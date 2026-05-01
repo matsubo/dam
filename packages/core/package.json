@@ -8,7 +8,9 @@
     "./slug": "./src/slug.ts",
     "./hateoas": "./src/hateoas.ts",
     "./http_client": "./src/http_client.ts",
-    "./similarity": "./src/similarity.ts"
+    "./prefectures": "./src/prefectures.ts",
+    "./similarity": "./src/similarity.ts",
+    "./source_adapter": "./src/source_adapter.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
