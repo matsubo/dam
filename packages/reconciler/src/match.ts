@@ -1,5 +1,5 @@
-import { findDamsForReconciliation } from '@dam/db/repo/dams';
 import { normalizeJaName, trigramSimilarity } from '@dam/core/similarity';
+import { findDamsForReconciliation } from '@dam/db/repo/dams';
 import { scoreCandidate } from './score.ts';
 
 export interface IncomingRecord {
@@ -17,13 +17,19 @@ export interface MatchResult {
 }
 
 export async function matchDam(record: IncomingRecord): Promise<MatchResult> {
-  let candidates = await findDamsForReconciliation({
-    pref: record.prefCode,
-    centerLat: record.lat ?? undefined,
-    centerLng: record.lng ?? undefined,
-    radiusM: record.lat != null && record.lng != null ? 5_000 : undefined,
-    limit: 50,
-  });
+  const hasLatLng = record.lat != null && record.lng != null;
+  let candidates = hasLatLng
+    ? await findDamsForReconciliation({
+        pref: record.prefCode,
+        centerLat: record.lat as number,
+        centerLng: record.lng as number,
+        radiusM: 5_000,
+        limit: 50,
+      })
+    : await findDamsForReconciliation({
+        pref: record.prefCode,
+        limit: 50,
+      });
   if (candidates.length === 0) {
     candidates = await findDamsForReconciliation({
       pref: record.prefCode,

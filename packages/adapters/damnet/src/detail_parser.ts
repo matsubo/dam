@@ -30,25 +30,25 @@ export function parseDamnetDetail(html: string, damnetId: string): DamnetDetail 
     if (th) fields[th] = td;
   });
 
-  const prefName = fields['都道府県'];
+  const prefName = fields.都道府県;
   if (!prefName) throw new Error(`damnet detail missing pref for ${damnetId}`);
-  const name = fields['ダム名'];
+  const name = fields.ダム名;
   if (!name) throw new Error(`damnet detail missing name for ${damnetId}`);
 
-  const { lat, lng } = parseLatLng(fields['位置']);
+  const { lat, lng } = parseLatLng(fields.位置);
 
   return {
     damnetId,
     name,
-    nameKana: fields['ふりがな'] ?? null,
+    nameKana: fields.ふりがな ?? null,
     prefCode: prefNameToCode(prefName),
-    manager: fields['管理者'] ?? null,
-    type: fields['型式'] ?? null,
-    heightM: num(fields['堤高']),
-    totalCapacityM3: num(fields['総貯水容量']),
-    effectiveCapacityM3: num(fields['有効貯水容量']),
-    floodCapacityM3: num(fields['洪水調節容量']),
-    completedYear: intish(fields['竣工']),
+    manager: fields.管理者 ?? null,
+    type: fields.型式 ?? null,
+    heightM: num(fields.堤高),
+    totalCapacityM3: num(fields.総貯水容量),
+    effectiveCapacityM3: num(fields.有効貯水容量),
+    floodCapacityM3: num(fields.洪水調節容量),
+    completedYear: intish(fields.竣工),
     lat,
     lng,
   };
