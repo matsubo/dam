@@ -1,5 +1,6 @@
 import { findNearestWatershed, findWatershedContaining } from '@dam/db/repo/watersheds';
 import { z } from 'zod';
+import { authorize, rateLimitHeaders } from '../../../../lib/api/auth.ts';
 import { HttpError, asProblem } from '../../../../lib/api/error.ts';
 import { hal } from '../../../../lib/api/response.ts';
 
@@ -12,6 +13,25 @@ const Query = z.object({
 
 export async function GET(req: Request): Promise<Response> {
   try {
+    const auth = await authorize(req);
+    if (!auth.ok) {
+      const headers: Record<string, string> = {
+        'content-type': 'application/problem+json',
+      };
+      if (auth.rate) {
+        Object.assign(headers, rateLimitHeaders(auth.rate));
+        if (auth.status === 429) {
+          headers['Retry-After'] = String(
+            Math.max(0, Math.ceil((auth.rate.resetAt - Date.now()) / 1000)),
+          );
+        }
+      }
+      return new Response(
+        JSON.stringify({ type: 'about:blank', title: auth.reason, status: auth.status }),
+        { status: auth.status, headers },
+      );
+    }
+
     const url = new URL(req.url);
     const parsed = Query.safeParse({
       lat: url.searchParams.get('lat'),
@@ -34,6 +54,7 @@ export async function GET(req: Request): Promise<Response> {
           dams_in_watershed: { href: `/api/v1/watersheds/${w.slug}/dams` },
           web: { href: `/watersheds/${w.slug}` },
         },
+        { headers: rateLimitHeaders(auth.rate) },
       );
     }
 
@@ -48,7 +69,13 @@ export async function GET(req: Request): Promise<Response> {
           nearest: nearest ? { href: `/api/v1/watersheds/${nearest.slug}` } : undefined,
         },
       }),
-      { status: 404, headers: { 'content-type': 'application/problem+json' } },
+      {
+        status: 404,
+        headers: {
+          'content-type': 'application/problem+json',
+          ...rateLimitHeaders(auth.rate),
+        },
+      },
     );
   } catch (err) {
     return asProblem(err);

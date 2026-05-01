@@ -74,3 +74,87 @@ export async function findNearestWatershed(
   `;
   return rows[0] ?? null;
 }
+
+export interface WatershedListItem {
+  id: bigint;
+  slug: string;
+  code: string;
+  name: string;
+  kind: 'first' | 'second' | 'other';
+  damCount: number;
+}
+
+export async function listWatersheds(
+  opts: { kind?: 'first' | 'second' | null; cursor?: bigint | null; pageSize?: number } = {},
+): Promise<{ items: WatershedListItem[]; nextCursor: bigint | null }> {
+  const limit = Math.max(1, Math.min(500, opts.pageSize ?? 200));
+  const rows = await sql<WatershedListItem[]>`
+    SELECT
+      w.id, w.slug, w.code, w.name, w.kind,
+      COUNT(d.id)::INT AS "damCount"
+    FROM watersheds w
+    LEFT JOIN dams d ON d.watershed_id = w.id
+    WHERE (${opts.kind ?? null}::text IS NULL OR w.kind = ${opts.kind ?? null})
+      AND (${opts.cursor ?? null}::bigint IS NULL OR w.id > ${opts.cursor ?? null})
+    GROUP BY w.id
+    ORDER BY w.id
+    LIMIT ${limit + 1}
+  `;
+  const items = rows.slice(0, limit);
+  const nextCursor = rows.length > limit ? (items[items.length - 1]?.id ?? null) : null;
+  return { items, nextCursor };
+}
+
+export interface WatershedDetail {
+  id: bigint;
+  slug: string;
+  code: string;
+  name: string;
+  nameKana: string | null;
+  kind: 'first' | 'second' | 'other';
+  areaKm2: number | null;
+}
+
+export async function findWatershedBySlug(slug: string): Promise<WatershedDetail | null> {
+  const rows = await sql<WatershedDetail[]>`
+    SELECT id, slug, code, name, name_kana AS "nameKana", kind, area_km2 AS "areaKm2"
+    FROM watersheds WHERE slug = ${slug} LIMIT 1
+  `;
+  return rows[0] ?? null;
+}
+
+export interface WatershedAggregate {
+  damCount: number;
+  totalCapacityM3: string | null;
+  latestStorageVolumeM3: string | null;
+  observedAt: Date | null;
+}
+
+export async function aggregateWatershed(watershedId: bigint): Promise<WatershedAggregate> {
+  const rows = await sql<WatershedAggregate[]>`
+    WITH ds AS (
+      SELECT id, total_capacity_m3 FROM dams WHERE watershed_id = ${watershedId}
+    ),
+    latest AS (
+      SELECT DISTINCT ON (o.dam_id) o.dam_id, o.observed_at, o.storage_volume_m3
+      FROM observations o
+      JOIN ds ON ds.id = o.dam_id
+      ORDER BY o.dam_id, o.observed_at DESC
+    )
+    SELECT
+      COUNT(*)::INT                                    AS "damCount",
+      SUM(ds.total_capacity_m3)::TEXT                  AS "totalCapacityM3",
+      SUM(latest.storage_volume_m3)::TEXT              AS "latestStorageVolumeM3",
+      MAX(latest.observed_at)                          AS "observedAt"
+    FROM ds
+    LEFT JOIN latest ON latest.dam_id = ds.id
+  `;
+  return (
+    rows[0] ?? {
+      damCount: 0,
+      totalCapacityM3: null,
+      latestStorageVolumeM3: null,
+      observedAt: null,
+    }
+  );
+}

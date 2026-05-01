@@ -54,3 +54,13 @@ import-damnet *args:
 
 reconcile:
     bun run --filter @dam/reconciler run
+
+# API key management
+api-key-issue email="" label="":
+    bun run bin/api_key.ts issue --email "{{email}}" --label "{{label}}"
+
+api-key-list:
+    bun run bin/api_key.ts list
+
+api-key-revoke id="":
+    bun run bin/api_key.ts revoke --id "{{id}}"

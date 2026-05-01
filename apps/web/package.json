@@ -11,13 +11,22 @@
   "dependencies": {
     "@dam/core": "workspace:*",
     "@dam/db": "workspace:*",
+    "echarts": "^6.0.0",
+    "echarts-for-react": "^3.0.6",
+    "leaflet": "^1.9.4",
     "next": "^15.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "swagger-ui-react": "^5.32.5",
     "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@types/leaflet": "^1.9.21",
     "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0"
+    "@types/react-dom": "^19.0.0",
+    "@types/swagger-ui-react": "^5.18.0",
+    "autoprefixer": "^10.5.0",
+    "postcss": "^8.5.12",
+    "tailwindcss": "^3.4"
   }
 }
