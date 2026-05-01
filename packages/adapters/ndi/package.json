@@ -1,0 +1,21 @@
+{
+  "name": "@dam/adapters-ndi",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "import:watersheds": "bun run src/cli.ts watersheds",
+    "import:dams": "bun run src/cli.ts dams"
+  },
+  "dependencies": {
+    "@dam/core": "workspace:*",
+    "@dam/db": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/geojson": "^7946.0.14"
+  }
+}
