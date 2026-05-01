@@ -104,6 +104,8 @@ export interface DamRow {
   manager: string | null;
   watershedId: bigint | null;
   externalIds: Record<string, string>;
+  lat: number;
+  lng: number;
 }
 
 export async function findDamsForReconciliation(opts: {
@@ -117,7 +119,8 @@ export async function findDamsForReconciliation(opts: {
   if (opts.centerLat !== undefined && opts.centerLng !== undefined && opts.radiusM) {
     return sql<DamRow[]>`
       SELECT id, slug, name, pref_code AS "prefCode", manager,
-             watershed_id AS "watershedId", external_ids AS "externalIds"
+             watershed_id AS "watershedId", external_ids AS "externalIds",
+             ST_Y(location::geometry) AS lat, ST_X(location::geometry) AS lng
       FROM dams
       WHERE ST_DWithin(
               location,
@@ -129,7 +132,8 @@ export async function findDamsForReconciliation(opts: {
   }
   return sql<DamRow[]>`
     SELECT id, slug, name, pref_code AS "prefCode", manager,
-           watershed_id AS "watershedId", external_ids AS "externalIds"
+           watershed_id AS "watershedId", external_ids AS "externalIds",
+           ST_Y(location::geometry) AS lat, ST_X(location::geometry) AS lng
     FROM dams
     WHERE (${opts.pref ?? null}::text IS NULL OR pref_code = ${opts.pref ?? null})
     LIMIT ${limit}
