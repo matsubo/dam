@@ -2,27 +2,13 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { sql } from '@dam/db/client';
-import { parseW01 } from './parse_w01.ts';
-import { parseW07 } from './parse_w07.ts';
 import { importDams } from './import_dams.ts';
 import { importWatersheds } from './import_watersheds.ts';
+import { parseW01 } from './parse_w01.ts';
+import { parseW07 } from './parse_w07.ts';
 
-const W01 = join(
-  import.meta.dir,
-  '..',
-  '..',
-  '..',
-  '..',
-  'tests/fixtures/ndi/w01_sample.geojson',
-);
-const W07 = join(
-  import.meta.dir,
-  '..',
-  '..',
-  '..',
-  '..',
-  'tests/fixtures/ndi/w07_sample.geojson',
-);
+const W01 = join(import.meta.dir, '..', '..', '..', '..', 'tests/fixtures/ndi/w01_sample.geojson');
+const W07 = join(import.meta.dir, '..', '..', '..', '..', 'tests/fixtures/ndi/w07_sample.geojson');
 
 beforeAll(async () => {
   const raw07 = await readFile(W07, 'utf8');
