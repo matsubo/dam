@@ -1,4 +1,12 @@
-import { bigint, numeric, pgTable, primaryKey, smallint, text, timestamp } from 'drizzle-orm/pg-core';
+import {
+  bigint,
+  numeric,
+  pgTable,
+  primaryKey,
+  smallint,
+  text,
+  timestamp,
+} from 'drizzle-orm/pg-core';
 
 export const observations = pgTable(
   'observations',
