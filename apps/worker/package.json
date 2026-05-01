@@ -1,0 +1,20 @@
+{
+  "name": "@dam/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dam/db": "workspace:*",
+    "@dam/adapters-ndi": "workspace:*",
+    "@dam/adapters-damnet": "workspace:*",
+    "@dam/core": "workspace:*",
+    "graphile-worker": "^0.16.0"
+  },
+  "devDependencies": {
+    "@types/geojson": "^7946.0.14"
+  }
+}
