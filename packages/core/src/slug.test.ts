@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { toSlug, suffixedSlug } from './slug.ts';
+import { suffixedSlug, toSlug } from './slug.ts';
 
 describe('toSlug', () => {
   test('converts ASCII to lowercased dash-separated', () => {
@@ -34,8 +34,8 @@ describe('suffixedSlug', () => {
   });
 
   test('keeps incrementing', () => {
-    expect(
-      suffixedSlug('yamba-dam', new Set(['yamba-dam', 'yamba-dam-2', 'yamba-dam-3'])),
-    ).toBe('yamba-dam-4');
+    expect(suffixedSlug('yamba-dam', new Set(['yamba-dam', 'yamba-dam-2', 'yamba-dam-3']))).toBe(
+      'yamba-dam-4',
+    );
   });
 });
