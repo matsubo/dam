@@ -39,4 +39,14 @@ describe('importWatersheds', () => {
     expect(r1.upserted).toBe(2);
     expect(r2.upserted).toBe(2);
   });
+
+  test('slug is stable across re-imports', async () => {
+    const raw = await readFile(FIXTURE, 'utf8');
+    const parsed = parseW07(raw);
+    await importWatersheds(parsed);
+    const before = await sql<{ slug: string }[]>`SELECT slug FROM watersheds WHERE code = '01'`;
+    await importWatersheds(parsed);
+    const after = await sql<{ slug: string }[]>`SELECT slug FROM watersheds WHERE code = '01'`;
+    expect(after[0]?.slug).toBe(before[0]?.slug);
+  });
 });
