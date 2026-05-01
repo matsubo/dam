@@ -1,7 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { sql } from '@dam/db/client';
 import { upsertWatershed } from '@dam/db/repo/watersheds';
-import { GET } from './route.ts';
+
+process.env.API_AUTH_BYPASS = '1';
+
+const { GET } = await import('./route.ts');
 
 const SQUARE = {
   type: 'MultiPolygon',
