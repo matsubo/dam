@@ -3,7 +3,14 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseDamnetDetail } from './detail_parser.ts';
 
-const FIXTURE = join(import.meta.dir, '..', '..', '..', '..', 'tests/fixtures/damnet/detail_yamba.html');
+const FIXTURE = join(
+  import.meta.dir,
+  '..',
+  '..',
+  '..',
+  '..',
+  'tests/fixtures/damnet/detail_yamba.html',
+);
 
 describe('parseDamnetDetail', () => {
   test('extracts metadata from attribute table', async () => {
