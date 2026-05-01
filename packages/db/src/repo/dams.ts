@@ -147,7 +147,7 @@ export async function appendExternalId(
 ): Promise<void> {
   await sql`
     UPDATE dams
-    SET external_ids = external_ids || jsonb_build_object(${source}, ${externalId})
+    SET external_ids = external_ids || jsonb_build_object(${source}::text, ${externalId}::text)
     WHERE id = ${damId}
   `;
 }
