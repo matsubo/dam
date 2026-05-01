@@ -1,5 +1,5 @@
 import { sql } from '@dam/db/client';
-import { hal } from '@/lib/api/response';
+import { hal } from '../../../../lib/api/response.ts';
 
 export const dynamic = 'force-dynamic';
 
