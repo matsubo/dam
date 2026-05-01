@@ -3,10 +3,18 @@
 // Note: graphile-worker's crontab parser only allows [_a-zA-Z][_a-zA-Z0-9:_-]*
 // for task identifiers, so we use colons instead of dots.
 export const CRONTAB = `
-# Master refresh: NLNI on the 1st of each month at 03:00
+# Master refresh
 0 3 1 * * master:refresh:ndi
-# Damnet: 5th of each month at 03:00 (after NLNI to maximize match coverage)
 0 3 5 * * master:refresh:damnet
-# Match sweep: nightly at 04:00
 0 4 * * * master:match
+
+# Realtime ingest (every hour at :05)
+5 * * * * ingest:kasenbosai
+
+# Backfill scheduling (rarely; run manually via add_job for ad-hoc enqueue)
+# Run actual fetches every 5 minutes (small batches, respects upstream)
+*/5 * * * * backfill:suimon:run
+
+# Quality recomputation
+30 4 * * * quality:recompute
 `;

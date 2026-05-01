@@ -8,10 +8,14 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@dam/db": "workspace:*",
-    "@dam/adapters-ndi": "workspace:*",
     "@dam/adapters-damnet": "workspace:*",
+    "@dam/adapters-kasenbosai": "workspace:*",
+    "@dam/adapters-ndi": "workspace:*",
+    "@dam/adapters-suimon": "workspace:*",
     "@dam/core": "workspace:*",
+    "@dam/db": "workspace:*",
+    "@dam/ingest": "workspace:*",
+    "@dam/storage": "workspace:*",
     "graphile-worker": "^0.16.0"
   },
   "devDependencies": {
