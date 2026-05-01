@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push: { branches: [main] }
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: timescale/timescaledb-ha:pg16
+        env:
+          POSTGRES_DB: dam
+          POSTGRES_USER: dam
+          POSTGRES_PASSWORD: dam
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U dam -d dam"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://dam:dam@localhost:5432/dam
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: latest }
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run typecheck
+      - run: bun run --filter @dam/db migrate
+      - run: bun test
