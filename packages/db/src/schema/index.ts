@@ -6,3 +6,4 @@ export * from './observations.ts';
 export * from './raw_snapshots.ts';
 export * from './source_priorities.ts';
 export * from './backfill_progress.ts';
+export * from './api_keys.ts';
