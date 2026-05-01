@@ -72,6 +72,42 @@ const KANA_TO_ROMAJI: Record<string, string> = {
   ぽ: 'po',
 };
 
+const YOUON_TO_ROMAJI: Record<string, string> = {
+  きゃ: 'kya',
+  きゅ: 'kyu',
+  きょ: 'kyo',
+  しゃ: 'sha',
+  しゅ: 'shu',
+  しょ: 'sho',
+  ちゃ: 'cha',
+  ちゅ: 'chu',
+  ちょ: 'cho',
+  にゃ: 'nya',
+  にゅ: 'nyu',
+  にょ: 'nyo',
+  ひゃ: 'hya',
+  ひゅ: 'hyu',
+  ひょ: 'hyo',
+  みゃ: 'mya',
+  みゅ: 'myu',
+  みょ: 'myo',
+  りゃ: 'rya',
+  りゅ: 'ryu',
+  りょ: 'ryo',
+  ぎゃ: 'gya',
+  ぎゅ: 'gyu',
+  ぎょ: 'gyo',
+  じゃ: 'ja',
+  じゅ: 'ju',
+  じょ: 'jo',
+  びゃ: 'bya',
+  びゅ: 'byu',
+  びょ: 'byo',
+  ぴゃ: 'pya',
+  ぴゅ: 'pyu',
+  ぴょ: 'pyo',
+};
+
 const KATAKANA_OFFSET = 0x60;
 function katakanaToHiragana(input: string): string {
   let out = '';
@@ -90,19 +126,39 @@ function isHiragana(code: number): boolean {
   return code >= 0x3040 && code <= 0x309f;
 }
 
-function isKatakana(code: number): boolean {
-  return code >= 0x30a0 && code <= 0x30ff;
-}
-
 function romanizeKana(input: string): string {
   const hira = katakanaToHiragana(input);
+  const chars = Array.from(hira);
   let out = '';
-  for (const ch of hira) {
-    const code = ch.codePointAt(0) ?? 0;
-    if (isHiragana(code)) {
-      out += KANA_TO_ROMAJI[ch] ?? '';
+  let pendingSokuon = false;
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i] ?? '';
+    // Sokuon: doubles the consonant of the next produced romaji syllable.
+    if (ch === 'っ') {
+      pendingSokuon = true;
+      continue;
+    }
+    let r: string;
+    const next = chars[i + 1] ?? '';
+    const digraph = ch + next;
+    if (next && YOUON_TO_ROMAJI[digraph] !== undefined) {
+      r = YOUON_TO_ROMAJI[digraph] ?? '';
+      i++;
     } else {
-      out += ch;
+      const code = ch.codePointAt(0) ?? 0;
+      if (isHiragana(code)) {
+        r = KANA_TO_ROMAJI[ch] ?? '';
+      } else {
+        r = ch;
+      }
+    }
+    if (pendingSokuon) {
+      if (r.length > 0) {
+        out += r[0] + r;
+      }
+      pendingSokuon = false;
+    } else {
+      out += r;
     }
   }
   return out;
@@ -114,11 +170,15 @@ export interface SlugOptions {
 
 export function toSlug(input: string, options: SlugOptions = {}): string {
   const kanaToRomaji = options.kanaToRomaji ?? true;
-  // Use NFC to keep composed kana (e.g. ば) as a single code point so the
-  // romaji table matches; NFKD would decompose ば into は + U+3099.
-  let base = input.normalize('NFC').toLowerCase();
+  // Use NFKC so halfwidth katakana (ﾔﾝﾊﾞ) folds to fullwidth (ヤンバ) and
+  // other compatibility forms collapse, while dakuten stay precomposed
+  // (ば remains a single code point so the romaji table matches). NFKD
+  // would decompose ば into は + U+3099 and break the lookup.
+  let base = input.normalize('NFKC').toLowerCase();
   if (kanaToRomaji) {
     base = romanizeKana(base);
+    // Hepburn: n becomes m before b, m, p (e.g. やんば → yanba → yamba).
+    base = base.replace(/n([bmp])/g, 'm$1');
   } else {
     // strip kana entirely
     base = base.replace(/[぀-ゟ゠-ヿ]/g, '');

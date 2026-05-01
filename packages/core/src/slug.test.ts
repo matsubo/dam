@@ -10,8 +10,41 @@ describe('toSlug', () => {
     expect(toSlug("O'Hara, Lake!")).toBe('ohara-lake');
   });
 
-  test('romanizes Japanese kana', () => {
-    expect(toSlug('やんば', { kanaToRomaji: true })).toBe('yanba');
+  test('romanizes Japanese hiragana with Hepburn n→m before b', () => {
+    expect(toSlug('やんば', { kanaToRomaji: true })).toBe('yamba');
+  });
+
+  test('romanizes katakana input', () => {
+    expect(toSlug('ヤンバ')).toBe('yamba');
+  });
+
+  test('handles mixed Latin and kana', () => {
+    expect(toSlug('Lake やんば Dam')).toBe('lake-yamba-dam');
+  });
+
+  test('handles sokuon by doubling the next consonant', () => {
+    expect(toSlug('やっぱ')).toBe('yappa');
+  });
+
+  test('handles yōon digraphs', () => {
+    expect(toSlug('しゃ')).toBe('sha');
+    expect(toSlug('きょう')).toBe('kyou');
+  });
+
+  test('romanizes the canonical fixture dam name 八ッ場ダム (kanji-passthrough lossy, ダム → damu)', () => {
+    expect(toSlug('八ッ場ダム')).toBe('damu');
+  });
+
+  test('folds halfwidth katakana via NFKC', () => {
+    expect(toSlug('ﾔﾝﾊﾞ')).toBe('yamba');
+  });
+
+  test('returns empty string for empty input', () => {
+    expect(toSlug('')).toBe('');
+  });
+
+  test('keeps numbers intact', () => {
+    expect(toSlug('Dam 123')).toBe('dam-123');
   });
 
   test('does not romanize when option disabled', () => {
