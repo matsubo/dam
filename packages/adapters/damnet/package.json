@@ -1,0 +1,17 @@
+{
+  "name": "@dam/adapters-damnet",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "import": "bun run src/cli.ts"
+  },
+  "dependencies": {
+    "@dam/core": "workspace:*",
+    "@dam/db": "workspace:*",
+    "@dam/reconciler": "workspace:*",
+    "cheerio": "^1.0.0"
+  }
+}
