@@ -36,10 +36,10 @@ dev-worker:
 
 # Master imports
 import-ndi-watersheds *args:
-    bun run --filter @dam/adapters-ndi import:watersheds {{args}}
+    bun run packages/adapters/ndi/src/cli.ts watersheds {{args}}
 
 import-ndi-dams *args:
-    bun run --filter @dam/adapters-ndi import:dams {{args}}
+    bun run packages/adapters/ndi/src/cli.ts dams {{args}}
 
 import-damnet *args:
     bun run --filter @dam/adapters-damnet import {{args}}

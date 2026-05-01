@@ -2,8 +2,8 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { sql } from '@dam/db/client';
-import { parseW07 } from './parse_w07.ts';
 import { importWatersheds } from './import_watersheds.ts';
+import { parseW07 } from './parse_w07.ts';
 
 const FIXTURE = join(
   import.meta.dir,
