@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-white text-ink antialiased;
+}
+
+a {
+  @apply text-accent hover:underline;
+}
+
+table {
+  @apply w-full text-sm;
+}
+th,
+td {
+  @apply px-3 py-2 text-left;
+}
+thead {
+  @apply bg-gray-50 text-gray-600 uppercase text-xs;
+}
+tbody tr {
+  @apply border-b border-gray-100;
+}
