@@ -77,6 +77,15 @@
         "drizzle-kit": "^0.27.0",
       },
     },
+    "packages/ingest": {
+      "name": "@dam/ingest",
+      "version": "0.0.0",
+      "dependencies": {
+        "@dam/core": "workspace:*",
+        "@dam/db": "workspace:*",
+        "@dam/storage": "workspace:*",
+      },
+    },
     "packages/reconciler": {
       "name": "@dam/reconciler",
       "version": "0.0.0",
@@ -203,6 +212,8 @@
     "@dam/core": ["@dam/core@workspace:packages/core"],
 
     "@dam/db": ["@dam/db@workspace:packages/db"],
+
+    "@dam/ingest": ["@dam/ingest@workspace:packages/ingest"],
 
     "@dam/reconciler": ["@dam/reconciler@workspace:packages/reconciler"],
 

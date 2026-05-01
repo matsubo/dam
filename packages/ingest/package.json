@@ -1,0 +1,17 @@
+{
+  "name": "@dam/ingest",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./pipeline": "./src/pipeline.ts",
+    "./quality": "./src/quality.ts"
+  },
+  "scripts": { "typecheck": "tsc --noEmit" },
+  "dependencies": {
+    "@dam/core": "workspace:*",
+    "@dam/db": "workspace:*",
+    "@dam/storage": "workspace:*"
+  }
+}
