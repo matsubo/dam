@@ -1,9 +1,13 @@
 // apps/worker/src/index.ts
 import { run } from 'graphile-worker';
 import { CRONTAB } from './crontab.ts';
+import backfillEnqueue from './tasks/backfill_suimon_enqueue.ts';
+import backfillRun from './tasks/backfill_suimon_run.ts';
+import ingestKasenbosai from './tasks/ingest_kasenbosai.ts';
 import match from './tasks/master_match.ts';
 import refreshDamnet from './tasks/master_refresh_damnet.ts';
 import refreshNdi from './tasks/master_refresh_ndi.ts';
+import qualityRecompute from './tasks/quality_recompute.ts';
 
 async function main(): Promise<void> {
   const url = process.env.DATABASE_URL;
@@ -19,6 +23,10 @@ async function main(): Promise<void> {
       'master:refresh:ndi': refreshNdi,
       'master:refresh:damnet': refreshDamnet,
       'master:match': match,
+      'ingest:kasenbosai': ingestKasenbosai,
+      'backfill:suimon:enqueue': backfillEnqueue,
+      'backfill:suimon:run': backfillRun,
+      'quality:recompute': qualityRecompute,
     },
   });
 
