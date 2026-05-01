@@ -3,7 +3,12 @@ import { hal } from '../../../../lib/api/response.ts';
 export const dynamic = 'force-dynamic';
 
 const SOURCES = [
-  { id: 'ndi-w01', description: 'NLNI W01 dam dataset', schedule: 'monthly', last_fetched_at: null },
+  {
+    id: 'ndi-w01',
+    description: 'NLNI W01 dam dataset',
+    schedule: 'monthly',
+    last_fetched_at: null,
+  },
   {
     id: 'ndi-w07',
     description: 'NLNI W07 watershed boundaries',
