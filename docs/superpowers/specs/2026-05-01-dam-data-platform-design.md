@@ -47,8 +47,8 @@ for dams across Japan, with the goal of becoming **the largest dam data source i
 - Watershed master (1st-class and 2nd-class systems).
 - Watershed boundary polygons (PostGIS geometry).
 
-#### 2.2 Realtime Reservoir Ingest (Phase E, Source A first)
-- Scraping adapter for the Kasen-Bosai (川の防災情報) site.
+#### 2.2 Realtime Reservoir Ingest (incremental coverage strategy)
+- Scraping adapter for the Kasen-Bosai (川の防災情報) site as the first source.
 - Hourly steady-state ingest.
 - Save raw HTML/XML to S3-compatible storage.
 - Insert normalized observations into the DB.
@@ -99,9 +99,10 @@ Notifications and prediction features are deferred until enough data is accumula
 4. **Dam lists from Kasen-Bosai and Suimon-Suishitsu DB** — for cross-reconciliation
    with realtime targets.
 
-### Realtime sources (Phase E)
+### Realtime sources (incremental coverage strategy)
 - **MVP**: Kasen-Bosai (www.river.go.jp) — direct-managed + JWA + prefecture-managed.
-- **Phase 2**: per-utility pages (electric utilities, private dams).
+- **Phase 2 onwards**: per-utility pages (electric utilities, private dams), added one
+  adapter at a time to widen coverage.
 
 ### Historical sources
 - **Suimon-Suishitsu DB** — 10+ years where hourly data is available.
