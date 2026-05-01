@@ -15,8 +15,13 @@ async function appliedSet(): Promise<Set<string>> {
 }
 
 async function migrationFiles(dir: string): Promise<string[]> {
-  const entries = await readdir(dir);
-  return entries.filter((e) => e.endsWith('.sql')).sort();
+  try {
+    const entries = await readdir(dir);
+    return entries.filter((e) => e.endsWith('.sql')).sort();
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw err;
+  }
 }
 
 async function main(): Promise<void> {

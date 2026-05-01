@@ -17,8 +17,7 @@ migrate:
 # Reset the database (drops volume — local only)
 reset-db:
     docker compose down -v
-    docker compose up -d
-    sleep 2
+    docker compose up -d --wait
     bun run --filter @dam/db migrate
 
 # Lint, format, typecheck, test
