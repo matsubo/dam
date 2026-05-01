@@ -90,3 +90,17 @@ export function rateLimitHeaders(state: RateState): Record<string, string> {
     'RateLimit-Reset': String(Math.max(0, Math.floor((state.resetAt - Date.now()) / 1000))),
   };
 }
+
+export function makeUnauthorized(auth: Exclude<AuthResult, { ok: true }>): Response {
+  const headers: Record<string, string> = { 'content-type': 'application/problem+json' };
+  if (auth.rate) Object.assign(headers, rateLimitHeaders(auth.rate));
+  if (auth.status === 429 && auth.rate) {
+    headers['Retry-After'] = String(
+      Math.max(0, Math.ceil((auth.rate.resetAt - Date.now()) / 1000)),
+    );
+  }
+  return new Response(
+    JSON.stringify({ type: 'about:blank', title: auth.reason, status: auth.status }),
+    { status: auth.status, headers },
+  );
+}
