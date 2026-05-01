@@ -1,0 +1,16 @@
+{
+  "name": "@dam/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./slug": "./src/slug.ts",
+    "./hateoas": "./src/hateoas.ts",
+    "./similarity": "./src/similarity.ts",
+    "./http_client": "./src/http_client.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}
