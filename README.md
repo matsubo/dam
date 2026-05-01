@@ -26,3 +26,23 @@ just import-damnet         -- --list tests/fixtures/damnet/list.html
 - `GET /api/v1/sources` — data-source registry
 
 See `docs/superpowers/specs/2026-05-01-dam-data-platform-design.md`.
+
+## Running ingest (Plan 2)
+
+```sh
+just up                  # postgres + minio
+just ensure-bucket       # create the dam-raw bucket if missing
+just migrate
+just dev-worker          # graphile-worker (registers all tasks)
+
+# Trigger a one-off run from the DB
+docker compose exec db psql -U dam -d dam \
+  -c "SELECT graphile_worker.add_job('ingest:kasenbosai');"
+
+# Backfill: enqueue the full year × dam matrix once
+docker compose exec db psql -U dam -d dam \
+  -c "SELECT graphile_worker.add_job('backfill:suimon:enqueue', '{\"fromYear\":2015,\"toYear\":2024}');"
+```
+
+The hourly cron triggers `ingest:kasenbosai` at minute :05 of every hour.
+Backfill batches run every 5 minutes with `SUIMON_BATCH` targets each.
