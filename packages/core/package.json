@@ -4,7 +4,11 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./slug": "./src/slug.ts",
+    "./hateoas": "./src/hateoas.ts",
+    "./http_client": "./src/http_client.ts",
+    "./similarity": "./src/similarity.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

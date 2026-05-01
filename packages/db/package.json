@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/client.ts"
+    ".": "./src/client.ts",
+    "./client": "./src/client.ts",
+    "./repo/*": "./src/repo/*.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
