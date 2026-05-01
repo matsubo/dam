@@ -41,4 +41,18 @@ describe('matchDam', () => {
     });
     expect(r.bestDamId).toBeNull();
   });
+
+  test('does not auto-match pref-only fallback below 0.85 threshold', async () => {
+    const r = await matchDam({
+      name: '八ッ場ダム', // exact name
+      prefCode: '10',
+      manager: '国土交通省関東地方整備局', // exact manager
+      lat: null, // no location at all
+      lng: null,
+    });
+    // name (1.0 * 0.5) + manager (0.1) = 0.6, below the 0.85 no-loc threshold
+    expect(r.bestDamId).toBeNull();
+    expect(r.confidence).toBeCloseTo(0.6, 5);
+    expect(r.candidateDamIds.length).toBeGreaterThan(0);
+  });
 });
