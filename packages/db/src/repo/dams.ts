@@ -178,3 +178,133 @@ export async function applyDamnetAttributes(
     WHERE id = ${damId}
   `;
 }
+
+export interface DamListFilters {
+  pref?: string | null;
+  watershedSlug?: string | null;
+  manager?: string | null;
+  search?: string | null;
+  cursor?: bigint | null;
+  pageSize?: number;
+}
+
+export interface DamListItem {
+  id: bigint;
+  slug: string;
+  name: string;
+  prefCode: string;
+  manager: string | null;
+  totalCapacityM3: string | null;
+  watershedSlug: string | null;
+  watershedName: string | null;
+  lat: number;
+  lng: number;
+}
+
+export async function listDams(
+  f: DamListFilters,
+): Promise<{ items: DamListItem[]; nextCursor: bigint | null }> {
+  const limit = Math.max(1, Math.min(200, f.pageSize ?? 50));
+  const rows = await sql<DamListItem[]>`
+    SELECT
+      d.id, d.slug, d.name, d.pref_code AS "prefCode", d.manager,
+      d.total_capacity_m3::TEXT AS "totalCapacityM3",
+      w.slug AS "watershedSlug", w.name AS "watershedName",
+      ST_Y(d.location::geometry) AS lat, ST_X(d.location::geometry) AS lng
+    FROM dams d
+    LEFT JOIN watersheds w ON w.id = d.watershed_id
+    WHERE (${f.pref ?? null}::text IS NULL OR d.pref_code = ${f.pref ?? null})
+      AND (${f.watershedSlug ?? null}::text IS NULL OR w.slug = ${f.watershedSlug ?? null})
+      AND (${f.manager ?? null}::text IS NULL OR d.manager = ${f.manager ?? null})
+      AND (${f.search ?? null}::text IS NULL OR d.name ILIKE ('%' || ${f.search ?? null} || '%'))
+      AND (${f.cursor ?? null}::bigint IS NULL OR d.id > ${f.cursor ?? null})
+    ORDER BY d.id
+    LIMIT ${limit + 1}
+  `;
+  const items = rows.slice(0, limit);
+  const nextCursor = rows.length > limit ? (items[items.length - 1]?.id ?? null) : null;
+  return { items, nextCursor };
+}
+
+export interface DamDetail extends DamListItem {
+  nameKana: string | null;
+  type: string | null;
+  heightM: string | null;
+  effectiveCapacityM3: string | null;
+  floodCapacityM3: string | null;
+  completedYear: number | null;
+  externalIds: Record<string, string>;
+}
+
+export async function findDamBySlug(slug: string): Promise<DamDetail | null> {
+  const rows = await sql<DamDetail[]>`
+    SELECT
+      d.id, d.slug, d.name, d.name_kana AS "nameKana",
+      d.pref_code AS "prefCode", d.manager, d.type,
+      d.height_m::TEXT AS "heightM",
+      d.total_capacity_m3::TEXT AS "totalCapacityM3",
+      d.effective_capacity_m3::TEXT AS "effectiveCapacityM3",
+      d.flood_capacity_m3::TEXT AS "floodCapacityM3",
+      d.completed_year AS "completedYear",
+      d.external_ids AS "externalIds",
+      w.slug AS "watershedSlug", w.name AS "watershedName",
+      ST_Y(d.location::geometry) AS lat, ST_X(d.location::geometry) AS lng
+    FROM dams d
+    LEFT JOIN watersheds w ON w.id = d.watershed_id
+    WHERE d.slug = ${slug}
+    LIMIT 1
+  `;
+  return rows[0] ?? null;
+}
+
+export interface LatestObservation {
+  observedAt: Date;
+  storageVolumeM3: string | null;
+  storageRate: string | null;
+  inflowM3s: string | null;
+  outflowM3s: string | null;
+  waterLevelM: string | null;
+  rainfallMm: string | null;
+  qualityFlag: number;
+  sourceId: string;
+}
+
+export async function latestObservation(damId: bigint): Promise<LatestObservation | null> {
+  const rows = await sql<LatestObservation[]>`
+    SELECT
+      observed_at AS "observedAt",
+      storage_volume_m3::TEXT AS "storageVolumeM3",
+      storage_rate::TEXT AS "storageRate",
+      inflow_m3s::TEXT AS "inflowM3s",
+      outflow_m3s::TEXT AS "outflowM3s",
+      water_level_m::TEXT AS "waterLevelM",
+      rainfall_mm::TEXT AS "rainfallMm",
+      quality_flag AS "qualityFlag",
+      source_id AS "sourceId"
+    FROM observations
+    WHERE dam_id = ${damId}
+    ORDER BY observed_at DESC
+    LIMIT 1
+  `;
+  return rows[0] ?? null;
+}
+
+export async function nearbyDams(
+  damId: bigint,
+  radiusM: number,
+  limit: number,
+): Promise<DamListItem[]> {
+  return sql<DamListItem[]>`
+    SELECT
+      d2.id, d2.slug, d2.name, d2.pref_code AS "prefCode", d2.manager,
+      d2.total_capacity_m3::TEXT AS "totalCapacityM3",
+      w.slug AS "watershedSlug", w.name AS "watershedName",
+      ST_Y(d2.location::geometry) AS lat, ST_X(d2.location::geometry) AS lng
+    FROM dams d
+    JOIN dams d2 ON d2.id <> d.id AND ST_DWithin(d.location, d2.location, ${radiusM})
+    LEFT JOIN watersheds w ON w.id = d2.watershed_id
+    WHERE d.id = ${damId}
+    ORDER BY d.location <-> d2.location
+    LIMIT ${limit}
+  `;
+}
