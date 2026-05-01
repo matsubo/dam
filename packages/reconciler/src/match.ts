@@ -17,13 +17,19 @@ export interface MatchResult {
 }
 
 export async function matchDam(record: IncomingRecord): Promise<MatchResult> {
-  const candidates = await findDamsForReconciliation({
+  let candidates = await findDamsForReconciliation({
     pref: record.prefCode,
     centerLat: record.lat ?? undefined,
     centerLng: record.lng ?? undefined,
     radiusM: record.lat != null && record.lng != null ? 5_000 : undefined,
     limit: 50,
   });
+  if (candidates.length === 0) {
+    candidates = await findDamsForReconciliation({
+      pref: record.prefCode,
+      limit: 50,
+    });
+  }
 
   const normIncoming = normalizeJaName(record.name);
   let best: { id: bigint; score: number } | null = null;

@@ -17,7 +17,7 @@ export async function enqueueMatchReview(input: NewMatchReview): Promise<void> {
     )
     VALUES (
       ${input.sourceId}, ${input.sourceExternalId},
-      ${input.candidateDamIds}::bigint[],
+      ${sql.array(input.candidateDamIds.map((id) => id.toString()))}::bigint[],
       ${input.bestDamId},
       ${input.confidence}, ${sql.json(input.payload as postgres.JSONValue)}::jsonb
     )
