@@ -7,14 +7,16 @@ export interface ImportResult {
   upserted: number;
 }
 
-async function watershedIdByCode(code: string): Promise<bigint | null> {
-  const rows = await sql<{ id: bigint }[]>`SELECT id FROM watersheds WHERE code = ${code}`;
-  return rows[0]?.id ?? null;
-}
-
 export async function importDams(parsed: ParsedDam[]): Promise<ImportResult> {
   const taken = await takenSlugs('');
+  const watershedMap = new Map(
+    (await sql<{ id: bigint; code: string }[]>`SELECT id, code FROM watersheds`).map(
+      (r) => [r.code, r.id] as const,
+    ),
+  );
+
   let count = 0;
+  let unresolved = 0;
 
   for (const d of parsed) {
     const base = toSlug(d.name) || `dam-${d.ndiId}`;
@@ -22,7 +24,13 @@ export async function importDams(parsed: ParsedDam[]): Promise<ImportResult> {
     const slug = suffixedSlug(candidate, taken);
     taken.add(slug);
 
-    const watershedId = d.watershedCode ? await watershedIdByCode(d.watershedCode) : null;
+    let watershedId: bigint | null = null;
+    if (d.watershedCode) {
+      watershedId = watershedMap.get(d.watershedCode) ?? null;
+      if (watershedId === null) {
+        unresolved++;
+      }
+    }
 
     await upsertDamByExternalId('ndi', {
       slug,
@@ -41,6 +49,12 @@ export async function importDams(parsed: ParsedDam[]): Promise<ImportResult> {
       externalIds: { ndi: d.ndiId },
     });
     count++;
+  }
+
+  if (unresolved > 0) {
+    console.warn(
+      `importDams: ${unresolved} dams had a watershedCode that did not resolve to a known watershed`,
+    );
   }
 
   return { upserted: count };

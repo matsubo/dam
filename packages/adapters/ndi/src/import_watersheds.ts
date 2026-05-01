@@ -8,15 +8,23 @@ export interface ImportResult {
 }
 
 export async function importWatersheds(parsed: ParsedWatershed[]): Promise<ImportResult> {
-  const taken = new Set(
-    (await sql<{ slug: string }[]>`SELECT slug FROM watersheds`).map((r) => r.slug),
+  const existing = new Map(
+    (await sql<{ code: string; slug: string }[]>`SELECT code, slug FROM watersheds`).map(
+      (r) => [r.code, r.slug] as const,
+    ),
   );
+  const taken = new Set(existing.values());
 
   let count = 0;
   for (const w of parsed) {
-    const base = toSlug(w.name) || `watershed-${w.code}`;
-    const slug = suffixedSlug(base, taken);
-    taken.add(slug);
+    const slug =
+      existing.get(w.code) ??
+      (() => {
+        const base = toSlug(w.name) || `watershed-${w.code}`;
+        const candidate = suffixedSlug(base, taken);
+        taken.add(candidate);
+        return candidate;
+      })();
 
     const geometry: GeoJSON.MultiPolygon =
       w.geometry.type === 'MultiPolygon'

@@ -40,6 +40,7 @@ export function parseW07(rawJson: string): ParsedWatershed[] {
     const code = f.properties.W07_001;
     const name = f.properties.W07_002;
     if (!code || !name) continue;
+    if (f.geometry?.type !== 'Polygon' && f.geometry?.type !== 'MultiPolygon') continue;
     out.push({
       code,
       name,
