@@ -1,0 +1,14 @@
+{
+  "name": "@dam/adapters-suimon",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit" },
+  "dependencies": {
+    "@dam/core": "workspace:*",
+    "@dam/db": "workspace:*",
+    "papaparse": "^5.4.1"
+  },
+  "devDependencies": { "@types/papaparse": "^5.3.14" }
+}
