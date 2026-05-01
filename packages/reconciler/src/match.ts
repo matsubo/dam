@@ -16,8 +16,12 @@ export interface MatchResult {
   candidateDamIds: bigint[];
 }
 
+const AUTO_MATCH_THRESHOLD_WITH_LOC = 0.6;
+const AUTO_MATCH_THRESHOLD_NO_LOC = 0.85;
+
 export async function matchDam(record: IncomingRecord): Promise<MatchResult> {
   const hasLatLng = record.lat != null && record.lng != null;
+
   let candidates = hasLatLng
     ? await findDamsForReconciliation({
         pref: record.prefCode,
@@ -30,11 +34,16 @@ export async function matchDam(record: IncomingRecord): Promise<MatchResult> {
         pref: record.prefCode,
         limit: 50,
       });
-  if (candidates.length === 0) {
+
+  // Fallback: if a spatial search returned nothing, widen to pref-only
+  // (do not auto-match below — see threshold logic).
+  let usedFallback = false;
+  if (hasLatLng && candidates.length === 0) {
     candidates = await findDamsForReconciliation({
       pref: record.prefCode,
       limit: 50,
     });
+    usedFallback = true;
   }
 
   const normIncoming = normalizeJaName(record.name);
@@ -43,10 +52,9 @@ export async function matchDam(record: IncomingRecord): Promise<MatchResult> {
 
   for (const c of candidates) {
     const nameSim = trigramSimilarity(normIncoming, normalizeJaName(c.name));
-    const distanceM =
-      record.lat != null && record.lng != null
-        ? haversineM(record.lat, record.lng, c.lat, c.lng)
-        : Number.POSITIVE_INFINITY;
+    const distanceM = hasLatLng
+      ? haversineM(record.lat as number, record.lng as number, c.lat, c.lng)
+      : Number.POSITIVE_INFINITY;
     const score = scoreCandidate({
       nameSim,
       distanceM,
@@ -57,8 +65,12 @@ export async function matchDam(record: IncomingRecord): Promise<MatchResult> {
   }
 
   if (!best) return { bestDamId: null, confidence: 0, candidateDamIds: [] };
+
+  const threshold =
+    !hasLatLng || usedFallback ? AUTO_MATCH_THRESHOLD_NO_LOC : AUTO_MATCH_THRESHOLD_WITH_LOC;
+
   return {
-    bestDamId: best.score >= 0.6 ? best.id : null,
+    bestDamId: best.score >= threshold ? best.id : null,
     confidence: best.score,
     candidateDamIds: candidateIds,
   };
