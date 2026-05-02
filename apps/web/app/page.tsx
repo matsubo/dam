@@ -23,7 +23,7 @@ async function counts() {
 }
 
 export default async function Home() {
-  const [c, latest] = await Promise.all([counts(), listDams({ pageSize: 6 })]);
+  const [c, latest] = await Promise.all([counts(), listDams({ pageSize: 6, orderBy: 'capacity' })]);
   return (
     <>
       <section className="mb-10">

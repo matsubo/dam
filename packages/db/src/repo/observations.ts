@@ -94,9 +94,12 @@ async function findSeriesDaily(opts: FindSeriesOptions): Promise<SeriesPoint[]> 
 }
 
 async function findSeriesMonthly(opts: FindSeriesOptions): Promise<SeriesPoint[]> {
+  // obs_monthly aggregates obs_daily and exposes avg/max/min only — there is
+  // no `last` column at the monthly bucket. Use the monthly average as the
+  // chart series.
   return sql<SeriesPoint[]>`
     SELECT month AS "observedAt",
-           last_storage_volume_m3 AS "storageVolumeM3",
+           avg_storage_volume_m3 AS "storageVolumeM3",
            NULL::NUMERIC AS "storageRate",
            0::SMALLINT AS "qualityFlag",
            'aggregate' AS "sourceId"

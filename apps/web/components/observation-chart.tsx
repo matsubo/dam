@@ -44,21 +44,40 @@ export function ObservationChart({ slug }: { slug: string }) {
     p.storageVolumeM3 ? Number(p.storageVolumeM3) : null,
   ]);
 
+  // Auto-scale axis to 億 (>=1e8) or 万 (>=1e4) so labels stay legible
+  // across the 6-orders-of-magnitude range of real reservoir capacities.
+  const maxAbs = Math.max(0, ...data.map(([, v]) => (v == null ? 0 : Math.abs(v))));
+  const useOku = maxAbs >= 100_000_000;
+  const axisFormatter = useOku
+    ? (v: number) => `${(v / 100_000_000).toFixed(1)}億`
+    : (v: number) => `${(v / 10_000).toFixed(0)}万`;
+  const tipFormatter = (
+    params: Array<{ axisValueLabel: string; value: [string, number | null] }>,
+  ) => {
+    const p = params[0];
+    if (!p) return '';
+    const v = p.value[1];
+    if (v == null) return `${p.axisValueLabel}<br/>—`;
+    const txt =
+      v >= 100_000_000
+        ? `${(v / 100_000_000).toFixed(2)} 億 m³`
+        : v >= 10_000
+          ? `${Math.round(v / 10_000).toLocaleString('ja-JP')} 万 m³`
+          : `${Math.round(v).toLocaleString('ja-JP')} m³`;
+    return `${p.axisValueLabel}<br/>${txt}`;
+  };
   const option = {
-    grid: { left: 60, right: 20, top: 30, bottom: 40 },
+    grid: { left: 70, right: 20, top: 30, bottom: 40 },
     xAxis: { type: 'time' as const },
-    yAxis: {
-      type: 'value' as const,
-      axisLabel: { formatter: (v: number) => `${(v / 1_000_000).toFixed(0)}万` },
-    },
-    tooltip: { trigger: 'axis' as const },
+    yAxis: { type: 'value' as const, axisLabel: { formatter: axisFormatter } },
+    tooltip: { trigger: 'axis' as const, formatter: tipFormatter },
     series: [
       {
         type: 'line' as const,
         data,
         smooth: true,
         sampling: 'lttb' as const,
-        name: '貯水量 m³',
+        name: '貯水量',
       },
     ],
     animation: false,

@@ -186,6 +186,8 @@ export interface DamListFilters {
   search?: string | null;
   cursor?: bigint | null;
   pageSize?: number;
+  /** Default: 'id'. Use 'capacity' for "largest first" ordering on the home page. */
+  orderBy?: 'id' | 'capacity';
 }
 
 export interface DamListItem {
@@ -205,6 +207,27 @@ export async function listDams(
   f: DamListFilters,
 ): Promise<{ items: DamListItem[]; nextCursor: bigint | null }> {
   const limit = Math.max(1, Math.min(200, f.pageSize ?? 50));
+  // 'capacity' orders by largest first; cursor pagination is disabled in
+  // that mode (the home page only ever asks for the top N).
+  if (f.orderBy === 'capacity') {
+    const rows = await sql<DamListItem[]>`
+      SELECT
+        d.id, d.slug, d.name, d.pref_code AS "prefCode", d.manager,
+        d.total_capacity_m3::TEXT AS "totalCapacityM3",
+        w.slug AS "watershedSlug", w.name AS "watershedName",
+        ST_Y(d.location::geometry) AS lat, ST_X(d.location::geometry) AS lng
+      FROM dams d
+      LEFT JOIN watersheds w ON w.id = d.watershed_id
+      WHERE (${f.pref ?? null}::text IS NULL OR d.pref_code = ${f.pref ?? null})
+        AND (${f.watershedSlug ?? null}::text IS NULL OR w.slug = ${f.watershedSlug ?? null})
+        AND (${f.manager ?? null}::text IS NULL OR d.manager = ${f.manager ?? null})
+        AND (${f.search ?? null}::text IS NULL OR d.name ILIKE ('%' || ${f.search ?? null} || '%'))
+        AND d.total_capacity_m3 IS NOT NULL
+      ORDER BY d.total_capacity_m3 DESC NULLS LAST, d.id
+      LIMIT ${limit}
+    `;
+    return { items: rows, nextCursor: null };
+  }
   const rows = await sql<DamListItem[]>`
     SELECT
       d.id, d.slug, d.name, d.pref_code AS "prefCode", d.manager,

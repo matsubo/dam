@@ -1,6 +1,8 @@
 import { PREFECTURES } from '@dam/core/prefectures';
-import { findDamBySlug, latestObservation, nearbyDams } from '@dam/db/repo/dams';
+import { findDamBySlug, latestObservation, listDams, nearbyDams } from '@dam/db/repo/dams';
+import { aggregateWatershed, findWatershedBySlug } from '@dam/db/repo/watersheds';
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '../../../components/breadcrumbs.tsx';
 import { DamCard } from '../../../components/dam-card.tsx';
@@ -35,10 +37,16 @@ export default async function DamDetail({ params }: PageProps) {
   const slug = decodeURIComponent(rawSlug);
   const d = await findDamBySlug(slug);
   if (!d) notFound();
-  const [latest, nearby] = await Promise.all([
+  const [latest, nearby, watershed, watershedDams] = await Promise.all([
     latestObservation(d.id),
     nearbyDams(d.id, 20_000, 6),
+    d.watershedSlug ? findWatershedBySlug(d.watershedSlug) : Promise.resolve(null),
+    d.watershedSlug
+      ? listDams({ watershedSlug: d.watershedSlug, pageSize: 12 })
+      : Promise.resolve({ items: [], nextCursor: null }),
   ]);
+  const watershedAgg = watershed ? await aggregateWatershed(watershed.id) : null;
+  const otherInWatershed = watershedDams.items.filter((w) => w.id !== d.id).slice(0, 6);
 
   const ld = {
     '@context': 'https://schema.org',
@@ -66,7 +74,15 @@ export default async function DamDetail({ params }: PageProps) {
       />
       <h1 className="text-3xl font-semibold mb-2">{d.name}</h1>
       <p className="text-muted mb-6">
-        {d.nameKana ?? ''} · {PREF_NAME.get(d.prefCode) ?? d.prefCode} · {d.manager ?? '—'}
+        {d.nameKana ?? ''} · {PREF_NAME.get(d.prefCode) ?? d.prefCode}
+        {d.watershedSlug && d.watershedName ? (
+          <>
+            {' · '}
+            <Link href={`/watersheds/${d.watershedSlug}`}>{d.watershedName}</Link>
+          </>
+        ) : null}
+        {' · '}
+        {d.manager ?? '—'}
       </p>
 
       <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
@@ -107,6 +123,44 @@ export default async function DamDetail({ params }: PageProps) {
         <h2 className="text-lg font-semibold mb-3">推移グラフ</h2>
         <ObservationChart slug={slug} />
       </section>
+
+      {watershed && (
+        <section className="mb-8">
+          <header className="flex items-baseline justify-between mb-3">
+            <h2 className="text-lg font-semibold">
+              <Link href={`/watersheds/${watershed.slug}`}>{watershed.name}</Link>
+            </h2>
+            <span className="text-sm text-muted">
+              {watershed.kind === 'first'
+                ? '一級水系'
+                : watershed.kind === 'second'
+                  ? '二級水系'
+                  : 'その他'}
+              {watershedAgg ? ` · ダム ${watershedAgg.damCount} 基` : ''}
+              {watershedAgg?.totalCapacityM3
+                ? ` · 総貯水容量 ${fmtCapacityMcm(watershedAgg.totalCapacityM3)}`
+                : ''}
+            </span>
+          </header>
+          {otherInWatershed.length > 0 ? (
+            <>
+              <p className="text-sm text-muted mb-3">同じ{watershed.name}の他のダム</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {otherInWatershed.map((n) => (
+                  <DamCard key={n.slug} d={n} />
+                ))}
+              </div>
+              <p className="mt-3 text-sm">
+                <Link href={`/watersheds/${watershed.slug}`}>
+                  {watershed.name}のダム一覧をすべて見る →
+                </Link>
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-muted">この水系で他のダムはまだ登録されていません。</p>
+          )}
+        </section>
+      )}
 
       {nearby.length > 0 && (
         <section className="mb-8">

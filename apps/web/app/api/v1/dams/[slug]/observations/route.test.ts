@@ -5,9 +5,23 @@ import { upsertObservations } from '@dam/db/repo/observations';
 import { GET } from './route.ts';
 
 let damId: bigint;
+const TEST_SOURCE = 'kasenbosai-test'; // unique source so the test owns its priority
+let savedTopPriority: number | null = null;
 
 beforeAll(async () => {
-  await sql`DELETE FROM observations WHERE source_id = 'kasenbosai' AND dam_id IN (SELECT id FROM dams WHERE external_ids ->> 'ndi' = 'API-OBS-1')`;
+  // Pin our test source as the highest-priority source so the route's
+  // preferredSource() returns it. Save the current top so we can restore.
+  const topRow = await sql<{ priority: number }[]>`
+    SELECT priority FROM source_priorities WHERE active ORDER BY priority DESC LIMIT 1
+  `;
+  savedTopPriority = topRow[0]?.priority ?? 100;
+  await sql`
+    INSERT INTO source_priorities (source_id, priority, description)
+    VALUES (${TEST_SOURCE}, ${savedTopPriority + 1}, 'integration test')
+    ON CONFLICT (source_id) DO UPDATE SET priority = EXCLUDED.priority
+  `;
+
+  await sql`DELETE FROM observations WHERE source_id = ${TEST_SOURCE}`;
   await sql`DELETE FROM dams WHERE external_ids ->> 'ndi' = 'API-OBS-1'`;
   damId = await upsertDamByExternalId('ndi', {
     slug: 'api-obs-1',
@@ -21,7 +35,7 @@ beforeAll(async () => {
     {
       observedAt: new Date('2026-04-30T10:00:00Z'),
       damId,
-      sourceId: 'kasenbosai',
+      sourceId: TEST_SOURCE,
       storageVolumeM3: 1_000_000,
       storageRate: 0.5,
     },
@@ -33,6 +47,7 @@ afterAll(async () => {
     await sql`DELETE FROM observations WHERE dam_id = ${damId}`;
     await sql`DELETE FROM dams WHERE id = ${damId}`;
   }
+  await sql`DELETE FROM source_priorities WHERE source_id = ${TEST_SOURCE}`;
 });
 
 function makeReq(slug: string, qs: string): Request {
