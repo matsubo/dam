@@ -1,5 +1,5 @@
 /**
- * Seed plausible synthetic hourly observations so the dam-detail charts render
+ * Seed plausible synthetic observations so the dam-detail charts render
  * before the realtime adapter has a real upstream feed.
  *
  * The Kasen-Bosai endpoint (www.river.go.jp) explicitly blocks programmatic
@@ -7,18 +7,25 @@
  * tools"). Until we negotiate access or wire in a different upstream, this
  * synth seeder lets the UI/API exercise the time-series stack end-to-end.
  *
- * Each row is tagged `source_id = 'synthetic'` so the quality UI surfaces it
- * as non-authoritative, and source_priorities ranks it lowest.
+ * Two-tier resolution so all three chart toggles have enough plots:
+ *   - Last `--hourly-days` (default 30): full hourly resolution
+ *   - Last `--years` (default 5) before that: one observation per day at 12:00
+ *     (cheap to store, dense enough for the 1-year/5-year aggregate views)
+ *
+ * Each row is tagged `source_id = 'synthetic'`. source_priorities ranks it
+ * highest while we lack a real feed; bump it down to 10 once a real adapter
+ * lands.
  *
  * Strategy per dam:
  *   - Baseline storage_rate sampled around 0.55 ± 0.20 (clamped to [0.10, 0.95])
- *   - Hourly values follow a slow random-walk + small diurnal sin
+ *   - Slow random walk + small diurnal sin + seasonal sinusoid (annual)
  *   - storage_volume = total_capacity_m3 * storage_rate (skip if no capacity)
  *   - inflow / outflow drawn from log-normal scaled by capacity
  *   - rainfall: zero most hours, occasional bursts
  *
  * Usage:
- *   bun run apps/web/bin/seed_synthetic_observations.ts [--days 30] [--limit 2749]
+ *   bun run apps/web/bin/seed_synthetic_observations.ts \
+ *     [--hourly-days 30] [--years 5] [--limit 5000]
  */
 import { sql } from '@dam/db/client';
 
@@ -28,7 +35,8 @@ for (let i = 2; i < process.argv.length; i += 2) {
   const v = process.argv[i + 1];
   if (k && v) args.set(k.replace(/^--/, ''), v);
 }
-const DAYS = Number(args.get('days') ?? '30');
+const HOURLY_DAYS = Number(args.get('hourly-days') ?? args.get('days') ?? '30');
+const YEARS = Number(args.get('years') ?? '5');
 const LIMIT = Number(args.get('limit') ?? '5000');
 const SOURCE = 'synthetic';
 
@@ -49,12 +57,14 @@ function randNormal(): number {
 }
 
 async function main(): Promise<void> {
-  // Ensure source_priorities knows about the synthetic source.
+  // Ensure source_priorities knows about the synthetic source. Pinned high
+  // (200) so the chart route picks synthetic data while the real adapters
+  // are still pending; lower this manually when a real upstream lands.
   await sql`
     INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE}, 10, 'Synthetic placeholder (UI-only, not authoritative)', true)
+    VALUES (${SOURCE}, 200, 'Synthetic placeholder (UI-only, not authoritative)', true)
     ON CONFLICT (source_id) DO UPDATE
-      SET priority = EXCLUDED.priority, description = EXCLUDED.description
+      SET priority = EXCLUDED.priority, description = EXCLUDED.description, active = true
   `;
 
   const dams = await sql<DamRow[]>`
@@ -64,7 +74,11 @@ async function main(): Promise<void> {
     ORDER BY id
     LIMIT ${LIMIT}
   `;
-  console.log(`seeding ${DAYS} days × ${dams.length} dams (~${(DAYS * 24 * dams.length).toLocaleString()} rows)`);
+  const olderDays = Math.max(0, YEARS * 365 - HOURLY_DAYS);
+  const expectedRows = (HOURLY_DAYS * 24 + olderDays) * dams.length;
+  console.log(
+    `seeding ${HOURLY_DAYS} d hourly + ${olderDays} d daily × ${dams.length} dams (~${expectedRows.toLocaleString()} rows)`,
+  );
 
   // Wipe prior synthetic rows so the seeder is idempotent.
   await sql`DELETE FROM observations WHERE source_id = ${SOURCE}`;
@@ -72,7 +86,6 @@ async function main(): Promise<void> {
   const now = new Date();
   // Round down to last whole hour for deterministic timestamps.
   now.setMinutes(0, 0, 0);
-  const totalHours = DAYS * 24;
 
   const BATCH = 5_000;
   const buf: Array<{
@@ -106,6 +119,38 @@ async function main(): Promise<void> {
     const flowScale = Math.cbrt(capacity) / 100; // m³/s units, very rough
     let rate = baseRate;
 
+    // Tier 1: oldest → newest, daily resolution at 12:00 JST for the years
+    // beyond the hourly window. Walk forward in time so the random walk
+    // accumulates naturally; storage_rate "lands" at the hourly window edge.
+    for (let d = olderDays; d >= 1; d--) {
+      const ts = new Date(now.getTime() - (HOURLY_DAYS + d) * 86_400_000);
+      ts.setUTCHours(3, 0, 0, 0); // 12:00 JST
+      // Seasonal: yearly sinusoid (peaks late summer/typhoon season).
+      const dayOfYear = Math.floor((ts.getTime() / 86_400_000) % 365);
+      const seasonal = 0.05 * Math.sin((dayOfYear / 365) * 2 * Math.PI);
+      rate = clamp(rate + 0.005 * randNormal() + seasonal * 0.02, 0.05, 1.0);
+      const volume = capacity * rate;
+      const inflow = clamp(flowScale * Math.exp(0.4 * randNormal()), 0, 1000);
+      const outflow = clamp(inflow * (0.85 + 0.2 * Math.random()), 0, 1000);
+      const rainfall = Math.random() < 0.85 ? 0 : Math.abs(3 * randNormal());
+
+      buf.push({
+        observed_at: ts,
+        dam_id: dam.id,
+        source_id: SOURCE,
+        storage_volume_m3: Math.round(volume * 100) / 100,
+        storage_rate: Math.round(rate * 10000) / 10000,
+        inflow_m3s: Math.round(inflow * 1000) / 1000,
+        outflow_m3s: Math.round(outflow * 1000) / 1000,
+        water_level_m: null,
+        rainfall_mm: Math.round(rainfall * 100) / 100,
+        quality_flag: 0,
+      });
+      if (buf.length >= BATCH) await flush();
+    }
+
+    // Tier 2: hourly resolution for the most recent HOURLY_DAYS.
+    const totalHours = HOURLY_DAYS * 24;
     for (let h = totalHours; h >= 1; h--) {
       const ts = new Date(now.getTime() - h * 3600_000);
       // Slow random walk + diurnal
@@ -113,7 +158,6 @@ async function main(): Promise<void> {
       const volume = capacity * rate;
       const inflow = clamp(flowScale * Math.exp(0.4 * randNormal()), 0, 1000);
       const outflow = clamp(inflow * (0.85 + 0.2 * Math.random()), 0, 1000);
-      // Rainfall: 90% zero, 10% positive
       const rainfall = Math.random() < 0.9 ? 0 : Math.abs(2 * randNormal());
 
       buf.push({
@@ -133,11 +177,20 @@ async function main(): Promise<void> {
   }
   await flush();
 
-  // Recompute the daily continuous aggregate manually so the API can read it.
-  await sql`CALL refresh_continuous_aggregate('obs_daily', NULL, NULL)`;
-  await sql`CALL refresh_continuous_aggregate('obs_monthly', NULL, NULL)`;
+  console.log(`wrote ${written} rows; refreshing continuous aggregates...`);
+  // refresh_continuous_aggregate cannot run inside an implicit transaction;
+  // postgres.js auto-commits each top-level statement so this works.
+  await sql.unsafe(`CALL refresh_continuous_aggregate('obs_daily', NULL, NULL)`);
+  await sql.unsafe(`CALL refresh_continuous_aggregate('obs_monthly', NULL, NULL)`);
 
-  console.log(JSON.stringify({ dams: dams.length, rowsWritten: written, days: DAYS }));
+  console.log(
+    JSON.stringify({
+      dams: dams.length,
+      rowsWritten: written,
+      hourlyDays: HOURLY_DAYS,
+      years: YEARS,
+    }),
+  );
 }
 
 main()
