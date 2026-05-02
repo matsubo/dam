@@ -22,8 +22,8 @@
  * Pre-requisite: ogr2ogr -f GeoJSON data/nlni/w01.geojson data/nlni/W01/W01-14-g_Dam.shp
  */
 import { readFile } from 'node:fs/promises';
-import { suffixedSlug, toSlug } from '@dam/core/slug';
 import { PREFECTURES } from '@dam/core/prefectures';
+import { suffixedSlug, toSlug } from '@dam/core/slug';
 import { sql } from '@dam/db/client';
 import { takenSlugs, upsertDamByExternalId } from '@dam/db/repo/dams';
 
@@ -67,10 +67,15 @@ interface Feature {
   properties: RawProps;
   geometry: { type: 'Point'; coordinates: number[] };
 }
-interface FC { type: 'FeatureCollection'; features: Feature[] }
+interface FC {
+  type: 'FeatureCollection';
+  features: Feature[];
+}
 
 function isFC(v: unknown): v is FC {
-  return typeof v === 'object' && v !== null && (v as { type?: string }).type === 'FeatureCollection';
+  return (
+    typeof v === 'object' && v !== null && (v as { type?: string }).type === 'FeatureCollection'
+  );
 }
 
 function prefCodeFromAddress(addr: string | undefined): string | null {
@@ -99,7 +104,9 @@ async function main(): Promise<void> {
   if (!isFC(data)) throw new Error('not a FeatureCollection');
 
   const watershedRows = await sql<{ id: bigint; name: string }[]>`SELECT id, name FROM watersheds`;
-  const watershedByName = new Map(watershedRows.map((w) => [w.name.replace(/水系$/, ''), w.id] as const));
+  const watershedByName = new Map(
+    watershedRows.map((w) => [w.name.replace(/水系$/, ''), w.id] as const),
+  );
 
   const taken = await takenSlugs('');
 
@@ -136,7 +143,8 @@ async function main(): Promise<void> {
     taken.add(slug);
 
     const ndiId = String(ndiCode);
-    const typeLabel = p.W01_005 && p.W01_005 !== '-' ? (TYPE_CODE_TO_LABEL[p.W01_005] ?? p.W01_005) : null;
+    const typeLabel =
+      p.W01_005 && p.W01_005 !== '-' ? (TYPE_CODE_TO_LABEL[p.W01_005] ?? p.W01_005) : null;
     const totalCapacityM3 = p.W01_010 ? p.W01_010 * 1_000 : null; // 千m³ → m³
     const watershedId = p.W01_003 ? (watershedByName.get(p.W01_003) ?? null) : null;
     const completedYear = intish(p.W01_012);
@@ -158,7 +166,9 @@ async function main(): Promise<void> {
     inserted++;
   }
 
-  console.log(JSON.stringify({ inserted, skippedNoPref, skippedNoCoord, total: data.features.length }));
+  console.log(
+    JSON.stringify({ inserted, skippedNoPref, skippedNoCoord, total: data.features.length }),
+  );
 }
 
 main()
