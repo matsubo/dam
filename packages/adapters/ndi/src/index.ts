@@ -1,3 +1,4 @@
+export { ndiAdapter } from './adapter.ts';
 export { parseW01 } from './parse_w01.ts';
 export { parseW07 } from './parse_w07.ts';
 export { importDams } from './import_dams.ts';
