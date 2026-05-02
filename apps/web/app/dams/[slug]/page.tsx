@@ -18,7 +18,8 @@ interface PageProps {
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const { slug } = await params;
+  const { slug: rawSlug } = await params;
+  const slug = decodeURIComponent(rawSlug);
   const d = await findDamBySlug(slug);
   if (!d) return { title: 'ダムが見つかりません' };
   return {
@@ -30,7 +31,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function DamDetail({ params }: PageProps) {
-  const { slug } = await params;
+  const { slug: rawSlug } = await params;
+  const slug = decodeURIComponent(rawSlug);
   const d = await findDamBySlug(slug);
   if (!d) notFound();
   const [latest, nearby] = await Promise.all([

@@ -13,7 +13,8 @@ interface PageProps {
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const { slug } = await params;
+  const { slug: rawSlug } = await params;
+  const slug = decodeURIComponent(rawSlug);
   const w = await findWatershedBySlug(slug);
   if (!w) return { title: '水系が見つかりません' };
   return {
@@ -24,7 +25,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function WatershedDetail({ params }: PageProps) {
-  const { slug } = await params;
+  const { slug: rawSlug } = await params;
+  const slug = decodeURIComponent(rawSlug);
   const w = await findWatershedBySlug(slug);
   if (!w) notFound();
   const [agg, list] = await Promise.all([
