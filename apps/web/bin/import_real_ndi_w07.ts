@@ -83,14 +83,19 @@ async function main(): Promise<void> {
   await sql`DROP TABLE stage_w07`;
   await sql`DROP TABLE stage_w07_final`;
 
-  console.log(JSON.stringify({
-    staged,
-    inserted: Number(result[0]?.inserted ?? 0),
-    updated: Number(result[0]?.updated ?? 0),
-    backfilled: backfill.count,
-  }));
+  console.log(
+    JSON.stringify({
+      staged,
+      inserted: Number(result[0]?.inserted ?? 0),
+      updated: Number(result[0]?.updated ?? 0),
+      backfilled: backfill.count,
+    }),
+  );
 }
 
 main()
-  .catch((e) => { console.error(e); process.exitCode = 1; })
+  .catch((e) => {
+    console.error(e);
+    process.exitCode = 1;
+  })
   .finally(() => sql.end({ timeout: 5 }));
