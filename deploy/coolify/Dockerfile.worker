@@ -1,0 +1,33 @@
+# syntax=docker/dockerfile:1.7
+# Build the graphile-worker process (scrapers, reconciler, scheduled jobs).
+
+FROM oven/bun:1.3 AS deps
+WORKDIR /app
+
+COPY package.json bun.lock tsconfig.base.json ./
+COPY apps/web/package.json apps/web/package.json
+COPY apps/worker/package.json apps/worker/package.json
+COPY packages/core/package.json packages/core/package.json
+COPY packages/db/package.json packages/db/package.json
+COPY packages/ingest/package.json packages/ingest/package.json
+COPY packages/reconciler/package.json packages/reconciler/package.json
+COPY packages/storage/package.json packages/storage/package.json
+COPY packages/adapters/damnet/package.json packages/adapters/damnet/package.json
+COPY packages/adapters/kasenbosai/package.json packages/adapters/kasenbosai/package.json
+COPY packages/adapters/ndi/package.json packages/adapters/ndi/package.json
+COPY packages/adapters/suimon/package.json packages/adapters/suimon/package.json
+
+RUN bun install --frozen-lockfile
+
+# ---------------------------------------------------------------------------
+FROM deps AS run
+WORKDIR /app
+
+# Worker needs the workspace packages + its own source.
+COPY packages ./packages
+COPY apps/worker ./apps/worker
+
+ENV NODE_ENV=production
+
+# graphile-worker exits non-zero on fatal errors; Coolify/compose will restart.
+CMD ["bun", "run", "apps/worker/src/index.ts"]
