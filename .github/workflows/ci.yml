@@ -49,3 +49,19 @@ jobs:
             -e MC_HOST_local=http://minio:minio12345@localhost:9000 \
             minio/mc:RELEASE.2025-04-08T15-39-49Z mb local/dam-raw || true
       - run: bun test
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium
+      - name: E2E (Playwright)
+        run: bunx playwright test
+        env:
+          API_AUTH_BYPASS: '1'
+          CI: '1'
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results
+          retention-days: 14

@@ -55,6 +55,16 @@ import-damnet *args:
 reconcile:
     bun run --filter @dam/reconciler run
 
+# Playwright E2E (auto-spawns the web server in API_AUTH_BYPASS=1 mode)
+e2e *args:
+    bunx playwright test {{args}}
+
+e2e-headed *args:
+    bunx playwright test --headed --project chromium {{args}}
+
+e2e-report:
+    bunx playwright show-report
+
 # API key management
 api-key-issue email="" label="":
     bun run bin/api_key.ts issue --email "{{email}}" --label "{{label}}"

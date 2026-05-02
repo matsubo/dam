@@ -24,7 +24,9 @@
       "**/.next/**",
       "**/dist/**",
       "**/migrations/**",
-      "**/.claude/**"
+      "**/.claude/**",
+      "**/playwright-report/**",
+      "**/test-results/**"
     ]
   }
 }
