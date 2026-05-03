@@ -4,6 +4,7 @@ import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
 import { DamTable } from '../../components/dam-table.tsx';
 import { Pagination } from '../../components/pagination.tsx';
 
+export const dynamic = 'force-dynamic';
 export const revalidate = 900;
 
 export const metadata: Metadata = {

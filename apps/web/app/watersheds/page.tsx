@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
 
+export const dynamic = 'force-dynamic';
 export const revalidate = 3600;
 export const metadata: Metadata = { title: '水系一覧' };
 

@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
 import { JapanMap, type MapPoint } from '../../components/japan-map.tsx';
 
+export const dynamic = 'force-dynamic';
 export const revalidate = 3600;
 export const metadata: Metadata = {
   title: '日本のダム地図',
