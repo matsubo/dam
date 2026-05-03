@@ -194,6 +194,21 @@ export default async function Home() {
               全国合計の容量・貯水量・直近の観測ボリュームをひと目で。
             </p>
           </div>
+          {/* Hero metric: full-width single-row progress bar at the top */}
+          <div className="bg-white border border-outline-variant rounded-xl p-5 mb-3">
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="text-sm text-on-surface-variant whitespace-nowrap">全国貯水率</div>
+              <div className="flex-1 min-w-[200px]">
+                <RateBar rate={overallRate} />
+              </div>
+              <div className="text-3xl font-display font-semibold tabular-nums whitespace-nowrap">
+                {overallRate != null ? `${(overallRate * 100).toFixed(1)} %` : '—'}
+              </div>
+              <div className="basis-full text-xs text-on-surface-variant">
+                現在貯水量 ÷ 総貯水容量（直近 7 日の最新値の合計）
+              </div>
+            </div>
+          </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Stat label="ダム" value={fmt(s.damCount)} sub="登録済み" />
             <Stat label="水系" value={fmt(s.watershedCount)} sub="一級・二級・その他" />
@@ -205,11 +220,6 @@ export default async function Home() {
             <Stat label="直近24時間の観測" value={fmt(s.obsLast24h)} />
             <Stat label="全国合計貯水容量" value={fmtCapacityMcm(s.totalCapacityM3)} sub="登録ダム合計" />
             <Stat label="現在の合計貯水量" value={fmtCapacityMcm(s.totalStorageM3)} sub="直近 7 日の最新値" />
-            <Stat
-              label="全国貯水率"
-              value={overallRate != null ? `${(overallRate * 100).toFixed(1)} %` : '—'}
-              sub="現在貯水量 ÷ 総貯水容量"
-            />
             <Stat
               label="観測カバー期間"
               value={yearsCovered ? `${yearsCovered} 年` : '—'}
@@ -345,6 +355,54 @@ curl -s "https://dam.teraren.com/api/v1/dams/biwakokaihatsu-25/observations\\
         </div>
       </section>
     </>
+  );
+}
+
+// Horizontal progress bar for storage rate. Same colour scale as the
+// reservoir gauge / map markers (red = 渇水, blue = 満水).
+function RateBar({ rate }: { rate: number | null }) {
+  if (rate == null || !Number.isFinite(rate)) {
+    return (
+      <div className="relative h-3 rounded-full bg-surface-container overflow-hidden">
+        <div className="absolute inset-y-0 left-0 bg-on-surface-variant/30 w-0" />
+      </div>
+    );
+  }
+  const pct = Math.max(0, Math.min(1, rate)) * 100;
+  const color =
+    rate < 0.2
+      ? '#dc2626'
+      : rate < 0.4
+        ? '#f97316'
+        : rate < 0.6
+          ? '#eab308'
+          : rate < 0.8
+            ? '#16a34a'
+            : '#1e6dff';
+  return (
+    <div
+      className="relative h-3 rounded-full bg-surface-container overflow-hidden"
+      role="progressbar"
+      aria-label="全国貯水率"
+      aria-valuenow={Math.round(pct)}
+      aria-valuemin={0}
+      aria-valuemax={100}
+    >
+      <div
+        className="absolute inset-y-0 left-0 transition-[width] duration-500 ease-out"
+        style={{ width: `${pct}%`, backgroundColor: color }}
+      />
+      {/* tick marks at 20/40/60/80 so the colour bands are decipherable */}
+      <div className="absolute inset-0 flex justify-between pointer-events-none">
+        {[0.2, 0.4, 0.6, 0.8].map((t) => (
+          <div
+            key={t}
+            className="border-l border-white/60"
+            style={{ marginLeft: `calc(${t * 100}% - 1px)`, height: '100%' }}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 

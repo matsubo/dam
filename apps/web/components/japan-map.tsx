@@ -14,16 +14,17 @@ export interface MapPoint {
 
 type LeafletMap = { remove: () => void };
 
-// Map storage rate (0..1) to a colour on a blue → green → yellow ramp.
-// Same anchors as a typical sequential viridis-like palette so low/full
-// reservoirs are visually distinct.
+// Map storage rate (0..1) to a colour. Semantics: high % = "safe" = blue,
+// low % approaching 0 = "danger" = red. Ramp anchors at 0.2 / 0.4 / 0.6 / 0.8
+// so the visual is intuitive — a reservoir at 90% reads as comfortably full,
+// 10% reads as drought-level alarming.
 function rateColor(rate: number | null | undefined): string {
   if (rate == null || !Number.isFinite(rate)) return '#9ca3af'; // gray-400 — no data
-  if (rate < 0.25) return '#1e6dff'; // low — blue
-  if (rate < 0.5) return '#06a8c2'; // teal
-  if (rate < 0.75) return '#16a34a'; // green
-  if (rate < 0.9) return '#eab308'; // yellow
-  return '#f97316'; // near-full — orange
+  if (rate < 0.2) return '#dc2626'; // critically low — red
+  if (rate < 0.4) return '#f97316'; // low — orange
+  if (rate < 0.6) return '#eab308'; // mid — yellow
+  if (rate < 0.8) return '#16a34a'; // healthy — green
+  return '#1e6dff'; // safe / full — blue
 }
 
 // Marker radius in pixels mapped from capacity. Use sqrt so circle AREA is

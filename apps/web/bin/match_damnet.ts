@@ -168,18 +168,21 @@ async function main(): Promise<void> {
     const heightM = num(c.height);
     const capacity = num(c.capacity_total);
     const capacityM3 = capacity ? capacity * 1_000 : null;
+    const active = num(c.capacity_active);
+    const activeCapacityM3 = active ? active * 1_000 : null;
     const typeLabel = c.type ? (TYPE_LETTER_TO_LABEL[c.type] ?? c.type) : null;
     const operator = c.operator || null;
     const kana = c.dam_name_kana || null;
-    if (kana || operator || typeLabel || heightM || capacityM3 || completed) {
+    if (kana || operator || typeLabel || heightM || capacityM3 || activeCapacityM3 || completed) {
       await sql`
         UPDATE dams SET
-          name_kana       = COALESCE(${kana}, name_kana),
-          manager         = COALESCE(${operator}, manager),
-          type            = COALESCE(${typeLabel}, type),
-          height_m        = COALESCE(${heightM}, height_m),
-          total_capacity_m3 = COALESCE(${capacityM3}, total_capacity_m3),
-          completed_year  = COALESCE(${completed}, completed_year)
+          name_kana          = COALESCE(${kana}, name_kana),
+          manager            = COALESCE(${operator}, manager),
+          type               = COALESCE(${typeLabel}, type),
+          height_m           = COALESCE(${heightM}, height_m),
+          total_capacity_m3  = COALESCE(${capacityM3}, total_capacity_m3),
+          active_capacity_m3 = COALESCE(${activeCapacityM3}, active_capacity_m3),
+          completed_year     = COALESCE(${completed}, completed_year)
         WHERE id = ${target.id}
       `;
       attrUpdated++;

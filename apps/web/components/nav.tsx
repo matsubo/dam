@@ -32,10 +32,26 @@ export function Nav() {
           <Link href="/api/docs" className="nav-link">
             API
           </Link>
+          <Link href="/account/keys" className="nav-link">
+            アカウント
+          </Link>
         </div>
         <div className="flex items-center gap-3">
-          <Link href="/dams" className="hidden sm:inline-flex btn-primary !py-2 !px-5 text-sm">
-            データを探す
+          <form action="/search" method="get" className="hidden md:flex items-center">
+            <input
+              type="search"
+              name="q"
+              placeholder="ダム・水系を検索"
+              aria-label="検索"
+              className="border border-outline-variant rounded-full px-4 py-1.5 text-sm w-48 focus:w-64 transition-all bg-surface-container-low focus:bg-white"
+            />
+          </form>
+          <Link
+            href="/search"
+            aria-label="検索"
+            className="md:hidden p-2 rounded-lg hover:bg-surface-container"
+          >
+            <span className="material-symbols-outlined">search</span>
           </Link>
           <label htmlFor="nav-toggle" className="lg:hidden cursor-pointer p-2 rounded-lg hover:bg-surface-container">
             <span className="material-symbols-outlined">menu</span>

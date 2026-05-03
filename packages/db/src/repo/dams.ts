@@ -258,10 +258,43 @@ export interface DamDetail extends DamListItem {
   heightM: string | null;
   effectiveCapacityM3: string | null;
   floodCapacityM3: string | null;
+  /** 利水容量 (active conservation storage). Backfilled from Damnet. */
+  activeCapacityM3: string | null;
   completedYear: number | null;
   externalIds: Record<string, string>;
   /** Sea-level elevation (m) backfilled from GSI's DEM API. May be null. */
   elevationM: number | null;
+}
+
+/**
+ * Partial-match search across dam name + kana. Case-insensitive.
+ * Limits to `limit` rows; ranks by total_capacity_m3 (largest first) so the
+ * most-significant matches surface first.
+ */
+export async function searchDams(query: string, limit = 30): Promise<DamListItem[]> {
+  const q = query.trim();
+  if (q.length === 0) return [];
+  const like = `%${q}%`;
+  return sql<DamListItem[]>`
+    SELECT
+      d.id, d.slug, d.name, d.pref_code AS "prefCode", d.manager,
+      d.total_capacity_m3::TEXT AS "totalCapacityM3",
+      w.slug AS "watershedSlug", w.name AS "watershedName",
+      ST_Y(d.location::geometry) AS lat, ST_X(d.location::geometry) AS lng,
+      d.image_url AS "imageUrl"
+    FROM dams d
+    LEFT JOIN watersheds w ON w.id = d.watershed_id
+    WHERE d.name      ILIKE ${like}
+       OR d.name_kana ILIKE ${like}
+       OR d.slug      ILIKE ${like}
+    ORDER BY
+      -- exact-name match first, then prefix, then anything else, then by size
+      (d.name = ${q}) DESC,
+      (d.name ILIKE ${`${q}%`}) DESC,
+      d.total_capacity_m3 DESC NULLS LAST,
+      d.id
+    LIMIT ${limit}
+  `;
 }
 
 export async function findDamBySlug(slug: string): Promise<DamDetail | null> {
@@ -275,6 +308,7 @@ export async function findDamBySlug(slug: string): Promise<DamDetail | null> {
       d.elevation_m::FLOAT8 AS "elevationM",
       d.total_capacity_m3::TEXT AS "totalCapacityM3",
       d.effective_capacity_m3::TEXT AS "effectiveCapacityM3",
+      d.active_capacity_m3::TEXT AS "activeCapacityM3",
       d.flood_capacity_m3::TEXT AS "floodCapacityM3",
       d.completed_year AS "completedYear",
       d.external_ids AS "externalIds",
