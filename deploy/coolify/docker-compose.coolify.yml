@@ -42,11 +42,14 @@ services:
       minio:
         condition: service_healthy
     healthcheck:
-      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/api/health']
+      # bun image has no curl/wget; use bun's built-in fetch.
+      test:
+        - 'CMD-SHELL'
+        - "bun -e \"fetch('http://127.0.0.1:3000/api/v1/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""
       interval: 30s
-      timeout: 5s
+      timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 60s
     # Coolify will inject SERVICE_FQDN_APP_3000 to expose this on the public URL.
     expose:
       - '3000'
@@ -70,17 +73,14 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-    # No public port — worker has no HTTP surface.
-    healthcheck:
-      # graphile-worker writes a stable process; check it's still alive.
-      test: ['CMD-SHELL', 'pgrep -f apps/worker/src/index.ts || exit 1']
-      interval: 60s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
+    # No public port — worker has no HTTP surface. No healthcheck either:
+    # the bun runtime image doesn't include `pgrep`/`procps`, and graphile-worker
+    # already exits non-zero on fatal errors → `restart: unless-stopped` covers it.
 
   db:
-    image: timescale/timescaledb-ha:pg16
+    # `:pg16-all` bundles TimescaleDB + PostGIS + pg_trgm + pgcrypto, all required
+    # by 0000_extensions.sql. The bare `:pg16` tag does NOT include PostGIS.
+    image: timescale/timescaledb-ha:pg16-all
     restart: unless-stopped
     environment:
       POSTGRES_DB: dam

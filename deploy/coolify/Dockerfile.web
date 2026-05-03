@@ -54,8 +54,9 @@ WORKDIR /app/apps/web
 EXPOSE 3000
 
 # Healthcheck — Coolify will also do its own, but having one in the image
-# makes `docker compose` self-healing locally.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:3000/api/health || exit 1
+# makes `docker compose` self-healing locally. The `oven/bun` image has no
+# curl/wget, so we use bun's built-in fetch.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD bun -e "fetch('http://127.0.0.1:3000/api/v1/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
 
 CMD ["bun", "next", "start", "-p", "3000"]
