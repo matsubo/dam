@@ -10,6 +10,7 @@ import { ObservationChart } from '../../../components/observation-chart.tsx';
 import { QualityBadge } from '../../../components/quality-badge.tsx';
 import { fmtCapacityMcm, fmtDate, fmtN, fmtPct } from '../../../lib/format.ts';
 
+export const dynamic = 'force-dynamic';
 export const revalidate = 900;
 export const dynamicParams = true;
 

@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '../../../components/breadcrumbs.tsx';
 import { DamTable } from '../../../components/dam-table.tsx';
 
+export const dynamic = 'force-dynamic';
 export const revalidate = 900;
 
 const PREF_NAME = new Map(PREFECTURES.map((p) => [p.code, p.name]));

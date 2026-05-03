@@ -1,6 +1,11 @@
 import { sql } from '@dam/db/client';
 import type { MetadataRoute } from 'next';
 
+// Dynamic so we don't query the DB during `next build`. Cached for an hour
+// in production via standard HTTP caching at the edge.
+export const dynamic = 'force-dynamic';
+export const revalidate = 3600;
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
   const [dams, watersheds] = await Promise.all([

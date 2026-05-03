@@ -6,6 +6,7 @@ import { Breadcrumbs } from '../../../components/breadcrumbs.tsx';
 import { DamTable } from '../../../components/dam-table.tsx';
 import { fmtCapacityMcm, fmtDate } from '../../../lib/format.ts';
 
+export const dynamic = 'force-dynamic';
 export const revalidate = 900;
 
 interface PageProps {

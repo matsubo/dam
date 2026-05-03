@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { DamCard } from '../components/dam-card.tsx';
 
+export const dynamic = 'force-dynamic';
 export const revalidate = 900;
 export const metadata: Metadata = {
   title: { absolute: 'Dam Data Platform — 日本のダム貯水量' },
