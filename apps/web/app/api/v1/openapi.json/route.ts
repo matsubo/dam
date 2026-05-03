@@ -50,7 +50,9 @@ export async function GET() {
       },
       '/api/v1/dams/{slug}/observations': {
         get: {
-          summary: 'Time series',
+          summary: 'Dam storage history (time series)',
+          description:
+            'Returns the dam\'s storage time-series for the requested window. Default response is HAL-JSON with a series of {observedAt, storageVolumeM3, storageRate, qualityFlag, sourceId}. Pass `format=csv` to download the same data as a CSV with `Content-Disposition: attachment`.',
           parameters: [
             { in: 'path', name: 'slug', required: true, schema: { type: 'string' } },
             {
@@ -71,8 +73,26 @@ export async function GET() {
               required: true,
               schema: { type: 'string', enum: ['hourly', 'daily', 'monthly'] },
             },
+            {
+              in: 'query',
+              name: 'format',
+              required: false,
+              schema: { type: 'string', enum: ['json', 'csv'], default: 'json' },
+            },
           ],
-          responses: { '200': { description: 'OK' } },
+          responses: {
+            '200': {
+              description: 'OK',
+              content: {
+                'application/json': {},
+                'text/csv': {
+                  example:
+                    'dam_slug,observed_at,storage_volume_m3,storage_rate,quality_flag,source_id\n' +
+                    'biwakokaihatsu-25,2025-05-01T00:00:00.000Z,1255099862.92,,0,aggregate\n',
+                },
+              },
+            },
+          },
         },
       },
       '/api/v1/watersheds': {
@@ -89,6 +109,41 @@ export async function GET() {
         get: {
           summary: 'Dams in watershed',
           parameters: [{ in: 'path', name: 'slug', required: true, schema: { type: 'string' } }],
+          responses: { '200': { description: 'OK' } },
+        },
+      },
+      '/api/v1/watersheds/{slug}/observations': {
+        get: {
+          summary: 'Watershed storage history (time series, summed across dams)',
+          description:
+            'Returns SUM(storage_volume_m3) per bucket across all dams in the watershed. Same query params and `format=csv` support as the per-dam endpoint.',
+          parameters: [
+            { in: 'path', name: 'slug', required: true, schema: { type: 'string' } },
+            {
+              in: 'query',
+              name: 'from',
+              required: true,
+              schema: { type: 'string', format: 'date-time' },
+            },
+            {
+              in: 'query',
+              name: 'to',
+              required: true,
+              schema: { type: 'string', format: 'date-time' },
+            },
+            {
+              in: 'query',
+              name: 'interval',
+              required: true,
+              schema: { type: 'string', enum: ['hourly', 'daily', 'monthly'] },
+            },
+            {
+              in: 'query',
+              name: 'format',
+              required: false,
+              schema: { type: 'string', enum: ['json', 'csv'], default: 'json' },
+            },
+          ],
           responses: { '200': { description: 'OK' } },
         },
       },

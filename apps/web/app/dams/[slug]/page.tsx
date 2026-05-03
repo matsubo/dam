@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '../../../components/breadcrumbs.tsx';
 import { DamCard } from '../../../components/dam-card.tsx';
+import { DamLocationMap } from '../../../components/dam-location-map.tsx';
 import { ObservationChart } from '../../../components/observation-chart.tsx';
 import { QualityBadge } from '../../../components/quality-badge.tsx';
 import { ReservoirGauge } from '../../../components/reservoir-gauge.tsx';
@@ -101,9 +102,10 @@ export default async function DamDetail({ params }: PageProps) {
         {d.manager ?? '—'}
       </p>
 
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
         <Stat label="総貯水容量" value={fmtCapacityMcm(d.totalCapacityM3)} />
         <Stat label="有効貯水容量" value={fmtCapacityMcm(d.effectiveCapacityM3)} />
+        <Stat label="利水容量" value={fmtCapacityMcm(d.activeCapacityM3)} />
         <Stat label="堤高" value={d.heightM ? `${fmtN(d.heightM)} m` : '—'} />
         <Stat
           label="標高"
@@ -162,6 +164,14 @@ export default async function DamDetail({ params }: PageProps) {
           slug={slug}
           capacityM3={d.totalCapacityM3 ? Number(d.totalCapacityM3) : null}
         />
+      </section>
+
+      <section className="mb-8">
+        <h2 className="text-lg font-semibold mb-3">所在地</h2>
+        <DamLocationMap lat={d.lat} lng={d.lng} name={d.name} />
+        <p className="text-xs text-on-surface-variant mt-2 tabular-nums">
+          {d.lat.toFixed(5)}, {d.lng.toFixed(5)}
+        </p>
       </section>
 
       {watershed && (

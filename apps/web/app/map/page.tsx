@@ -48,7 +48,7 @@ export default async function MapPage() {
       <Breadcrumbs items={[{ label: 'ホーム', href: '/' }, { label: '地図' }]} />
       <h1 className="text-2xl font-semibold mb-2">日本のダム地図</h1>
       <p className="text-sm text-muted mb-4">
-        円の面積 = 総貯水容量。色 = 最新貯水率（青=低 → 緑=中 → 黄=高）。
+        円の面積 = 総貯水容量。色 = 最新貯水率（赤=渇水 → 黄=中 → 青=満水）。
       </p>
       <JapanMap points={points} />
     </div>

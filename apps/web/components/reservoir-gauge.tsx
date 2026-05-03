@@ -2,12 +2,14 @@
 // (capacity × rate). Colour follows the same blue→teal→green→yellow→orange
 // ramp as the map markers so the visual encoding stays consistent.
 
+// High % = safe (blue), low % = danger (red). Same scale as the /map markers
+// so the two visual languages stay aligned.
 function rateColor(rate: number): string {
-  if (rate < 0.25) return '#1e6dff';
-  if (rate < 0.5) return '#06a8c2';
-  if (rate < 0.75) return '#16a34a';
-  if (rate < 0.9) return '#eab308';
-  return '#f97316';
+  if (rate < 0.2) return '#dc2626'; // critically low — red
+  if (rate < 0.4) return '#f97316'; // low — orange
+  if (rate < 0.6) return '#eab308'; // mid — yellow
+  if (rate < 0.8) return '#16a34a'; // healthy — green
+  return '#1e6dff'; // safe / full — blue
 }
 
 export function ReservoirGauge({

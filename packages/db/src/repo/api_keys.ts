@@ -92,6 +92,44 @@ export async function revoke(id: bigint): Promise<void> {
   await sql`UPDATE api_keys SET active = FALSE, revoked_at = NOW() WHERE id = ${id}`;
 }
 
+export interface KeyListItem {
+  id: bigint;
+  prefix: string;
+  label: string | null;
+  tier: 'free' | 'partner' | 'admin';
+  ratePerMin: number;
+  ratePerDay: number;
+  active: boolean;
+  createdAt: Date;
+  lastUsedAt: Date | null;
+  revokedAt: Date | null;
+}
+
+/** All keys for an email, newest first (revoked included so the UI can grey them). */
+export async function listKeysByEmail(email: string): Promise<KeyListItem[]> {
+  return sql<KeyListItem[]>`
+    SELECT id, prefix, label, tier,
+           rate_per_min AS "ratePerMin",
+           rate_per_day AS "ratePerDay",
+           active,
+           created_at   AS "createdAt",
+           last_used_at AS "lastUsedAt",
+           revoked_at   AS "revokedAt"
+    FROM api_keys
+    WHERE email = ${email}
+    ORDER BY created_at DESC
+  `;
+}
+
+/** Revoke a key only if it belongs to the given email. Returns rows updated. */
+export async function revokeForEmail(id: bigint, email: string): Promise<number> {
+  const r = await sql`
+    UPDATE api_keys SET active = FALSE, revoked_at = NOW()
+    WHERE id = ${id} AND email = ${email} AND revoked_at IS NULL
+  `;
+  return r.count;
+}
+
 export async function touchLastUsed(id: bigint): Promise<void> {
   await sql`UPDATE api_keys SET last_used_at = NOW() WHERE id = ${id}`;
 }

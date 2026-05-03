@@ -105,6 +105,33 @@ export async function listWatersheds(
   return { items, nextCursor };
 }
 
+/**
+ * Partial-match search across watershed name + kana. Case-insensitive.
+ * Watersheds with attached dams rank above empty placeholders.
+ */
+export async function searchWatersheds(query: string, limit = 30): Promise<WatershedListItem[]> {
+  const q = query.trim();
+  if (q.length === 0) return [];
+  const like = `%${q}%`;
+  return sql<WatershedListItem[]>`
+    SELECT
+      w.id, w.slug, w.code, w.name, w.kind,
+      COUNT(d.id)::INT AS "damCount"
+    FROM watersheds w
+    LEFT JOIN dams d ON d.watershed_id = w.id
+    WHERE w.name      ILIKE ${like}
+       OR w.name_kana ILIKE ${like}
+       OR w.slug      ILIKE ${like}
+    GROUP BY w.id
+    ORDER BY
+      (w.name = ${q}) DESC,
+      (w.name ILIKE ${`${q}%`}) DESC,
+      COUNT(d.id) DESC,
+      w.id
+    LIMIT ${limit}
+  `;
+}
+
 export interface WatershedDetail {
   id: bigint;
   slug: string;

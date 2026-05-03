@@ -219,6 +219,37 @@ export function ObservationChart({
         ))}
       </div>
       <ReactECharts option={option} style={{ height: 360 }} />
+      {/* Download / API exploration links — same time window as the rendered chart */}
+      <DataLinks slug={slug} kind={kind} interval={interval} />
+    </div>
+  );
+}
+
+function DataLinks({
+  slug,
+  kind,
+  interval,
+}: {
+  slug: string;
+  kind: 'dam' | 'watershed';
+  interval: 'hourly' | 'daily' | 'monthly';
+}) {
+  const to = new Date();
+  const fromDate = new Date();
+  if (interval === 'hourly') fromDate.setUTCDate(fromDate.getUTCDate() - 7);
+  else if (interval === 'daily') fromDate.setUTCFullYear(fromDate.getUTCFullYear() - 1);
+  else fromDate.setUTCFullYear(fromDate.getUTCFullYear() - 5);
+  const base = kind === 'watershed' ? '/api/v1/watersheds' : '/api/v1/dams';
+  const qs = `from=${fromDate.toISOString()}&to=${to.toISOString()}&interval=${interval}`;
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-on-surface-variant">
+      <span>このデータを取得:</span>
+      <a className="text-primary hover:underline" href={`${base}/${slug}/observations?${qs}`}>
+        JSON
+      </a>
+      <a className="text-primary hover:underline" href={`${base}/${slug}/observations?${qs}&format=csv`}>
+        CSV ダウンロード
+      </a>
     </div>
   );
 }
