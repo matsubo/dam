@@ -22,7 +22,7 @@ name: dam
 services:
   app:
     build:
-      context: ../..
+      context: .
       dockerfile: deploy/coolify/Dockerfile.web
     restart: unless-stopped
     environment:
@@ -56,7 +56,7 @@ services:
 
   worker:
     build:
-      context: ../..
+      context: .
       dockerfile: deploy/coolify/Dockerfile.worker
     restart: unless-stopped
     environment:

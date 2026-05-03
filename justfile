@@ -5,7 +5,7 @@ default:
 
 # Bring up the local infra (db + minio)
 up:
-    docker compose up -d
+    docker compose -f docker-compose.dev.yml up -d
 
 # Ensure the local raw-snapshot bucket exists in MinIO
 # Uses the compose network so this works on macOS Docker Desktop (no --network host).
@@ -16,7 +16,7 @@ ensure-bucket:
         mb --ignore-existing local/${S3_BUCKET:-dam-raw}
 
 down:
-    docker compose down
+    docker compose -f docker-compose.dev.yml down
 
 # Run all migrations
 migrate:
@@ -24,8 +24,8 @@ migrate:
 
 # Reset the database (drops volume — local only)
 reset-db:
-    docker compose down -v
-    docker compose up -d --wait
+    docker compose -f docker-compose.dev.yml down -v
+    docker compose -f docker-compose.dev.yml up -d --wait
     bun run --filter @dam/db migrate
 
 # Lint, format, typecheck, test
