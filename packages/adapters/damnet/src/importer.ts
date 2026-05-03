@@ -3,7 +3,7 @@ import { enqueueMatchReview } from '@dam/db/repo/match_review';
 import { matchDam } from '@dam/reconciler';
 import type { DamnetDetail } from './types.ts';
 
-export interface ImportOutcome {
+interface ImportOutcome {
   outcome: 'matched' | 'review_enqueued' | 'no_candidate';
   damId: bigint | null;
   confidence: number;

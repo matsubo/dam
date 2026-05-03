@@ -63,16 +63,29 @@ async function processOne(row: Row): Promise<void> {
       return;
     }
     const html = await res.text();
-    // Match the first uploaded photo (jpg/jpeg/png/webp) under /wp-content/uploads/.
-    // Site logos and theme assets live under /wp-content/themes/, so they're skipped.
-    const match = html.match(
-      /https:\/\/dambinran\.damnet\.or\.jp\/wp-content\/uploads\/[^"\s)]+\.(?:jpe?g|png|webp)/i,
+    // Damnet's per-dam page embeds two kinds of wp-uploads images:
+    //   1. Generic promo banners shared across all pages (`dam100_00A.jpg`,
+    //      `beautifuldamA.jpg`, theme assets) — picked up by a naive "first
+    //      wp-content/uploads url" regex, but they're NOT photos of the dam.
+    //   2. Real dam photos named `{damNumber}DC{digits}{angle}{idx}L.jpg`
+    //      where `{damNumber}` is the same as `external_ids.damnet`.
+    // Match (2) by anchoring the filename to the damNumber. Prefer the front-on
+    // angle (BU = 正面) when several DC files exist, otherwise take the first.
+    const num = row.damnet;
+    const damPhotoRe = new RegExp(
+      `https://dambinran\\.damnet\\.or\\.jp/wp-content/uploads/[^"\\s)]*?\\b${num}DC[A-Z0-9_-]+\\.(?:jpe?g|png|webp)`,
+      'gi',
     );
-    if (!match) {
+    const candidates = Array.from(html.matchAll(damPhotoRe), (m) => m[0]);
+    if (candidates.length === 0) {
       missing += 1;
       return;
     }
-    const imageUrl = match[0];
+    // Prefer "正面" angle (BU) → "下流面" (DO) → first.
+    const imageUrl =
+      candidates.find((u) => /BU\d/i.test(u)) ??
+      candidates.find((u) => /DO\d/i.test(u)) ??
+      candidates[0]!;
     await sql`UPDATE dams SET image_url = ${imageUrl}, updated_at = NOW() WHERE id = ${row.id}::BIGINT`;
     found += 1;
   } catch (err) {

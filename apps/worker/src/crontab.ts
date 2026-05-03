@@ -17,4 +17,10 @@ export const CRONTAB = `
 
 # Quality recomputation
 30 4 * * * quality:recompute
+
+# Cover-image and elevation refresh — monthly, staggered to avoid hitting the
+# upstream APIs all at once.
+0 5 1 * * images:refresh:damnet
+0 5 2 * * images:refresh:wikipedia
+0 5 3 * * master:refresh:elevation
 `;

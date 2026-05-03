@@ -17,8 +17,5 @@
     "@dam/ingest": "workspace:*",
     "@dam/storage": "workspace:*",
     "graphile-worker": "^0.16.0"
-  },
-  "devDependencies": {
-    "@types/geojson": "^7946.0.14"
   }
 }

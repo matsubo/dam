@@ -12,6 +12,10 @@ const nextConfig: NextConfig = {
     // host so next/image can optimise them.
     remotePatterns: [
       { protocol: 'https', hostname: 'dambinran.damnet.or.jp', pathname: '/wp-content/uploads/**' },
+      // Wikipedia / Wikimedia Commons thumbnails — fallback when Damnet has no
+      // photo. Both the thumb path (`/thumb/...`) and the original path land
+      // under upload.wikimedia.org.
+      { protocol: 'https', hostname: 'upload.wikimedia.org', pathname: '/wikipedia/**' },
     ],
   },
 };

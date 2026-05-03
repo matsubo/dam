@@ -3,7 +3,7 @@ import { sql } from '@dam/db/client';
 import { upsertWatershed } from '@dam/db/repo/watersheds';
 import type { ParsedWatershed } from './types.ts';
 
-export interface ImportResult {
+interface ImportResult {
   upserted: number;
 }
 

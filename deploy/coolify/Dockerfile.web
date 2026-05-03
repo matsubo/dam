@@ -49,6 +49,11 @@ COPY --from=build /app/package.json /app/package.json
 COPY --from=build /app/bun.lock /app/bun.lock
 COPY --from=build /app/packages /app/packages
 COPY --from=build /app/apps/web /app/apps/web
+# Bundle the master-data seed (gzipped pg_dump of dams + watersheds + sources +
+# rivers — 16 MB compressed). Restored on first boot if `dams` is empty.
+COPY deploy/seed/master.sql.gz /seed/master.sql.gz
+# postgresql-client gives us psql for the seed restore. Tiny on debian-slim.
+RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app/apps/web
 EXPOSE 3000
@@ -59,9 +64,14 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD bun -e "fetch('http://127.0.0.1:3000/api/v1/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
 
-# On startup, run pending DB migrations against the prod DB before serving.
-# `migrate` is idempotent — already-applied entries are skipped via the
-# `_migrations` table, so this is safe to run on every container restart.
-# Working directory is /app/apps/web; the migrate script lives in @dam/db
-# so we cd up to the workspace root before invoking it.
-CMD ["sh", "-c", "cd /app && bun run --filter @dam/db migrate && cd /app/apps/web && bun next start -p 3000"]
+# Bootstrap chain on every container start:
+#   1. Apply any pending migrations  (idempotent via _migrations ledger)
+#   2. If the dams table is empty, restore the bundled master seed.
+#      The seed is a pg_dump --data-only of dams + watersheds + rivers +
+#      source_priorities, ~16 MB gzipped, baked into the image at /seed/.
+#   3. If observations is empty AND dams is now populated, run the synthetic
+#      observation seeder so the chart endpoints have plausible data.
+#   4. Start Next.js.
+COPY deploy/coolify/bootstrap.sh /bootstrap.sh
+RUN chmod +x /bootstrap.sh
+CMD ["/bootstrap.sh"]
