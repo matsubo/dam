@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Volumes/nvme/matsu/ghq/github.com/matsubo/dam log --oneline -20)"
+    ]
+  }
+}

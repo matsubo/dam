@@ -11,14 +11,13 @@ need to bring the stack up the first time.
 | --- | --- |
 | `Dockerfile.web` | Builds and runs the Next.js app on `:3000`. |
 | `Dockerfile.worker` | Builds and runs the graphile-worker process. |
-| `docker-compose.coolify.yml` | Wires `app` + `worker` + `db` + `minio` together for a single-server deploy. |
+| (`/docker-compose.yaml` at repo root) | Wires `app` + `worker` + `db` + `minio` together for a single-server deploy. The local-dev compose lives at `/docker-compose.dev.yml`. |
 
 ## First-time bring-up
 
-1. **Create the Coolify resource.** Choose "Docker Compose" and point it at this
-   repo's `deploy/coolify/docker-compose.coolify.yml`. Coolify clones the repo
-   itself, so the `build.context: ../..` reaches the workspace root inside
-   Coolify's checkout.
+1. **Create the Coolify resource.** Choose "Docker Compose" — Coolify auto-picks
+   `docker-compose.yaml` at the repo root. Build context is `.` so it has access
+   to the entire monorepo when running `Dockerfile.web` / `Dockerfile.worker`.
 2. **Set environment variables** in the Coolify UI (do not commit them):
    - `POSTGRES_PASSWORD`
    - `S3_ACCESS_KEY`, `S3_SECRET_KEY` (used both as MinIO root creds and as the
@@ -28,8 +27,8 @@ need to bring the stack up the first time.
      must include a real contact address per upstream's TOS
    - `NEXT_PUBLIC_SITE_URL` — e.g. `https://dam.example.com`
 3. **Deploy.** Coolify builds both Dockerfiles in parallel and starts the
-   services. The `app` healthcheck hits `/api/health`, so first-time deployment
-   blocks until the migrations are applied and the app responds.
+   services. The `app` healthcheck hits `/api/v1/healthz`, so first-time
+   deployment blocks until the app can reach the DB.
 4. **Apply migrations.** From the Coolify terminal for the `app` container:
    ```sh
    bun run --filter @dam/db migrate

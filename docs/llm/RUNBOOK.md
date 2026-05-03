@@ -176,7 +176,7 @@ SELECT COUNT(*) FROM dams;
 ## Deploy
 
 Coolify pulls from main, runs `Dockerfile.web` for app and `Dockerfile.worker`
-for the worker. Compose file is `deploy/coolify/docker-compose.coolify.yml`.
+for the worker. Compose file is `docker-compose.yaml` at the repo root.
 
 Required Coolify secrets:
 
