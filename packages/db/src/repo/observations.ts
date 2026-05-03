@@ -116,3 +116,89 @@ export async function findSeries(opts: FindSeriesOptions): Promise<SeriesPoint[]
   if (opts.bucket === 'daily') return findSeriesDaily(opts);
   return findSeriesMonthly(opts);
 }
+
+export interface FindWatershedSeriesOptions {
+  watershedId: bigint;
+  from: Date;
+  to: Date;
+  bucket: 'hourly' | 'daily' | 'monthly';
+  preferredSource?: string | null;
+}
+
+// Aggregate the watershed's storage by summing latest-bucket volumes across
+// all dams that have observations in that bucket. Per-dam volumes can have
+// gaps so we use last() at the bucket level rather than avg() to avoid
+// double-counting partial observations.
+async function findWatershedSeriesHourly(
+  opts: FindWatershedSeriesOptions,
+): Promise<SeriesPoint[]> {
+  const preferred = opts.preferredSource ?? null;
+  return sql<SeriesPoint[]>`
+    WITH ds AS (SELECT id FROM dams WHERE watershed_id = ${opts.watershedId}),
+    bucketed AS (
+      SELECT
+        time_bucket('1 hour', o.observed_at) AS bucket,
+        o.dam_id,
+        last(o.storage_volume_m3, o.observed_at) AS volume,
+        last(o.storage_rate, o.observed_at)      AS rate
+      FROM observations o
+      JOIN ds ON ds.id = o.dam_id
+      WHERE o.observed_at >= ${opts.from}
+        AND o.observed_at <  ${opts.to}
+        AND (${preferred}::text IS NULL OR o.source_id = ${preferred})
+      GROUP BY bucket, o.dam_id
+    )
+    SELECT bucket AS "observedAt",
+           SUM(volume)::NUMERIC AS "storageVolumeM3",
+           AVG(rate)::NUMERIC   AS "storageRate",
+           0::SMALLINT          AS "qualityFlag",
+           'aggregate'          AS "sourceId"
+    FROM bucketed
+    GROUP BY bucket
+    ORDER BY bucket
+  `;
+}
+
+async function findWatershedSeriesDaily(
+  opts: FindWatershedSeriesOptions,
+): Promise<SeriesPoint[]> {
+  return sql<SeriesPoint[]>`
+    WITH ds AS (SELECT id FROM dams WHERE watershed_id = ${opts.watershedId})
+    SELECT day AS "observedAt",
+           SUM(last_storage_volume_m3)::NUMERIC AS "storageVolumeM3",
+           AVG(avg_storage_rate)::NUMERIC       AS "storageRate",
+           0::SMALLINT                          AS "qualityFlag",
+           'aggregate'                          AS "sourceId"
+    FROM obs_daily
+    JOIN ds ON ds.id = obs_daily.dam_id
+    WHERE day >= ${opts.from} AND day < ${opts.to}
+    GROUP BY day
+    ORDER BY day
+  `;
+}
+
+async function findWatershedSeriesMonthly(
+  opts: FindWatershedSeriesOptions,
+): Promise<SeriesPoint[]> {
+  return sql<SeriesPoint[]>`
+    WITH ds AS (SELECT id FROM dams WHERE watershed_id = ${opts.watershedId})
+    SELECT month AS "observedAt",
+           SUM(avg_storage_volume_m3)::NUMERIC AS "storageVolumeM3",
+           NULL::NUMERIC                       AS "storageRate",
+           0::SMALLINT                         AS "qualityFlag",
+           'aggregate'                         AS "sourceId"
+    FROM obs_monthly
+    JOIN ds ON ds.id = obs_monthly.dam_id
+    WHERE month >= ${opts.from} AND month < ${opts.to}
+    GROUP BY month
+    ORDER BY month
+  `;
+}
+
+export async function findWatershedSeries(
+  opts: FindWatershedSeriesOptions,
+): Promise<SeriesPoint[]> {
+  if (opts.bucket === 'hourly') return findWatershedSeriesHourly(opts);
+  if (opts.bucket === 'daily') return findWatershedSeriesDaily(opts);
+  return findWatershedSeriesMonthly(opts);
+}

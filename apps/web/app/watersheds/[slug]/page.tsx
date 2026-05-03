@@ -4,7 +4,8 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '../../../components/breadcrumbs.tsx';
 import { DamTable } from '../../../components/dam-table.tsx';
-import { fmtCapacityMcm, fmtDate } from '../../../lib/format.ts';
+import { ObservationChart } from '../../../components/observation-chart.tsx';
+import { fmtCapacityMcm, fmtDate, fmtPct } from '../../../lib/format.ts';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 900;
@@ -35,7 +36,7 @@ export default async function WatershedDetail({ params }: PageProps) {
     listDams({ watershedSlug: slug, pageSize: 200 }),
   ]);
   return (
-    <>
+    <div className="max-w-7xl mx-auto px-5 md:px-10 py-8">
       <Breadcrumbs
         items={[
           { label: 'ホーム', href: '/' },
@@ -48,19 +49,37 @@ export default async function WatershedDetail({ params }: PageProps) {
         {w.kind === 'first' ? '一級水系' : w.kind === 'second' ? '二級水系' : 'その他'}
       </p>
 
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <section className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <Stat label="ダム数" value={String(agg.damCount)} />
         <Stat label="総貯水容量" value={fmtCapacityMcm(agg.totalCapacityM3)} />
         <Stat
           label="現在貯水量"
-          value={`${fmtCapacityMcm(agg.latestStorageVolumeM3)}`}
+          value={fmtCapacityMcm(agg.latestStorageVolumeM3)}
           {...(agg.observedAt ? { sub: fmtDate(agg.observedAt) } : {})}
+        />
+        <Stat
+          label="貯水率"
+          value={fmtPct(
+            agg.latestStorageVolumeM3 && agg.totalCapacityM3 && Number(agg.totalCapacityM3) > 0
+              ? Number(agg.latestStorageVolumeM3) / Number(agg.totalCapacityM3)
+              : null,
+          )}
+          sub="現在貯水量 ÷ 総貯水容量"
+        />
+      </section>
+
+      <section className="mb-8">
+        <h2 className="text-lg font-semibold mb-3">推移グラフ（水系合計）</h2>
+        <ObservationChart
+          slug={rawSlug}
+          kind="watershed"
+          capacityM3={agg.totalCapacityM3 ? Number(agg.totalCapacityM3) : null}
         />
       </section>
 
       <h2 className="text-lg font-semibold mb-3">この水系のダム</h2>
       <DamTable rows={list.items} />
-    </>
+    </div>
   );
 }
 

@@ -2,12 +2,14 @@ import { PREFECTURES } from '@dam/core/prefectures';
 import { findDamBySlug, latestObservation, listDams, nearbyDams } from '@dam/db/repo/dams';
 import { aggregateWatershed, findWatershedBySlug } from '@dam/db/repo/watersheds';
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '../../../components/breadcrumbs.tsx';
 import { DamCard } from '../../../components/dam-card.tsx';
 import { ObservationChart } from '../../../components/observation-chart.tsx';
 import { QualityBadge } from '../../../components/quality-badge.tsx';
+import { ReservoirGauge } from '../../../components/reservoir-gauge.tsx';
 import { fmtCapacityMcm, fmtDate, fmtN, fmtPct } from '../../../lib/format.ts';
 
 export const dynamic = 'force-dynamic';
@@ -62,7 +64,7 @@ export default async function DamDetail({ params }: PageProps) {
   };
 
   return (
-    <>
+    <div className="max-w-7xl mx-auto px-5 md:px-10 py-8">
       <Breadcrumbs
         items={[
           { label: 'ホーム', href: '/' },
@@ -73,6 +75,18 @@ export default async function DamDetail({ params }: PageProps) {
           { label: d.name },
         ]}
       />
+      {d.imageUrl ? (
+        <div className="relative w-full aspect-[3/1] mb-4 rounded overflow-hidden bg-gray-100">
+          <Image
+            src={d.imageUrl}
+            alt={`${d.name}のダム`}
+            fill
+            sizes="(max-width: 768px) 100vw, 1000px"
+            priority
+            className="object-cover"
+          />
+        </div>
+      ) : null}
       <h1 className="text-3xl font-semibold mb-2">{d.name}</h1>
       <p className="text-muted mb-6">
         {d.nameKana ?? ''} · {PREF_NAME.get(d.prefCode) ?? d.prefCode}
@@ -86,10 +100,18 @@ export default async function DamDetail({ params }: PageProps) {
         {d.manager ?? '—'}
       </p>
 
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <section className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <Stat label="総貯水容量" value={fmtCapacityMcm(d.totalCapacityM3)} />
         <Stat label="有効貯水容量" value={fmtCapacityMcm(d.effectiveCapacityM3)} />
         <Stat label="堤高" value={d.heightM ? `${fmtN(d.heightM)} m` : '—'} />
+        <Stat
+          label="標高"
+          value={
+            d.elevationM != null && Number.isFinite(d.elevationM)
+              ? `${Math.round(d.elevationM).toLocaleString('ja-JP')} m`
+              : '—'
+          }
+        />
       </section>
 
       <section className="border border-gray-200 rounded p-4 mb-8">
@@ -103,18 +125,31 @@ export default async function DamDetail({ params }: PageProps) {
           )}
         </header>
         {latest ? (
-          <dl className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <Pair label="貯水量" value={fmtCapacityMcm(latest.storageVolumeM3)} />
-            <Pair label="貯水率" value={fmtPct(latest.storageRate)} />
-            <Pair
-              label="流入量"
-              value={latest.inflowM3s ? `${fmtN(latest.inflowM3s)} m³/s` : '—'}
-            />
-            <Pair
-              label="放流量"
-              value={latest.outflowM3s ? `${fmtN(latest.outflowM3s)} m³/s` : '—'}
-            />
-          </dl>
+          <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
+            <div className="shrink-0 flex flex-col items-center">
+              {(() => {
+                const cap = d.totalCapacityM3 ? Number(d.totalCapacityM3) : null;
+                const vol = latest.storageVolumeM3 ? Number(latest.storageVolumeM3) : null;
+                const direct = latest.storageRate ? Number(latest.storageRate) : null;
+                const rate =
+                  direct ?? (cap && cap > 0 && vol != null ? vol / cap : null);
+                return <ReservoirGauge rate={rate} size={180} />;
+              })()}
+              <div className="text-xs text-muted mt-1">貯水率</div>
+            </div>
+            <dl className="grid grid-cols-2 md:grid-cols-2 gap-4 text-sm flex-1">
+              <Pair label="貯水量" value={fmtCapacityMcm(latest.storageVolumeM3)} />
+              <Pair label="貯水率" value={fmtPct(latest.storageRate)} />
+              <Pair
+                label="流入量"
+                value={latest.inflowM3s ? `${fmtN(latest.inflowM3s)} m³/s` : '—'}
+              />
+              <Pair
+                label="放流量"
+                value={latest.outflowM3s ? `${fmtN(latest.outflowM3s)} m³/s` : '—'}
+              />
+            </dl>
+          </div>
         ) : (
           <p className="text-muted">まだ観測値がありません。</p>
         )}
@@ -122,7 +157,10 @@ export default async function DamDetail({ params }: PageProps) {
 
       <section className="mb-8">
         <h2 className="text-lg font-semibold mb-3">推移グラフ</h2>
-        <ObservationChart slug={slug} />
+        <ObservationChart
+          slug={slug}
+          capacityM3={d.totalCapacityM3 ? Number(d.totalCapacityM3) : null}
+        />
       </section>
 
       {watershed && (
@@ -176,7 +214,7 @@ export default async function DamDetail({ params }: PageProps) {
 
       {/* biome-ignore lint/security/noDangerouslySetInnerHtml: required to emit schema.org JSON-LD */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
-    </>
+    </div>
   );
 }
 

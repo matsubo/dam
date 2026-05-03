@@ -36,7 +36,7 @@ export default async function WatershedsPage() {
   );
   const emptyCount = all.length - ordered.length;
   return (
-    <>
+    <div className="max-w-7xl mx-auto px-5 md:px-10 py-8">
       <Breadcrumbs items={[{ label: 'ホーム', href: '/' }, { label: '水系' }]} />
       <h1 className="text-2xl font-semibold mb-2">水系一覧</h1>
       <p className="text-muted mb-6 text-sm">
@@ -65,6 +65,6 @@ export default async function WatershedsPage() {
           ))}
         </tbody>
       </table>
-    </>
+    </div>
   );
 }

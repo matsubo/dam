@@ -7,6 +7,13 @@ const nextConfig: NextConfig = {
   // Allow LAN hostnames during dev so Next doesn't gate _next/* HMR + RSC fetches
   // as cross-origin (which surfaces as a console warning in the browser).
   allowedDevOrigins: ['mini', 'mini.local', 'mini.saga-lionfish.ts.net', '127.0.0.1'],
+  images: {
+    // Cover images are sourced from Damnet's WordPress uploads; allow the
+    // host so next/image can optimise them.
+    remotePatterns: [
+      { protocol: 'https', hostname: 'dambinran.damnet.or.jp', pathname: '/wp-content/uploads/**' },
+    ],
+  },
 };
 
 export default nextConfig;
