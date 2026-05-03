@@ -260,6 +260,16 @@ export interface DamDetail extends DamListItem {
   floodCapacityM3: string | null;
   /** 利水容量 (active conservation storage). Backfilled from Damnet. */
   activeCapacityM3: string | null;
+  /** Additional master attributes from Damnet ダム便覧. All nullable. */
+  constructionStartYear: number | null;
+  purposes: string | null;
+  crestLengthM: string | null;
+  embankmentVolumeM3: string | null;
+  watershedAreaKm2: string | null;
+  reservoirAreaKm2: string | null;
+  leftBankLocation: string | null;
+  mainContractor: string | null;
+  redevelopmentStatus: string | null;
   completedYear: number | null;
   externalIds: Record<string, string>;
   /** Sea-level elevation (m) backfilled from GSI's DEM API. May be null. */
@@ -309,6 +319,15 @@ export async function findDamBySlug(slug: string): Promise<DamDetail | null> {
       d.total_capacity_m3::TEXT AS "totalCapacityM3",
       d.effective_capacity_m3::TEXT AS "effectiveCapacityM3",
       d.active_capacity_m3::TEXT AS "activeCapacityM3",
+      d.construction_start_year AS "constructionStartYear",
+      d.purposes AS "purposes",
+      d.crest_length_m::TEXT AS "crestLengthM",
+      d.embankment_volume_m3::TEXT AS "embankmentVolumeM3",
+      d.watershed_area_km2::TEXT AS "watershedAreaKm2",
+      d.reservoir_area_km2::TEXT AS "reservoirAreaKm2",
+      d.left_bank_location AS "leftBankLocation",
+      d.main_contractor AS "mainContractor",
+      d.redevelopment_status AS "redevelopmentStatus",
       d.flood_capacity_m3::TEXT AS "floodCapacityM3",
       d.completed_year AS "completedYear",
       d.external_ids AS "externalIds",

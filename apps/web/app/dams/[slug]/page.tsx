@@ -117,6 +117,8 @@ export default async function DamDetail({ params }: PageProps) {
         />
       </section>
 
+      <DamSpecs d={d} />
+
       <section className="border border-gray-200 rounded p-4 mb-8">
         <header className="flex items-baseline justify-between mb-3">
           <h2 className="text-lg font-semibold">最新観測値</h2>
@@ -243,5 +245,87 @@ function Pair({ label, value }: { label: string; value: string }) {
       <div className="text-xs text-muted">{label}</div>
       <div className="text-base tabular-nums">{value}</div>
     </div>
+  );
+}
+
+// Damnet 用途コード → 日本語ラベル. Codes can stack (e.g. "FNAWP").
+const PURPOSE_LABEL: Record<string, string> = {
+  F: '洪水調節',
+  N: '不特定用水',
+  A: '農業用水',
+  W: '上水道',
+  I: '工業用水',
+  P: '発電',
+  S: '消流雪用水',
+  R: 'レクリエーション',
+};
+
+function decodePurposes(code: string | null): string {
+  if (!code) return '—';
+  const labels = Array.from(code).map((c) => PURPOSE_LABEL[c] ?? c);
+  return labels.join('・');
+}
+
+interface DamSpecData {
+  type: string | null;
+  completedYear: number | null;
+  constructionStartYear: number | null;
+  purposes: string | null;
+  crestLengthM: string | null;
+  embankmentVolumeM3: string | null;
+  watershedAreaKm2: string | null;
+  reservoirAreaKm2: string | null;
+  leftBankLocation: string | null;
+  mainContractor: string | null;
+  redevelopmentStatus: string | null;
+  totalCapacityM3: string | null;
+  effectiveCapacityM3: string | null;
+  activeCapacityM3: string | null;
+  floodCapacityM3: string | null;
+}
+
+function DamSpecs({ d }: { d: DamSpecData }) {
+  // Skip the section entirely if every Damnet-only field is null — the simple
+  // 5-stat strip above already covers what's left.
+  const haveAny =
+    d.purposes ||
+    d.constructionStartYear ||
+    d.crestLengthM ||
+    d.embankmentVolumeM3 ||
+    d.watershedAreaKm2 ||
+    d.reservoirAreaKm2 ||
+    d.leftBankLocation ||
+    d.mainContractor ||
+    d.redevelopmentStatus;
+  if (!haveAny) return null;
+  const fmtNum = (v: string | null, suffix: string, fractionDigits = 0) => {
+    if (v == null) return '—';
+    const n = Number(v);
+    if (!Number.isFinite(n)) return '—';
+    return `${n.toLocaleString('ja-JP', { maximumFractionDigits: fractionDigits })} ${suffix}`;
+  };
+  return (
+    <section className="mb-8 bg-white border border-outline-variant rounded-xl p-5">
+      <h2 className="text-lg font-semibold mb-4">ダム諸元</h2>
+      <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4 text-sm">
+        <Pair label="型式" value={d.type ?? '—'} />
+        <Pair label="目的" value={decodePurposes(d.purposes)} />
+        <Pair
+          label="着工〜竣工"
+          value={
+            d.constructionStartYear || d.completedYear
+              ? `${d.constructionStartYear ?? '—'} 〜 ${d.completedYear ?? '—'} 年`
+              : '—'
+          }
+        />
+        <Pair label="堤長" value={fmtNum(d.crestLengthM, 'm', 1)} />
+        <Pair label="堤体積" value={fmtNum(d.embankmentVolumeM3, 'm³')} />
+        <Pair label="流域面積" value={fmtNum(d.watershedAreaKm2, 'km²', 2)} />
+        <Pair label="湛水面積" value={fmtNum(d.reservoirAreaKm2, 'km²', 3)} />
+        <Pair label="左岸所在地" value={d.leftBankLocation ?? '—'} />
+        <Pair label="主要施工者" value={d.mainContractor ?? '—'} />
+        {d.redevelopmentStatus ? <Pair label="再開発" value={d.redevelopmentStatus} /> : null}
+      </dl>
+    </section>
   );
 }

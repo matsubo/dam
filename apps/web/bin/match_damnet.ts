@@ -22,6 +22,15 @@ interface DamInfo {
   capacity_total: string;
   capacity_active: string;
   operator: string;
+  // Additional master attributes (all strings as JSON-decoded; "" when absent)
+  purposes: string;
+  crest_length: string;
+  embankment_volume: string;
+  watershed_area: string | number;
+  reservoir_area: string | number;
+  left_bank_location: string;
+  main_contractor: string;
+  redevelopment_status: string;
 }
 
 const TYPE_LETTER_TO_LABEL: Record<string, string> = {
@@ -104,7 +113,9 @@ function normalizeName(s: string): string {
     .toLowerCase();
 }
 
-function num(v: string): number | null {
+function num(v: string | number | null | undefined): number | null {
+  if (v == null) return null;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
   if (!v || v === '-') return null;
   const n = Number(v.replace(/,/g, ''));
   return Number.isFinite(n) ? n : null;
@@ -173,16 +184,55 @@ async function main(): Promise<void> {
     const typeLabel = c.type ? (TYPE_LETTER_TO_LABEL[c.type] ?? c.type) : null;
     const operator = c.operator || null;
     const kana = c.dam_name_kana || null;
-    if (kana || operator || typeLabel || heightM || capacityM3 || activeCapacityM3 || completed) {
+    // Additional spec columns (Damnet → master)
+    const constructionStart = intish(c.construction_start_year);
+    const purposes = c.purposes || null;
+    const crestLengthM = num(c.crest_length);
+    const embankmentVolume = num(c.embankment_volume); // 千 m³
+    const embankmentVolumeM3 = embankmentVolume ? embankmentVolume * 1_000 : null;
+    const watershedAreaKm2 = num(c.watershed_area);
+    // Damnet stores reservoir_area in hectares (1 km² = 100 ha).
+    const reservoirAreaHa = num(c.reservoir_area);
+    const reservoirAreaKm2 = reservoirAreaHa != null ? reservoirAreaHa / 100 : null;
+    const leftBankLocation = c.left_bank_location || null;
+    const mainContractor = c.main_contractor || null;
+    const redevelopmentStatus = c.redevelopment_status || null;
+    const hasAnyUpdate =
+      kana ||
+      operator ||
+      typeLabel ||
+      heightM ||
+      capacityM3 ||
+      activeCapacityM3 ||
+      completed ||
+      constructionStart ||
+      purposes ||
+      crestLengthM ||
+      embankmentVolumeM3 ||
+      watershedAreaKm2 ||
+      reservoirAreaKm2 ||
+      leftBankLocation ||
+      mainContractor ||
+      redevelopmentStatus;
+    if (hasAnyUpdate) {
       await sql`
         UPDATE dams SET
-          name_kana          = COALESCE(${kana}, name_kana),
-          manager            = COALESCE(${operator}, manager),
-          type               = COALESCE(${typeLabel}, type),
-          height_m           = COALESCE(${heightM}, height_m),
-          total_capacity_m3  = COALESCE(${capacityM3}, total_capacity_m3),
-          active_capacity_m3 = COALESCE(${activeCapacityM3}, active_capacity_m3),
-          completed_year     = COALESCE(${completed}, completed_year)
+          name_kana               = COALESCE(${kana}, name_kana),
+          manager                 = COALESCE(${operator}, manager),
+          type                    = COALESCE(${typeLabel}, type),
+          height_m                = COALESCE(${heightM}, height_m),
+          total_capacity_m3       = COALESCE(${capacityM3}, total_capacity_m3),
+          active_capacity_m3      = COALESCE(${activeCapacityM3}, active_capacity_m3),
+          completed_year          = COALESCE(${completed}, completed_year),
+          construction_start_year = COALESCE(${constructionStart}, construction_start_year),
+          purposes                = COALESCE(${purposes}, purposes),
+          crest_length_m          = COALESCE(${crestLengthM}, crest_length_m),
+          embankment_volume_m3    = COALESCE(${embankmentVolumeM3}, embankment_volume_m3),
+          watershed_area_km2      = COALESCE(${watershedAreaKm2}, watershed_area_km2),
+          reservoir_area_km2      = COALESCE(${reservoirAreaKm2}, reservoir_area_km2),
+          left_bank_location      = COALESCE(${leftBankLocation}, left_bank_location),
+          main_contractor         = COALESCE(${mainContractor}, main_contractor),
+          redevelopment_status    = COALESCE(${redevelopmentStatus}, redevelopment_status)
         WHERE id = ${target.id}
       `;
       attrUpdated++;
