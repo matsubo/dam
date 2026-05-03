@@ -56,6 +56,16 @@ services:
     # Coolify will inject SERVICE_FQDN_APP_3000 to expose this on the public URL.
     expose:
       - '3000'
+    # Explicit Traefik labels routing dam.teraren.com → app:3000. Coolify
+    # auto-generates labels for the sslip.io fallback host; these add a
+    # parallel router for the public domain. Single HTTP entrypoint is
+    # sufficient because Cloudflare terminates TLS in front of Coolify.
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.dam-app.rule=Host(`dam.teraren.com`)
+      - traefik.http.routers.dam-app.entrypoints=http
+      - traefik.http.routers.dam-app.service=dam-app
+      - traefik.http.services.dam-app.loadbalancer.server.port=3000
 
   worker:
     build:
