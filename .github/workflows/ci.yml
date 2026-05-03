@@ -48,7 +48,9 @@ jobs:
           docker run --rm --network host \
             -e MC_HOST_local=http://minio:minio12345@localhost:9000 \
             minio/mc:RELEASE.2025-04-08T15-39-49Z mb local/dam-raw || true
-      - run: bun test
+      - name: Unit + integration tests
+        # Skip tests/e2e/*.spec.ts — those run via bunx playwright test below.
+        run: bun test --path-ignore-patterns 'tests/e2e/**'
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
       - name: E2E (Playwright)
