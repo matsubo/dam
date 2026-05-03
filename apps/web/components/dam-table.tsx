@@ -12,6 +12,7 @@ export interface DamRowItem {
   totalCapacityM3: string | null;
   watershedSlug: string | null;
   watershedName: string | null;
+  imageUrl?: string | null;
 }
 
 export function DamTable({ rows }: { rows: DamRowItem[] }) {

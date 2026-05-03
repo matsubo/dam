@@ -201,6 +201,7 @@ export interface DamListItem {
   watershedName: string | null;
   lat: number;
   lng: number;
+  imageUrl: string | null;
 }
 
 export async function listDams(
@@ -215,7 +216,8 @@ export async function listDams(
         d.id, d.slug, d.name, d.pref_code AS "prefCode", d.manager,
         d.total_capacity_m3::TEXT AS "totalCapacityM3",
         w.slug AS "watershedSlug", w.name AS "watershedName",
-        ST_Y(d.location::geometry) AS lat, ST_X(d.location::geometry) AS lng
+        ST_Y(d.location::geometry) AS lat, ST_X(d.location::geometry) AS lng,
+        d.image_url AS "imageUrl"
       FROM dams d
       LEFT JOIN watersheds w ON w.id = d.watershed_id
       WHERE (${f.pref ?? null}::text IS NULL OR d.pref_code = ${f.pref ?? null})
@@ -233,7 +235,8 @@ export async function listDams(
       d.id, d.slug, d.name, d.pref_code AS "prefCode", d.manager,
       d.total_capacity_m3::TEXT AS "totalCapacityM3",
       w.slug AS "watershedSlug", w.name AS "watershedName",
-      ST_Y(d.location::geometry) AS lat, ST_X(d.location::geometry) AS lng
+      ST_Y(d.location::geometry) AS lat, ST_X(d.location::geometry) AS lng,
+      d.image_url AS "imageUrl"
     FROM dams d
     LEFT JOIN watersheds w ON w.id = d.watershed_id
     WHERE (${f.pref ?? null}::text IS NULL OR d.pref_code = ${f.pref ?? null})
@@ -257,6 +260,8 @@ export interface DamDetail extends DamListItem {
   floodCapacityM3: string | null;
   completedYear: number | null;
   externalIds: Record<string, string>;
+  /** Sea-level elevation (m) backfilled from GSI's DEM API. May be null. */
+  elevationM: number | null;
 }
 
 export async function findDamBySlug(slug: string): Promise<DamDetail | null> {
@@ -264,14 +269,18 @@ export async function findDamBySlug(slug: string): Promise<DamDetail | null> {
     SELECT
       d.id, d.slug, d.name, d.name_kana AS "nameKana",
       d.pref_code AS "prefCode", d.manager, d.type,
-      d.height_m::TEXT AS "heightM",
+      -- height_m carries -9999 sentinels for "unknown" in some NDI rows;
+      -- nullify those at the source so the UI can format cleanly.
+      NULLIF(d.height_m, -9999)::TEXT AS "heightM",
+      d.elevation_m::FLOAT8 AS "elevationM",
       d.total_capacity_m3::TEXT AS "totalCapacityM3",
       d.effective_capacity_m3::TEXT AS "effectiveCapacityM3",
       d.flood_capacity_m3::TEXT AS "floodCapacityM3",
       d.completed_year AS "completedYear",
       d.external_ids AS "externalIds",
       w.slug AS "watershedSlug", w.name AS "watershedName",
-      ST_Y(d.location::geometry) AS lat, ST_X(d.location::geometry) AS lng
+      ST_Y(d.location::geometry) AS lat, ST_X(d.location::geometry) AS lng,
+      d.image_url AS "imageUrl"
     FROM dams d
     LEFT JOIN watersheds w ON w.id = d.watershed_id
     WHERE d.slug = ${slug}

@@ -7,23 +7,98 @@
 }
 
 body {
-  @apply bg-white text-ink antialiased;
+  @apply bg-surface text-on-surface antialiased;
 }
 
 a {
-  @apply text-accent hover:underline;
+  @apply text-primary hover:underline;
 }
 
 table {
-  @apply w-full text-sm;
+  @apply w-full text-sm bg-white border border-outline-variant rounded-xl overflow-hidden;
 }
 th,
 td {
   @apply px-3 py-2 text-left;
 }
 thead {
-  @apply bg-gray-50 text-gray-600 uppercase text-xs;
+  @apply bg-surface-container-low text-on-surface-variant uppercase text-xs;
 }
 tbody tr {
-  @apply border-b border-gray-100;
+  @apply border-t border-outline-variant/40;
+}
+tbody tr:hover {
+  @apply bg-surface-container-low/60;
+}
+
+@layer components {
+  /* Top nav link, Material 3-ish — bottom-line indicator on hover. */
+  .nav-link {
+    @apply text-sm font-semibold text-on-surface relative px-1 py-1.5 hover:text-primary transition-colors;
+  }
+  .nav-link::after {
+    content: '';
+    @apply absolute left-0 right-0 -bottom-0.5 h-px bg-primary scale-x-0 origin-left transition-transform;
+  }
+  .nav-link:hover::after {
+    @apply scale-x-100;
+  }
+
+  /* Solid CTA */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 bg-primary text-white font-semibold rounded-full px-6 py-3 hover:bg-primary/90 transition-colors no-underline;
+  }
+  /* Outline / secondary CTA */
+  .btn-outline {
+    @apply inline-flex items-center justify-center gap-2 border border-outline-variant text-on-surface font-semibold rounded-full px-6 py-3 hover:bg-surface-container transition-colors no-underline;
+  }
+
+  /* Hero eyebrow text — small caps with an accent rule */
+  .eyebrow {
+    @apply text-[11px] font-bold tracking-[0.22em] uppercase text-primary;
+  }
+  /* Section/footer column heading — neutral muted variant */
+  .eyebrow-muted {
+    @apply text-[11px] font-bold tracking-[0.22em] uppercase text-on-surface-variant;
+  }
+
+  /* Subtle dot grid background for hero areas */
+  .dots-bg {
+    background-image: radial-gradient(rgba(0, 87, 192, 0.18) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+
+  /* Card with a soft hover-lift, used for feature blurbs and stat callouts */
+  .card-surface {
+    @apply bg-white border border-outline-variant rounded-xl p-5 transition-all hover:-translate-y-0.5 hover:shadow-md;
+  }
+
+  /* "Fake" terminal block, used in code samples */
+  .code-block {
+    @apply bg-[#0e141b] text-white rounded-xl overflow-hidden font-code text-sm;
+  }
+  .code-block-head {
+    @apply flex items-center gap-3 px-4 py-3 border-b border-white/10;
+  }
+  .code-block-body {
+    @apply p-4 overflow-x-auto;
+  }
+  .code-block-body pre {
+    @apply m-0 leading-relaxed;
+  }
+  .tk-comment {
+    @apply text-white/40;
+  }
+  .tk-kw {
+    @apply text-[#7dd3fc];
+  }
+  .tk-str {
+    @apply text-[#86efac];
+  }
+}
+
+/* Desaturate the GSI basemap so the colour-encoded dam markers (size = capacity,
+   colour = storage rate) stand out instead of competing with the topo tiles. */
+.jp-map-grayscale {
+  filter: grayscale(1) brightness(1.05) contrast(0.92);
 }

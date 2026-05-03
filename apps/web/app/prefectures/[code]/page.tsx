@@ -27,12 +27,12 @@ export default async function PrefPage({ params }: PageProps) {
   if (!name) notFound();
   const r = await listDams({ pref: code, pageSize: 500 });
   return (
-    <>
+    <div className="max-w-7xl mx-auto px-5 md:px-10 py-8">
       <Breadcrumbs
         items={[{ label: 'ホーム', href: '/' }, { label: '都道府県' }, { label: name }]}
       />
       <h1 className="text-2xl font-semibold mb-4">{name}のダム</h1>
       <DamTable rows={r.items} />
-    </>
+    </div>
   );
 }
