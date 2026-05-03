@@ -7,6 +7,14 @@ import {
   usageToday,
 } from '@dam/db/repo/api_keys';
 
+// Stripe-style bearer-token auth.
+//   Authorization: Bearer <key>
+// HTTP Basic auth with the key as the username (and empty password) is also
+// accepted, matching Stripe's CLI / curl ergonomics — `curl -u sk_test_...:`.
+//
+// The legacy `X-API-Key: <key>` header is still honoured so existing clients
+// keep working during a transition period.
+
 export interface RateState {
   limit: number;
   remaining: number;
@@ -26,6 +34,28 @@ function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
 
 const ADMIN_BYPASS = (): boolean => process.env.API_AUTH_BYPASS === '1';
 
+function extractKey(req: Request): string | null {
+  // 1. Authorization: Bearer <key>
+  const auth = req.headers.get('authorization');
+  if (auth) {
+    const m = /^Bearer\s+(.+)$/i.exec(auth);
+    if (m) return m[1]!.trim();
+    // 2. Basic auth with key as the username (Stripe-style `curl -u key:`)
+    const basic = /^Basic\s+(.+)$/i.exec(auth);
+    if (basic) {
+      try {
+        const decoded = atob(basic[1]!);
+        const colon = decoded.indexOf(':');
+        return colon >= 0 ? decoded.slice(0, colon) : decoded;
+      } catch {
+        return null;
+      }
+    }
+  }
+  // 3. Legacy X-API-Key header — kept for backwards compatibility.
+  return req.headers.get('x-api-key');
+}
+
 export async function authorize(req: Request): Promise<AuthResult> {
   if (ADMIN_BYPASS()) {
     return {
@@ -34,14 +64,14 @@ export async function authorize(req: Request): Promise<AuthResult> {
       rate: { limit: 1_000_000, remaining: 1_000_000, resetAt: 0 },
     };
   }
-  const header = req.headers.get('x-api-key');
-  if (!header || !header.includes('_')) {
-    return { ok: false, status: 401, reason: 'Missing X-API-Key' };
+  const key = extractKey(req);
+  if (!key || !key.includes('_')) {
+    return { ok: false, status: 401, reason: 'Missing Authorization: Bearer key' };
   }
-  const prefix = header.slice(0, 8);
+  const prefix = key.slice(0, 8);
   const row = await lookupByPrefix(prefix);
   if (!row || !row.active) return { ok: false, status: 401, reason: 'Invalid key' };
-  if (!timingSafeEqual(row.hash, hashKey(header))) {
+  if (!timingSafeEqual(row.hash, hashKey(key))) {
     return { ok: false, status: 401, reason: 'Invalid key' };
   }
 
@@ -94,6 +124,10 @@ export function rateLimitHeaders(state: RateState): Record<string, string> {
 export function makeUnauthorized(auth: Exclude<AuthResult, { ok: true }>): Response {
   const headers: Record<string, string> = { 'content-type': 'application/problem+json' };
   if (auth.rate) Object.assign(headers, rateLimitHeaders(auth.rate));
+  if (auth.status === 401) {
+    // RFC 6750 — bearer-token challenge so curl/HTTPie surfaces "WWW-Authenticate"
+    headers['WWW-Authenticate'] = 'Bearer realm="dam.teraren.com"';
+  }
   if (auth.status === 429 && auth.rate) {
     headers['Retry-After'] = String(
       Math.max(0, Math.ceil((auth.rate.resetAt - Date.now()) / 1000)),

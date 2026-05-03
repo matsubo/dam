@@ -1,7 +1,7 @@
 // packages/adapters/suimon/src/parser.ts
 import Papa from 'papaparse';
 
-export interface SuimonRow {
+interface SuimonRow {
   observedAt: Date;
   storageVolumeM3: number | null;
   storageRate: number | null;

@@ -1,7 +1,7 @@
 // packages/adapters/kasenbosai/src/parser.ts
 import { XMLParser } from 'fast-xml-parser';
 
-export interface KasenbosaiReading {
+interface KasenbosaiReading {
   damId: string;
   observedAt: Date;
   storageVolumeM3: number | null;

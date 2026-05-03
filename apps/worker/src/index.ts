@@ -8,6 +8,9 @@ import match from './tasks/master_match.ts';
 import refreshDamnet from './tasks/master_refresh_damnet.ts';
 import refreshNdi from './tasks/master_refresh_ndi.ts';
 import qualityRecompute from './tasks/quality_recompute.ts';
+import refreshDamElevation from './tasks/refresh_dam_elevation.ts';
+import refreshDamImagesDamnet from './tasks/refresh_dam_images_damnet.ts';
+import refreshDamImagesWikipedia from './tasks/refresh_dam_images_wikipedia.ts';
 
 async function main(): Promise<void> {
   const url = process.env.DATABASE_URL;
@@ -27,6 +30,9 @@ async function main(): Promise<void> {
       'backfill:suimon:enqueue': backfillEnqueue,
       'backfill:suimon:run': backfillRun,
       'quality:recompute': qualityRecompute,
+      'images:refresh:damnet': refreshDamImagesDamnet,
+      'images:refresh:wikipedia': refreshDamImagesWikipedia,
+      'master:refresh:elevation': refreshDamElevation,
     },
   });
 

@@ -3,30 +3,36 @@ import Link from 'next/link';
 import { fmtCapacityMcm } from '../lib/format.ts';
 import type { DamRowItem } from './dam-table.tsx';
 
+// Cover image is OPTIONAL ornament — when absent, render a clean text-only
+// card without a placeholder. Only ~24% of dams have a real cover, so the
+// default state is "no image" and that should feel intentional, not missing.
+// When the image IS present it's a small 64×64 thumbnail next to the title,
+// not a hero banner.
 export function DamCard({ d }: { d: DamRowItem }) {
   return (
-    <article className="border border-gray-200 rounded overflow-hidden flex flex-col">
-      <Link href={`/dams/${d.slug}`} className="block bg-gray-100 aspect-[4/3] relative">
-        {d.imageUrl ? (
+    <article className="card-surface flex gap-3 items-start">
+      {d.imageUrl ? (
+        <Link
+          href={`/dams/${d.slug}`}
+          className="shrink-0 relative w-16 h-16 rounded-lg overflow-hidden bg-surface-container-low"
+        >
           <Image
             src={d.imageUrl}
-            alt={`${d.name}のダム`}
+            alt=""
             fill
-            sizes="(max-width: 768px) 100vw, 33vw"
+            sizes="64px"
             className="object-cover"
           />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-muted text-xs">
-            画像なし
-          </div>
-        )}
-      </Link>
-      <div className="p-4">
-        <h3 className="text-lg font-semibold">
-          <Link href={`/dams/${d.slug}`}>{d.name}</Link>
+        </Link>
+      ) : null}
+      <div className="min-w-0 flex-1">
+        <h3 className="font-display font-semibold leading-tight">
+          <Link href={`/dams/${d.slug}`} className="text-on-surface no-underline hover:text-primary">
+            {d.name}
+          </Link>
         </h3>
-        <p className="text-sm text-muted">{d.manager ?? '—'}</p>
-        <p className="text-sm">総貯水容量: {fmtCapacityMcm(d.totalCapacityM3)}</p>
+        <p className="text-xs text-on-surface-variant truncate">{d.manager ?? '—'}</p>
+        <p className="text-sm tabular-nums">{fmtCapacityMcm(d.totalCapacityM3)}</p>
       </div>
     </article>
   );

@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '../../../components/breadcrumbs.tsx';
 import { DamTable } from '../../../components/dam-table.tsx';
 import { ObservationChart } from '../../../components/observation-chart.tsx';
+import { ReservoirGauge } from '../../../components/reservoir-gauge.tsx';
 import { fmtCapacityMcm, fmtDate, fmtPct } from '../../../lib/format.ts';
 
 export const dynamic = 'force-dynamic';
@@ -49,24 +50,34 @@ export default async function WatershedDetail({ params }: PageProps) {
         {w.kind === 'first' ? '一級水系' : w.kind === 'second' ? '二級水系' : 'その他'}
       </p>
 
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <Stat label="ダム数" value={String(agg.damCount)} />
-        <Stat label="総貯水容量" value={fmtCapacityMcm(agg.totalCapacityM3)} />
-        <Stat
-          label="現在貯水量"
-          value={fmtCapacityMcm(agg.latestStorageVolumeM3)}
-          {...(agg.observedAt ? { sub: fmtDate(agg.observedAt) } : {})}
-        />
-        <Stat
-          label="貯水率"
-          value={fmtPct(
-            agg.latestStorageVolumeM3 && agg.totalCapacityM3 && Number(agg.totalCapacityM3) > 0
-              ? Number(agg.latestStorageVolumeM3) / Number(agg.totalCapacityM3)
-              : null,
-          )}
-          sub="現在貯水量 ÷ 総貯水容量"
-        />
-      </section>
+      {(() => {
+        const rate =
+          agg.latestStorageVolumeM3 && agg.totalCapacityM3 && Number(agg.totalCapacityM3) > 0
+            ? Number(agg.latestStorageVolumeM3) / Number(agg.totalCapacityM3)
+            : null;
+        return (
+          <section className="flex flex-col md:flex-row gap-6 items-center md:items-stretch mb-8">
+            <div className="shrink-0 flex flex-col items-center justify-center bg-white border border-outline-variant rounded-xl p-4">
+              <ReservoirGauge rate={rate} size={180} />
+              <div className="text-xs text-on-surface-variant mt-1">水系合計貯水率</div>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-2 gap-4 flex-1">
+              <Stat label="ダム数" value={String(agg.damCount)} />
+              <Stat label="総貯水容量" value={fmtCapacityMcm(agg.totalCapacityM3)} />
+              <Stat
+                label="現在貯水量"
+                value={fmtCapacityMcm(agg.latestStorageVolumeM3)}
+                {...(agg.observedAt ? { sub: fmtDate(agg.observedAt) } : {})}
+              />
+              <Stat
+                label="貯水率"
+                value={fmtPct(rate)}
+                sub="現在貯水量 ÷ 総貯水容量"
+              />
+            </div>
+          </section>
+        );
+      })()}
 
       <section className="mb-8">
         <h2 className="text-lg font-semibold mb-3">推移グラフ（水系合計）</h2>

@@ -53,7 +53,12 @@ export function ObservationChart({
     else fromDate.setUTCFullYear(fromDate.getUTCFullYear() - 5);
     const base = kind === 'watershed' ? '/api/v1/watersheds' : '/api/v1/dams';
     const url = `${base}/${slug}/observations?from=${fromDate.toISOString()}&to=${to.toISOString()}&interval=${interval}`;
-    fetch(url, { headers: { 'x-api-key': process.env.NEXT_PUBLIC_API_KEY ?? '' } })
+    fetch(
+      url,
+      process.env.NEXT_PUBLIC_API_KEY
+        ? { headers: { Authorization: `Bearer ${process.env.NEXT_PUBLIC_API_KEY}` } }
+        : {},
+    )
       .then(async (r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const body = (await r.json()) as { series: SeriesPoint[] };

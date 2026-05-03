@@ -8,9 +8,19 @@ export async function GET() {
     info: { title: 'Dam Data Platform API', version: '1.0.0' },
     servers: [{ url: process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000' }],
     components: {
-      securitySchemes: { ApiKey: { type: 'apiKey', in: 'header', name: 'X-API-Key' } },
+      // Stripe-style bearer-token auth. Pass the key as
+      //   Authorization: Bearer <key>
+      // or with HTTP Basic (key as username, empty password).
+      securitySchemes: {
+        Bearer: {
+          type: 'http',
+          scheme: 'bearer',
+          description:
+            'Stripe-style bearer-token. `curl -H "Authorization: Bearer <key>" ...` または `curl -u <key>: ...` (Basic)。',
+        },
+      },
     },
-    security: [{ ApiKey: [] }],
+    security: [{ Bearer: [] }],
     paths: {
       '/api/v1/healthz': {
         get: { summary: 'Health check', responses: { '200': { description: 'OK' } } },

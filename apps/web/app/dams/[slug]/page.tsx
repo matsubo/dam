@@ -75,19 +75,20 @@ export default async function DamDetail({ params }: PageProps) {
           { label: d.name },
         ]}
       />
-      {d.imageUrl ? (
-        <div className="relative w-full aspect-[3/1] mb-4 rounded overflow-hidden bg-gray-100">
-          <Image
-            src={d.imageUrl}
-            alt={`${d.name}のダム`}
-            fill
-            sizes="(max-width: 768px) 100vw, 1000px"
-            priority
-            className="object-cover"
-          />
-        </div>
-      ) : null}
-      <h1 className="text-3xl font-semibold mb-2">{d.name}</h1>
+      <div className="flex items-start gap-4 mb-2">
+        {d.imageUrl ? (
+          <div className="shrink-0 relative w-20 h-20 rounded-lg overflow-hidden bg-surface-container-low border border-outline-variant/40">
+            <Image
+              src={d.imageUrl}
+              alt=""
+              fill
+              sizes="80px"
+              className="object-cover"
+            />
+          </div>
+        ) : null}
+        <h1 className="text-3xl font-semibold">{d.name}</h1>
+      </div>
       <p className="text-muted mb-6">
         {d.nameKana ?? ''} · {PREF_NAME.get(d.prefCode) ?? d.prefCode}
         {d.watershedSlug && d.watershedName ? (

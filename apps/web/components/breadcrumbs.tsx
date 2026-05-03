@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-export interface Crumb {
+interface Crumb {
   label: string;
   href?: string;
 }

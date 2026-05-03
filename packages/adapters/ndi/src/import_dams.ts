@@ -3,7 +3,7 @@ import { sql } from '@dam/db/client';
 import { takenSlugs, upsertDamByExternalId } from '@dam/db/repo/dams';
 import type { ParsedDam } from './types.ts';
 
-export interface ImportResult {
+interface ImportResult {
   upserted: number;
 }
 
