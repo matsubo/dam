@@ -10,8 +10,10 @@ Last updated: 2026-05-04.
 By using this site or its API you accept these terms.
 
 1. **Scope** — Dam Data Japan aggregates Japanese reservoir data from
-   public government sources (国土交通省, 国土数値情報, ダム便覧, 国土地理院,
-   気象庁) and republishes it via this website and the JSON API.
+   public sources (国土数値情報 W01/A21, 一般財団法人日本ダム協会 ダム便覧,
+   国土地理院 地理院タイル/標高, ja.wikipedia 写真フォールバック) and
+   republishes it via this website and the JSON API. Realtime observation
+   values are not republished.
 2. **Nature of data** — Values are derived from upstream sources via
    normalization, name-matching, and unit conversion. Latency, accuracy,
    and completeness are not guaranteed. **Do not use for decisive

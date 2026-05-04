@@ -11,8 +11,8 @@ const BODY = `# Dam Data Japan
 
 Open data API for the storage volume, inflow, and outflow of every dam
 listed in Japan's national reservoir registry. Built from public sources
-(国土交通省 国土数値情報, ダム便覧, 国土地理院, 川の防災情報) and republished
-under permissive terms.
+(国土数値情報, ダム便覧, 国土地理院, ja.wikipedia for photo fallback) and
+republished under permissive terms. Realtime values are not republished.
 
 ## What you can do here
 - Browse 2,749 dams with capacity, location, and operator metadata
