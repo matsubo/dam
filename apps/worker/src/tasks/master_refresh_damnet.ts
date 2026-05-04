@@ -12,7 +12,8 @@ const task: Task = async (_payload, helpers) => {
     return;
   }
   const c = new HttpClient({
-    userAgent: 'DamDataPlatform/0.1 (+https://example.com/bot; matsubokkuri@gmail.com)',
+    userAgent:
+      'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
     minIntervalMs: 2000,
     maxRetries: 3,
   });
