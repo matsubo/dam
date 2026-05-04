@@ -1,6 +1,16 @@
 #!/bin/sh
-# Web container boot sequence: migrate → seed-if-empty → start.
+# Web container boot sequence: migrate → seed-if-empty (or force) → start.
 # Idempotent — safe to run on every restart.
+#
+# Force flags (set in the Coolify env, then UNSET after the deploy succeeds):
+#   BOOTSTRAP_FORCE_MASTER=1       — TRUNCATE master tables and re-restore
+#                                    /seed/master.sql.gz, even when dams is
+#                                    non-empty. Use to push a fresh local
+#                                    snapshot to prod.
+#   BOOTSTRAP_FORCE_OBSERVATIONS=1 — TRUNCATE observations and re-run the
+#                                    synthetic seeder. Implied when
+#                                    BOOTSTRAP_FORCE_MASTER=1 (because
+#                                    TRUNCATE CASCADE wipes obs anyway).
 #
 # We deliberately AVOID `set -eu`. A non-fatal failure in the bootstrap
 # (e.g. seed file checksum drift, observations seed timeout) shouldn't keep
@@ -30,9 +40,29 @@ fi
 dams=$(count_or_empty "SELECT COUNT(*) FROM dams")
 echo "[bootstrap] dams.count = '${dams}'"
 
+force_master="${BOOTSTRAP_FORCE_MASTER:-}"
+need_master_restore=0
 if [ "${dams}" = "0" ]; then
+  need_master_restore=1
+elif [ "${force_master}" = "1" ]; then
+  echo "[bootstrap] BOOTSTRAP_FORCE_MASTER=1 set — will overwrite master data"
+  need_master_restore=1
+fi
+
+if [ "${need_master_restore}" = "1" ]; then
   if [ -f /seed/master.sql.gz ]; then
-    echo "[bootstrap] dams empty → restoring /seed/master.sql.gz"
+    if [ "${force_master}" = "1" ]; then
+      # CASCADE wipes observations / raw_snapshots / match_review too.
+      # That's intentional — synth observations get regenerated below
+      # against the new dam IDs so the time-series stays self-consistent.
+      echo "[bootstrap] truncating master + dependent tables (CASCADE)"
+      psql "$DATABASE_URL" -v ON_ERROR_STOP=0 -q -c "
+        TRUNCATE TABLE
+          source_priorities, dams, rivers, watersheds
+        RESTART IDENTITY CASCADE;
+      " >/dev/null
+    fi
+    echo "[bootstrap] restoring /seed/master.sql.gz"
     if gunzip -c /seed/master.sql.gz | psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q; then
       dams=$(count_or_empty "SELECT COUNT(*) FROM dams")
       echo "[bootstrap] dams.count after restore = '${dams}'"
@@ -46,6 +76,13 @@ fi
 
 obs=$(count_or_empty "SELECT COUNT(*) FROM observations")
 echo "[bootstrap] observations.count = '${obs}'"
+
+force_obs="${BOOTSTRAP_FORCE_OBSERVATIONS:-}"
+if [ "${force_obs}" = "1" ] && [ "${obs}" != "0" ]; then
+  echo "[bootstrap] BOOTSTRAP_FORCE_OBSERVATIONS=1 — truncating observations"
+  psql "$DATABASE_URL" -v ON_ERROR_STOP=0 -q -c "TRUNCATE TABLE observations RESTART IDENTITY CASCADE;" >/dev/null
+  obs="0"
+fi
 
 if [ "${obs}" = "0" ] && [ -n "${dams}" ] && [ "${dams}" != "0" ]; then
   echo "[bootstrap] observations empty → running synthetic seeder (≈30s)"
