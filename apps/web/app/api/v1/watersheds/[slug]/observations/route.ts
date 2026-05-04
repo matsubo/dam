@@ -59,9 +59,14 @@ export async function GET(
       throw new HttpError(400, 'Invalid from/to');
     }
 
+    // Rate denominator = 利水容量 of the rate-able subset only (dams with
+    // a known active_capacity_m3). Excluded dams don't contribute to either
+    // the numerator or denominator, keeping the watershed-level ratio honest.
     const wsRows = await sql<
-      { id: bigint; total_capacity_m3: string | null }[]
-    >`SELECT w.id, COALESCE(SUM(d.total_capacity_m3), 0)::TEXT AS total_capacity_m3
+      { id: bigint; total_capacity_m3: string | null; active_capacity_m3: string | null }[]
+    >`SELECT w.id,
+             COALESCE(SUM(d.total_capacity_m3), 0)::TEXT  AS total_capacity_m3,
+             COALESCE(SUM(d.active_capacity_m3), 0)::TEXT AS active_capacity_m3
       FROM watersheds w
       LEFT JOIN dams d ON d.watershed_id = w.id
       WHERE w.slug = ${slug}
@@ -99,6 +104,8 @@ export async function GET(
         count: series.length,
         source: preferred ?? null,
         totalCapacityM3: ws.total_capacity_m3,
+        // The chart uses this for its rate-axis denominator.
+        activeCapacityM3: ws.active_capacity_m3,
       },
       {
         self: { href: self },

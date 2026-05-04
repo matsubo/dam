@@ -26,8 +26,8 @@ export const apiKeys = pgTable('api_keys', {
   tier: text('tier', { enum: ['free', 'partner', 'admin'] })
     .notNull()
     .default('free'),
-  ratePerMin: integer('rate_per_min').notNull().default(60),
-  ratePerDay: integer('rate_per_day').notNull().default(10000),
+  ratePerMin: integer('rate_per_min').notNull().default(600),
+  ratePerDay: integer('rate_per_day').notNull().default(100000),
   active: boolean('active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   lastUsedAt: timestamp('last_used_at', { withTimezone: true }),

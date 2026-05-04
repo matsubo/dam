@@ -20,7 +20,10 @@ export async function importWatersheds(parsed: ParsedWatershed[]): Promise<Impor
     const slug =
       existing.get(w.code) ??
       (() => {
-        const base = toSlug(w.name) || `watershed-${w.code}`;
+        // Prefer a romanised slug; fall back to the bare Japanese name
+        // since the URL is already namespaced under /watersheds/. The
+        // legacy `watershed-` prefix was just visual noise.
+        const base = toSlug(w.name) || w.name || `w-${w.code}`;
         const candidate = suffixedSlug(base, taken);
         taken.add(candidate);
         return candidate;

@@ -20,6 +20,8 @@ function toCsv(slug: string, series: SeriesPoint[]): string {
     'observed_at',
     'storage_volume_m3',
     'storage_rate',
+    'inflow_m3s',
+    'outflow_m3s',
     'quality_flag',
     'source_id',
   ].join(',');
@@ -32,6 +34,8 @@ function toCsv(slug: string, series: SeriesPoint[]): string {
       observed,
       p.storageVolumeM3 ?? '',
       p.storageRate ?? '',
+      p.inflowM3s ?? '',
+      p.outflowM3s ?? '',
       p.qualityFlag,
       p.sourceId,
     ].join(',');

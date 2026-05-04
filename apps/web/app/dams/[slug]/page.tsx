@@ -1,5 +1,11 @@
 import { PREFECTURES } from '@dam/core/prefectures';
-import { findDamBySlug, latestObservation, listDams, nearbyDams } from '@dam/db/repo/dams';
+import {
+  findDamBySlug,
+  latestObservation,
+  listDams,
+  nearbyDams,
+  storageChange,
+} from '@dam/db/repo/dams';
 import { aggregateWatershed, findWatershedBySlug } from '@dam/db/repo/watersheds';
 import type { Metadata } from 'next';
 import Image from 'next/image';
@@ -11,6 +17,7 @@ import { DamLocationMap } from '../../../components/dam-location-map.tsx';
 import { ObservationChart } from '../../../components/observation-chart.tsx';
 import { QualityBadge } from '../../../components/quality-badge.tsx';
 import { ReservoirGauge } from '../../../components/reservoir-gauge.tsx';
+import { StorageChangeStrip } from '../../../components/storage-change-strip.tsx';
 import { fmtCapacityMcm, fmtDate, fmtN, fmtPct } from '../../../lib/format.ts';
 
 export const dynamic = 'force-dynamic';
@@ -41,8 +48,9 @@ export default async function DamDetail({ params }: PageProps) {
   const slug = decodeURIComponent(rawSlug);
   const d = await findDamBySlug(slug);
   if (!d) notFound();
-  const [latest, nearby, watershed, watershedDams] = await Promise.all([
+  const [latest, change, nearby, watershed, watershedDams] = await Promise.all([
     latestObservation(d.id),
+    storageChange(d.id),
     nearbyDams(d.id, 20_000, 6),
     d.watershedSlug ? findWatershedBySlug(d.watershedSlug) : Promise.resolve(null),
     d.watershedSlug
@@ -129,22 +137,25 @@ export default async function DamDetail({ params }: PageProps) {
             </span>
           )}
         </header>
-        {latest ? (
+        {latest ? (() => {
+          // Denominator policy: 利水容量 only. When the dam has no
+          // active capacity (~51% of all dams — Damnet doesn't list
+          // them), the rate isn't shown rather than mislabelling a
+          // total-capacity ratio (which is what observations.storage_rate
+          // typically stores upstream) as 貯水率.
+          const cap = d.activeCapacityM3 ? Number(d.activeCapacityM3) : null;
+          const vol = latest.storageVolumeM3 ? Number(latest.storageVolumeM3) : null;
+          const rate = cap && cap > 0 && vol != null ? Math.min(1, vol / cap) : null;
+          return (
+          <>
           <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
             <div className="shrink-0 flex flex-col items-center">
-              {(() => {
-                const cap = d.totalCapacityM3 ? Number(d.totalCapacityM3) : null;
-                const vol = latest.storageVolumeM3 ? Number(latest.storageVolumeM3) : null;
-                const direct = latest.storageRate ? Number(latest.storageRate) : null;
-                const rate =
-                  direct ?? (cap && cap > 0 && vol != null ? vol / cap : null);
-                return <ReservoirGauge rate={rate} size={180} />;
-              })()}
+              <ReservoirGauge rate={rate} size={180} />
               <div className="text-xs text-muted mt-1">貯水率</div>
             </div>
             <dl className="grid grid-cols-2 md:grid-cols-2 gap-4 text-sm flex-1">
               <Pair label="貯水量" value={fmtCapacityMcm(latest.storageVolumeM3)} />
-              <Pair label="貯水率" value={fmtPct(latest.storageRate)} />
+              <Pair label="貯水率" value={fmtPct(rate)} />
               <Pair
                 label="流入量"
                 value={latest.inflowM3s ? `${fmtN(latest.inflowM3s)} m³/s` : '—'}
@@ -155,7 +166,9 @@ export default async function DamDetail({ params }: PageProps) {
               />
             </dl>
           </div>
-        ) : (
+          </>
+          );
+        })() : (
           <p className="text-muted">まだ観測値がありません。</p>
         )}
       </section>
@@ -164,16 +177,51 @@ export default async function DamDetail({ params }: PageProps) {
         <h2 className="text-lg font-semibold mb-3">推移グラフ</h2>
         <ObservationChart
           slug={slug}
-          capacityM3={d.totalCapacityM3 ? Number(d.totalCapacityM3) : null}
+          capacityM3={d.activeCapacityM3 ? Number(d.activeCapacityM3) : null}
         />
+        {latest ? (
+          <div className="mt-5">
+            <div className="text-xs text-muted mb-2">貯水量の変化</div>
+            <StorageChangeStrip change={change} />
+          </div>
+        ) : null}
       </section>
 
       <section className="mb-8">
         <h2 className="text-lg font-semibold mb-3">所在地</h2>
         <DamLocationMap lat={d.lat} lng={d.lng} name={d.name} />
-        <p className="text-xs text-on-surface-variant mt-2 tabular-nums">
-          {d.lat.toFixed(5)}, {d.lng.toFixed(5)}
-        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-on-surface-variant">
+          <span className="tabular-nums">
+            {d.lat.toFixed(5)}, {d.lng.toFixed(5)}
+          </span>
+          <a
+            href={`https://www.google.com/maps/search/?api=1&query=${d.lat},${d.lng}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline inline-flex items-center gap-1"
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+              open_in_new
+            </span>
+            Google マップで開く
+          </a>
+          <a
+            href={`https://maps.apple.com/?q=${encodeURIComponent(d.name)}&ll=${d.lat},${d.lng}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-on-surface-variant hover:text-primary hover:underline"
+          >
+            Apple マップ
+          </a>
+          <a
+            href={`https://maps.gsi.go.jp/#15/${d.lat}/${d.lng}/&base=std&ls=std&disp=1&vs=c1g1j0h0k0l0u0t0z0r0s0m0f0`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-on-surface-variant hover:text-primary hover:underline"
+          >
+            地理院地図
+          </a>
+        </div>
       </section>
 
       {watershed && (

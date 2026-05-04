@@ -134,6 +134,22 @@ export async function touchLastUsed(id: bigint): Promise<void> {
   await sql`UPDATE api_keys SET last_used_at = NOW() WHERE id = ${id}`;
 }
 
+/**
+ * Hard-delete every API key (and its usage rows) for the given email. Used by
+ * the self-service 退会 flow on /account/keys. Returns the number of api_keys
+ * rows removed so the caller can confirm something actually happened.
+ */
+export async function deleteAccountByEmail(email: string): Promise<number> {
+  const ids = await sql<{ id: bigint }[]>`
+    SELECT id FROM api_keys WHERE email = ${email}
+  `;
+  if (ids.length === 0) return 0;
+  const idList = ids.map((r) => r.id);
+  await sql`DELETE FROM api_key_usage WHERE api_key_id = ANY(${idList}::BIGINT[])`;
+  const r = await sql`DELETE FROM api_keys WHERE email = ${email}`;
+  return r.count;
+}
+
 export async function recordUsage(id: bigint, at: Date): Promise<void> {
   const minute = new Date(Math.floor(at.getTime() / 60_000) * 60_000);
   await sql`

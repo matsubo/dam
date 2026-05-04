@@ -252,6 +252,62 @@ export async function listDams(
   return { items, nextCursor };
 }
 
+export interface DamPagedFilters {
+  pref?: string | null;
+  watershedSlug?: string | null;
+  manager?: string | null;
+  search?: string | null;
+  /** 1-based. Out-of-range values clamp to [1, totalPages]. */
+  page?: number;
+  pageSize?: number;
+}
+
+/**
+ * Page-based variant of listDams used by the /dams browse UI. Cursor mode
+ * (listDams) is fine for cheap API access but the human-facing list wants
+ * "page 12 of 55"–style navigation, which needs OFFSET + total COUNT.
+ */
+export async function listDamsPaged(f: DamPagedFilters): Promise<{
+  items: DamListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}> {
+  const pageSize = Math.max(1, Math.min(200, f.pageSize ?? 50));
+  const requestedPage = Math.max(1, Math.floor(f.page ?? 1));
+  const totalRows = await sql<{ total: bigint }[]>`
+    SELECT COUNT(*)::BIGINT AS total
+    FROM dams d
+    LEFT JOIN watersheds w ON w.id = d.watershed_id
+    WHERE (${f.pref ?? null}::text IS NULL OR d.pref_code = ${f.pref ?? null})
+      AND (${f.watershedSlug ?? null}::text IS NULL OR w.slug = ${f.watershedSlug ?? null})
+      AND (${f.manager ?? null}::text IS NULL OR d.manager = ${f.manager ?? null})
+      AND (${f.search ?? null}::text IS NULL OR d.name ILIKE ('%' || ${f.search ?? null} || '%'))
+  `;
+  const total = Number(totalRows[0]?.total ?? 0n);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(totalPages, requestedPage);
+  const offset = (page - 1) * pageSize;
+  const items = await sql<DamListItem[]>`
+    SELECT
+      d.id, d.slug, d.name, d.pref_code AS "prefCode", d.manager,
+      d.total_capacity_m3::TEXT AS "totalCapacityM3",
+      w.slug AS "watershedSlug", w.name AS "watershedName",
+      ST_Y(d.location::geometry) AS lat, ST_X(d.location::geometry) AS lng,
+      d.image_url AS "imageUrl"
+    FROM dams d
+    LEFT JOIN watersheds w ON w.id = d.watershed_id
+    WHERE (${f.pref ?? null}::text IS NULL OR d.pref_code = ${f.pref ?? null})
+      AND (${f.watershedSlug ?? null}::text IS NULL OR w.slug = ${f.watershedSlug ?? null})
+      AND (${f.manager ?? null}::text IS NULL OR d.manager = ${f.manager ?? null})
+      AND (${f.search ?? null}::text IS NULL OR d.name ILIKE ('%' || ${f.search ?? null} || '%'))
+    ORDER BY d.id
+    LIMIT ${pageSize} OFFSET ${offset}
+  `;
+  return { items, total, page, pageSize, totalPages };
+}
+
 export interface DamDetail extends DamListItem {
   nameKana: string | null;
   type: string | null;
@@ -372,6 +428,165 @@ export async function latestObservation(damId: bigint): Promise<LatestObservatio
     LIMIT 1
   `;
   return rows[0] ?? null;
+}
+
+export interface StorageChange {
+  /** Storage volume at the latest observation (m³, string for bigint safety). */
+  current: string | null;
+  /** Closest observation at-or-before the lookback timestamp. */
+  h1: string | null;
+  h6: string | null;
+  h12: string | null;
+  d1: string | null;
+  d7: string | null;
+  d30: string | null;
+  d365: string | null;
+  d1825: string | null;
+  /** Actual age in seconds of the chosen reference point (for tooltip). */
+  h1AgeS: number | null;
+  h6AgeS: number | null;
+  h12AgeS: number | null;
+  d1AgeS: number | null;
+  d7AgeS: number | null;
+  d30AgeS: number | null;
+  d365AgeS: number | null;
+  d1825AgeS: number | null;
+}
+
+/**
+ * Returns the latest storage_volume plus the closest historical observation
+ * at the four lookback windows used by the TradingView-style change %
+ * display on the dam page. We pick "the most recent observation at or before
+ * NOW() - INTERVAL X" so a sparse observation cadence (e.g. 1/day) still
+ * yields a usable comparison.
+ */
+export async function storageChange(damId: bigint): Promise<StorageChange> {
+  // 8 lookback windows. The query picks "the most recent observation at or
+  // before NOW() - INTERVAL X" for each, so a 1-hour ingest cadence still
+  // resolves the short windows accurately while sparser data degrades
+  // gracefully (the StorageChangeStrip flags stale picks visually).
+  const rows = await sql<
+    {
+      current: string | null;
+      h1: string | null;
+      h6: string | null;
+      h12: string | null;
+      d1: string | null;
+      d7: string | null;
+      d30: string | null;
+      d365: string | null;
+      d1825: string | null;
+      currentAt: Date | null;
+      h1At: Date | null;
+      h6At: Date | null;
+      h12At: Date | null;
+      d1At: Date | null;
+      d7At: Date | null;
+      d30At: Date | null;
+      d365At: Date | null;
+      d1825At: Date | null;
+    }[]
+  >`
+    WITH latest AS (
+      SELECT storage_volume_m3, observed_at
+      FROM observations
+      WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
+      ORDER BY observed_at DESC
+      LIMIT 1
+    )
+    SELECT
+      (SELECT storage_volume_m3::TEXT FROM latest) AS current,
+      (SELECT observed_at FROM latest)             AS "currentAt",
+      (SELECT storage_volume_m3::TEXT FROM observations
+        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
+          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '1 hour'
+        ORDER BY observed_at DESC LIMIT 1) AS h1,
+      (SELECT observed_at FROM observations
+        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
+          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '1 hour'
+        ORDER BY observed_at DESC LIMIT 1) AS "h1At",
+      (SELECT storage_volume_m3::TEXT FROM observations
+        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
+          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '6 hours'
+        ORDER BY observed_at DESC LIMIT 1) AS h6,
+      (SELECT observed_at FROM observations
+        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
+          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '6 hours'
+        ORDER BY observed_at DESC LIMIT 1) AS "h6At",
+      (SELECT storage_volume_m3::TEXT FROM observations
+        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
+          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '12 hours'
+        ORDER BY observed_at DESC LIMIT 1) AS h12,
+      (SELECT observed_at FROM observations
+        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
+          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '12 hours'
+        ORDER BY observed_at DESC LIMIT 1) AS "h12At",
+      (SELECT storage_volume_m3::TEXT FROM observations
+        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
+          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '1 day'
+        ORDER BY observed_at DESC LIMIT 1) AS d1,
+      (SELECT observed_at FROM observations
+        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
+          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '1 day'
+        ORDER BY observed_at DESC LIMIT 1) AS "d1At",
+      (SELECT storage_volume_m3::TEXT FROM observations
+        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
+          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '7 days'
+        ORDER BY observed_at DESC LIMIT 1) AS d7,
+      (SELECT observed_at FROM observations
+        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
+          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '7 days'
+        ORDER BY observed_at DESC LIMIT 1) AS "d7At",
+      (SELECT storage_volume_m3::TEXT FROM observations
+        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
+          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '30 days'
+        ORDER BY observed_at DESC LIMIT 1) AS d30,
+      (SELECT observed_at FROM observations
+        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
+          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '30 days'
+        ORDER BY observed_at DESC LIMIT 1) AS "d30At",
+      (SELECT storage_volume_m3::TEXT FROM observations
+        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
+          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '365 days'
+        ORDER BY observed_at DESC LIMIT 1) AS d365,
+      (SELECT observed_at FROM observations
+        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
+          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '365 days'
+        ORDER BY observed_at DESC LIMIT 1) AS "d365At",
+      (SELECT storage_volume_m3::TEXT FROM observations
+        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
+          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '1825 days'
+        ORDER BY observed_at DESC LIMIT 1) AS d1825,
+      (SELECT observed_at FROM observations
+        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
+          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '1825 days'
+        ORDER BY observed_at DESC LIMIT 1) AS "d1825At"
+  `;
+  const r = rows[0];
+  if (!r) {
+    return {
+      current: null,
+      h1: null, h6: null, h12: null,
+      d1: null, d7: null, d30: null, d365: null, d1825: null,
+      h1AgeS: null, h6AgeS: null, h12AgeS: null,
+      d1AgeS: null, d7AgeS: null, d30AgeS: null, d365AgeS: null, d1825AgeS: null,
+    };
+  }
+  const ageS = (a: Date | null, b: Date | null): number | null =>
+    a && b ? Math.round((a.getTime() - b.getTime()) / 1000) : null;
+  return {
+    current: r.current,
+    h1: r.h1, h6: r.h6, h12: r.h12,
+    d1: r.d1, d7: r.d7, d30: r.d30, d365: r.d365, d1825: r.d1825,
+    h1AgeS: ageS(r.currentAt, r.h1At),
+    h6AgeS: ageS(r.currentAt, r.h6At),
+    h12AgeS: ageS(r.currentAt, r.h12At),
+    d1AgeS: ageS(r.currentAt, r.d1At),
+    d7AgeS: ageS(r.currentAt, r.d7At),
+    d30AgeS: ageS(r.currentAt, r.d30At),
+    d365AgeS: ageS(r.currentAt, r.d365At),
+    d1825AgeS: ageS(r.currentAt, r.d1825At),
+  };
 }
 
 export async function nearbyDams(

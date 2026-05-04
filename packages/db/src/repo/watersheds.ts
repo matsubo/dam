@@ -151,35 +151,241 @@ export async function findWatershedBySlug(slug: string): Promise<WatershedDetail
 }
 
 export interface WatershedAggregate {
+  /** All dams in the watershed (not just rate-able). */
   damCount: number;
+  /** Sum of 総貯水容量 over all dams — used as a "size" indicator. */
   totalCapacityM3: string | null;
+  /** Sum of 利水容量 over the rate-able subset only. Used as the rate denominator. */
+  activeCapacityM3: string | null;
+  /** Number of dams contributing to activeCapacity / latestStorage (i.e. those with active_capacity_m3 IS NOT NULL). */
+  rateableDamCount: number;
+  /** Latest storage summed over the rate-able subset only — pairs with activeCapacityM3 for rate. */
   latestStorageVolumeM3: string | null;
   observedAt: Date | null;
 }
 
+export interface WatershedStorageChange {
+  current: string | null;
+  h1: string | null;
+  h6: string | null;
+  h12: string | null;
+  d1: string | null;
+  d7: string | null;
+  d30: string | null;
+  d365: string | null;
+  d1825: string | null;
+  h1AgeS: number | null;
+  h6AgeS: number | null;
+  h12AgeS: number | null;
+  d1AgeS: number | null;
+  d7AgeS: number | null;
+  d30AgeS: number | null;
+  d365AgeS: number | null;
+  d1825AgeS: number | null;
+}
+
+/**
+ * Watershed-level "latest minus N-window-ago" totals, computed only over the
+ * dams in the watershed that have 利水容量 (= the same rate-able subset the
+ * watershed gauge uses, so the change percentages are consistent with the
+ * displayed rate).
+ *
+ * Approach: we union 8 lookback timestamps and, for each, take the latest
+ * per-dam observation at-or-before that point and SUM. The latest value uses
+ * a small grace window (each dam's observation must be within 7 days of the
+ * watershed-level "now" to count) so a single stale dam doesn't poison the
+ * total.
+ */
+export async function watershedStorageChange(
+  watershedId: bigint,
+): Promise<WatershedStorageChange> {
+  const rows = await sql<
+    {
+      bucket: string;
+      total: string | null;
+      pickedAt: Date | null;
+    }[]
+  >`
+    WITH ds AS (
+      SELECT id FROM dams
+      WHERE watershed_id = ${watershedId} AND active_capacity_m3 IS NOT NULL
+    ),
+    latest_per_dam AS (
+      SELECT DISTINCT ON (o.dam_id)
+             o.dam_id, o.storage_volume_m3, o.observed_at
+      FROM observations o
+      JOIN ds ON ds.id = o.dam_id
+      WHERE o.storage_volume_m3 IS NOT NULL
+      ORDER BY o.dam_id, o.observed_at DESC
+    ),
+    -- "Now" for the watershed = max observed_at in the rate-able subset.
+    -- We use the same anchor for every lookback so the windows align.
+    anchor AS (SELECT MAX(observed_at) AS t FROM latest_per_dam),
+    buckets AS (
+      SELECT 'current' AS bucket, INTERVAL '0 second' AS lookback UNION ALL
+      SELECT 'h1',     INTERVAL '1 hour'     UNION ALL
+      SELECT 'h6',     INTERVAL '6 hours'    UNION ALL
+      SELECT 'h12',    INTERVAL '12 hours'   UNION ALL
+      SELECT 'd1',     INTERVAL '1 day'      UNION ALL
+      SELECT 'd7',     INTERVAL '7 days'     UNION ALL
+      SELECT 'd30',    INTERVAL '30 days'    UNION ALL
+      SELECT 'd365',   INTERVAL '365 days'   UNION ALL
+      SELECT 'd1825',  INTERVAL '1825 days'
+    ),
+    -- For each bucket, take each dam's most recent observation <= anchor − lookback,
+    -- then sum.
+    per_bucket AS (
+      SELECT
+        b.bucket,
+        SUM(picks.storage_volume_m3)::TEXT AS total,
+        MIN(picks.observed_at) AS picked_at
+      FROM buckets b
+      LEFT JOIN LATERAL (
+        SELECT DISTINCT ON (o.dam_id)
+               o.dam_id, o.storage_volume_m3, o.observed_at
+        FROM observations o
+        JOIN ds ON ds.id = o.dam_id
+        WHERE o.storage_volume_m3 IS NOT NULL
+          AND o.observed_at <= (SELECT t FROM anchor) - b.lookback
+        ORDER BY o.dam_id, o.observed_at DESC
+      ) picks ON TRUE
+      GROUP BY b.bucket
+    )
+    SELECT bucket, total, picked_at AS "pickedAt" FROM per_bucket
+  `;
+  const map = new Map<string, { total: string | null; pickedAt: Date | null }>();
+  for (const r of rows) map.set(r.bucket, { total: r.total, pickedAt: r.pickedAt });
+  const get = (k: string): string | null => map.get(k)?.total ?? null;
+  const at = (k: string): Date | null => map.get(k)?.pickedAt ?? null;
+  const currentAt = at('current');
+  const ageS = (a: Date | null, b: Date | null): number | null =>
+    a && b ? Math.round((a.getTime() - b.getTime()) / 1000) : null;
+  return {
+    current: get('current'),
+    h1: get('h1'),
+    h6: get('h6'),
+    h12: get('h12'),
+    d1: get('d1'),
+    d7: get('d7'),
+    d30: get('d30'),
+    d365: get('d365'),
+    d1825: get('d1825'),
+    h1AgeS: ageS(currentAt, at('h1')),
+    h6AgeS: ageS(currentAt, at('h6')),
+    h12AgeS: ageS(currentAt, at('h12')),
+    d1AgeS: ageS(currentAt, at('d1')),
+    d7AgeS: ageS(currentAt, at('d7')),
+    d30AgeS: ageS(currentAt, at('d30')),
+    d365AgeS: ageS(currentAt, at('d365')),
+    d1825AgeS: ageS(currentAt, at('d1825')),
+  };
+}
+
+/**
+ * National version of watershedStorageChange — same shape, but the rate-able
+ * subset is "every dam in the country with active_capacity_m3". Used by the
+ * home page change strip.
+ */
+export async function nationalStorageChange(): Promise<WatershedStorageChange> {
+  const rows = await sql<{ bucket: string; total: string | null; pickedAt: Date | null }[]>`
+    WITH ds AS (
+      SELECT id FROM dams WHERE active_capacity_m3 IS NOT NULL
+    ),
+    latest_per_dam AS (
+      SELECT DISTINCT ON (o.dam_id)
+             o.dam_id, o.storage_volume_m3, o.observed_at
+      FROM observations o
+      JOIN ds ON ds.id = o.dam_id
+      WHERE o.storage_volume_m3 IS NOT NULL
+      ORDER BY o.dam_id, o.observed_at DESC
+    ),
+    anchor AS (SELECT MAX(observed_at) AS t FROM latest_per_dam),
+    buckets AS (
+      SELECT 'current' AS bucket, INTERVAL '0 second' AS lookback UNION ALL
+      SELECT 'h1',    INTERVAL '1 hour'    UNION ALL
+      SELECT 'h6',    INTERVAL '6 hours'   UNION ALL
+      SELECT 'h12',   INTERVAL '12 hours'  UNION ALL
+      SELECT 'd1',    INTERVAL '1 day'     UNION ALL
+      SELECT 'd7',    INTERVAL '7 days'    UNION ALL
+      SELECT 'd30',   INTERVAL '30 days'   UNION ALL
+      SELECT 'd365',  INTERVAL '365 days'  UNION ALL
+      SELECT 'd1825', INTERVAL '1825 days'
+    ),
+    per_bucket AS (
+      SELECT
+        b.bucket,
+        SUM(picks.storage_volume_m3)::TEXT AS total,
+        MIN(picks.observed_at) AS picked_at
+      FROM buckets b
+      LEFT JOIN LATERAL (
+        SELECT DISTINCT ON (o.dam_id) o.dam_id, o.storage_volume_m3, o.observed_at
+        FROM observations o
+        JOIN ds ON ds.id = o.dam_id
+        WHERE o.storage_volume_m3 IS NOT NULL
+          AND o.observed_at <= (SELECT t FROM anchor) - b.lookback
+        ORDER BY o.dam_id, o.observed_at DESC
+      ) picks ON TRUE
+      GROUP BY b.bucket
+    )
+    SELECT bucket, total, picked_at AS "pickedAt" FROM per_bucket
+  `;
+  const map = new Map<string, { total: string | null; pickedAt: Date | null }>();
+  for (const r of rows) map.set(r.bucket, { total: r.total, pickedAt: r.pickedAt });
+  const get = (k: string): string | null => map.get(k)?.total ?? null;
+  const at = (k: string): Date | null => map.get(k)?.pickedAt ?? null;
+  const currentAt = at('current');
+  const ageS = (a: Date | null, b: Date | null): number | null =>
+    a && b ? Math.round((a.getTime() - b.getTime()) / 1000) : null;
+  return {
+    current: get('current'),
+    h1: get('h1'), h6: get('h6'), h12: get('h12'),
+    d1: get('d1'), d7: get('d7'), d30: get('d30'), d365: get('d365'), d1825: get('d1825'),
+    h1AgeS: ageS(currentAt, at('h1')),
+    h6AgeS: ageS(currentAt, at('h6')),
+    h12AgeS: ageS(currentAt, at('h12')),
+    d1AgeS: ageS(currentAt, at('d1')),
+    d7AgeS: ageS(currentAt, at('d7')),
+    d30AgeS: ageS(currentAt, at('d30')),
+    d365AgeS: ageS(currentAt, at('d365')),
+    d1825AgeS: ageS(currentAt, at('d1825')),
+  };
+}
+
 export async function aggregateWatershed(watershedId: bigint): Promise<WatershedAggregate> {
+  // Two cohorts:
+  //   `ds`        — every dam in the watershed (used for damCount + total capacity)
+  //   `ds_rateable` — dams with active_capacity_m3 (used for the storage-rate
+  //                  numerator/denominator pair). Excluding null-active dams
+  //                  here keeps the watershed rate honest: we don't mix
+  //                  total-capacity dams into the active-capacity ratio.
   const rows = await sql<WatershedAggregate[]>`
     WITH ds AS (
-      SELECT id, total_capacity_m3 FROM dams WHERE watershed_id = ${watershedId}
+      SELECT id, total_capacity_m3, active_capacity_m3
+      FROM dams WHERE watershed_id = ${watershedId}
+    ),
+    ds_rateable AS (
+      SELECT id, active_capacity_m3 FROM ds WHERE active_capacity_m3 IS NOT NULL
     ),
     latest AS (
       SELECT DISTINCT ON (o.dam_id) o.dam_id, o.observed_at, o.storage_volume_m3
       FROM observations o
-      JOIN ds ON ds.id = o.dam_id
+      JOIN ds_rateable ON ds_rateable.id = o.dam_id
       ORDER BY o.dam_id, o.observed_at DESC
     )
     SELECT
-      COUNT(*)::INT                                    AS "damCount",
-      SUM(ds.total_capacity_m3)::TEXT                  AS "totalCapacityM3",
-      SUM(latest.storage_volume_m3)::TEXT              AS "latestStorageVolumeM3",
-      MAX(latest.observed_at)                          AS "observedAt"
-    FROM ds
-    LEFT JOIN latest ON latest.dam_id = ds.id
+      (SELECT COUNT(*)::INT          FROM ds)                     AS "damCount",
+      (SELECT SUM(total_capacity_m3)::TEXT FROM ds)               AS "totalCapacityM3",
+      (SELECT COUNT(*)::INT          FROM ds_rateable)            AS "rateableDamCount",
+      (SELECT SUM(active_capacity_m3)::TEXT FROM ds_rateable)     AS "activeCapacityM3",
+      (SELECT SUM(latest.storage_volume_m3)::TEXT FROM latest)    AS "latestStorageVolumeM3",
+      (SELECT MAX(latest.observed_at)             FROM latest)    AS "observedAt"
   `;
   return (
     rows[0] ?? {
       damCount: 0,
       totalCapacityM3: null,
+      activeCapacityM3: null,
+      rateableDamCount: 0,
       latestStorageVolumeM3: null,
       observedAt: null,
     }

@@ -1,10 +1,10 @@
 import { PREFECTURES } from '@dam/core/prefectures';
-import { listDams } from '@dam/db/repo/dams';
+import { listDamsPaged } from '@dam/db/repo/dams';
 import { listWatersheds } from '@dam/db/repo/watersheds';
 import type { Metadata } from 'next';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
 import { DamTable } from '../../components/dam-table.tsx';
-import { Pagination } from '../../components/pagination.tsx';
+import { PagePagination } from '../../components/page-pagination.tsx';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 900;
@@ -15,19 +15,32 @@ export const metadata: Metadata = {
 };
 
 interface SP {
-  searchParams?: Promise<{ pref?: string; watershed?: string; manager?: string; cursor?: string }>;
+  searchParams?: Promise<{
+    pref?: string;
+    watershed?: string;
+    manager?: string;
+    page?: string;
+  }>;
 }
+
+const PAGE_SIZE = 50;
 
 export default async function DamsPage({ searchParams }: SP) {
   const sp = (await searchParams) ?? {};
+  const requestedPage = sp.page ? Number(sp.page) : 1;
+  // Treat empty-string query params (e.g. `?pref=13&watershed=` produced by
+  // the filter form when 水系 is unselected) as "not filtered". Without this
+  // the watershed_slug = '' clause matches no rows and shows 0 results.
+  const blank = (s: string | undefined): string | null =>
+    s == null || s === '' ? null : s;
   const [r, allWatersheds] = await Promise.all([
-    listDams({
-      pref: sp.pref ?? null,
-      watershedSlug: sp.watershed ?? null,
-      manager: sp.manager ?? null,
+    listDamsPaged({
+      pref: blank(sp.pref),
+      watershedSlug: blank(sp.watershed),
+      manager: blank(sp.manager),
       search: null,
-      cursor: sp.cursor ? BigInt(sp.cursor) : null,
-      pageSize: 50,
+      page: Number.isFinite(requestedPage) ? requestedPage : 1,
+      pageSize: PAGE_SIZE,
     }),
     // Pull only the watersheds that actually have dams attached so the dropdown
     // doesn't list 644 systems where 144 are empty placeholders.
@@ -107,11 +120,23 @@ export default async function DamsPage({ searchParams }: SP) {
             クリア
           </a>
         )}
-        <span className="text-muted ml-auto">{r.items.length} 件</span>
+        <span className="text-muted ml-auto tabular-nums">
+          {r.total.toLocaleString('ja-JP')} 件
+        </span>
       </form>
 
       <DamTable rows={r.items.map((i) => ({ ...i, totalCapacityM3: i.totalCapacityM3 }))} />
-      <Pagination basePath="/dams" nextCursor={r.nextCursor?.toString() ?? null} />
+      <PagePagination
+        basePath="/dams"
+        query={{
+          pref: sp.pref ?? null,
+          watershed: sp.watershed ?? null,
+          manager: sp.manager ?? null,
+        }}
+        page={r.page}
+        totalPages={r.totalPages}
+        total={r.total}
+      />
     </div>
   );
 }

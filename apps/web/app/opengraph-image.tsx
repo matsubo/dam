@@ -77,7 +77,7 @@ export default function OG() {
               lineHeight: 1.4,
             }}
           >
-            全国 2,749 基のダムを網羅。1 時間ごとに更新する貯水量データ。
+            全国 2,749 基のダム諸元と 1 時間粒度の貯水量履歴。
           </div>
         </div>
         <div
@@ -100,7 +100,7 @@ export default function OG() {
                 background: '#86efac',
               }}
             />
-            毎時更新
+            履歴データ
           </span>
         </div>
       </div>

@@ -106,8 +106,16 @@ const PREFECTURES_BY_NAME: Record<string, string> = {
 };
 
 function normalizeName(s: string): string {
+  // NDI splits redeveloped dams into separate rows suffixed with （再）/（元）
+  // ("post-redevelopment" / "original"), e.g. 早明浦（再）vs 早明浦（元）, while
+  // Damnet keeps a single row per physical dam. Strip these markers (both
+  // full-width and half-width parens) so both NDI rows match the same Damnet
+  // entry and inherit its 利水容量 etc.
+  // 「(新)」/「（新）」 also appears for newly-built dams superseding an old one
+  // and is treated the same way.
   return s
     .normalize('NFKC')
+    .replace(/[（(](?:再|元|新)[）)]/gu, '')
     .replace(/(?:ダム|貯水池|池)$/u, '')
     .trim()
     .toLowerCase();
@@ -132,19 +140,28 @@ async function main(): Promise<void> {
   const lines = raw.split('\n').filter(Boolean);
   const captures: DamInfo[] = lines.map((l) => JSON.parse(l) as DamInfo);
 
-  // Preload all master dams keyed by (prefCode, normalized name)
+  // Preload all master dams indexed by (prefCode, normalized name). Multiple
+  // NDI rows can collide on the same key after normalization — most often
+  // 〇〇（再）+ 〇〇（元）pairs that describe the same physical dam — so the
+  // map stores an array of rows. The Damnet ID can only be attached to ONE of
+  // them (unique-index constraint), but we want every row in the group to
+  // inherit the master attributes (利水容量, etc).
   const allDams = await sql<DamRow[]>`
     SELECT id, slug, name, pref_code, external_ids FROM dams
   `;
-  const damByKey = new Map<string, DamRow>();
+  const damByKey = new Map<string, DamRow[]>();
   for (const d of allDams) {
-    damByKey.set(`${d.pref_code}|${normalizeName(d.name)}`, d);
+    const key = `${d.pref_code}|${normalizeName(d.name)}`;
+    const list = damByKey.get(key);
+    if (list) list.push(d);
+    else damByKey.set(key, [d]);
   }
   const allSlugs = new Set(allDams.map((d) => d.slug));
 
   let matched = 0;
   let skippedNoPref = 0;
   let skippedNotFound = 0;
+  let skippedConflict = 0;
   let attached = 0;
   let attrUpdated = 0;
   let slugUpdated = 0;
@@ -156,16 +173,32 @@ async function main(): Promise<void> {
       continue;
     }
     const key = `${prefCode}|${normalizeName(c.dam_name)}`;
-    const target = damByKey.get(key);
-    if (!target) {
+    const targets = damByKey.get(key);
+    if (!targets || targets.length === 0) {
       skippedNotFound++;
       continue;
     }
     matched++;
+    // The first row in the group is the canonical Damnet-ID holder. Subsequent
+    // rows (`（再）`/`（元）` siblings) only inherit the attribute backfill.
+    const target = targets[0]!;
 
-    // 1. Append damnet external_id (idempotent)
+    // 1. Append damnet external_id (idempotent + cross-row safe).
+    // The unique index `dams_ext_damnet_uniq` rejects the same dam_number on
+    // two different masters; this happens when a Damnet record's
+    // (prefecture, normalized name) matches a target whose namesake in a
+    // neighbouring run already claimed that ID. Skip silently in that case.
     const alreadyHas = target.external_ids?.damnet === c.dam_number;
     if (!alreadyHas) {
+      const conflict = await sql<{ id: bigint }[]>`
+        SELECT id FROM dams
+        WHERE external_ids->>'damnet' = ${c.dam_number} AND id <> ${target.id}
+        LIMIT 1
+      `;
+      if (conflict.length > 0) {
+        skippedConflict++;
+        continue;
+      }
       await sql`
         UPDATE dams
         SET external_ids = external_ids || jsonb_build_object('damnet', ${c.dam_number}::text)
@@ -215,6 +248,10 @@ async function main(): Promise<void> {
       mainContractor ||
       redevelopmentStatus;
     if (hasAnyUpdate) {
+      // Apply attributes to every row in this name-collision group so both
+      // 〇〇（再）and 〇〇（元）pick up the same 利水容量 / dimensions / etc.
+      // postgres.js refuses to bind bigint[] directly, so cast via TEXT[].
+      const ids = targets.map((t) => t.id.toString());
       await sql`
         UPDATE dams SET
           name_kana               = COALESCE(${kana}, name_kana),
@@ -223,6 +260,7 @@ async function main(): Promise<void> {
           height_m                = COALESCE(${heightM}, height_m),
           total_capacity_m3       = COALESCE(${capacityM3}, total_capacity_m3),
           active_capacity_m3      = COALESCE(${activeCapacityM3}, active_capacity_m3),
+          effective_capacity_m3   = COALESCE(${activeCapacityM3}, effective_capacity_m3),
           completed_year          = COALESCE(${completed}, completed_year),
           construction_start_year = COALESCE(${constructionStart}, construction_start_year),
           purposes                = COALESCE(${purposes}, purposes),
@@ -233,9 +271,9 @@ async function main(): Promise<void> {
           left_bank_location      = COALESCE(${leftBankLocation}, left_bank_location),
           main_contractor         = COALESCE(${mainContractor}, main_contractor),
           redevelopment_status    = COALESCE(${redevelopmentStatus}, redevelopment_status)
-        WHERE id = ${target.id}
+        WHERE id::TEXT = ANY(${ids}::TEXT[])
       `;
-      attrUpdated++;
+      attrUpdated += targets.length;
     }
 
     // 3. If slug is the placeholder (dam-NNNN-PP) and we now have kana, repair it.
@@ -258,6 +296,7 @@ async function main(): Promise<void> {
       matched,
       skippedNoPref,
       skippedNotFound,
+      skippedConflict,
       attached,
       attrUpdated,
       slugUpdated,
