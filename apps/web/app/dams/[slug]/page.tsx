@@ -95,16 +95,16 @@ export default async function DamDetail({ params }: PageProps) {
               const credit = imageCredit(d.imageUrl);
               if (!credit) return null;
               return (
-                <figcaption className="text-[10px] text-on-surface-variant mt-1 text-center">
+                <figcaption className="text-[10px] leading-tight text-on-surface-variant mt-1 max-w-[88px]">
                   <a
                     href={credit.href}
                     target="_blank"
-                    rel="noopener noreferrer"
-                    title={credit.license}
-                    className="hover:underline"
+                    rel="noopener noreferrer license"
+                    className="block font-medium hover:underline"
                   >
                     {credit.text}
                   </a>
+                  <span className="block text-[9px] opacity-80">{credit.license}</span>
                 </figcaption>
               );
             })()}
