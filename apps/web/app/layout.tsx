@@ -180,29 +180,32 @@ function SiteFooter() {
           </div>
         </div>
 
-        {/* Data attribution band */}
+        {/* Data attribution band — only sources we actually consume.
+            Each entry includes the licence terms we operate under. */}
         <div className="bg-white border border-outline-variant rounded-xl p-5 mb-8">
-          <div className="eyebrow-muted mb-3">データ出典</div>
+          <div className="eyebrow-muted mb-3">データ出典 · ライセンス</div>
           <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-xs text-on-surface-variant">
             <li>
-              <span className="font-semibold text-on-surface">国土交通省</span> 川の防災情報（水位・流量・降雨量）
+              <span className="font-semibold text-on-surface">国土数値情報</span>{' '}
+              ダム諸元 W01・流域界 A21（出典明示で再配布可）
             </li>
             <li>
-              <span className="font-semibold text-on-surface">国土交通省</span> 水文水質データベース（過去履歴）
+              <span className="font-semibold text-on-surface">一般財団法人 日本ダム協会</span>{' '}
+              ダム便覧（諸元・写真の引用は出典明示。写真の著作権は撮影者に帰属）
             </li>
             <li>
-              <span className="font-semibold text-on-surface">国土数値情報</span> ダム諸元 W01・水系流域 W07
+              <span className="font-semibold text-on-surface">国土地理院</span>{' '}
+              地理院タイル（出典明示で利用可）
             </li>
             <li>
-              <span className="font-semibold text-on-surface">日本ダム協会</span> ダム便覧（写真・基本情報）
-            </li>
-            <li>
-              <span className="font-semibold text-on-surface">国土地理院</span> 地理院タイル（地図表示）
-            </li>
-            <li>
-              <span className="font-semibold text-on-surface">気象庁</span> 関連リファレンス
+              <span className="font-semibold text-on-surface">ja.wikipedia.org</span>{' '}
+              ダム写真フォールバック（CC BY-SA 4.0、各ページの著作者に従う）
             </li>
           </ul>
+          <p className="text-[10px] text-on-surface-variant mt-3">
+            写真は外部サーバから配信されており、各画像のライセンスは原典に従います。
+            再利用する場合は必ず原典の権利者に従ってください。
+          </p>
         </div>
 
         <div className="pt-6 border-t border-outline-variant flex flex-col md:flex-row items-center justify-between gap-4">

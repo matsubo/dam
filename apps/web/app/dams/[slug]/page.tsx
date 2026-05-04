@@ -19,6 +19,7 @@ import { QualityBadge } from '../../../components/quality-badge.tsx';
 import { ReservoirGauge } from '../../../components/reservoir-gauge.tsx';
 import { StorageChangeStrip } from '../../../components/storage-change-strip.tsx';
 import { fmtCapacityMcm, fmtDate, fmtN, fmtPct } from '../../../lib/format.ts';
+import { imageCredit } from '../../../lib/image-credit.ts';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 900;
@@ -86,15 +87,28 @@ export default async function DamDetail({ params }: PageProps) {
       />
       <div className="flex items-start gap-4 mb-2">
         {d.imageUrl ? (
-          <div className="shrink-0 relative w-20 h-20 rounded-lg overflow-hidden bg-surface-container-low border border-outline-variant/40">
-            <Image
-              src={d.imageUrl}
-              alt=""
-              fill
-              sizes="80px"
-              className="object-cover"
-            />
-          </div>
+          <figure className="shrink-0">
+            <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-surface-container-low border border-outline-variant/40">
+              <Image src={d.imageUrl} alt="" fill sizes="80px" className="object-cover" />
+            </div>
+            {(() => {
+              const credit = imageCredit(d.imageUrl);
+              if (!credit) return null;
+              return (
+                <figcaption className="text-[10px] text-on-surface-variant mt-1 text-center">
+                  <a
+                    href={credit.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={credit.license}
+                    className="hover:underline"
+                  >
+                    {credit.text}
+                  </a>
+                </figcaption>
+              );
+            })()}
+          </figure>
         ) : null}
         <h1 className="text-3xl font-semibold">{d.name}</h1>
       </div>

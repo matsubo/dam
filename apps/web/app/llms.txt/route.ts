@@ -12,14 +12,17 @@ const BODY = `# Dam Data Japan
 
 > Open-data API for the storage volume, inflow, and outflow of every dam
 > registered in Japan's national reservoir inventory. Built from public
-> government sources (国土数値情報, ダム便覧, 国土地理院, 川の防災情報) and
-> republished under permissive terms.
+> sources (国土数値情報, ダム便覧, 国土地理院 and ja.wikipedia for photos)
+> and republished under permissive terms. Realtime values are not
+> republished — defer to upstream sites for live readings.
 
 ## At a glance
 
 - 2,749 dams across all 47 prefectures
-- Master attributes (capacity, height, year, manager, purpose) for ~87% of
-  dams; the missing tail is small agricultural / sediment dams.
+- 利水容量 (active conservation capacity) populated for ~87% of dams from
+  ダム便覧. Remaining 13% are mostly small agricultural / sediment dams not
+  covered by Damnet. Other master attributes (location, total capacity,
+  manager, etc.) are populated for nearly all dams from NDI.
 - Time-series at 1-hour grain with daily and monthly continuous aggregates.
 - Free public API, 600 req/min · 100,000 req/day after Google sign-in.
 
