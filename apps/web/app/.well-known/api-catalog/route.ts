@@ -49,8 +49,8 @@ export function GET(): Response {
         ],
         author: [
           {
-            href: 'mailto:<redacted>',
-            title: 'Site operator',
+            href: 'https://discord.gg/UbWqspWbAk',
+            title: 'Site operator (Discord)',
           },
         ],
       },

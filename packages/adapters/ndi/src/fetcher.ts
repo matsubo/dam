@@ -4,7 +4,8 @@ import { HttpClient } from '@dam/core/http_client';
 export async function loadGeoJson(source: string): Promise<string> {
   if (source.startsWith('http://') || source.startsWith('https://')) {
     const c = new HttpClient({
-      userAgent: 'DamDataPlatform/0.1 (+https://example.com/bot; <redacted>)',
+      userAgent:
+        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
       minIntervalMs: 1000,
       maxRetries: 3,
       timeoutMs: 60_000,
