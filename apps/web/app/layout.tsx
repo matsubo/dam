@@ -4,6 +4,7 @@ import { ExtensionErrorShield } from '../components/extension-error-shield.tsx';
 import { GoogleAnalytics } from '../components/google-analytics.tsx';
 import { Gtm, GtmNoscript } from '../components/gtm.tsx';
 import { Nav } from '../components/nav.tsx';
+import { APP_VERSION } from '../lib/version.ts';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -172,8 +173,13 @@ function SiteFooter() {
                 </a>
               </li>
               <li>
-                <a className="text-on-surface-variant hover:text-primary transition-colors" href="mailto:matsubokkuri@gmail.com">
-                  お問い合わせ
+                <a
+                  className="text-on-surface-variant hover:text-primary transition-colors"
+                  href="https://discord.gg/UbWqspWbAk"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  お問い合わせ (Discord)
                 </a>
               </li>
             </ul>
@@ -211,7 +217,7 @@ function SiteFooter() {
         <div className="pt-6 border-t border-outline-variant flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-xs text-on-surface-variant font-display font-medium">
             © {new Date().getFullYear()} Dam Data Japan · Open Reservoir Data ·{' '}
-            <span className="text-on-surface-variant/70">v0.1</span>
+            <span className="text-on-surface-variant/70">v{APP_VERSION}</span>
           </p>
           <div className="flex items-center gap-3">
             <a
@@ -227,12 +233,14 @@ function SiteFooter() {
               </svg>
             </a>
             <a
-              title="Email"
-              href="mailto:matsubokkuri@gmail.com"
+              title="Discord"
+              href="https://discord.gg/UbWqspWbAk"
+              target="_blank"
+              rel="noopener noreferrer"
               className="w-9 h-9 inline-flex items-center justify-center border border-outline-variant rounded-lg text-on-surface-variant hover:bg-primary hover:text-white hover:border-primary transition-colors"
             >
               <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-                mail
+                chat
               </span>
             </a>
           </div>

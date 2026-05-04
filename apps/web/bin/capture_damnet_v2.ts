@@ -22,7 +22,7 @@ for (let i = 2; i < process.argv.length; i += 2) {
 const OUT = args.get('out') ?? 'data/damnet/dams.jsonl';
 const CONCURRENCY = Number(args.get('concurrency') ?? '6');
 const MAX_PAGES = Number(args.get('max-pages') ?? '200');
-const UA = `DamDataPlatform/0.1 (+contact: ${process.env.HTTP_CONTACT_EMAIL ?? 'matsubokkuri@gmail.com'})`;
+const UA = `DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: ${process.env.HTTP_CONTACT_EMAIL ?? 'https://discord.gg/UbWqspWbAk'})`;
 const BASE = 'https://dambinran.damnet.or.jp';
 
 interface DamInfo {

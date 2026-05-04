@@ -49,8 +49,8 @@ export function GET(): Response {
         ],
         author: [
           {
-            href: 'mailto:matsubokkuri@gmail.com',
-            title: 'Site operator',
+            href: 'https://discord.gg/UbWqspWbAk',
+            title: 'Site operator (Discord)',
           },
         ],
       },

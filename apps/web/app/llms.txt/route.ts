@@ -71,7 +71,8 @@ Documented at: ${SITE_URL}/sources
 
 ## Contact
 
-- Operator: matsubokkuri@gmail.com
+- Contact: https://discord.gg/UbWqspWbAk (operator runs a Discord; no
+  direct email)
 - Terms: ${SITE_URL}/legal/terms
 - Privacy: ${SITE_URL}/legal/privacy
 - Account / API keys: ${SITE_URL}/account/keys

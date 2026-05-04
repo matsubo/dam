@@ -19,7 +19,7 @@ const FROM = Number(args.get('from') ?? '123500');
 const TO = Number(args.get('to') ?? '128000');
 const CONCURRENCY = Number(args.get('concurrency') ?? '8');
 const OUT = args.get('out') ?? 'data/damnet/dams.jsonl';
-const UA = `DamDataPlatform/0.1 (+contact: ${process.env.HTTP_CONTACT_EMAIL ?? 'matsubokkuri@gmail.com'})`;
+const UA = `DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: ${process.env.HTTP_CONTACT_EMAIL ?? 'https://discord.gg/UbWqspWbAk'})`;
 
 interface DamInfo {
   id: number;

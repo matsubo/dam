@@ -22,7 +22,7 @@ Last updated: 2026-05-04.
 5. **Self-service deletion** — At /account/keys you can revoke any API
    key or hard-delete your entire account (keys + usage logs).
 6. **Cookies** — Used for sign-in session and analytics only.
-7. **Contact** — matsubokkuri@gmail.com.
+7. **Contact** — https://discord.gg/UbWqspWbAk (Discord). No direct email.
 
 Full policy (HTML): ${SITE_URL}/legal/privacy
 `;

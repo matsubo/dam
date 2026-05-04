@@ -32,7 +32,7 @@ By using this site or its API you accept these terms.
    the operator is not liable for any direct or indirect damages.
 7. **Governing law** — Japanese law. Tokyo District Court has exclusive
    jurisdiction in the first instance.
-8. **Contact** — matsubokkuri@gmail.com.
+8. **Contact** — https://discord.gg/UbWqspWbAk (Discord). No direct email.
 
 Full terms (HTML): ${SITE_URL}/legal/terms
 `;

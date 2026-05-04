@@ -43,7 +43,7 @@ under /api/v1 requires an API key issued from /account/keys. Send it as
   from public archives (not realtime).
 
 ## Contact
-- Operator: matsubokkuri@gmail.com
+- Contact: https://discord.gg/UbWqspWbAk (Discord — no email contact)
 - Terms: ${SITE_URL}/legal/terms
 - Privacy: ${SITE_URL}/legal/privacy
 `;

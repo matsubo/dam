@@ -124,10 +124,15 @@ export default function TermsPage() {
       <Section n="11" title="お問い合わせ">
         <p>
           本規約に関するお問い合わせは{' '}
-          <a className="text-primary hover:underline" href="mailto:matsubokkuri@gmail.com">
-            matsubokkuri@gmail.com
+          <a
+            className="text-primary hover:underline"
+            href="https://discord.gg/UbWqspWbAk"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Discord サーバー
           </a>{' '}
-          までご連絡ください。
+          までご連絡ください (個別のメール窓口はありません)。
         </p>
       </Section>
 

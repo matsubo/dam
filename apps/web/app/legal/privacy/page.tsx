@@ -26,7 +26,17 @@ export default function PrivacyPage() {
         <p>
           本サイト「Dam Data Japan」(以下「本サービス」) は、利用者の個人情報の重要性を認識し、
           個人情報の保護に関する法律、関係法令、ガイドラインを遵守し、適切に取扱います。
-          本サービスは公益目的の無償サービスとして個人 (matsubokkuri@gmail.com) が運営しています。
+          本サービスは公益目的の無償サービスとして個人が運営しています。
+          連絡窓口は{' '}
+          <a
+            className="text-primary hover:underline"
+            href="https://discord.gg/UbWqspWbAk"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Discord サーバー
+          </a>
+          のみで、個別のメールアドレスは公開していません。
         </p>
       </Section>
 
@@ -106,10 +116,15 @@ export default function PrivacyPage() {
       <Section n="7" title="お問い合わせ窓口">
         <p>
           本ポリシーに関するご質問・苦情・各種請求は{' '}
-          <a className="text-primary hover:underline" href="mailto:matsubokkuri@gmail.com">
-            matsubokkuri@gmail.com
+          <a
+            className="text-primary hover:underline"
+            href="https://discord.gg/UbWqspWbAk"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Discord サーバー
           </a>{' '}
-          までご連絡ください。
+          までご連絡ください (個別のメール窓口はありません)。
         </p>
       </Section>
 

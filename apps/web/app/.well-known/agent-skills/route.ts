@@ -110,7 +110,7 @@ export function GET(): Response {
     name: 'Dam Data Japan',
     description:
       'Open data API for Japanese reservoir master metadata + historical storage / inflow / outflow time-series at 1-hour grain. Realtime values are not republished — defer to 川の防災情報 (river.go.jp) for live readings.',
-    contact: 'matsubokkuri@gmail.com',
+    contact: 'https://discord.gg/UbWqspWbAk',
     auth: {
       type: 'bearer',
       description:

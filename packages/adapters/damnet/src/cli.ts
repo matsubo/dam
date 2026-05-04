@@ -9,7 +9,8 @@ import { parseDamnetList } from './list_scraper.ts';
 async function readSource(s: string): Promise<string> {
   if (s.startsWith('http://') || s.startsWith('https://')) {
     const c = new HttpClient({
-      userAgent: 'DamDataPlatform/0.1 (+https://example.com/bot; matsubokkuri@gmail.com)',
+      userAgent:
+        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
       minIntervalMs: 2000,
       maxRetries: 3,
     });

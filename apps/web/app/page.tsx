@@ -116,7 +116,11 @@ export default async function Home() {
     description:
       'Master metadata and historical storage volume / inflow / outflow at 1-hour grain for ~2,749 dams across all 47 prefectures in Japan, aggregated from 国土数値情報 and ダム便覧 (with 国土地理院 for elevation and ja.wikipedia for photo fallback). Realtime values are not republished.',
     url: 'https://dam.teraren.com/',
-    creator: { '@type': 'Person', name: 'matsubokkuri', email: 'matsubokkuri@gmail.com' },
+    creator: {
+      '@type': 'Person',
+      name: 'Dam Data Japan operator',
+      url: 'https://discord.gg/UbWqspWbAk',
+    },
     license: 'https://dam.teraren.com/legal/terms',
     isAccessibleForFree: true,
     inLanguage: ['ja', 'en'],
