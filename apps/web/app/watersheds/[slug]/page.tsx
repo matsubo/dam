@@ -1,11 +1,16 @@
 import { listDams } from '@dam/db/repo/dams';
-import { aggregateWatershed, findWatershedBySlug } from '@dam/db/repo/watersheds';
+import {
+  aggregateWatershed,
+  findWatershedBySlug,
+  watershedStorageChange,
+} from '@dam/db/repo/watersheds';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '../../../components/breadcrumbs.tsx';
 import { DamTable } from '../../../components/dam-table.tsx';
 import { ObservationChart } from '../../../components/observation-chart.tsx';
 import { ReservoirGauge } from '../../../components/reservoir-gauge.tsx';
+import { StorageChangeStrip } from '../../../components/storage-change-strip.tsx';
 import { fmtCapacityMcm, fmtDate, fmtPct } from '../../../lib/format.ts';
 
 export const dynamic = 'force-dynamic';
@@ -32,8 +37,9 @@ export default async function WatershedDetail({ params }: PageProps) {
   const slug = decodeURIComponent(rawSlug);
   const w = await findWatershedBySlug(slug);
   if (!w) notFound();
-  const [agg, list] = await Promise.all([
+  const [agg, change, list] = await Promise.all([
     aggregateWatershed(w.id),
+    watershedStorageChange(w.id),
     listDams({ watershedSlug: slug, pageSize: 200 }),
   ]);
   return (
@@ -51,15 +57,24 @@ export default async function WatershedDetail({ params }: PageProps) {
       </p>
 
       {(() => {
+        // Rate uses 利水容量 as the denominator and only counts dams whose
+        // 利水容量 is known. Excluded dams contribute to total capacity but
+        // not to the rate calc.
+        const activeCap = agg.activeCapacityM3 ? Number(agg.activeCapacityM3) : null;
         const rate =
-          agg.latestStorageVolumeM3 && agg.totalCapacityM3 && Number(agg.totalCapacityM3) > 0
-            ? Number(agg.latestStorageVolumeM3) / Number(agg.totalCapacityM3)
+          agg.latestStorageVolumeM3 && activeCap && activeCap > 0
+            ? Math.min(1, Number(agg.latestStorageVolumeM3) / activeCap)
             : null;
         return (
           <section className="flex flex-col md:flex-row gap-6 items-center md:items-stretch mb-8">
             <div className="shrink-0 flex flex-col items-center justify-center bg-white border border-outline-variant rounded-xl p-4">
               <ReservoirGauge rate={rate} size={180} />
               <div className="text-xs text-on-surface-variant mt-1">水系合計貯水率</div>
+              {agg.rateableDamCount < agg.damCount ? (
+                <div className="text-[10px] text-on-surface-variant mt-1 text-center">
+                  ({agg.rateableDamCount}/{agg.damCount} 基集計)
+                </div>
+              ) : null}
             </div>
             <div className="grid grid-cols-2 md:grid-cols-2 gap-4 flex-1">
               <Stat label="ダム数" value={String(agg.damCount)} />
@@ -72,7 +87,11 @@ export default async function WatershedDetail({ params }: PageProps) {
               <Stat
                 label="貯水率"
                 value={fmtPct(rate)}
-                sub="現在貯水量 ÷ 総貯水容量"
+                sub={
+                  agg.rateableDamCount === 0
+                    ? '利水容量データなし'
+                    : `現在貯水量 ÷ 利水容量(${agg.rateableDamCount}基)`
+                }
               />
             </div>
           </section>
@@ -84,8 +103,14 @@ export default async function WatershedDetail({ params }: PageProps) {
         <ObservationChart
           slug={rawSlug}
           kind="watershed"
-          capacityM3={agg.totalCapacityM3 ? Number(agg.totalCapacityM3) : null}
+          capacityM3={agg.activeCapacityM3 ? Number(agg.activeCapacityM3) : null}
         />
+        {change.current ? (
+          <div className="mt-5">
+            <div className="text-xs text-muted mb-2">水系合計貯水量の変化</div>
+            <StorageChangeStrip change={change} />
+          </div>
+        ) : null}
       </section>
 
       <h2 className="text-lg font-semibold mb-3">この水系のダム</h2>

@@ -22,6 +22,9 @@ interface PrefRow {
   damCount: number;
   totalCapacityM3: string | null;
   storageM3: string | null;
+  activeCapacityM3: string | null;
+  rateableStorageM3: string | null;
+  rateableDamCount: number;
 }
 interface WsRow {
   slug: string;
@@ -29,6 +32,9 @@ interface WsRow {
   damCount: number;
   totalCapacityM3: string | null;
   storageM3: string | null;
+  activeCapacityM3: string | null;
+  rateableStorageM3: string | null;
+  rateableDamCount: number;
 }
 interface SizeBucket {
   bucket: string;
@@ -47,6 +53,9 @@ interface Headline {
   obsLast24h: bigint;
   totalCapacityM3: string | null;
   totalStorageM3: string | null;
+  activeCapacityM3: string | null;
+  rateableStorageM3: string | null;
+  rateableDamCount: bigint;
   oldestObs: Date | null;
   newestObs: Date | null;
   rawSnapshots: bigint;
@@ -62,11 +71,21 @@ async function loadStats() {
         (SELECT COUNT(*) FROM observations)::BIGINT                            AS "obsTotal",
         (SELECT COUNT(*) FROM observations WHERE observed_at > NOW() - INTERVAL '24 hours')::BIGINT AS "obsLast24h",
         (SELECT SUM(total_capacity_m3)::TEXT FROM dams)                        AS "totalCapacityM3",
+        (SELECT SUM(active_capacity_m3)::TEXT FROM dams WHERE active_capacity_m3 IS NOT NULL) AS "activeCapacityM3",
+        (SELECT COUNT(*)::BIGINT FROM dams WHERE active_capacity_m3 IS NOT NULL) AS "rateableDamCount",
         (SELECT SUM(volume)::TEXT FROM (
           SELECT DISTINCT ON (dam_id) storage_volume_m3 AS volume
           FROM observations WHERE observed_at > NOW() - INTERVAL '7 days'
           ORDER BY dam_id, observed_at DESC
         ) latest)                                                              AS "totalStorageM3",
+        (SELECT SUM(volume)::TEXT FROM (
+          SELECT DISTINCT ON (o.dam_id) o.storage_volume_m3 AS volume
+          FROM observations o
+          JOIN dams d ON d.id = o.dam_id
+          WHERE o.observed_at > NOW() - INTERVAL '7 days'
+            AND d.active_capacity_m3 IS NOT NULL
+          ORDER BY o.dam_id, o.observed_at DESC
+        ) latest)                                                              AS "rateableStorageM3",
         (SELECT MIN(observed_at) FROM observations)                            AS "oldestObs",
         (SELECT MAX(observed_at) FROM observations)                            AS "newestObs",
         (SELECT COUNT(*) FROM raw_snapshots)::BIGINT                           AS "rawSnapshots",
@@ -79,10 +98,15 @@ async function loadStats() {
         ORDER BY dam_id, observed_at DESC
       )
       SELECT
-        d.pref_code               AS "prefCode",
-        COUNT(d.id)::INT          AS "damCount",
-        SUM(d.total_capacity_m3)::TEXT  AS "totalCapacityM3",
-        SUM(latest.storage_volume_m3)::TEXT AS "storageM3"
+        d.pref_code                                                                  AS "prefCode",
+        COUNT(d.id)::INT                                                             AS "damCount",
+        SUM(d.total_capacity_m3)::TEXT                                               AS "totalCapacityM3",
+        SUM(latest.storage_volume_m3)::TEXT                                          AS "storageM3",
+        (SUM(d.active_capacity_m3) FILTER (WHERE d.active_capacity_m3 IS NOT NULL))::TEXT
+                                                                                     AS "activeCapacityM3",
+        (SUM(latest.storage_volume_m3) FILTER (WHERE d.active_capacity_m3 IS NOT NULL))::TEXT
+                                                                                     AS "rateableStorageM3",
+        (COUNT(d.id) FILTER (WHERE d.active_capacity_m3 IS NOT NULL))::INT           AS "rateableDamCount"
       FROM dams d
       LEFT JOIN latest ON latest.dam_id = d.id
       GROUP BY d.pref_code
@@ -95,11 +119,16 @@ async function loadStats() {
         ORDER BY dam_id, observed_at DESC
       )
       SELECT
-        w.slug                              AS slug,
-        w.name                              AS name,
-        COUNT(d.id)::INT                    AS "damCount",
-        SUM(d.total_capacity_m3)::TEXT      AS "totalCapacityM3",
-        SUM(latest.storage_volume_m3)::TEXT AS "storageM3"
+        w.slug                                                                       AS slug,
+        w.name                                                                       AS name,
+        COUNT(d.id)::INT                                                             AS "damCount",
+        SUM(d.total_capacity_m3)::TEXT                                               AS "totalCapacityM3",
+        SUM(latest.storage_volume_m3)::TEXT                                          AS "storageM3",
+        (SUM(d.active_capacity_m3) FILTER (WHERE d.active_capacity_m3 IS NOT NULL))::TEXT
+                                                                                     AS "activeCapacityM3",
+        (SUM(latest.storage_volume_m3) FILTER (WHERE d.active_capacity_m3 IS NOT NULL))::TEXT
+                                                                                     AS "rateableStorageM3",
+        (COUNT(d.id) FILTER (WHERE d.active_capacity_m3 IS NOT NULL))::INT           AS "rateableDamCount"
       FROM watersheds w
       JOIN dams d ON d.watershed_id = w.id
       LEFT JOIN latest ON latest.dam_id = d.id
@@ -152,15 +181,16 @@ export default async function StatsPage() {
   const s = await loadStats();
   const headline = s.headline;
   const overallRate =
-    headline.totalCapacityM3 && headline.totalStorageM3
-      ? Number(headline.totalStorageM3) / Number(headline.totalCapacityM3)
+    headline.activeCapacityM3 && headline.rateableStorageM3
+      ? Number(headline.rateableStorageM3) / Number(headline.activeCapacityM3)
       : null;
   return (
     <div className="max-w-7xl mx-auto px-5 md:px-10 py-8">
       <Breadcrumbs items={[{ label: 'ホーム', href: '/' }, { label: 'マクロ統計' }]} />
       <h1 className="text-3xl font-semibold mb-2">マクロ統計</h1>
       <p className="text-muted mb-6">
-        全国のダムに関する集計指標。最新貯水量は直近7日間の最新観測値、貯水率は容量比です。
+        全国のダムに関する集計指標。最新貯水量は直近 7
+        日間の最新観測値。貯水率は利水容量を分母とし、利水容量データのあるダムのみで集計しています。
       </p>
 
       <h2 className="text-lg font-semibold mb-3">サマリー</h2>
@@ -174,6 +204,7 @@ export default async function StatsPage() {
         <Stat
           label="全国貯水率"
           value={overallRate != null ? `${(overallRate * 100).toFixed(1)} %` : '—'}
+          sub={`利水容量比 (${fmt(headline.rateableDamCount)} 基)`}
         />
         <Stat
           label="観測カバー期間"
@@ -211,7 +242,14 @@ export default async function StatsPage() {
               <td className="tabular-nums">{fmt(p.damCount)}</td>
               <td className="tabular-nums">{fmtCapacityMcm(p.totalCapacityM3)}</td>
               <td className="tabular-nums">{fmtCapacityMcm(p.storageM3)}</td>
-              <td className="tabular-nums">{pct(p.storageM3, p.totalCapacityM3)}</td>
+              <td className="tabular-nums">
+                {pct(p.rateableStorageM3, p.activeCapacityM3)}
+                {p.rateableDamCount > 0 && p.rateableDamCount < p.damCount ? (
+                  <span className="text-[10px] text-muted ml-1">
+                    ({p.rateableDamCount}/{p.damCount})
+                  </span>
+                ) : null}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -239,7 +277,14 @@ export default async function StatsPage() {
               <td className="tabular-nums">{fmt(w.damCount)}</td>
               <td className="tabular-nums">{fmtCapacityMcm(w.totalCapacityM3)}</td>
               <td className="tabular-nums">{fmtCapacityMcm(w.storageM3)}</td>
-              <td className="tabular-nums">{pct(w.storageM3, w.totalCapacityM3)}</td>
+              <td className="tabular-nums">
+                {pct(w.rateableStorageM3, w.activeCapacityM3)}
+                {w.rateableDamCount > 0 && w.rateableDamCount < w.damCount ? (
+                  <span className="text-[10px] text-muted ml-1">
+                    ({w.rateableDamCount}/{w.damCount})
+                  </span>
+                ) : null}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -288,11 +333,12 @@ export default async function StatsPage() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="border border-gray-200 rounded p-3">
       <div className="text-xs text-muted">{label}</div>
       <div className="text-xl font-semibold tabular-nums">{value}</div>
+      {sub && <div className="text-[10px] text-muted mt-1">{sub}</div>}
     </div>
   );
 }

@@ -25,6 +25,8 @@ export interface SeriesPoint {
   observedAt: string;
   storageVolumeM3: string | null;
   storageRate: string | null;
+  inflowM3s: string | null;
+  outflowM3s: string | null;
   qualityFlag: number;
   sourceId: string;
 }
@@ -92,6 +94,19 @@ export function ObservationChart({
     }
     return [p.observedAt, null];
   });
+  const inflowData: Array<[string, number | null]> = points.map((p) => [
+    p.observedAt,
+    p.inflowM3s != null ? Number(p.inflowM3s) : null,
+  ]);
+  const outflowData: Array<[string, number | null]> = points.map((p) => [
+    p.observedAt,
+    p.outflowM3s != null ? Number(p.outflowM3s) : null,
+  ]);
+  // Daily / monthly continuous aggregates don't carry inflow/outflow (only
+  // last_storage). Hide the lines entirely when no point has a flow value
+  // so the legend doesn't dangle.
+  const hasFlow =
+    inflowData.some(([, v]) => v != null) || outflowData.some(([, v]) => v != null);
 
   // Auto-scale axis to 億 (>=1e8) or 万 (>=1e4) so labels stay legible
   // across the 6-orders-of-magnitude range of real reservoir capacities.
@@ -123,6 +138,8 @@ export function ObservationChart({
       let txt: string;
       if (v == null) txt = '—';
       else if (p.seriesName === '貯水率') txt = `${(v * 100).toFixed(1)} %`;
+      else if (p.seriesName === '流入量' || p.seriesName === '放流量')
+        txt = `${v.toFixed(2)} m³/s`;
       else txt = fmtVolume(v);
       return `${p.marker} ${p.seriesName}: <b>${txt}</b>`;
     });
@@ -168,9 +185,37 @@ export function ObservationChart({
       itemStyle: { color: '#16a34a' },
     },
   ];
+  if (hasFlow) {
+    series.push(
+      {
+        type: 'line' as const,
+        data: inflowData,
+        smooth: true,
+        sampling: 'lttb' as const,
+        showSymbol: false,
+        name: '流入量',
+        yAxisIndex: 2,
+        connectNulls: false,
+        lineStyle: { width: 1, color: '#0891b2', opacity: 0.85 },
+        itemStyle: { color: '#0891b2' },
+      },
+      {
+        type: 'line' as const,
+        data: outflowData,
+        smooth: true,
+        sampling: 'lttb' as const,
+        showSymbol: false,
+        name: '放流量',
+        yAxisIndex: 2,
+        connectNulls: false,
+        lineStyle: { width: 1, color: '#ea580c', opacity: 0.85 },
+        itemStyle: { color: '#ea580c' },
+      },
+    );
+  }
 
   const option = {
-    grid: { left: 70, right: 60, top: 40, bottom: 40 },
+    grid: { left: 70, right: hasFlow ? 110 : 60, top: 40, bottom: 40 },
     xAxis: { type: 'time' as const },
     yAxis: [
       {
@@ -197,9 +242,27 @@ export function ObservationChart({
           formatter: (v: number) => `${(v * 100).toFixed(0)}%`,
         },
       },
+      // Third axis only present when we have flow data; offset right of the
+      // 貯水率 axis so labels don't collide.
+      {
+        type: 'value' as const,
+        name: '流量',
+        nameTextStyle: { color: '#0891b2' },
+        position: 'right' as const,
+        offset: 50,
+        axisLabel: {
+          color: '#0891b2',
+          formatter: (v: number) => `${v.toFixed(0)} m³/s`,
+        },
+        show: hasFlow,
+      },
     ],
     tooltip: { trigger: 'axis' as const, formatter: tipFormatter },
-    legend: { data: ['貯水量', '貯水率'], top: 0, textStyle: { fontSize: 12 } },
+    legend: {
+      data: hasFlow ? ['貯水量', '貯水率', '流入量', '放流量'] : ['貯水量', '貯水率'],
+      top: 0,
+      textStyle: { fontSize: 12 },
+    },
     series,
     animation: false,
   };

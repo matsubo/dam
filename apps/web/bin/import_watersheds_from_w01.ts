@@ -36,7 +36,10 @@ async function main(): Promise<void> {
   let skipped = 0;
   for (const name of names) {
     const stem = name.replace(/水系$/u, '');
-    const base = toSlug(stem) || `watershed-${name}`;
+    // Prefer a romanised slug; fall back to the bare Japanese name. The
+    // URL is already namespaced under /watersheds/, no need for a redundant
+    // `watershed-` prefix.
+    const base = toSlug(stem) || stem || name;
     const slug = suffixedSlug(base, taken);
     taken.add(slug);
     const code = `W01-${name}`;

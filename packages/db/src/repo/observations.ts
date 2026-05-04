@@ -49,6 +49,9 @@ export interface SeriesPoint {
   observedAt: Date;
   storageVolumeM3: number | null;
   storageRate: number | null;
+  /** Hourly grain only — the continuous aggregates omit flow columns. */
+  inflowM3s: number | null;
+  outflowM3s: number | null;
   qualityFlag: number;
   sourceId: string;
 }
@@ -67,6 +70,8 @@ async function findSeriesHourly(opts: FindSeriesOptions): Promise<SeriesPoint[]>
     SELECT observed_at AS "observedAt",
            storage_volume_m3 AS "storageVolumeM3",
            storage_rate AS "storageRate",
+           inflow_m3s AS "inflowM3s",
+           outflow_m3s AS "outflowM3s",
            quality_flag AS "qualityFlag",
            source_id AS "sourceId"
     FROM observations
@@ -79,10 +84,15 @@ async function findSeriesHourly(opts: FindSeriesOptions): Promise<SeriesPoint[]>
 }
 
 async function findSeriesDaily(opts: FindSeriesOptions): Promise<SeriesPoint[]> {
+  // The daily continuous aggregate carries last_storage_volume only; flow
+  // columns aren't aggregated yet, so we surface NULL for inflow/outflow at
+  // this bucket and let the UI hide the lines.
   return sql<SeriesPoint[]>`
     SELECT day AS "observedAt",
            last_storage_volume_m3 AS "storageVolumeM3",
            NULL::NUMERIC AS "storageRate",
+           NULL::NUMERIC AS "inflowM3s",
+           NULL::NUMERIC AS "outflowM3s",
            0::SMALLINT AS "qualityFlag",
            'aggregate' AS "sourceId"
     FROM obs_daily
@@ -96,11 +106,13 @@ async function findSeriesDaily(opts: FindSeriesOptions): Promise<SeriesPoint[]> 
 async function findSeriesMonthly(opts: FindSeriesOptions): Promise<SeriesPoint[]> {
   // obs_monthly aggregates obs_daily and exposes avg/max/min only — there is
   // no `last` column at the monthly bucket. Use the monthly average as the
-  // chart series.
+  // chart series. Flow columns are NULL here too (see daily).
   return sql<SeriesPoint[]>`
     SELECT month AS "observedAt",
            avg_storage_volume_m3 AS "storageVolumeM3",
            NULL::NUMERIC AS "storageRate",
+           NULL::NUMERIC AS "inflowM3s",
+           NULL::NUMERIC AS "outflowM3s",
            0::SMALLINT AS "qualityFlag",
            'aggregate' AS "sourceId"
     FROM obs_monthly

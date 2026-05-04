@@ -1,4 +1,9 @@
-import { issueKey, listKeysByEmail, revokeForEmail } from '@dam/db/repo/api_keys';
+import {
+  deleteAccountByEmail,
+  issueKey,
+  listKeysByEmail,
+  revokeForEmail,
+} from '@dam/db/repo/api_keys';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { auth, signOut } from '../../../auth.ts';
@@ -11,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 interface SP {
-  searchParams?: Promise<{ issued?: string; prefix?: string }>;
+  searchParams?: Promise<{ issued?: string; prefix?: string; delete_error?: string }>;
 }
 
 export default async function KeysPage({ searchParams }: SP) {
@@ -45,6 +50,19 @@ export default async function KeysPage({ searchParams }: SP) {
   async function doSignOut(): Promise<void> {
     'use server';
     await signOut({ redirectTo: '/' });
+  }
+  async function deleteAccount(formData: FormData): Promise<void> {
+    'use server';
+    const me = (await auth())?.user?.email;
+    if (!me) redirect('/account/sign-in');
+    // Require typed confirmation matching the email so a stray click on the
+    // 退会 button can't nuke a user's keys + usage history.
+    const confirm = String(formData.get('confirm') ?? '').trim();
+    if (confirm !== me) {
+      redirect('/account/keys?delete_error=mismatch');
+    }
+    await deleteAccountByEmail(me);
+    await signOut({ redirectTo: '/?account=deleted' });
   }
 
   return (
@@ -104,7 +122,8 @@ export default async function KeysPage({ searchParams }: SP) {
           </button>
         </form>
         <p className="text-xs text-on-surface-variant mt-2">
-          無料枠: 60 req/min、10,000 req/day。`X-API-Key` または `Authorization: Bearer …` で送信。
+          無料枠: 600 req/min、100,000 req/day。`Authorization: Bearer …` で送信
+          (旧仕様の `X-API-Key` ヘッダも互換のため引き続き受け付けます)。
         </p>
       </section>
 
@@ -166,6 +185,43 @@ export default async function KeysPage({ searchParams }: SP) {
           </tbody>
         </table>
       )}
+
+      <section className="mt-12 border border-red-300 rounded-xl p-5 bg-red-50/40">
+        <h2 className="font-display font-semibold text-red-800 mb-2">退会</h2>
+        <p className="text-sm text-on-surface-variant mb-1">
+          退会すると、このメールアドレス（<strong>{email}</strong>）に紐づく
+          すべての API キーと利用履歴が <strong>完全に削除</strong> されます。
+          公開ページの閲覧はサインアウト状態でも引き続き可能です。
+        </p>
+        <p className="text-xs text-on-surface-variant mb-3">
+          この操作は取り消せません。同じ Google アカウントで再ログインすれば
+          新しいキーは発行できますが、過去のキー / 利用履歴は復元できません。
+        </p>
+        {sp.delete_error === 'mismatch' ? (
+          <p className="text-sm text-red-700 mb-3">
+            確認文字列が一致しませんでした。再度お試しください。
+          </p>
+        ) : null}
+        <form action={deleteAccount} className="flex flex-wrap gap-2 items-center">
+          <label htmlFor="confirm-email" className="text-xs text-on-surface-variant">
+            確認のため、ご自身のメールアドレスを入力してください:
+          </label>
+          <input
+            id="confirm-email"
+            type="email"
+            name="confirm"
+            required
+            placeholder={email}
+            className="flex-1 min-w-[260px] border border-red-300 rounded-lg px-3 py-2 text-sm"
+          />
+          <button
+            type="submit"
+            className="bg-red-700 hover:bg-red-800 text-white text-sm font-semibold py-2 px-5 rounded-lg"
+          >
+            退会する
+          </button>
+        </form>
+      </section>
     </div>
   );
 }

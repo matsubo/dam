@@ -8,12 +8,13 @@ export const CRONTAB = `
 0 3 5 * * master:refresh:damnet
 0 4 * * * master:match
 
-# Realtime ingest (every hour at :05)
-5 * * * * ingest:kasenbosai
+# Realtime ingest is intentionally NOT scheduled. The service publishes
+# historical data only — for current-moment values defer to the upstream
+# 川の防災情報 / 水文水質データベース sites.
 
-# Backfill scheduling (rarely; run manually via add_job for ad-hoc enqueue)
-# Run actual fetches every 5 minutes (small batches, respects upstream)
-*/5 * * * * backfill:suimon:run
+# Suimon backfill remains opt-in only. Enqueue ad-hoc jobs via add_job
+# rather than running it on a fixed cron, so we don't keep hammering the
+# upstream when there's nothing new to import.
 
 # Quality recomputation
 30 4 * * * quality:recompute

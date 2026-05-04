@@ -32,9 +32,12 @@ tbody tr:hover {
 }
 
 @layer components {
-  /* Top nav link, Material 3-ish — bottom-line indicator on hover. */
+  /* Top nav link, Material 3-ish — bottom-line indicator on hover. The
+     `no-underline` here overrides the global `a { hover:underline }`, so we
+     only see the ::after underline animation, not the browser default plus
+     the indicator stacked on top of each other. */
   .nav-link {
-    @apply text-sm font-semibold text-on-surface relative px-1 py-1.5 hover:text-primary transition-colors;
+    @apply text-sm font-semibold text-on-surface relative px-1 py-1.5 hover:text-primary transition-colors no-underline hover:no-underline;
   }
   .nav-link::after {
     content: '';

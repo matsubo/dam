@@ -1,15 +1,17 @@
 import { sql } from '@dam/db/client';
-import { listDams } from '@dam/db/repo/dams';
+import { listDams, type DamListItem } from '@dam/db/repo/dams';
+import { nationalStorageChange } from '@dam/db/repo/watersheds';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { DamCard } from '../components/dam-card.tsx';
+import { StorageChangeStrip } from '../components/storage-change-strip.tsx';
 import { fmtCapacityMcm } from '../lib/format.ts';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 900;
 export const metadata: Metadata = {
   title: { absolute: 'Dam Data Platform — 日本のダム貯水量' },
-  description: '日本全国のダム貯水量データと推移。1時間ごとの最新値と長期トレンド。',
+  description: '日本全国のダム諸元と貯水量履歴。長期トレンドを 1 時間〜月次の粒度で参照。',
 };
 
 interface HomeStats {
@@ -18,24 +20,33 @@ interface HomeStats {
   obsTotal: bigint;
   obsLast24h: bigint;
   totalCapacityM3: string | null;
-  totalStorageM3: string | null;
+  /** Sum of 利水容量 across the rate-able subset only (active_capacity_m3 IS NOT NULL). Used as the denominator. */
+  activeCapacityM3: string | null;
+  /** Latest storage summed across the rate-able subset only — pairs with activeCapacityM3 for rate. */
+  rateableStorageM3: string | null;
+  rateableDamCount: bigint;
   oldestObs: Date | null;
 }
 
 async function homeStats(): Promise<HomeStats> {
   const rows = await sql<HomeStats[]>`
     SELECT
-      (SELECT COUNT(*)            FROM dams)::BIGINT                                     AS "damCount",
-      (SELECT COUNT(*)            FROM watersheds)::BIGINT                               AS "watershedCount",
-      (SELECT COUNT(*)            FROM observations)::BIGINT                             AS "obsTotal",
-      (SELECT COUNT(*)            FROM observations WHERE observed_at > NOW() - INTERVAL '24 hours')::BIGINT AS "obsLast24h",
+      (SELECT COUNT(*)::BIGINT      FROM dams)                                           AS "damCount",
+      (SELECT COUNT(*)::BIGINT      FROM watersheds)                                     AS "watershedCount",
+      (SELECT COUNT(*)::BIGINT      FROM observations)                                   AS "obsTotal",
+      (SELECT COUNT(*)::BIGINT      FROM observations WHERE observed_at > NOW() - INTERVAL '24 hours') AS "obsLast24h",
       (SELECT SUM(total_capacity_m3)::TEXT FROM dams)                                    AS "totalCapacityM3",
+      (SELECT SUM(active_capacity_m3)::TEXT FROM dams WHERE active_capacity_m3 IS NOT NULL) AS "activeCapacityM3",
+      (SELECT COUNT(*)::BIGINT      FROM dams WHERE active_capacity_m3 IS NOT NULL)      AS "rateableDamCount",
       (SELECT SUM(volume)::TEXT FROM (
-        SELECT DISTINCT ON (dam_id) storage_volume_m3 AS volume
-        FROM observations WHERE observed_at > NOW() - INTERVAL '7 days'
-        ORDER BY dam_id, observed_at DESC
-      ) latest)                                                                          AS "totalStorageM3",
-      (SELECT MIN(observed_at)    FROM observations)                                     AS "oldestObs"
+        SELECT DISTINCT ON (o.dam_id) o.storage_volume_m3 AS volume
+        FROM observations o
+        JOIN dams d ON d.id = o.dam_id
+        WHERE o.observed_at > NOW() - INTERVAL '7 days'
+          AND d.active_capacity_m3 IS NOT NULL
+        ORDER BY o.dam_id, o.observed_at DESC
+      ) latest)                                                                          AS "rateableStorageM3",
+      (SELECT MIN(observed_at)      FROM observations)                                   AS "oldestObs"
   `;
   const row = rows[0];
   if (!row) throw new Error('homeStats query returned no row');
@@ -44,18 +55,103 @@ async function homeStats(): Promise<HomeStats> {
 
 const fmt = (n: bigint | number) => Number(n).toLocaleString('ja-JP');
 
+async function featuredSparklines(damIds: bigint[]): Promise<Map<string, number[]>> {
+  if (damIds.length === 0) return new Map();
+  // Pull the last ~30 daily volume points for each featured dam in a single
+  // round-trip; cards then render an SVG sparkline server-side, so there's
+  // no client cost beyond a tiny inline <path>.
+  // postgres.js doesn't auto-cast a JS bigint[] to BIGINT[]; pass the IDs as
+  // a stringified-int8 array so PostgreSQL can coerce.
+  const damIdStrs = damIds.map((id) => id.toString());
+  const rows = await sql<{ dam_id: bigint; series: string }[]>`
+    SELECT dam_id,
+           string_agg(last_storage_volume_m3::TEXT, ',' ORDER BY day) AS series
+    FROM (
+      SELECT dam_id, day, last_storage_volume_m3
+      FROM obs_daily
+      WHERE dam_id::TEXT = ANY(${damIdStrs}::TEXT[])
+        AND day > NOW() - INTERVAL '60 days'
+      ORDER BY dam_id, day
+    ) sub
+    GROUP BY dam_id
+  `;
+  const out = new Map<string, number[]>();
+  for (const r of rows) {
+    out.set(
+      r.dam_id.toString(),
+      r.series
+        .split(',')
+        .map((v) => Number(v))
+        .filter((n) => Number.isFinite(n)),
+    );
+  }
+  return out;
+}
+
 export default async function Home() {
-  const [s, latest] = await Promise.all([homeStats(), listDams({ pageSize: 6, orderBy: 'capacity' })]);
+  const [s, latest, change] = await Promise.all([
+    homeStats(),
+    listDams({ pageSize: 6, orderBy: 'capacity' }),
+    nationalStorageChange(),
+  ]);
+  const sparklines = await featuredSparklines(latest.items.map((d) => d.id));
+  // 全国貯水率: 利水容量 (active_capacity_m3) を分母にして、利水容量データを
+  // 持つダムだけで集計。Damnet 未収録の小型ダムは集計から除外。
   const overallRate =
-    s.totalCapacityM3 && s.totalStorageM3 && Number(s.totalCapacityM3) > 0
-      ? Number(s.totalStorageM3) / Number(s.totalCapacityM3)
+    s.activeCapacityM3 && s.rateableStorageM3 && Number(s.activeCapacityM3) > 0
+      ? Math.min(1, Number(s.rateableStorageM3) / Number(s.activeCapacityM3))
       : null;
   const yearsCovered = s.oldestObs
     ? Math.max(1, Math.round((Date.now() - s.oldestObs.getTime()) / (365 * 24 * 3600 * 1000)))
     : null;
 
+  // Dataset schema (schema.org / Google Dataset Search). One per page so an
+  // agent that only fetches the homepage gets a structured citation of the
+  // dataset, its publisher, license, and download URLs without scraping HTML.
+  const datasetLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Dataset',
+    name: 'Dam Data Japan',
+    alternateName: '日本のダム貯水量データ',
+    description:
+      'Hourly storage volume, inflow, and outflow for ~2,749 dams across all 47 prefectures in Japan, aggregated from 国土数値情報, ダム便覧, 国土地理院 and 川の防災情報.',
+    url: 'https://dam.teraren.com/',
+    creator: { '@type': 'Person', name: 'matsubokkuri', email: 'matsubokkuri@gmail.com' },
+    license: 'https://dam.teraren.com/legal/terms',
+    isAccessibleForFree: true,
+    inLanguage: ['ja', 'en'],
+    keywords: ['dam', 'reservoir', 'Japan', 'storage volume', 'hydrology', 'open data'],
+    spatialCoverage: { '@type': 'Place', name: 'Japan', geo: { '@type': 'GeoShape', box: '24 122 46 146' } },
+    distribution: [
+      {
+        '@type': 'DataDownload',
+        encodingFormat: 'application/openapi+json',
+        contentUrl: 'https://dam.teraren.com/api/v1/openapi.json',
+        name: 'OpenAPI 3 specification',
+      },
+      {
+        '@type': 'DataDownload',
+        encodingFormat: 'application/hal+json',
+        contentUrl: 'https://dam.teraren.com/api/v1/dams',
+        name: 'JSON list of all dams',
+      },
+      {
+        '@type': 'DataDownload',
+        encodingFormat: 'text/csv',
+        contentUrl:
+          'https://dam.teraren.com/api/v1/dams/{slug}/observations?from=&to=&interval=daily&format=csv',
+        name: 'Per-dam observation series CSV',
+      },
+    ],
+  };
   return (
     <>
+      {/* biome-ignore lint/security/noDangerouslySetInnerHtml: trusted JSON-LD */}
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(datasetLd) }}
+      />
       {/* Hero */}
       <section className="relative overflow-hidden pt-20 md:pt-28 pb-14 bg-white">
         <div className="absolute inset-0 dots-bg opacity-60 pointer-events-none" />
@@ -71,8 +167,11 @@ export default async function Home() {
               <span className="text-primary">誰にでも開かれた</span>形で。
             </h1>
             <p className="text-body-lg text-on-surface-variant mb-8 max-w-xl">
-              全国 {fmt(s.damCount)} 基のダムを網羅。1 時間ごとに更新する貯水量データを、
-              研究者・防災担当・開発者のために<strong className="text-on-surface">無償で公開</strong>しています。
+              全国 {fmt(s.damCount)} 基のダムを網羅。諸元データと
+              1 時間〜月次粒度の貯水量履歴を、
+              研究者・防災担当・開発者のために
+              <strong className="text-on-surface">無償で公開</strong>
+              しています (リアルタイム値は一次情報源を併用してください)。
             </p>
             <div className="flex flex-wrap gap-3">
               <Link href="/dams" className="btn-primary text-base">
@@ -84,8 +183,8 @@ export default async function Home() {
             </div>
             <div className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-3 text-sm">
               <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-base">update</span>
-                <span className="text-on-surface-variant">1 時間ごと更新</span>
+                <span className="material-symbols-outlined text-primary text-base">timeline</span>
+                <span className="text-on-surface-variant">1 時間粒度の履歴</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-primary text-base">history</span>
@@ -168,19 +267,20 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* No-key band */}
+      {/* Free-API band */}
       <section className="bg-primary-container py-6">
         <div className="max-w-7xl mx-auto px-5 md:px-10 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <span className="material-symbols-outlined text-white" style={{ fontSize: 32 }}>
-              key_off
+              vpn_key
             </span>
             <h3 className="font-display text-h3 text-white font-semibold">
-              API キー不要。登録ゼロで、すぐ使えます。
+              無料の API キーで、すぐ使えます。
             </h3>
           </div>
           <p className="text-white/90 text-body-md font-medium text-center md:text-right max-w-md">
-            公開データへのアクセスに障壁を設けないことが、我々のオープンデータへのコミットメントです。
+            Google でサインインして発行 (600 req/min · 100,000
+            req/day)。研究・防災・教育・商用、いずれも無償でご利用いただけます。
           </p>
         </div>
       </section>
@@ -205,9 +305,17 @@ export default async function Home() {
                 {overallRate != null ? `${(overallRate * 100).toFixed(1)} %` : '—'}
               </div>
               <div className="basis-full text-xs text-on-surface-variant">
-                現在貯水量 ÷ 総貯水容量（直近 7 日の最新値の合計）
+                {`現在貯水量 ÷ 利水容量（直近 7 日の最新値、利水容量データのある ${fmt(s.rateableDamCount)} 基で集計）`}
               </div>
             </div>
+            {change.current ? (
+              <div className="mt-4 pt-4 border-t border-outline-variant">
+                <div className="text-xs text-on-surface-variant mb-2">
+                  全国合計貯水量の変化
+                </div>
+                <StorageChangeStrip change={change} />
+              </div>
+            ) : null}
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Stat label="ダム" value={fmt(s.damCount)} sub="登録済み" />
@@ -218,8 +326,12 @@ export default async function Home() {
               sub={yearsCovered ? `直近 ${yearsCovered} 年分` : ''}
             />
             <Stat label="直近24時間の観測" value={fmt(s.obsLast24h)} />
-            <Stat label="全国合計貯水容量" value={fmtCapacityMcm(s.totalCapacityM3)} sub="登録ダム合計" />
-            <Stat label="現在の合計貯水量" value={fmtCapacityMcm(s.totalStorageM3)} sub="直近 7 日の最新値" />
+            <Stat label="全国合計貯水容量" value={fmtCapacityMcm(s.totalCapacityM3)} sub="登録ダム合計(総容量)" />
+            <Stat
+              label="現在の合計貯水量"
+              value={fmtCapacityMcm(s.rateableStorageM3)}
+              sub={`直近 7 日 · ${fmt(s.rateableDamCount)} 基`}
+            />
             <Stat
               label="観測カバー期間"
               value={yearsCovered ? `${yearsCovered} 年` : '—'}
@@ -239,9 +351,16 @@ export default async function Home() {
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {latest.items.map((d) => (
-              <DamCard key={d.slug} d={d} />
-            ))}
+            {latest.items.map((d) => {
+              const series = sparklines.get(d.id.toString());
+              return (
+                <DamCard
+                  key={d.slug}
+                  d={d}
+                  {...(series ? { sparkline: series } : {})}
+                />
+              );
+            })}
           </div>
           <p className="mt-6">
             <Link href="/dams" className="btn-outline text-sm">
@@ -281,10 +400,12 @@ export default async function Home() {
         <div className="max-w-7xl mx-auto px-5 md:px-10 grid lg:grid-cols-2 gap-14 items-start">
           <div className="space-y-8">
             <div className="border-l-4 border-primary pl-6">
-              <h2 className="font-display text-h2 font-semibold mb-3">ゼロコンフィグでデータ連携。</h2>
+              <h2 className="font-display text-h2 font-semibold mb-3">無料 API でデータ連携。</h2>
               <p className="text-body-md text-on-surface-variant">
-                API キー不要。クリーンな RESTful エンドポイントが構造化された JSON を返却します。
-                分析パイプラインにも、Web アプリにもすぐ投入できます。
+                Google
+                サインインで発行できる無料の API キー (600 req/min · 100,000
+                req/day) で、クリーンな RESTful エンドポイントから構造化された JSON
+                を取得。分析パイプラインにも、Web アプリにもすぐ投入できます。
               </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">

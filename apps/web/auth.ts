@@ -12,11 +12,20 @@ import NextAuth from 'next-auth';
 import Google from 'next-auth/providers/google';
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  debug: process.env.AUTH_DEBUG === '1',
   providers: [
     // Auth.js reads AUTH_GOOGLE_ID + AUTH_GOOGLE_SECRET from process.env
     // automatically when the provider is invoked with no explicit config.
     Google,
   ],
+  logger: {
+    error(error) {
+      console.error('[auth][error]', error);
+    },
+    warn(code) {
+      console.warn('[auth][warn]', code);
+    },
+  },
   pages: {
     // Land users on /account/sign-in instead of the default Auth.js page.
     signIn: '/account/sign-in',

@@ -8,7 +8,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: { default: 'Dam Data Platform', template: '%s — Dam Data Platform' },
-  description: '日本全国のダム貯水量データ。1時間ごとに更新、長期トレンドも一括で。',
+  description: '日本全国のダム諸元と貯水量の履歴データ。長期トレンドを 1 時間〜月次の粒度で。',
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'),
   // Google Search Console verification token — set via NEXT_PUBLIC_GSC_VERIFICATION
   // (the value Search Console gives you in the "HTML tag" verification flow).
@@ -28,6 +28,16 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <link
           rel="stylesheet"
           href="https://fonts.googleapis.com/icon?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,300..700,0..1,-50..200"
+        />
+        {/* Wallet-extension error shield — installed BEFORE Next dev's
+            overlay attaches its own listener, so we get the event first and
+            can preventDefault. The React component (ExtensionErrorShield)
+            still runs as a defence-in-depth secondary listener. */}
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: tiny inline guard */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var P=[/window\\.ethereum/,/window\\.solana/,/window\\.tron/,/chrome-extension:\\/\\//,/moz-extension:\\/\\//,/safari-extension:\\/\\//];function noise(m,s){m=String(m||"");s=String(s||"");for(var i=0;i<P.length;i++){if(P[i].test(m)||P[i].test(s))return true;}return false;}window.addEventListener("error",function(e){if(noise(e.message,e.filename)){e.preventDefault();e.stopImmediatePropagation();}},true);window.addEventListener("unhandledrejection",function(e){var r=e.reason||{};if(noise(r.message,r.stack)){e.preventDefault();e.stopImmediatePropagation();}},true);})();`,
+          }}
         />
       </head>
       <body>
@@ -58,18 +68,21 @@ function SiteFooter() {
               </span>
             </div>
             <p className="text-sm text-on-surface-variant leading-relaxed max-w-sm mb-5">
-              国土交通省・国土数値情報・ダム便覧の公開データをもとに、全国 2,749 基のダムの貯水量を 1
-              時間ごとに集約・配信する公益サービス。研究・防災・教育・商用、いずれの用途にも無償でご利用いただけます。
+              国土交通省・国土数値情報・ダム便覧の公開データをもとに、全国 2,749
+              基のダムの諸元と貯水量履歴を集約・配信するサービス。
+              研究・防災・教育・商用、いずれの用途にも無償でご利用いただけます。
+              なお、観測値のリアルタイム提供は行っていません — 各時点の値は
+              一次情報源 (川の防災情報など) を併用してください。
             </p>
             <div className="flex flex-wrap gap-2 text-xs">
               <span className="px-2 py-1 rounded-full bg-white border border-outline-variant text-on-surface-variant">
                 Open Data
               </span>
               <span className="px-2 py-1 rounded-full bg-white border border-outline-variant text-on-surface-variant">
-                API キー不要
+                無料 API
               </span>
               <span className="px-2 py-1 rounded-full bg-white border border-outline-variant text-on-surface-variant">
-                毎時更新
+                履歴データ
               </span>
             </div>
           </div>
@@ -132,11 +145,30 @@ function SiteFooter() {
           </div>
 
           <div>
-            <div className="eyebrow-muted mb-4">サイトについて</div>
+            <div className="eyebrow-muted mb-4">アカウント</div>
             <ul className="space-y-2 text-sm">
               <li>
-                <a className="text-on-surface-variant hover:text-primary transition-colors" href="/sources">
-                  データの出典
+                <a className="text-on-surface-variant hover:text-primary transition-colors" href="/account/keys">
+                  API キー管理
+                </a>
+              </li>
+              <li>
+                <a className="text-on-surface-variant hover:text-primary transition-colors" href="/account/sign-in">
+                  サインイン
+                </a>
+              </li>
+            </ul>
+
+            <div className="eyebrow-muted mt-6 mb-4">運営</div>
+            <ul className="space-y-2 text-sm">
+              <li>
+                <a className="text-on-surface-variant hover:text-primary transition-colors" href="/legal/terms">
+                  利用規約
+                </a>
+              </li>
+              <li>
+                <a className="text-on-surface-variant hover:text-primary transition-colors" href="/legal/privacy">
+                  プライバシーポリシー
                 </a>
               </li>
               <li>
