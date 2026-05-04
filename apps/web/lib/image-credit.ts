@@ -6,10 +6,44 @@
 export interface ImageCredit {
   /** Short text shown directly under or over the photo (e.g. "ダム便覧"). */
   text: string;
-  /** Per-image source page, never the dam page. */
+  /** Per-image source page (Commons file page for Wikipedia, dam page for
+      Damnet) so the user can resolve author + licence themselves. */
   href: string;
-  /** License hint shown in tooltip. */
+  /** License hint shown in tooltip + a small line under the photo. */
   license: string;
+}
+
+/**
+ * Extract the Commons file page URL from a Wikimedia thumbnail. Examples:
+ *   https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Foo.jpg/800px-Foo.jpg
+ *     → https://commons.wikimedia.org/wiki/File:Foo.jpg
+ *   https://upload.wikimedia.org/wikipedia/commons/a/ab/Foo.jpg
+ *     → https://commons.wikimedia.org/wiki/File:Foo.jpg
+ *   https://upload.wikimedia.org/wikipedia/ja/thumb/a/ab/Foo.jpg/800px-Foo.jpg
+ *     → https://ja.wikipedia.org/wiki/File:Foo.jpg  (per-language file)
+ * Returns null when we can't decode the path safely.
+ */
+function commonsFileUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    // path layout: /wikipedia/<wiki>/[thumb/]<a>/<ab>/<Filename>[/<size>-<Filename>]
+    const m = u.pathname.match(
+      /^\/wikipedia\/([a-z]+)\/(?:thumb\/)?[0-9a-f]\/[0-9a-f]{2}\/([^/]+?)(?:\/[^/]+)?$/,
+    );
+    if (!m) return null;
+    const [, wiki, file] = m;
+    const decodedFile = decodeURIComponent(file ?? '');
+    if (!decodedFile) return null;
+    // For commons-wiki files, the canonical file page lives on Commons. For
+    // per-language wikis (e.g. /wikipedia/ja/...), the file is local to that
+    // wiki and Commons may 404 — link to the language wiki instead.
+    if (wiki === 'commons') {
+      return `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(decodedFile)}`;
+    }
+    return `https://${wiki}.wikipedia.org/wiki/File:${encodeURIComponent(decodedFile)}`;
+  } catch {
+    return null;
+  }
 }
 
 export function imageCredit(url: string | null | undefined): ImageCredit | null {
@@ -27,18 +61,19 @@ export function imageCredit(url: string | null | undefined): ImageCredit | null 
       return {
         text: '© ダム便覧',
         href: damnetHref,
-        license: '一般財団法人日本ダム協会 / 撮影者に帰属',
+        license: '一般財団法人日本ダム協会 / 写真の著作権は撮影者に帰属',
       };
     }
     if (u.hostname.endsWith('wikipedia.org') || u.hostname.endsWith('wikimedia.org')) {
-      // Wikimedia thumbnails (e.g. upload.wikimedia.org/wikipedia/commons/thumb/...)
-      // and ja.wikipedia.org pageimages thumbnails both originate from Commons.
-      // We surface the Wikimedia Commons file page so users can find the
-      // licence + author.
+      // Wikimedia thumbnails (upload.wikimedia.org/wikipedia/commons/thumb/...)
+      // and per-language wikipedia thumbnails. We resolve the file page so
+      // users can find the actual author + licence (CC-BY-SA, public-domain
+      // and others mix on Commons).
+      const filePage = commonsFileUrl(url) ?? 'https://commons.wikimedia.org/';
       return {
-        text: 'Photo: Wikipedia',
-        href: 'https://commons.wikimedia.org/',
-        license: 'CC-BY-SA (各ファイルの作者に従う)',
+        text: 'Photo: Wikimedia',
+        href: filePage,
+        license: 'CC-BY-SA / 著作者表示は各ファイルページを参照',
       };
     }
   } catch {
