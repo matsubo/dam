@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Web container boot sequence: migrate → seed-if-empty (or force) → start.
 # Idempotent — safe to run on every restart.
 #
