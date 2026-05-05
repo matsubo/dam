@@ -1,5 +1,5 @@
 import { PREFECTURES } from '@dam/core/prefectures';
-import { listDamsPaged } from '@dam/db/repo/dams';
+import { latestRateByDam, listDamsPaged } from '@dam/db/repo/dams';
 import { listWatersheds } from '@dam/db/repo/watersheds';
 import type { Metadata } from 'next';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
@@ -56,6 +56,13 @@ export default async function DamsPage({ searchParams }: SP) {
       const da = order[a.kind] - order[b.kind];
       return da !== 0 ? da : a.name.localeCompare(b.name, 'ja');
     });
+  // 貯水率 column on the dam table — single LATERAL query, scoped to the
+  // current page so cost is bounded.
+  const rates = new Map(
+    Array.from(
+      (await latestRateByDam(r.items.map((d) => d.id))).entries(),
+    ).map(([k, v]) => [k, { rate: v }]),
+  );
   return (
     <div className="max-w-7xl mx-auto px-5 md:px-10 py-8">
       <Breadcrumbs items={[{ label: 'ホーム', href: '/' }, { label: 'ダム' }]} />
@@ -130,7 +137,7 @@ export default async function DamsPage({ searchParams }: SP) {
         </span>
       </form>
 
-      <DamTable rows={r.items.map((i) => ({ ...i, totalCapacityM3: i.totalCapacityM3 }))} />
+      <DamTable rows={r.items} rates={rates} />
       <PagePagination
         basePath="/dams"
         query={{

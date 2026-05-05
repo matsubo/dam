@@ -432,3 +432,53 @@ export async function aggregateWatershed(watershedId: bigint): Promise<Watershed
     }
   );
 }
+
+/**
+ * Batch per-watershed 貯水率: SUM(latest storage_volume_m3) /
+ * SUM(active_capacity_m3) over rate-able dams in each requested watershed.
+ * Result keyed by `watershed_id::TEXT` so callers can join on string ids
+ * without dragging bigint through JSON. rate ∈ [0, 1] when both numerator
+ * and denominator are present; null otherwise.
+ *
+ * Used by /watersheds list to render a 貯水率 progress bar per row in
+ * one round-trip rather than 644 separate aggregateWatershed() calls.
+ */
+export async function ratesForWatersheds(
+  watershedIds: bigint[],
+): Promise<Map<string, number | null>> {
+  if (watershedIds.length === 0) return new Map();
+  const ids = watershedIds.map((id) => id.toString());
+  const rows = await sql<{ watershedId: string; rate: number | null }[]>`
+    WITH ds AS (
+      SELECT d.id, d.watershed_id, d.active_capacity_m3
+      FROM dams d
+      WHERE d.watershed_id::TEXT = ANY(${ids}::TEXT[])
+        AND d.active_capacity_m3 IS NOT NULL
+    ),
+    latest AS (
+      SELECT DISTINCT ON (o.dam_id)
+             o.dam_id, o.storage_volume_m3
+      FROM observations o
+      JOIN ds ON ds.id = o.dam_id
+      WHERE o.storage_volume_m3 IS NOT NULL
+      ORDER BY o.dam_id, o.observed_at DESC
+    )
+    SELECT
+      ds.watershed_id::TEXT AS "watershedId",
+      CASE
+        WHEN SUM(ds.active_capacity_m3) > 0
+          AND SUM(latest.storage_volume_m3) IS NOT NULL
+        THEN LEAST(1.0,
+          SUM(latest.storage_volume_m3)::FLOAT8 /
+          SUM(ds.active_capacity_m3)::FLOAT8
+        )
+        ELSE NULL
+      END AS rate
+    FROM ds
+    LEFT JOIN latest ON latest.dam_id = ds.id
+    GROUP BY ds.watershed_id
+  `;
+  const m = new Map<string, number | null>();
+  for (const r of rows) m.set(r.watershedId, r.rate);
+  return m;
+}
