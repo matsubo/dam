@@ -7,6 +7,7 @@ import {
   storageChange,
 } from '@dam/db/repo/dams';
 import { aggregateWatershed, findWatershedBySlug } from '@dam/db/repo/watersheds';
+import { ExternalLink } from 'lucide-react';
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -214,9 +215,7 @@ export default async function DamDetail({ params }: PageProps) {
             rel="noopener noreferrer"
             className="text-primary hover:underline inline-flex items-center gap-1"
           >
-            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
-              open_in_new
-            </span>
+            <ExternalLink size={14} aria-hidden="true" />
             Google マップで開く
           </a>
           <a

@@ -1,5 +1,6 @@
 'use client';
 
+import { Droplets, Menu, Search, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -38,7 +39,7 @@ export function Nav() {
     <header className="fixed top-0 w-full z-50 bg-white/85 backdrop-blur-md border-b border-outline-variant">
       <nav className="max-w-7xl mx-auto px-5 md:px-10 flex justify-between items-center h-16">
         <Link href="/" className="flex items-center gap-2.5 group no-underline">
-          <span className="material-symbols-outlined text-primary text-2xl">water</span>
+          <Droplets className="text-primary" size={24} aria-hidden="true" />
           <span className="font-display text-lg font-extrabold tracking-tight text-on-surface">
             Dam Data
           </span>
@@ -68,7 +69,7 @@ export function Nav() {
             aria-label="検索"
             className="md:hidden p-2 rounded-lg hover:bg-surface-container"
           >
-            <span className="material-symbols-outlined">search</span>
+            <Search size={22} aria-hidden="true" />
           </Link>
           <button
             type="button"
@@ -78,7 +79,7 @@ export function Nav() {
             onClick={() => setOpen((v) => !v)}
             className="lg:hidden p-2 rounded-lg hover:bg-surface-container"
           >
-            <span className="material-symbols-outlined">{open ? 'close' : 'menu'}</span>
+            {open ? <X size={22} aria-hidden="true" /> : <Menu size={22} aria-hidden="true" />}
           </button>
         </div>
       </nav>

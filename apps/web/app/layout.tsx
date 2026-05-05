@@ -1,3 +1,4 @@
+import { Droplets, MessageCircle } from 'lucide-react';
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { ExtensionErrorShield } from '../components/extension-error-shield.tsx';
@@ -25,11 +26,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ja">
       <head>
-        {/* Material Symbols (Outlined) — matches the school.teraren.com palette */}
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/icon?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,300..700,0..1,-50..200"
-        />
         {/* Wallet-extension error shield — installed BEFORE Next dev's
             overlay attaches its own listener, so we get the event first and
             can preventDefault. The React component (ExtensionErrorShield)
@@ -63,7 +59,7 @@ function SiteFooter() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-12">
           <div className="col-span-2">
             <div className="flex items-center gap-2.5 mb-4">
-              <span className="material-symbols-outlined text-primary text-2xl">water</span>
+              <Droplets className="text-primary" size={24} aria-hidden="true" />
               <span className="font-display text-lg font-extrabold tracking-tight text-on-surface">
                 Dam Data
               </span>
@@ -239,9 +235,7 @@ function SiteFooter() {
               rel="noopener noreferrer"
               className="w-9 h-9 inline-flex items-center justify-center border border-outline-variant rounded-lg text-on-surface-variant hover:bg-primary hover:text-white hover:border-primary transition-colors"
             >
-              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-                chat
-              </span>
+              <MessageCircle size={16} aria-hidden="true" />
             </a>
           </div>
         </div>
