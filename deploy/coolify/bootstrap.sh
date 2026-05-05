@@ -64,17 +64,21 @@ fi
 
 if [ "${need_master_restore}" = "1" ]; then
   if [ -f /seed/master.sql.gz ]; then
-    if [ "${force_master}" = "1" ]; then
-      # CASCADE wipes observations / raw_snapshots / match_review too.
-      # That's intentional — synth observations get regenerated below
-      # against the new dam IDs so the time-series stays self-consistent.
-      log "[bootstrap] truncating master + dependent tables (CASCADE)"
-      psql "$DATABASE_URL" -v ON_ERROR_STOP=0 -q -c "
-        TRUNCATE TABLE
-          source_priorities, dams, rivers, watersheds
-        RESTART IDENTITY CASCADE;
-      " >/dev/null
-    fi
+    # Always TRUNCATE before restore. Reasoning:
+    #   - dams=0 path: a prior restore may have failed mid-way, leaving
+    #     watersheds/rivers partially populated. Restoring on top of those
+    #     rows trips unique-key violations.
+    #   - force_master=1 path: the operator explicitly asked for a clean
+    #     overwrite.
+    # CASCADE wipes observations / raw_snapshots / match_review too. When
+    # dams=0 those rows reference non-existent dam IDs anyway (orphans).
+    # The synth seeder below (or live ingest) repopulates observations.
+    log "[bootstrap] truncating master + dependent tables (CASCADE) before restore"
+    psql "$DATABASE_URL" -v ON_ERROR_STOP=0 -q -c "
+      TRUNCATE TABLE
+        source_priorities, dams, rivers, watersheds
+      RESTART IDENTITY CASCADE;
+    " >/dev/null
     log "[bootstrap] restoring /seed/master.sql.gz"
     restore_log=$(gunzip -c /seed/master.sql.gz | psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q 2>&1)
     restore_status=$?
