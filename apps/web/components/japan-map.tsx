@@ -14,17 +14,14 @@ export interface MapPoint {
 
 type LeafletMap = { remove: () => void };
 
-// Map storage rate (0..1) to a colour. Semantics: high % = "safe" = blue,
-// low % approaching 0 = "danger" = red. Ramp anchors at 0.2 / 0.4 / 0.6 / 0.8
-// so the visual is intuitive — a reservoir at 90% reads as comfortably full,
-// 10% reads as drought-level alarming.
+// Map storage rate (0..1) to a colour on a continuous red → blue gradient.
+// 0% → red (hue 0), 100% → blue (hue 220). Linear in HSL hue so the ramp
+// passes naturally through orange / yellow / green / cyan on the way up.
 function rateColor(rate: number | null | undefined): string {
   if (rate == null || !Number.isFinite(rate)) return '#9ca3af'; // gray-400 — no data
-  if (rate < 0.2) return '#dc2626'; // critically low — red
-  if (rate < 0.4) return '#f97316'; // low — orange
-  if (rate < 0.6) return '#eab308'; // mid — yellow
-  if (rate < 0.8) return '#16a34a'; // healthy — green
-  return '#1e6dff'; // safe / full — blue
+  const t = Math.max(0, Math.min(1, rate));
+  const hue = Math.round(t * 220); // 0 (red) → 220 (blue)
+  return `hsl(${hue}, 78%, 48%)`;
 }
 
 // Marker radius in pixels mapped from capacity. Use sqrt so circle AREA is
