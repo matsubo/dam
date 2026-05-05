@@ -21,8 +21,12 @@ import { ENTITY_ICONS } from '../components/entity-icon.tsx';
 import { StorageChangeStrip } from '../components/storage-change-strip.tsx';
 import { fmtCapacityMcm } from '../lib/format.ts';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 900;
+// `force-dynamic` was previously set to keep counts fresh, but it disables ISR
+// entirely so every request paid the 6.7M-row scan in homeStats / 8-bucket
+// nationalStorageChange (≈11 s cold). The home page has no per-request data —
+// drop it and let `revalidate` serve from the static-generation cache. Cold
+// path stays slow once per window; warm path is sub-100 ms.
+export const revalidate = 300;
 export const metadata: Metadata = {
   title: { absolute: 'Dam Data Platform — 日本のダム貯水量' },
   description: '日本全国のダム諸元と貯水量履歴。長期トレンドを 1 時間〜月次の粒度で参照。',
@@ -43,11 +47,16 @@ interface HomeStats {
 }
 
 async function homeStats(): Promise<HomeStats> {
+  // observations is a TimescaleDB hypertable; COUNT(*) over its 6.7 M rows
+  // takes seconds. The home page only needs an order-of-magnitude figure for
+  // the "観測 N 件" stat, so use pg_class.reltuples — instant after ANALYZE
+  // and accurate within ~1 % for tables that vacuum regularly.
   const rows = await sql<HomeStats[]>`
     SELECT
       (SELECT COUNT(*)::BIGINT      FROM dams)                                           AS "damCount",
       (SELECT COUNT(*)::BIGINT      FROM watersheds)                                     AS "watershedCount",
-      (SELECT COUNT(*)::BIGINT      FROM observations)                                   AS "obsTotal",
+      (SELECT GREATEST(0, reltuples)::BIGINT
+         FROM pg_class WHERE oid = 'public.observations'::regclass)                      AS "obsTotal",
       (SELECT COUNT(*)::BIGINT      FROM observations WHERE observed_at > NOW() - INTERVAL '24 hours') AS "obsLast24h",
       (SELECT SUM(total_capacity_m3)::TEXT FROM dams)                                    AS "totalCapacityM3",
       (SELECT SUM(active_capacity_m3)::TEXT FROM dams WHERE active_capacity_m3 IS NOT NULL) AS "activeCapacityM3",
