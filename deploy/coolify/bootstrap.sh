@@ -121,6 +121,53 @@ fi
 obs=$(count_or_empty "SELECT COUNT(*) FROM observations")
 log "[bootstrap] observations.count = '${obs}'"
 
+# One-shot kick: clean up orphan observations (rows referencing dam_id that
+# no longer exists after a master TRUNCATE) and clear failed graphile-worker
+# jobs that block the queue. Then enqueue master refreshes + the kasenbosai
+# observations crawl so prod gets fresh data without waiting for the daily
+# cron. Triggered by BOOTSTRAP_KICK=1 (UNSET this env after the boot
+# succeeds).
+kick="${BOOTSTRAP_KICK:-}"
+if [ "${kick}" = "1" ]; then
+  log "[bootstrap] BOOTSTRAP_KICK=1 — cleaning + enqueuing crawl jobs"
+
+  # Per-step so a failure in one (e.g. _private_jobs schema variant) doesn't
+  # block the others.
+  run_kick_step() {
+    label="$1"
+    sql="$2"
+    out=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q -c "${sql}" 2>&1)
+    rc=$?
+    if [ ${rc} -eq 0 ]; then
+      log "[bootstrap] kick.${label} OK"
+    else
+      log "[bootstrap] kick.${label} FAILED (rc=${rc}):"
+      echo "${out}" | head -10 | while IFS= read -r line; do
+        log "  ${line}"
+      done
+    fi
+  }
+
+  # 1. Orphan observation cleanup — rows referencing dam_id that no longer
+  # exists after master TRUNCATE. Their compressed Timescale chunks trip
+  # 'tuple decompression limit exceeded' in quality:recompute.
+  run_kick_step "orphan_obs" \
+    "DELETE FROM observations WHERE dam_id NOT IN (SELECT id FROM dams);"
+
+  # 2. Clear stuck graphile-worker jobs (>= 3 attempts).
+  run_kick_step "drop_stuck_jobs" \
+    "DELETE FROM graphile_worker._private_jobs WHERE attempts >= 3;"
+
+  # 3. Enqueue master refresh + observations crawl. Each call returns a row
+  # describing the queued job — psql will print it.
+  run_kick_step "enqueue_ndi"     "SELECT graphile_worker.add_job('master:refresh:ndi',    '{}'::json);"
+  run_kick_step "enqueue_damnet"  "SELECT graphile_worker.add_job('master:refresh:damnet', '{}'::json);"
+  run_kick_step "enqueue_ingest"  "SELECT graphile_worker.add_job('ingest:kasenbosai',     '{}'::json);"
+
+  obs=$(count_or_empty "SELECT COUNT(*) FROM observations")
+  log "[bootstrap] observations.count after kick = '${obs}'"
+fi
+
 force_obs="${BOOTSTRAP_FORCE_OBSERVATIONS:-}"
 if [ "${force_obs}" = "1" ] && [ "${obs}" != "0" ]; then
   log "[bootstrap] BOOTSTRAP_FORCE_OBSERVATIONS=1 — truncating observations"
