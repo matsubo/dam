@@ -49,15 +49,14 @@ interface HomeStats {
 
 async function homeStats(): Promise<HomeStats> {
   // observations is a TimescaleDB hypertable; COUNT(*) over its 6.7 M rows
-  // takes seconds. The home page only needs an order-of-magnitude figure for
-  // the "観測 N 件" stat, so use pg_class.reltuples — instant after ANALYZE
-  // and accurate within ~1 % for tables that vacuum regularly.
+  // takes seconds. Use TimescaleDB's purpose-built approximate_row_count()
+  // — it sums chunk-level pg_class.reltuples (the parent table's reltuples
+  // is always 0 because rows live in children), instant after ANALYZE.
   const rows = await sql<HomeStats[]>`
     SELECT
       (SELECT COUNT(*)::BIGINT      FROM dams)                                           AS "damCount",
       (SELECT COUNT(*)::BIGINT      FROM watersheds)                                     AS "watershedCount",
-      (SELECT GREATEST(0, reltuples)::BIGINT
-         FROM pg_class WHERE oid = 'public.observations'::regclass)                      AS "obsTotal",
+      GREATEST(0, approximate_row_count('observations'))::BIGINT                         AS "obsTotal",
       (SELECT COUNT(*)::BIGINT      FROM observations WHERE observed_at > NOW() - INTERVAL '24 hours') AS "obsLast24h",
       (SELECT SUM(total_capacity_m3)::TEXT FROM dams)                                    AS "totalCapacityM3",
       (SELECT SUM(active_capacity_m3)::TEXT FROM dams WHERE active_capacity_m3 IS NOT NULL) AS "activeCapacityM3",
