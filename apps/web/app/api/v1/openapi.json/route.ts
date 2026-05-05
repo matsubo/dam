@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { APP_VERSION } from '../../../../lib/version.ts';
+import { APP_STAGE, APP_VERSION } from '../../../../lib/version.ts';
 
 export const dynamic = 'force-static';
 
@@ -878,6 +878,8 @@ export async function GET() {
       summary:
         '日本国内 2,749 基のダムマスタと貯水量履歴の公開 API。リアルタイム値は再配信していません。',
       description: [
+        `> **${APP_STAGE.toUpperCase()} stage (v${APP_VERSION})** — 本サービスは現在アルファ段階です。データの正確性・可用性・互換性は今後変動する可能性があります。詳細は [/roadmap](/roadmap) を参照してください。`,
+        '',
         '## 概要',
         '日本国内のダム諸元 (位置・容量・管理者ほか) と貯水量履歴 (1 時間粒度) を JSON / CSV で配信する公益 API です。',
         '',
