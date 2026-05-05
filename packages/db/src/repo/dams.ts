@@ -630,3 +630,36 @@ export async function nearbyDams(
     LIMIT ${limit}
   `;
 }
+
+/**
+ * Latest storage rate per dam id, keyed by `id.toString()` so the result is
+ * JSON-safe. rate ∈ [0, 1] when 利水容量 + 観測値 are both present, null
+ * otherwise. LATERAL DISTINCT-ON keeps this cheap even for ~200 ids.
+ */
+export async function latestRateByDam(
+  damIds: bigint[],
+): Promise<Map<string, number | null>> {
+  if (damIds.length === 0) return new Map();
+  const ids = damIds.map((id) => id.toString());
+  const rows = await sql<{ damId: string; rate: number | null }[]>`
+    SELECT
+      d.id::TEXT AS "damId",
+      CASE
+        WHEN d.active_capacity_m3 IS NULL OR d.active_capacity_m3 <= 0 THEN NULL
+        WHEN latest.storage_volume_m3 IS NULL THEN NULL
+        ELSE LEAST(1.0, latest.storage_volume_m3::FLOAT8 / d.active_capacity_m3::FLOAT8)
+      END AS rate
+    FROM dams d
+    LEFT JOIN LATERAL (
+      SELECT o.storage_volume_m3
+      FROM observations o
+      WHERE o.dam_id = d.id AND o.storage_volume_m3 IS NOT NULL
+      ORDER BY o.observed_at DESC
+      LIMIT 1
+    ) latest ON TRUE
+    WHERE d.id::TEXT = ANY(${ids}::TEXT[])
+  `;
+  const m = new Map<string, number | null>();
+  for (const r of rows) m.set(r.damId, r.rate);
+  return m;
+}

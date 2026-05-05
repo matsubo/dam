@@ -144,6 +144,11 @@ function SiteFooter() {
                 </a>
               </li>
               <li>
+                <a className="text-on-surface-variant hover:text-primary transition-colors" href="/glossary">
+                  用語集
+                </a>
+              </li>
+              <li>
                 <a className="text-on-surface-variant hover:text-primary transition-colors" href="/sitemap.xml">
                   サイトマップ
                 </a>

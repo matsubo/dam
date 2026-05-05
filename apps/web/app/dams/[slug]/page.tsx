@@ -2,6 +2,7 @@ import { PREFECTURES } from '@dam/core/prefectures';
 import {
   findDamBySlug,
   latestObservation,
+  latestRateByDam,
   listDams,
   nearbyDams,
   storageChange,
@@ -62,6 +63,11 @@ export default async function DamDetail({ params }: PageProps) {
   ]);
   const watershedAgg = watershed ? await aggregateWatershed(watershed.id) : null;
   const otherInWatershed = watershedDams.items.filter((w) => w.id !== d.id).slice(0, 6);
+  // Latest 貯水率 per "同じ水系の他のダム" card.
+  const otherRates =
+    otherInWatershed.length > 0
+      ? await latestRateByDam(otherInWatershed.map((n) => n.id))
+      : new Map<string, number | null>();
 
   const ld = {
     '@context': 'https://schema.org',
@@ -274,7 +280,11 @@ export default async function DamDetail({ params }: PageProps) {
               <p className="text-sm text-muted mb-3">同じ{watershed.name}の他のダム</p>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {otherInWatershed.map((n) => (
-                  <DamCard key={n.slug} d={n} />
+                  <DamCard
+                    key={n.slug}
+                    d={n}
+                    rate={otherRates.get(n.id.toString()) ?? null}
+                  />
                 ))}
               </div>
               <p className="mt-3 text-sm">

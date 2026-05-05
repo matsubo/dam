@@ -28,6 +28,7 @@ function pickCacheControl(pathname: string): string {
   if (pathname.startsWith('/account')) return CACHE_PRIVATE;
   if (
     pathname === '/roadmap' ||
+    pathname === '/glossary' ||
     pathname.startsWith('/legal/') ||
     pathname === '/sources'
   )

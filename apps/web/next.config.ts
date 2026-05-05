@@ -26,6 +26,7 @@ const nextConfig: NextConfig = {
       { source: '/account/:path*', headers: [{ key: 'Cache-Control', value: PRIVATE }] },
       // High-stability content — daily refresh is plenty.
       { source: '/roadmap', headers: [{ key: 'Cache-Control', value: LOOSE }] },
+      { source: '/glossary', headers: [{ key: 'Cache-Control', value: LOOSE }] },
       { source: '/legal/:path*', headers: [{ key: 'Cache-Control', value: LOOSE }] },
       { source: '/sources', headers: [{ key: 'Cache-Control', value: LOOSE }] },
       // OpenAPI is force-static — long shared cache, browsers revalidate.

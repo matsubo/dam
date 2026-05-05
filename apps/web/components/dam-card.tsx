@@ -1,14 +1,21 @@
 import Link from 'next/link';
-import { fmtCapacityMcm } from '../lib/format.ts';
+import { fmtCapacityMcm, fmtPct } from '../lib/format.ts';
 import type { DamRowItem } from './dam-table.tsx';
 import { EntityIcon } from './entity-icon.tsx';
 import { Sparkline } from './sparkline.tsx';
 
-// Featured-dam card with optional inline sparkline showing recent storage
-// trend. The sparkline is rendered server-side as an SVG <path> so there's
-// zero client JS cost; pass `sparkline` as the dam's recent volume series
-// (e.g. last 30 daily points). When omitted the card stays compact.
-export function DamCard({ d, sparkline }: { d: DamRowItem; sparkline?: number[] }) {
+// Featured-dam card with optional inline sparkline + 貯水率 progress bar.
+// All extras are opt-in; when only `d` is passed the card stays compact.
+export function DamCard({
+  d,
+  sparkline,
+  rate,
+}: {
+  d: DamRowItem;
+  sparkline?: number[];
+  /** 貯水率 ∈ [0, 1]. Pass null for "data not available", undefined to hide. */
+  rate?: number | null;
+}) {
   return (
     <article className="card-surface flex gap-4 items-stretch">
       <div className="min-w-0 flex-1 flex flex-col">
@@ -33,6 +40,24 @@ export function DamCard({ d, sparkline }: { d: DamRowItem; sparkline?: number[] 
           {fmtCapacityMcm(d.totalCapacityM3)}
         </div>
         <p className="text-xs text-on-surface-variant">総貯水容量</p>
+        {rate !== undefined ? (
+          rate != null ? (
+            <div className="mt-2" aria-label={`貯水率 ${(rate * 100).toFixed(1)}%`}>
+              <div className="relative h-1.5 rounded-full bg-surface-container overflow-hidden">
+                <div
+                  className="absolute inset-y-0 left-0 bg-primary"
+                  style={{ width: `${rate * 100}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-[11px] text-on-surface-variant tabular-nums mt-0.5">
+                <span>貯水率</span>
+                <span className="font-semibold text-on-surface">{fmtPct(rate)}</span>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-2 text-[11px] text-on-surface-variant">貯水率 —</p>
+          )
+        ) : null}
       </div>
       {sparkline && sparkline.length > 1 ? (
         <Link
