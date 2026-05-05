@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { Metadata } from 'next';
+import { unstable_cache } from 'next/cache';
 import Link from 'next/link';
 import { DamCard } from '../components/dam-card.tsx';
 import { ENTITY_ICONS } from '../components/entity-icon.tsx';
@@ -111,13 +112,47 @@ async function featuredSparklines(damIds: bigint[]): Promise<Map<string, number[
   return out;
 }
 
+// Memoise the four home-page fetchers across requests. Dam metadata + the
+// daily-grain change strip + macro counts barely move within a 5-minute
+// window — caching them in-process turns warm hits into <50 ms responses
+// without paying the DB round-trip. Tags let us invalidate from a future
+// revalidateTag('home') if we ever need a manual refresh.
+const HOME_CACHE_OPTS = { revalidate: 300, tags: ['home'] };
+
+const cachedHomeStats = unstable_cache(homeStats, ['home-stats'], HOME_CACHE_OPTS);
+const cachedTopDams = unstable_cache(
+  () => listDams({ pageSize: 6, orderBy: 'capacity' }),
+  ['home-top-dams'],
+  HOME_CACHE_OPTS,
+);
+const cachedNationalChange = unstable_cache(
+  nationalStorageChange,
+  ['home-national-change'],
+  HOME_CACHE_OPTS,
+);
+// unstable_cache JSON-stringifies its return value, which loses Map<>. Stash
+// as a plain object keyed by dam_id; rehydrate to a Map at the call site.
+const cachedFeaturedSparklines = unstable_cache(
+  async (idsCsv: string): Promise<Record<string, number[]>> => {
+    const ids = idsCsv.split(',').map((s) => BigInt(s));
+    const m = await featuredSparklines(ids);
+    return Object.fromEntries(m);
+  },
+  ['home-sparklines'],
+  HOME_CACHE_OPTS,
+);
+
 export default async function Home() {
   const [s, latest, change] = await Promise.all([
-    homeStats(),
-    listDams({ pageSize: 6, orderBy: 'capacity' }),
-    nationalStorageChange(),
+    cachedHomeStats(),
+    cachedTopDams(),
+    cachedNationalChange(),
   ]);
-  const sparklines = await featuredSparklines(latest.items.map((d) => d.id));
+  const sparklines = new Map(
+    Object.entries(
+      await cachedFeaturedSparklines(latest.items.map((d) => d.id.toString()).join(',')),
+    ),
+  );
   // 全国貯水率: 利水容量 (active_capacity_m3) を分母にして、利水容量データを
   // 持つダムだけで集計。Damnet 未収録の小型ダムは集計から除外。
   const overallRate =
