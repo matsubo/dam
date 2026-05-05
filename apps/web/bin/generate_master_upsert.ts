@@ -240,20 +240,9 @@ async function main(): Promise<void> {
   );
   lines.push('');
 
-  // Re-link watershed_id / river_id by code (since the seed's IDs are
-  // local-only). For watershed_id we look up by name → watershed.
-  lines.push(`-- Patch watershed_id by joining on watershed name (best-effort).`);
-  lines.push(
-    `UPDATE public.dams d
-     SET watershed_id = w.id
-     FROM public.watersheds w
-     JOIN _seed_dams s ON s.external_ids ? 'ndi' AND d.external_ids->>'ndi' = s.external_ids->>'ndi'
-     WHERE w.id IS DISTINCT FROM d.watershed_id
-       AND s.external_ids ? 'ndi'
-       AND d.external_ids->>'ndi' = s.external_ids->>'ndi'
-       AND FALSE; -- intentionally disabled; watershed_id link is set by NDI import on prod, not by this upsert`,
-  );
-  lines.push('');
+  // watershed_id / river_id are deliberately not patched here — those FK
+  // links are set by the NDI import on prod, keyed by external_ids->>'ndi'.
+  // The seed's local-only IDs would just clobber correct prod values.
 
   lines.push('COMMIT;');
   lines.push('');
