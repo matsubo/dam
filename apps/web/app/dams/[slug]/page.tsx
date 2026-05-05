@@ -292,11 +292,61 @@ export default async function DamDetail({ params }: PageProps) {
       {nearby.length > 0 && (
         <section className="mb-8">
           <h2 className="text-lg font-semibold mb-3">近隣のダム</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {nearby.map((n) => (
-              <DamCard key={n.slug} d={{ ...n, totalCapacityM3: n.totalCapacityM3 }} />
-            ))}
-          </div>
+          <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {nearby.map((n) => {
+              const km = n.distanceM / 1000;
+              const distLabel =
+                km >= 10 ? `${km.toFixed(1)} km` : `${km.toFixed(2)} km`;
+              const bearing = bearingFromRadians(n.bearingRad);
+              const activeCap = n.activeCapacityM3 ? Number(n.activeCapacityM3) : null;
+              const latest = n.latestStorageM3 ? Number(n.latestStorageM3) : null;
+              const rate =
+                latest != null && activeCap != null && activeCap > 0
+                  ? Math.min(1, latest / activeCap)
+                  : null;
+              return (
+                <li key={n.slug} className="card-surface">
+                  <Link
+                    href={`/dams/${n.slug}`}
+                    className="font-display font-semibold leading-tight text-base mb-1 truncate inline-flex items-center gap-1.5 text-on-surface no-underline hover:text-primary"
+                  >
+                    <EntityIcon kind="dam" size={14} className="text-primary shrink-0" />
+                    {n.name}
+                  </Link>
+                  <div className="text-xs text-on-surface-variant mb-2 inline-flex items-center gap-2">
+                    <span className="tabular-nums">{distLabel}</span>
+                    <span aria-label={`方角 ${bearing.label}`} title={`方角 ${bearing.label}`}>
+                      {bearing.arrow} {bearing.label}
+                    </span>
+                  </div>
+                  {rate != null ? (
+                    <div className="space-y-1" aria-label={`貯水率 ${(rate * 100).toFixed(1)}%`}>
+                      <div className="relative h-1.5 rounded-full bg-surface-container overflow-hidden">
+                        <div
+                          className="absolute inset-y-0 left-0 bg-primary"
+                          style={{ width: `${rate * 100}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-[11px] text-on-surface-variant tabular-nums">
+                        <span>貯水率</span>
+                        <span className="font-semibold text-on-surface">{fmtPct(rate)}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-on-surface-variant">
+                      貯水率 — (利水容量 or 観測値なし)
+                    </div>
+                  )}
+                  <div className="mt-2 text-xs text-on-surface-variant">
+                    総貯水容量{' '}
+                    <span className="text-on-surface tabular-nums">
+                      {fmtCapacityMcm(n.totalCapacityM3)}
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         </section>
       )}
 
@@ -304,6 +354,17 @@ export default async function DamDetail({ params }: PageProps) {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
     </div>
   );
+}
+
+// 8-point compass label for a bearing in radians clockwise from north.
+// PostGIS ST_Azimuth returns 0 = north, π/2 = east. Convert to degrees and
+// snap to 45° buckets.
+function bearingFromRadians(rad: number): { label: string; arrow: string } {
+  const deg = (((rad * 180) / Math.PI) % 360 + 360) % 360;
+  const idx = Math.round(deg / 45) % 8;
+  const labels = ['北', '北東', '東', '南東', '南', '南西', '西', '北西'] as const;
+  const arrows = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'] as const;
+  return { label: labels[idx] ?? '', arrow: arrows[idx] ?? '' };
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
