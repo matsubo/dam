@@ -1,4 +1,4 @@
-import { listDams } from '@dam/db/repo/dams';
+import { latestRateByDam, listDams } from '@dam/db/repo/dams';
 import {
   aggregateWatershed,
   findWatershedBySlug,
@@ -43,6 +43,12 @@ export default async function WatershedDetail({ params }: PageProps) {
     watershedStorageChange(w.id),
     listDams({ watershedSlug: slug, pageSize: 200 }),
   ]);
+  // Per-dam latest 貯水率 to render a progress-bar column on the table.
+  const rates = new Map(
+    Array.from(
+      (await latestRateByDam(list.items.map((d) => d.id))).entries(),
+    ).map(([k, v]) => [k, { rate: v }]),
+  );
   return (
     <div className="max-w-7xl mx-auto px-5 md:px-10 py-8">
       <Breadcrumbs
@@ -118,7 +124,7 @@ export default async function WatershedDetail({ params }: PageProps) {
       </section>
 
       <h2 className="text-lg font-semibold mb-3">この水系のダム</h2>
-      <DamTable rows={list.items} />
+      <DamTable rows={list.items} rates={rates} />
     </div>
   );
 }
