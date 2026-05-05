@@ -74,18 +74,21 @@ if [ "${need_master_restore}" = "1" ]; then
   fi
 fi
 
-force_upsert="${BOOTSTRAP_UPSERT_MASTER:-}"
-if [ "${force_upsert}" = "1" ] && [ -f /seed/master_upsert.sql.gz ]; then
-  # Non-destructive: UPSERTs master rows matched by NDI external_id, leaves
-  # observations / raw_snapshots / match_review intact. Safe to leave the
-  # env flag on; idempotent. Use this instead of FORCE_MASTER when prod has
-  # observation history worth preserving.
-  echo "[bootstrap] BOOTSTRAP_UPSERT_MASTER=1 → applying /seed/master_upsert.sql.gz"
-  if gunzip -c /seed/master_upsert.sql.gz | psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q; then
+# Always run the master upsert when the file is present — it's idempotent
+# and converges prod's master rows to the bundled snapshot without touching
+# observations. No env flag required so a normal redeploy is enough to
+# refresh master metadata after a Damnet re-crawl. Add stdout+stderr capture
+# so the operator can inspect what changed in `coolify application_logs`.
+if [ -f /seed/master_upsert.sql.gz ]; then
+  echo "[bootstrap] applying /seed/master_upsert.sql.gz (idempotent UPSERT, observations preserved)"
+  upsert_log=$(gunzip -c /seed/master_upsert.sql.gz | psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q 2>&1)
+  upsert_status=$?
+  if [ ${upsert_status} -eq 0 ]; then
     dams=$(count_or_empty "SELECT COUNT(*) FROM dams")
     echo "[bootstrap] dams.count after upsert = '${dams}'"
   else
-    echo "[bootstrap] master upsert failed (non-fatal)"
+    echo "[bootstrap] master upsert FAILED (status=${upsert_status}, non-fatal):"
+    echo "${upsert_log}" | head -20
   fi
 fi
 
