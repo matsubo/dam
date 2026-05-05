@@ -31,6 +31,7 @@ export const revalidate = 300;
 export const metadata: Metadata = {
   title: { absolute: 'Dam Data Platform — 日本のダム貯水量' },
   description: '日本全国のダム諸元と貯水量履歴。長期トレンドを 1 時間〜月次の粒度で参照。',
+  alternates: { canonical: '/' },
 };
 
 interface HomeStats {
@@ -119,9 +120,36 @@ async function featuredSparklines(damIds: bigint[]): Promise<Map<string, number[
 // revalidateTag('home') if we ever need a manual refresh.
 const HOME_CACHE_OPTS = { revalidate: 300, tags: ['home'] };
 
-const cachedHomeStats = unstable_cache(homeStats, ['home-stats'], HOME_CACHE_OPTS);
+// unstable_cache uses JSON.stringify, which throws on bigint. Wrap each
+// fetcher to coerce bigint → string/number before caching, and rehydrate at
+// the call site where the original type is needed.
+const cachedHomeStats = unstable_cache(
+  async () => {
+    const s = await homeStats();
+    return {
+      damCount: Number(s.damCount),
+      watershedCount: Number(s.watershedCount),
+      obsTotal: Number(s.obsTotal),
+      obsLast24h: Number(s.obsLast24h),
+      totalCapacityM3: s.totalCapacityM3,
+      activeCapacityM3: s.activeCapacityM3,
+      rateableStorageM3: s.rateableStorageM3,
+      rateableDamCount: Number(s.rateableDamCount),
+      oldestObsIso: s.oldestObs?.toISOString() ?? null,
+    };
+  },
+  ['home-stats'],
+  HOME_CACHE_OPTS,
+);
 const cachedTopDams = unstable_cache(
-  () => listDams({ pageSize: 6, orderBy: 'capacity' }),
+  async () => {
+    const r = await listDams({ pageSize: 6, orderBy: 'capacity' });
+    return {
+      ...r,
+      // bigint → string for JSON safety; rehydrate after the cache read.
+      items: r.items.map((d) => ({ ...d, id: d.id.toString() })),
+    };
+  },
   ['home-top-dams'],
   HOME_CACHE_OPTS,
 );
@@ -143,11 +171,21 @@ const cachedFeaturedSparklines = unstable_cache(
 );
 
 export default async function Home() {
-  const [s, latest, change] = await Promise.all([
+  const [statsRaw, latestRaw, change] = await Promise.all([
     cachedHomeStats(),
     cachedTopDams(),
     cachedNationalChange(),
   ]);
+  // Rehydrate JSON-safe primitives back to the shapes the rest of the page
+  // expects (bigint dam ids, Date oldestObs).
+  const s = {
+    ...statsRaw,
+    oldestObs: statsRaw.oldestObsIso ? new Date(statsRaw.oldestObsIso) : null,
+  };
+  const latest: Awaited<ReturnType<typeof listDams>> = {
+    ...latestRaw,
+    items: latestRaw.items.map((d) => ({ ...d, id: BigInt(d.id) })),
+  };
   const sparklines = new Map(
     Object.entries(
       await cachedFeaturedSparklines(latest.items.map((d) => d.id.toString()).join(',')),
@@ -206,6 +244,30 @@ export default async function Home() {
       },
     ],
   };
+  // WebSite schema with SearchAction → enables Google's sitelinks search box
+  // pointing at /search?q={query}.
+  const websiteLd = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    url: 'https://dam.teraren.com/',
+    name: 'Dam Data Platform',
+    inLanguage: 'ja',
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: { '@type': 'EntryPoint', urlTemplate: 'https://dam.teraren.com/search?q={query}' },
+      'query-input': 'required name=query',
+    },
+  };
+  // Organization schema → publisher signal (E-E-A-T) and a single anchor for
+  // the social profile links surfaced in SERP knowledge cards.
+  const orgLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'Dam Data Japan',
+    url: 'https://dam.teraren.com/',
+    logo: 'https://dam.teraren.com/icon',
+    sameAs: ['https://discord.gg/UbWqspWbAk', 'https://x.com/matsubokkuri'],
+  };
   return (
     <>
       {/* biome-ignore lint/security/noDangerouslySetInnerHtml: trusted JSON-LD */}
@@ -213,6 +275,18 @@ export default async function Home() {
         type="application/ld+json"
         // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{ __html: JSON.stringify(datasetLd) }}
+      />
+      {/* biome-ignore lint/security/noDangerouslySetInnerHtml: trusted JSON-LD */}
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteLd) }}
+      />
+      {/* biome-ignore lint/security/noDangerouslySetInnerHtml: trusted JSON-LD */}
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(orgLd) }}
       />
       {/* Hero */}
       <section className="relative overflow-hidden pt-20 md:pt-28 pb-14 bg-white">

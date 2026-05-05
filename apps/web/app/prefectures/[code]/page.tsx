@@ -18,7 +18,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { code } = await params;
   const name = PREF_NAME.get(code);
   if (!name) return { title: '都道府県が見つかりません' };
-  return { title: `${name}のダム`, alternates: { canonical: `/prefectures/${code}` } };
+  return {
+    title: `${name}のダム`,
+    description: `${name}に所在するダムの一覧と諸元。総貯水容量・水系・管理者で並び替え。`,
+    alternates: { canonical: `/prefectures/${code}` },
+  };
 }
 
 export default async function PrefPage({ params }: PageProps) {

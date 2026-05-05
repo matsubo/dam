@@ -13,6 +13,7 @@ export const revalidate = 900;
 export const metadata: Metadata = {
   title: 'ダム一覧',
   description: '日本全国のダム一覧。都道府県・水系・管理者で絞り込み。',
+  alternates: { canonical: '/dams' },
 };
 
 interface SP {

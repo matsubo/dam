@@ -8,6 +8,7 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { auth, signOut } from '../../../auth.ts';
 import { Breadcrumbs } from '../../../components/breadcrumbs.tsx';
+import { fmtDateOnly } from '../../../lib/format.ts';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
@@ -151,11 +152,9 @@ export default async function KeysPage({ searchParams }: SP) {
                 <td className="text-xs tabular-nums">
                   {k.ratePerMin}/min · {k.ratePerDay}/day
                 </td>
+                <td className="text-xs text-on-surface-variant">{fmtDateOnly(k.createdAt)}</td>
                 <td className="text-xs text-on-surface-variant">
-                  {k.createdAt.toISOString().slice(0, 10)}
-                </td>
-                <td className="text-xs text-on-surface-variant">
-                  {k.lastUsedAt ? k.lastUsedAt.toISOString().slice(0, 10) : '—'}
+                  {k.lastUsedAt ? fmtDateOnly(k.lastUsedAt) : '—'}
                 </td>
                 <td className="text-xs">
                   {k.revokedAt ? (

@@ -1,13 +1,17 @@
 import { sql } from '@dam/db/client';
 import type { Metadata } from 'next';
+import { unstable_cache } from 'next/cache';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
 import { JapanMap, type MapPoint } from '../../components/japan-map.tsx';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 3600;
+// Map page: 2,749 dam pins, expensive to compute (DISTINCT ON over recent
+// observations + ST_X/ST_Y projection). Data only changes when ingestion
+// lands new observations or master refreshes — cache aggressively.
+export const revalidate = 86400;
 export const metadata: Metadata = {
   title: '日本のダム地図',
   description: '全国のダムを地図で確認。円の大きさ＝総貯水容量、色＝最新貯水率。',
+  alternates: { canonical: '/map' },
 };
 
 async function fetchPoints(): Promise<MapPoint[]> {
@@ -41,8 +45,18 @@ async function fetchPoints(): Promise<MapPoint[]> {
   `;
 }
 
+// In-process cache for the entire map dataset. The 'map' tag lets a future
+// post-ingest hook call revalidateTag('map') to refresh on demand.
+const cachedFetchPoints = unstable_cache(
+  async (): Promise<MapPoint[]> => {
+    return await fetchPoints();
+  },
+  ['map-points-v1'],
+  { revalidate: 86400, tags: ['map'] },
+);
+
 export default async function MapPage() {
-  const points = await fetchPoints();
+  const points = await cachedFetchPoints();
   return (
     <div className="max-w-7xl mx-auto px-5 md:px-10 py-8">
       <Breadcrumbs items={[{ label: 'ホーム', href: '/' }, { label: '地図' }]} />

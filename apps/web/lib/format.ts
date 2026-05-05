@@ -5,6 +5,14 @@ const DF = new Intl.DateTimeFormat('ja-JP', {
   timeStyle: 'short',
   timeZone: 'Asia/Tokyo',
 });
+// All publicly-rendered timestamps are formatted in JST so users in any
+// region see a consistent "wall clock" matching the Japanese government
+// data sources. The string is suffixed with " JST" so the timezone is
+// unambiguous.
+const DF_DATE_ONLY = new Intl.DateTimeFormat('en-CA', {
+  dateStyle: 'short', // YYYY-MM-DD via en-CA
+  timeZone: 'Asia/Tokyo',
+});
 
 export function fmtN(value: number | string | null | undefined): string {
   if (value == null || value === '') return '—';
@@ -23,7 +31,14 @@ export function fmtPct(value: number | string | null | undefined): string {
 export function fmtDate(value: Date | string | null | undefined): string {
   if (!value) return '—';
   const d = value instanceof Date ? value : new Date(value);
-  return DF.format(d);
+  return `${DF.format(d)} JST`;
+}
+
+/** Date-only (YYYY-MM-DD JST). Used where time-of-day is irrelevant. */
+export function fmtDateOnly(value: Date | string | null | undefined): string {
+  if (!value) return '—';
+  const d = value instanceof Date ? value : new Date(value);
+  return `${DF_DATE_ONLY.format(d)} JST`;
 }
 
 /**

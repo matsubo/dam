@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   title: 'ロードマップ',
   description:
     'Dam Data Platform の運用ロードマップ。アルファ・ベータ・正式リリースの各段階で達成するゴール。',
+  alternates: { canonical: '/roadmap' },
 };
 
 interface Stage {
