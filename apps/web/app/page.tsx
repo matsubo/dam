@@ -1,6 +1,20 @@
 import { sql } from '@dam/db/client';
 import { listDams, type DamListItem } from '@dam/db/repo/dams';
 import { nationalStorageChange } from '@dam/db/repo/watersheds';
+import {
+  ArrowRight,
+  BadgeCheck,
+  BarChart3,
+  Braces,
+  Droplet,
+  Gauge,
+  Globe,
+  History,
+  KeyRound,
+  LineChart,
+  Map as MapIcon,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { DamCard } from '../components/dam-card.tsx';
@@ -187,17 +201,17 @@ export default async function Home() {
             </div>
             <div className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-3 text-sm">
               <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-base">timeline</span>
+                <LineChart className="text-primary" size={18} aria-hidden="true" />
                 <span className="text-on-surface-variant">1 時間粒度の履歴</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-base">history</span>
+                <History className="text-primary" size={18} aria-hidden="true" />
                 <span className="text-on-surface-variant">
                   {yearsCovered ? `直近 ${yearsCovered} 年分の履歴` : '長期トレンド'}
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-base">license</span>
+                <BadgeCheck className="text-primary" size={18} aria-hidden="true" />
                 <span className="text-on-surface-variant">商用利用可</span>
               </div>
             </div>
@@ -275,9 +289,7 @@ export default async function Home() {
       <section className="bg-primary-container py-6">
         <div className="max-w-7xl mx-auto px-5 md:px-10 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <span className="material-symbols-outlined text-white" style={{ fontSize: 32 }}>
-              vpn_key
-            </span>
+            <KeyRound className="text-white" size={32} aria-hidden="true" />
             <h3 className="font-display text-h3 text-white font-semibold">
               無料の API キーで、すぐ使えます。
             </h3>
@@ -369,7 +381,7 @@ export default async function Home() {
           <p className="mt-6">
             <Link href="/dams" className="btn-outline text-sm">
               すべてのダムを見る
-              <span className="material-symbols-outlined text-base">arrow_forward</span>
+              <ArrowRight size={16} aria-hidden="true" />
             </Link>
           </p>
         </div>
@@ -380,19 +392,19 @@ export default async function Home() {
         <div className="max-w-7xl mx-auto px-5 md:px-10 grid grid-cols-1 md:grid-cols-3 gap-4">
           <CtaCard
             href="/map"
-            icon="map"
+            Icon={MapIcon}
             title="日本のダム地図"
             text="全国のダムを地図で確認。円の大きさ = 容量、色 = 貯水率。"
           />
           <CtaCard
             href="/watersheds"
-            icon="water_drop"
+            Icon={Droplet}
             title="水系から探す"
             text="一級・二級水系ごとのダムと貯水率の推移を集計。"
           />
           <CtaCard
             href="/stats"
-            icon="bar_chart"
+            Icon={BarChart3}
             title="マクロ統計"
             text="都道府県別・水系別・規模別の集計を一覧で。"
           />
@@ -414,36 +426,28 @@ export default async function Home() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="card-surface">
-                <span className="material-symbols-outlined text-primary mb-3" style={{ fontSize: 28 }}>
-                  speed
-                </span>
+                <Gauge className="text-primary mb-3" size={28} aria-hidden="true" />
                 <h4 className="font-display font-bold mb-2">高速な集計 API</h4>
                 <p className="text-sm text-on-surface-variant">
                   TimescaleDB 連続集計で、5 年分の月次データもミリ秒で。
                 </p>
               </div>
               <div className="card-surface">
-                <span className="material-symbols-outlined text-primary mb-3" style={{ fontSize: 28 }}>
-                  data_object
-                </span>
+                <Braces className="text-primary mb-3" size={28} aria-hidden="true" />
                 <h4 className="font-display font-bold mb-2">HATEOAS Level 3</h4>
                 <p className="text-sm text-on-surface-variant">
                   すべてのレスポンスに `_links` を含む、自己記述的な JSON。
                 </p>
               </div>
               <div className="card-surface">
-                <span className="material-symbols-outlined text-primary mb-3" style={{ fontSize: 28 }}>
-                  public
-                </span>
+                <Globe className="text-primary mb-3" size={28} aria-hidden="true" />
                 <h4 className="font-display font-bold mb-2">空間検索</h4>
                 <p className="text-sm text-on-surface-variant">
                   PostGIS で水系や近傍ダムを高速検索。
                 </p>
               </div>
               <div className="card-surface">
-                <span className="material-symbols-outlined text-primary mb-3" style={{ fontSize: 28 }}>
-                  history
-                </span>
+                <History className="text-primary mb-3" size={28} aria-hidden="true" />
                 <h4 className="font-display font-bold mb-2">時系列対応</h4>
                 <p className="text-sm text-on-surface-variant">
                   hourly / daily / monthly の 3 解像度で取得。
@@ -543,20 +547,18 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 
 function CtaCard({
   href,
-  icon,
+  Icon,
   title,
   text,
 }: {
   href: string;
-  icon: string;
+  Icon: LucideIcon;
   title: string;
   text: string;
 }) {
   return (
     <Link href={href} className="card-surface block no-underline group">
-      <span className="material-symbols-outlined text-primary mb-3" style={{ fontSize: 36 }}>
-        {icon}
-      </span>
+      <Icon className="text-primary mb-3" size={36} aria-hidden="true" />
       <h3 className="font-display text-h3 font-bold mb-2 text-on-surface group-hover:text-primary">
         {title}
       </h3>
