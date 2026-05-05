@@ -76,11 +76,16 @@ if [ "${need_master_restore}" = "1" ]; then
       " >/dev/null
     fi
     log "[bootstrap] restoring /seed/master.sql.gz"
-    if gunzip -c /seed/master.sql.gz | psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q; then
+    restore_log=$(gunzip -c /seed/master.sql.gz | psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q 2>&1)
+    restore_status=$?
+    if [ ${restore_status} -eq 0 ]; then
       dams=$(count_or_empty "SELECT COUNT(*) FROM dams")
       log "[bootstrap] dams.count after restore = '${dams}'"
     else
-      log "[bootstrap] seed restore failed (non-fatal)"
+      log "[bootstrap] seed restore FAILED (status=${restore_status}, non-fatal):"
+      echo "${restore_log}" | head -30 | while IFS= read -r line; do
+        log "  ${line}"
+      done
     fi
   else
     log "[bootstrap] no seed file at /seed/master.sql.gz — skipping master restore"
