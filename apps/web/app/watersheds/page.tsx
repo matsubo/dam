@@ -1,8 +1,9 @@
-import { listWatersheds } from '@dam/db/repo/watersheds';
+import { listWatersheds, ratesForWatersheds } from '@dam/db/repo/watersheds';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
 import { EntityIcon } from '../../components/entity-icon.tsx';
+import { fmtPct } from '../../lib/format.ts';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 3600;
@@ -41,6 +42,9 @@ export default async function WatershedsPage() {
     { first: 0, second: 0, other: 0 } as Record<'first' | 'second' | 'other', number>,
   );
   const emptyCount = all.length - ordered.length;
+  // Per-watershed 貯水率: SUM(latest storage) / SUM(active_capacity) over
+  // rate-able dams in each system. Single round-trip across the visible list.
+  const rates = await ratesForWatersheds(ordered.map((w) => w.id));
   return (
     <div className="max-w-7xl mx-auto px-5 md:px-10 py-8">
       <Breadcrumbs items={[{ label: 'ホーム', href: '/' }, { label: '水系' }]} />
@@ -60,26 +64,50 @@ export default async function WatershedsPage() {
             <th>水系</th>
             <th>区分</th>
             <th className="text-right">ダム数</th>
+            <th className="text-right">貯水率</th>
           </tr>
         </thead>
         <tbody>
-          {ordered.map((w) => (
-            <tr key={w.slug}>
-              <td>
-                <span className="inline-flex items-center gap-1.5">
-                  <EntityIcon kind="watershed" size={14} className="shrink-0" />
-                  <Link href={`/watersheds/${w.slug}`}>{w.name}</Link>
-                </span>
-              </td>
-              <td>{w.kind === 'first' ? '一級' : w.kind === 'second' ? '二級' : 'その他'}</td>
-              <td className="text-right tabular-nums">
-                <span className="inline-flex items-center gap-1 justify-end">
-                  <EntityIcon kind="dam" size={12} className="text-primary shrink-0" />
-                  {w.damCount}
-                </span>
-              </td>
-            </tr>
-          ))}
+          {ordered.map((w) => {
+            const rate = rates.get(w.id.toString()) ?? null;
+            return (
+              <tr key={w.slug}>
+                <td>
+                  <span className="inline-flex items-center gap-1.5">
+                    <EntityIcon kind="watershed" size={14} className="shrink-0" />
+                    <Link href={`/watersheds/${w.slug}`}>{w.name}</Link>
+                  </span>
+                </td>
+                <td>{w.kind === 'first' ? '一級' : w.kind === 'second' ? '二級' : 'その他'}</td>
+                <td className="text-right tabular-nums">
+                  <span className="inline-flex items-center gap-1 justify-end">
+                    <EntityIcon kind="dam" size={12} className="text-primary shrink-0" />
+                    {w.damCount}
+                  </span>
+                </td>
+                <td className="text-right tabular-nums">
+                  {rate != null ? (
+                    <div className="inline-flex items-center gap-2 min-w-[140px]">
+                      <div
+                        className="relative h-1.5 rounded-full bg-surface-container overflow-hidden flex-1"
+                        aria-label={`貯水率 ${(rate * 100).toFixed(1)}%`}
+                      >
+                        <div
+                          className="absolute inset-y-0 left-0 bg-primary"
+                          style={{ width: `${rate * 100}%` }}
+                        />
+                      </div>
+                      <span className="text-xs font-semibold w-12 text-right">
+                        {fmtPct(rate)}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-on-surface-variant">—</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
