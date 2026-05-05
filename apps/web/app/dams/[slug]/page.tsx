@@ -8,6 +8,7 @@ import {
 } from '@dam/db/repo/dams';
 import { aggregateWatershed, findWatershedBySlug } from '@dam/db/repo/watersheds';
 import { ExternalLink } from 'lucide-react';
+import { EntityIcon } from '../../../components/entity-icon.tsx';
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -111,14 +112,20 @@ export default async function DamDetail({ params }: PageProps) {
             })()}
           </figure>
         ) : null}
-        <h1 className="text-3xl font-semibold">{d.name}</h1>
+        <h1 className="text-3xl font-semibold inline-flex items-center gap-2">
+          <EntityIcon kind="dam" size={28} className="text-primary shrink-0" />
+          <span>{d.name}</span>
+        </h1>
       </div>
       <p className="text-muted mb-6">
         {d.nameKana ?? ''} · {PREF_NAME.get(d.prefCode) ?? d.prefCode}
         {d.watershedSlug && d.watershedName ? (
           <>
             {' · '}
-            <Link href={`/watersheds/${d.watershedSlug}`}>{d.watershedName}</Link>
+            <span className="inline-flex items-center gap-1">
+              <EntityIcon kind="watershed" size={14} className="shrink-0" />
+              <Link href={`/watersheds/${d.watershedSlug}`}>{d.watershedName}</Link>
+            </span>
           </>
         ) : null}
         {' · '}
@@ -240,7 +247,8 @@ export default async function DamDetail({ params }: PageProps) {
       {watershed && (
         <section className="mb-8">
           <header className="flex items-baseline justify-between mb-3">
-            <h2 className="text-lg font-semibold">
+            <h2 className="text-lg font-semibold inline-flex items-center gap-1.5">
+              <EntityIcon kind="watershed" size={18} className="shrink-0" />
               <Link href={`/watersheds/${watershed.slug}`}>{watershed.name}</Link>
             </h2>
             <span className="text-sm text-muted">

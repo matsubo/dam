@@ -2,6 +2,7 @@ import { listWatersheds } from '@dam/db/repo/watersheds';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
+import { EntityIcon } from '../../components/entity-icon.tsx';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 3600;
@@ -38,7 +39,10 @@ export default async function WatershedsPage() {
   return (
     <div className="max-w-7xl mx-auto px-5 md:px-10 py-8">
       <Breadcrumbs items={[{ label: 'ホーム', href: '/' }, { label: '水系' }]} />
-      <h1 className="text-2xl font-semibold mb-2">水系一覧</h1>
+      <h1 className="text-2xl font-semibold mb-2 inline-flex items-center gap-2">
+        <EntityIcon kind="watershed" size={24} className="text-primary shrink-0" />
+        <span>水系一覧</span>
+      </h1>
       <p className="text-muted mb-6 text-sm">
         ダムが登録されている {ordered.length} 水系を表示（一級 {counts.first} · 二級 {counts.second}{' '}
         · その他 {counts.other}）。マスタ全体は {all.length} 水系（一級 {totals.first} · 二級{' '}
@@ -57,10 +61,18 @@ export default async function WatershedsPage() {
           {ordered.map((w) => (
             <tr key={w.slug}>
               <td>
-                <Link href={`/watersheds/${w.slug}`}>{w.name}</Link>
+                <span className="inline-flex items-center gap-1.5">
+                  <EntityIcon kind="watershed" size={14} className="shrink-0" />
+                  <Link href={`/watersheds/${w.slug}`}>{w.name}</Link>
+                </span>
               </td>
               <td>{w.kind === 'first' ? '一級' : w.kind === 'second' ? '二級' : 'その他'}</td>
-              <td className="text-right">{w.damCount}</td>
+              <td className="text-right tabular-nums">
+                <span className="inline-flex items-center gap-1 justify-end">
+                  <EntityIcon kind="dam" size={12} className="text-primary shrink-0" />
+                  {w.damCount}
+                </span>
+              </td>
             </tr>
           ))}
         </tbody>

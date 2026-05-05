@@ -1,6 +1,7 @@
 import { PREFECTURES } from '@dam/core/prefectures';
 import Link from 'next/link';
 import { fmtCapacityMcm } from '../lib/format.ts';
+import { EntityIcon } from './entity-icon.tsx';
 
 const PREF_NAME = new Map(PREFECTURES.map((p) => [p.code, p.name]));
 
@@ -31,12 +32,18 @@ export function DamTable({ rows }: { rows: DamRowItem[] }) {
         {rows.map((r) => (
           <tr key={r.slug}>
             <td>
-              <Link href={`/dams/${r.slug}`}>{r.name}</Link>
+              <span className="inline-flex items-center gap-1.5">
+                <EntityIcon kind="dam" size={14} className="text-primary shrink-0" />
+                <Link href={`/dams/${r.slug}`}>{r.name}</Link>
+              </span>
             </td>
             <td>{PREF_NAME.get(r.prefCode) ?? r.prefCode}</td>
             <td>
               {r.watershedSlug ? (
-                <Link href={`/watersheds/${r.watershedSlug}`}>{r.watershedName}</Link>
+                <span className="inline-flex items-center gap-1.5">
+                  <EntityIcon kind="watershed" size={14} className="shrink-0" />
+                  <Link href={`/watersheds/${r.watershedSlug}`}>{r.watershedName}</Link>
+                </span>
               ) : (
                 '—'
               )}

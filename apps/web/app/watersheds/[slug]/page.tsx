@@ -8,6 +8,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '../../../components/breadcrumbs.tsx';
 import { DamTable } from '../../../components/dam-table.tsx';
+import { EntityIcon } from '../../../components/entity-icon.tsx';
 import { ObservationChart } from '../../../components/observation-chart.tsx';
 import { ReservoirGauge } from '../../../components/reservoir-gauge.tsx';
 import { StorageChangeStrip } from '../../../components/storage-change-strip.tsx';
@@ -51,7 +52,10 @@ export default async function WatershedDetail({ params }: PageProps) {
           { label: w.name },
         ]}
       />
-      <h1 className="text-3xl font-semibold mb-2">{w.name}</h1>
+      <h1 className="text-3xl font-semibold mb-2 inline-flex items-center gap-2">
+        <EntityIcon kind="watershed" size={28} className="text-primary shrink-0" />
+        <span>{w.name}</span>
+      </h1>
       <p className="text-muted mb-6">
         {w.kind === 'first' ? '一級水系' : w.kind === 'second' ? '二級水系' : 'その他'}
       </p>
