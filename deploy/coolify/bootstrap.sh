@@ -17,6 +17,15 @@
 # the web app from serving — better to start with whatever data we have and
 # let the operator re-trigger the seed manually.
 
+# Mirror everything bootstrap prints to a static file Next.js serves so an
+# operator without `docker exec` can read it via HTTPS:
+#   curl https://dam.teraren.com/bootstrap.txt
+# The file gets overwritten on every container start. Public on purpose —
+# contains only DB row counts, no secrets.
+BOOTSTRAP_LOG=/app/apps/web/public/bootstrap.txt
+mkdir -p "$(dirname "${BOOTSTRAP_LOG}")"
+exec > >(tee "${BOOTSTRAP_LOG}") 2>&1
+
 echo "[bootstrap] $(date -u +%FT%TZ) starting"
 
 cd /app
