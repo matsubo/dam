@@ -5,7 +5,7 @@ import { ExtensionErrorShield } from '../components/extension-error-shield.tsx';
 import { GoogleAnalytics } from '../components/google-analytics.tsx';
 import { Gtm, GtmNoscript } from '../components/gtm.tsx';
 import { Nav } from '../components/nav.tsx';
-import { APP_VERSION } from '../lib/version.ts';
+import { APP_STAGE, APP_VERSION } from '../lib/version.ts';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -129,6 +129,11 @@ function SiteFooter() {
                 </a>
               </li>
               <li>
+                <a className="text-on-surface-variant hover:text-primary transition-colors" href="/roadmap">
+                  ロードマップ
+                </a>
+              </li>
+              <li>
                 <a className="text-on-surface-variant hover:text-primary transition-colors" href="/sitemap.xml">
                   サイトマップ
                 </a>
@@ -213,7 +218,16 @@ function SiteFooter() {
         <div className="pt-6 border-t border-outline-variant flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-xs text-on-surface-variant font-display font-medium">
             © {new Date().getFullYear()} Dam Data Japan · Open Reservoir Data ·{' '}
-            <span className="text-on-surface-variant/70">v{APP_VERSION}</span>
+            <a
+              href="/roadmap"
+              className="text-on-surface-variant/70 hover:text-primary"
+              title={`現在 ${APP_STAGE.toUpperCase()} ステージ — ロードマップを見る`}
+            >
+              v{APP_VERSION}{' '}
+              <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider font-semibold bg-primary/10 text-primary">
+                {APP_STAGE}
+              </span>
+            </a>
           </p>
           <div className="flex items-center gap-3">
             <a
