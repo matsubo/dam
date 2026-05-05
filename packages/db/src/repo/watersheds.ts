@@ -287,47 +287,88 @@ export async function watershedStorageChange(
  * home page change strip.
  */
 export async function nationalStorageChange(): Promise<WatershedStorageChange> {
+  // Original query did 9 LATERAL DISTINCT-ON scans across the whole observations
+  // hypertable (~9 s on 6.7 M synth rows). Rewrite:
+  //   • sub-day buckets (current, h1, h6, h12) — raw observations restricted to
+  //     the last 48 h, then DISTINCT ON per dam picks the latest obs at-or-
+  //     before each lookback. Cheap because the scan window is bounded.
+  //   • day+ buckets (d1, d7, d30, d365, d1825) — obs_daily continuous
+  //     aggregate. last_storage_volume_m3 per (dam_id, day) is the materialised
+  //     answer to "what was each dam's last storage on day X". Pin the day to
+  //     `anchor::date - lookback_days`.
   const rows = await sql<{ bucket: string; total: string | null; pickedAt: Date | null }[]>`
     WITH ds AS (
       SELECT id FROM dams WHERE active_capacity_m3 IS NOT NULL
     ),
-    latest_per_dam AS (
-      SELECT DISTINCT ON (o.dam_id)
-             o.dam_id, o.storage_volume_m3, o.observed_at
+    -- Anchor day from obs_daily (one row per dam per day → cheap MAX). The
+    -- anchor timestamp itself comes from the small obs window covering that
+    -- day plus the day before, so all sub-day-bucket scans stay bounded.
+    anchor_day AS (
+      SELECT MAX(od.day) AS d
+      FROM obs_daily od
+      JOIN ds ON ds.id = od.dam_id
+    ),
+    recent_obs AS (
+      SELECT o.dam_id, o.storage_volume_m3, o.observed_at
       FROM observations o
       JOIN ds ON ds.id = o.dam_id
       WHERE o.storage_volume_m3 IS NOT NULL
-      ORDER BY o.dam_id, o.observed_at DESC
+        AND o.observed_at >= ((SELECT d FROM anchor_day) - INTERVAL '1 day')
+        AND o.observed_at <  ((SELECT d FROM anchor_day) + INTERVAL '2 days')
     ),
-    anchor AS (SELECT MAX(observed_at) AS t FROM latest_per_dam),
-    buckets AS (
-      SELECT 'current' AS bucket, INTERVAL '0 second' AS lookback UNION ALL
-      SELECT 'h1',    INTERVAL '1 hour'    UNION ALL
-      SELECT 'h6',    INTERVAL '6 hours'   UNION ALL
-      SELECT 'h12',   INTERVAL '12 hours'  UNION ALL
-      SELECT 'd1',    INTERVAL '1 day'     UNION ALL
-      SELECT 'd7',    INTERVAL '7 days'    UNION ALL
-      SELECT 'd30',   INTERVAL '30 days'   UNION ALL
-      SELECT 'd365',  INTERVAL '365 days'  UNION ALL
-      SELECT 'd1825', INTERVAL '1825 days'
-    ),
-    per_bucket AS (
-      SELECT
-        b.bucket,
-        SUM(picks.storage_volume_m3)::TEXT AS total,
-        MIN(picks.observed_at) AS picked_at
-      FROM buckets b
+    anchor AS (SELECT MAX(observed_at) AS t FROM recent_obs),
+    -- Sub-day buckets: snap each dam's latest obs at-or-before (anchor - lookback).
+    sub_day AS (
+      SELECT b.bucket, b.lookback, picks.dam_id, picks.storage_volume_m3, picks.observed_at
+      FROM (VALUES
+        ('current', INTERVAL '0 second'),
+        ('h1',      INTERVAL '1 hour'),
+        ('h6',      INTERVAL '6 hours'),
+        ('h12',     INTERVAL '12 hours')
+      ) AS b(bucket, lookback)
       LEFT JOIN LATERAL (
         SELECT DISTINCT ON (o.dam_id) o.dam_id, o.storage_volume_m3, o.observed_at
-        FROM observations o
-        JOIN ds ON ds.id = o.dam_id
-        WHERE o.storage_volume_m3 IS NOT NULL
-          AND o.observed_at <= (SELECT t FROM anchor) - b.lookback
+        FROM recent_obs o
+        WHERE o.observed_at <= (SELECT t FROM anchor) - b.lookback
         ORDER BY o.dam_id, o.observed_at DESC
       ) picks ON TRUE
-      GROUP BY b.bucket
+    ),
+    sub_day_totals AS (
+      SELECT bucket,
+             SUM(storage_volume_m3)::TEXT AS total,
+             MIN(observed_at) AS picked_at
+      FROM sub_day
+      GROUP BY bucket
+    ),
+    -- Day+ buckets: obs_daily pinned to anchor_day - N. last_storage_volume_m3
+    -- is the materialised "last value of the bucket day".
+    day_plus AS (
+      SELECT b.bucket, picks.day::TIMESTAMPTZ AS picked_at, picks.last_storage_volume_m3
+      FROM (VALUES
+        ('d1',     1),
+        ('d7',     7),
+        ('d30',   30),
+        ('d365', 365),
+        ('d1825', 1825)
+      ) AS b(bucket, lookback_days)
+      LEFT JOIN LATERAL (
+        SELECT od.dam_id, od.day, od.last_storage_volume_m3
+        FROM obs_daily od
+        JOIN ds ON ds.id = od.dam_id
+        WHERE od.day = (SELECT d FROM anchor_day) - (b.lookback_days * INTERVAL '1 day')
+          AND od.last_storage_volume_m3 IS NOT NULL
+      ) picks ON TRUE
+    ),
+    day_plus_totals AS (
+      SELECT bucket,
+             SUM(last_storage_volume_m3)::TEXT AS total,
+             MIN(picked_at) AS picked_at
+      FROM day_plus
+      GROUP BY bucket
     )
-    SELECT bucket, total, picked_at AS "pickedAt" FROM per_bucket
+    SELECT bucket, total, picked_at AS "pickedAt" FROM sub_day_totals
+    UNION ALL
+    SELECT bucket, total, picked_at AS "pickedAt" FROM day_plus_totals
   `;
   const map = new Map<string, { total: string | null; pickedAt: Date | null }>();
   for (const r of rows) map.set(r.bucket, { total: r.total, pickedAt: r.pickedAt });
