@@ -43,6 +43,7 @@ const SOURCE = 'synthetic';
 interface DamRow {
   id: bigint;
   total_capacity_m3: string | null;
+  active_capacity_m3: string | null;
 }
 
 function clamp(x: number, lo: number, hi: number): number {
@@ -68,7 +69,9 @@ async function main(): Promise<void> {
   `;
 
   const dams = await sql<DamRow[]>`
-    SELECT id, total_capacity_m3::TEXT AS total_capacity_m3
+    SELECT id,
+           total_capacity_m3::TEXT  AS total_capacity_m3,
+           active_capacity_m3::TEXT AS active_capacity_m3
     FROM dams
     WHERE total_capacity_m3 IS NOT NULL
     ORDER BY id
@@ -113,7 +116,17 @@ async function main(): Promise<void> {
   }
 
   for (const dam of dams) {
-    const capacity = Number(dam.total_capacity_m3);
+    // Volume baseline = 利水容量 (active_capacity_m3) when available, else
+    // total_capacity_m3. The site computes 貯水率 = volume / active_capacity,
+    // so basing the synthetic volume on total_capacity made rates exceed
+    // 100 % whenever active_capacity < total_capacity (typical: ~60 % of
+    // total). Falling back to total_capacity is fine for dams where 利水
+    // 容量 isn't recorded — the rate denominator doesn't apply there
+    // either, so the chart just uses the raw volume.
+    const activeCap = dam.active_capacity_m3 ? Number(dam.active_capacity_m3) : NaN;
+    const totalCap = Number(dam.total_capacity_m3);
+    const capacity =
+      Number.isFinite(activeCap) && activeCap > 0 ? activeCap : totalCap;
     if (!Number.isFinite(capacity) || capacity <= 0) continue;
     const baseRate = clamp(0.55 + 0.2 * randNormal(), 0.1, 0.95);
     const flowScale = Math.cbrt(capacity) / 100; // m³/s units, very rough

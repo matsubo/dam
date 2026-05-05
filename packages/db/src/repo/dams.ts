@@ -589,20 +589,42 @@ export async function storageChange(damId: bigint): Promise<StorageChange> {
   };
 }
 
+export interface NearbyDam extends DamListItem {
+  /** Great-circle distance from the source dam, in metres. */
+  distanceM: number;
+  /** Bearing from the source dam, radians clockwise from north (0=N, π/2=E). */
+  bearingRad: number;
+  /** 利水容量 (denominator for storage rate). NULL when the dam has none. */
+  activeCapacityM3: string | null;
+  /** Latest storage_volume_m3 across any source. NULL when no observations exist. */
+  latestStorageM3: string | null;
+}
+
 export async function nearbyDams(
   damId: bigint,
   radiusM: number,
   limit: number,
-): Promise<DamListItem[]> {
-  return sql<DamListItem[]>`
+): Promise<NearbyDam[]> {
+  return sql<NearbyDam[]>`
     SELECT
       d2.id, d2.slug, d2.name, d2.pref_code AS "prefCode", d2.manager,
-      d2.total_capacity_m3::TEXT AS "totalCapacityM3",
+      d2.total_capacity_m3::TEXT  AS "totalCapacityM3",
+      d2.active_capacity_m3::TEXT AS "activeCapacityM3",
       w.slug AS "watershedSlug", w.name AS "watershedName",
-      ST_Y(d2.location::geometry) AS lat, ST_X(d2.location::geometry) AS lng
+      ST_Y(d2.location::geometry) AS lat, ST_X(d2.location::geometry) AS lng,
+      ST_Distance(d.location, d2.location)::FLOAT8                    AS "distanceM",
+      ST_Azimuth(d.location::geometry, d2.location::geometry)::FLOAT8 AS "bearingRad",
+      latest.storage_volume_m3::TEXT AS "latestStorageM3"
     FROM dams d
     JOIN dams d2 ON d2.id <> d.id AND ST_DWithin(d.location, d2.location, ${radiusM})
     LEFT JOIN watersheds w ON w.id = d2.watershed_id
+    LEFT JOIN LATERAL (
+      SELECT o.storage_volume_m3
+      FROM observations o
+      WHERE o.dam_id = d2.id AND o.storage_volume_m3 IS NOT NULL
+      ORDER BY o.observed_at DESC
+      LIMIT 1
+    ) latest ON TRUE
     WHERE d.id = ${damId}
     ORDER BY d.location <-> d2.location
     LIMIT ${limit}
