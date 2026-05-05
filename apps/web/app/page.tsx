@@ -6,7 +6,6 @@ import {
   BadgeCheck,
   BarChart3,
   Braces,
-  Droplet,
   Gauge,
   Globe,
   History,
@@ -18,6 +17,7 @@ import type { LucideIcon } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { DamCard } from '../components/dam-card.tsx';
+import { ENTITY_ICONS } from '../components/entity-icon.tsx';
 import { StorageChangeStrip } from '../components/storage-change-strip.tsx';
 import { fmtCapacityMcm } from '../lib/format.ts';
 
@@ -398,7 +398,7 @@ export default async function Home() {
           />
           <CtaCard
             href="/watersheds"
-            Icon={Droplet}
+            Icon={ENTITY_ICONS.watershed}
             title="水系から探す"
             text="一級・二級水系ごとのダムと貯水率の推移を集計。"
           />

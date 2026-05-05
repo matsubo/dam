@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { fmtCapacityMcm } from '../lib/format.ts';
-import { Sparkline } from './sparkline.tsx';
 import type { DamRowItem } from './dam-table.tsx';
+import { EntityIcon } from './entity-icon.tsx';
+import { Sparkline } from './sparkline.tsx';
 
 // Featured-dam card with optional inline sparkline showing recent storage
 // trend. The sparkline is rendered server-side as an SVG <path> so there's
@@ -11,14 +12,22 @@ export function DamCard({ d, sparkline }: { d: DamRowItem; sparkline?: number[] 
   return (
     <article className="card-surface flex gap-4 items-stretch">
       <div className="min-w-0 flex-1 flex flex-col">
-        <h3 className="font-display font-semibold leading-tight text-base mb-1 truncate">
-          <Link href={`/dams/${d.slug}`} className="text-on-surface no-underline hover:text-primary">
+        <h3 className="font-display font-semibold leading-tight text-base mb-1 truncate inline-flex items-center gap-1.5">
+          <EntityIcon kind="dam" size={16} className="text-primary shrink-0" />
+          <Link href={`/dams/${d.slug}`} className="text-on-surface no-underline hover:text-primary truncate">
             {d.name}
           </Link>
         </h3>
-        <p className="text-xs text-on-surface-variant truncate">
-          {d.watershedName ? `${d.watershedName}` : '—'}
-          {d.manager ? ` · ${d.manager}` : ''}
+        <p className="text-xs text-on-surface-variant truncate inline-flex items-center gap-1">
+          {d.watershedName ? (
+            <>
+              <EntityIcon kind="watershed" size={12} className="shrink-0" />
+              <span className="truncate">{d.watershedName}</span>
+            </>
+          ) : (
+            <span>—</span>
+          )}
+          {d.manager ? <span className="ml-1">· {d.manager}</span> : null}
         </p>
         <div className="mt-2 mb-1 text-xl font-display font-bold tabular-nums">
           {fmtCapacityMcm(d.totalCapacityM3)}

@@ -4,10 +4,16 @@ import { Droplets, Menu, Search, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { type EntityKind, EntityIcon } from './entity-icon.tsx';
 
-const ITEMS: { href: string; label: string; emphasised?: boolean }[] = [
-  { href: '/dams', label: 'ダム' },
-  { href: '/watersheds', label: '水系' },
+const ITEMS: {
+  href: string;
+  label: string;
+  emphasised?: boolean;
+  entity?: EntityKind;
+}[] = [
+  { href: '/dams', label: 'ダム', entity: 'dam' },
+  { href: '/watersheds', label: '水系', entity: 'watershed' },
   { href: '/map', label: '地図' },
   { href: '/stats', label: '統計' },
   { href: '/sources', label: 'データソース' },
@@ -49,7 +55,8 @@ export function Nav() {
         </Link>
         <div className="hidden lg:flex items-center gap-8">
           {ITEMS.map((it) => (
-            <Link key={it.href} href={it.href} className="nav-link">
+            <Link key={it.href} href={it.href} className="nav-link inline-flex items-center gap-1.5">
+              {it.entity ? <EntityIcon kind={it.entity} size={14} className="shrink-0" /> : null}
               {it.label}
             </Link>
           ))}
@@ -104,10 +111,11 @@ export function Nav() {
                   <Link
                     href={it.href}
                     onClick={() => setOpen(false)}
-                    className={`block px-3 py-2.5 rounded-lg font-medium hover:bg-surface-container-low ${
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-lg font-medium hover:bg-surface-container-low ${
                       it.emphasised ? 'text-primary' : ''
                     }`}
                   >
+                    {it.entity ? <EntityIcon kind={it.entity} size={16} className="shrink-0" /> : null}
                     {it.label}
                   </Link>
                 </li>
