@@ -13,6 +13,29 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dam.teraren.com';
 
+// Cache-Control profiles. Browsers always revalidate (max-age=0); the CDN /
+// shared cache (s-maxage) absorbs traffic. SWR keeps the stale copy serving
+// while the CDN refreshes in the background. Pages are public open data
+// with no per-user content, so cookies aren't a concern; /account routes
+// get private/no-store explicitly.
+const CACHE_TIGHT =
+  'public, max-age=0, s-maxage=300, stale-while-revalidate=86400';
+const CACHE_LOOSE =
+  'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800';
+const CACHE_PRIVATE = 'private, no-store';
+
+function pickCacheControl(pathname: string): string {
+  if (pathname.startsWith('/account')) return CACHE_PRIVATE;
+  if (
+    pathname === '/roadmap' ||
+    pathname.startsWith('/legal/') ||
+    pathname === '/sources'
+  )
+    return CACHE_LOOSE;
+  // /, /dams, /watersheds, /map, /stats, /search, dam + watershed details
+  return CACHE_TIGHT;
+}
+
 const LINK_HEADER = [
   `<${SITE_URL}/.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json"`,
   `<${SITE_URL}/.well-known/agent-skills>; rel="agent-skills"; type="application/json"`,
@@ -64,6 +87,8 @@ export function middleware(req: NextRequest): NextResponse {
     return NextResponse.redirect(url, 308);
   }
 
+  const cacheControl = pickCacheControl(pathname);
+
   // Markdown negotiation: rewrite to the /md/* sibling when applicable.
   if (prefersMarkdown(req.headers.get('accept')) && MD_ROUTES.has(pathname)) {
     const url = req.nextUrl.clone();
@@ -71,6 +96,7 @@ export function middleware(req: NextRequest): NextResponse {
     const res = NextResponse.rewrite(url);
     res.headers.set('Link', LINK_HEADER);
     res.headers.set('Vary', 'Accept');
+    res.headers.set('Cache-Control', cacheControl);
     return res;
   }
 
@@ -79,6 +105,9 @@ export function middleware(req: NextRequest): NextResponse {
   // Tell shared caches that we vary the body on Accept (for MD negotiation).
   const existingVary = res.headers.get('Vary');
   res.headers.set('Vary', existingVary ? `${existingVary}, Accept` : 'Accept');
+  // Set Cache-Control unconditionally — covers Next.js dynamic responses,
+  // which otherwise default to 'private, no-cache, no-store, must-revalidate'.
+  res.headers.set('Cache-Control', cacheControl);
   return res;
 }
 
