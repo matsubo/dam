@@ -22,12 +22,11 @@ import { ENTITY_ICONS } from '../components/entity-icon.tsx';
 import { StorageChangeStrip } from '../components/storage-change-strip.tsx';
 import { fmtCapacityMcm } from '../lib/format.ts';
 
-// `force-dynamic` was previously set to keep counts fresh, but it disables ISR
-// entirely so every request paid the 6.7M-row scan in homeStats / 8-bucket
-// nationalStorageChange (≈11 s cold). The home page has no per-request data —
-// drop it and let `revalidate` serve from the static-generation cache. Cold
-// path stays slow once per window; warm path is sub-100 ms.
-export const revalidate = 300;
+// force-dynamic skips Next's build-time prerender (which would fail because
+// the build container can't reach the DB). Real caching happens in
+// unstable_cache wrappers below — 5-min TTL keyed on the four fetchers,
+// shared across requests at runtime.
+export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
   title: { absolute: 'Dam Data Platform — 日本のダム貯水量' },
   description: '日本全国のダム諸元と貯水量履歴。長期トレンドを 1 時間〜月次の粒度で参照。',

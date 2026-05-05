@@ -5,9 +5,11 @@ import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
 import { JapanMap, type MapPoint } from '../../components/japan-map.tsx';
 
 // Map page: 2,749 dam pins, expensive to compute (DISTINCT ON over recent
-// observations + ST_X/ST_Y projection). Data only changes when ingestion
-// lands new observations or master refreshes — cache aggressively.
-export const revalidate = 86400;
+// observations + ST_X/ST_Y projection). force-dynamic skips Next's
+// build-time static prerender (which fails because the build container
+// can't reach the DB). The actual caching is provided by unstable_cache
+// below — 24 h TTL across requests at runtime.
+export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
   title: '日本のダム地図',
   description: '全国のダムを地図で確認。円の大きさ＝総貯水容量、色＝最新貯水率。',
