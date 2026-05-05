@@ -6,7 +6,12 @@ import { EntityIcon } from '../../components/entity-icon.tsx';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 3600;
-export const metadata: Metadata = { title: '水系一覧' };
+export const metadata: Metadata = {
+  title: '水系一覧',
+  description:
+    '一級・二級水系ごとのダム数と貯水量推移。日本国内の主要 644 水系を網羅。',
+  alternates: { canonical: '/watersheds' },
+};
 
 export default async function WatershedsPage() {
   // Fetch all watersheds. Order: 一級 first, then 二級, then 'other' — and

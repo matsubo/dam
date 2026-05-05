@@ -12,6 +12,16 @@ export const metadata: Metadata = {
   title: { default: 'Dam Data Platform', template: '%s — Dam Data Platform' },
   description: '日本全国のダム諸元と貯水量の履歴データ。長期トレンドを 1 時間〜月次の粒度で。',
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'),
+  // Sitewide OpenGraph + Twitter defaults. Per-page metadata can override
+  // any of these; the auto-generated opengraph-image.tsx / twitter-image.tsx
+  // supplies the image without us listing it here.
+  openGraph: {
+    type: 'website',
+    siteName: 'Dam Data Platform',
+    locale: 'ja_JP',
+    url: process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000',
+  },
+  twitter: { card: 'summary_large_image', site: '@matsubokkuri' },
   // Google Search Console verification token — set via NEXT_PUBLIC_GSC_VERIFICATION
   // (the value Search Console gives you in the "HTML tag" verification flow).
   // When unset, the meta tag is omitted.

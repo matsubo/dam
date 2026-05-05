@@ -1,7 +1,7 @@
 import { sql } from '@dam/db/client';
 import type { Metadata } from 'next';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
-import { fmtDate } from '../../lib/format.ts';
+import { fmtDate, fmtDateOnly } from '../../lib/format.ts';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 300;
@@ -536,7 +536,7 @@ export default async function SourcesPage() {
             label="期間"
             value={
               data.cadence.earliest && data.cadence.latest
-                ? `${data.cadence.earliest.toISOString().slice(0, 10)} 〜 ${data.cadence.latest.toISOString().slice(0, 10)}`
+                ? `${fmtDateOnly(data.cadence.earliest)} 〜 ${fmtDateOnly(data.cadence.latest)}`
                 : '—'
             }
           />

@@ -91,7 +91,13 @@ export default async function DamDetail({ params }: PageProps) {
         {d.imageUrl ? (
           <figure className="shrink-0">
             <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-surface-container-low border border-outline-variant/40">
-              <Image src={d.imageUrl} alt="" fill sizes="80px" className="object-cover" />
+              <Image
+                src={d.imageUrl}
+                alt={`${d.name}の写真`}
+                fill
+                sizes="80px"
+                className="object-cover"
+              />
             </div>
             {(() => {
               const credit = imageCredit(d.imageUrl);
