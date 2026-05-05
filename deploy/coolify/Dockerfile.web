@@ -52,6 +52,10 @@ COPY --from=build /app/apps/web /app/apps/web
 # Bundle the master-data seed (gzipped pg_dump of dams + watersheds + sources +
 # rivers — 16 MB compressed). Restored on first boot if `dams` is empty.
 COPY deploy/seed/master.sql.gz /seed/master.sql.gz
+# Idempotent UPSERT bundle (matches by external_ids->>'ndi'). Applied on
+# every boot — converges prod's master rows to the bundled snapshot without
+# touching observations/raw_snapshots/match_review.
+COPY deploy/seed/master_upsert.sql.gz /seed/master_upsert.sql.gz
 # postgresql-client gives us psql for the seed restore. Tiny on debian-slim.
 RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client && rm -rf /var/lib/apt/lists/*
 
