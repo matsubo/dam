@@ -100,8 +100,10 @@ tbody tr:hover {
   }
 }
 
-/* Desaturate the GSI basemap so the colour-encoded dam markers (size = capacity,
-   colour = storage rate) stand out instead of competing with the topo tiles. */
+/* Desaturate + fade the GSI basemap so the colour-encoded dam markers
+   (size = capacity, colour = storage rate) stand out instead of competing
+   with the topo tiles. */
 .jp-map-grayscale {
-  filter: grayscale(1) brightness(1.05) contrast(0.92);
+  filter: grayscale(1) brightness(1.18) contrast(0.78);
+  opacity: 0.55;
 }
