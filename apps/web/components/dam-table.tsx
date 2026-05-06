@@ -25,6 +25,26 @@ export interface DamRateMeta {
   rate: number | null;
 }
 
+function RateBar({ rate }: { rate: number | null }) {
+  if (rate == null) return <span className="text-xs text-on-surface-variant">—</span>;
+  return (
+    <div className="inline-flex items-center gap-2 w-full md:min-w-[140px]">
+      <div
+        className="relative h-1.5 rounded-full bg-surface-container overflow-hidden flex-1"
+        aria-label={`貯水率 ${(rate * 100).toFixed(1)}%`}
+      >
+        <div
+          className="absolute inset-y-0 left-0 bg-primary"
+          style={{ width: `${rate * 100}%` }}
+        />
+      </div>
+      <span className="text-xs font-semibold w-12 text-right tabular-nums">
+        {fmtPct(rate)}
+      </span>
+    </div>
+  );
+}
+
 export function DamTable({
   rows,
   rates,
@@ -36,67 +56,109 @@ export function DamTable({
 }) {
   const showRate = !!rates;
   return (
-    <table>
-      <thead>
-        <tr>
-          <th>ダム名</th>
-          <th>都道府県</th>
-          <th>水系</th>
-          <th>管理者</th>
-          {showRate ? <th className="text-right">貯水率</th> : null}
-          <th className="text-right">総貯水容量</th>
-        </tr>
-      </thead>
-      <tbody>
+    <>
+      {/* Mobile: stacked cards. The narrow table format gets unreadable
+          below ~640 px because Japanese name + watershed + manager don't
+          fit on one line. */}
+      <ul className="md:hidden space-y-2">
         {rows.map((r) => {
           const rateMeta = rates && r.id != null ? rates.get(r.id.toString()) : undefined;
           return (
-            <tr key={r.slug}>
-              <td>
-                <span className="inline-flex items-center gap-1.5">
-                  <EntityIcon kind="dam" size={14} className="text-primary shrink-0" />
-                  <Link href={`/dams/${r.slug}`}>{r.name}</Link>
-                </span>
-              </td>
-              <td>{PREF_NAME.get(r.prefCode) ?? r.prefCode}</td>
-              <td>
+            <li
+              key={r.slug}
+              className="bg-white border border-outline-variant rounded-xl p-3"
+            >
+              <Link
+                href={`/dams/${r.slug}`}
+                className="font-display font-semibold inline-flex items-center gap-1.5 text-on-surface no-underline hover:text-primary"
+              >
+                <EntityIcon kind="dam" size={14} className="text-primary shrink-0" />
+                {r.name}
+              </Link>
+              <div className="text-xs text-on-surface-variant mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span>{PREF_NAME.get(r.prefCode) ?? r.prefCode}</span>
                 {r.watershedSlug ? (
-                  <span className="inline-flex items-center gap-1.5">
-                    <EntityIcon kind="watershed" size={14} className="shrink-0" />
-                    <Link href={`/watersheds/${r.watershedSlug}`}>{r.watershedName}</Link>
-                  </span>
-                ) : (
-                  '—'
-                )}
-              </td>
-              <td>{r.manager ?? '—'}</td>
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span className="inline-flex items-center gap-1">
+                      <EntityIcon kind="watershed" size={11} className="shrink-0" />
+                      <Link href={`/watersheds/${r.watershedSlug}`}>{r.watershedName}</Link>
+                    </span>
+                  </>
+                ) : null}
+                {r.manager ? (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span>{r.manager}</span>
+                  </>
+                ) : null}
+              </div>
               {showRate ? (
-                <td className="text-right tabular-nums">
-                  {rateMeta && rateMeta.rate != null ? (
-                    <div className="inline-flex items-center gap-2 min-w-[140px]">
-                      <div
-                        className="relative h-1.5 rounded-full bg-surface-container overflow-hidden flex-1"
-                        aria-label={`貯水率 ${(rateMeta.rate * 100).toFixed(1)}%`}
-                      >
-                        <div
-                          className="absolute inset-y-0 left-0 bg-primary"
-                          style={{ width: `${rateMeta.rate * 100}%` }}
-                        />
-                      </div>
-                      <span className="text-xs font-semibold w-12 text-right">
-                        {fmtPct(rateMeta.rate)}
-                      </span>
-                    </div>
-                  ) : (
-                    <span className="text-xs text-on-surface-variant">—</span>
-                  )}
-                </td>
+                <div className="mt-2">
+                  <RateBar rate={rateMeta?.rate ?? null} />
+                </div>
               ) : null}
-              <td className="text-right tabular-nums">{fmtCapacityMcm(r.totalCapacityM3)}</td>
-            </tr>
+              <div className="mt-2 text-xs text-on-surface-variant flex justify-between">
+                <span>総貯水容量</span>
+                <span className="text-on-surface tabular-nums">
+                  {fmtCapacityMcm(r.totalCapacityM3)}
+                </span>
+              </div>
+            </li>
           );
         })}
-      </tbody>
-    </table>
+      </ul>
+
+      {/* Desktop: classic table. */}
+      <div className="hidden md:block overflow-x-auto">
+        <table>
+          <thead>
+            <tr>
+              <th>ダム名</th>
+              <th>都道府県</th>
+              <th>水系</th>
+              <th>管理者</th>
+              {showRate ? <th className="text-right">貯水率</th> : null}
+              <th className="text-right">総貯水容量</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const rateMeta = rates && r.id != null ? rates.get(r.id.toString()) : undefined;
+              return (
+                <tr key={r.slug}>
+                  <td>
+                    <span className="inline-flex items-center gap-1.5">
+                      <EntityIcon kind="dam" size={14} className="text-primary shrink-0" />
+                      <Link href={`/dams/${r.slug}`}>{r.name}</Link>
+                    </span>
+                  </td>
+                  <td>{PREF_NAME.get(r.prefCode) ?? r.prefCode}</td>
+                  <td>
+                    {r.watershedSlug ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <EntityIcon kind="watershed" size={14} className="shrink-0" />
+                        <Link href={`/watersheds/${r.watershedSlug}`}>{r.watershedName}</Link>
+                      </span>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                  <td>{r.manager ?? '—'}</td>
+                  {showRate ? (
+                    <td className="text-right tabular-nums">
+                      <RateBar rate={rateMeta?.rate ?? null} />
+                    </td>
+                  ) : null}
+                  <td className="text-right tabular-nums">
+                    {fmtCapacityMcm(r.totalCapacityM3)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
