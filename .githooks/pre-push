@@ -1,0 +1,12 @@
+#!/bin/sh
+# pre-push: run unit tests across apps + packages. E2E (Playwright) is
+# excluded — too slow for a push hook; runs in CI / on demand only.
+#
+# Wired via git config core.hooksPath .githooks (set by `bun run prepare`
+# at install time). Bypass with --no-verify when intentionally pushing
+# WIP commits.
+
+set -e
+
+echo "[pre-push] bun test"
+exec bun test apps packages

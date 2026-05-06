@@ -1,0 +1,23 @@
+#!/bin/sh
+# pre-commit: run Biome on staged files only.
+# Wired via git config core.hooksPath .githooks (set by `bun run prepare`
+# at install time).
+#
+# Skip when there are no staged JS/TS/JSON files (e.g. doc-only commits).
+
+set -e
+
+# Collect staged files biome cares about. --diff-filter=ACMR excludes
+# deletions; --no-renames is implied for our purposes.
+staged=$(git diff --cached --name-only --diff-filter=ACMR \
+  -- '*.ts' '*.tsx' '*.js' '*.jsx' '*.json' '*.jsonc')
+
+if [ -z "${staged}" ]; then
+  exit 0
+fi
+
+echo "[pre-commit] biome check on ${staged}"
+# `biome check --staged` is the supported way to lint only staged files in
+# Biome 1.9+. It reads from the index, so unstaged edits in the same files
+# don't bias the result.
+exec bun x biome check --staged --no-errors-on-unmatched
