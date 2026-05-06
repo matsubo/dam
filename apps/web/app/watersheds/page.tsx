@@ -58,58 +58,115 @@ export default async function WatershedsPage() {
         {totals.second} · その他 {totals.other}）
         {emptyCount > 0 ? `、うち ${emptyCount} 水系はダム登録なし` : ''}。
       </p>
-      <table>
-        <thead>
-          <tr>
-            <th>水系</th>
-            <th>区分</th>
-            <th className="text-right">ダム数</th>
-            <th className="text-right">貯水率</th>
-          </tr>
-        </thead>
-        <tbody>
-          {ordered.map((w) => {
-            const rate = rates.get(w.id.toString()) ?? null;
-            return (
-              <tr key={w.slug}>
-                <td>
-                  <span className="inline-flex items-center gap-1.5">
-                    <EntityIcon kind="watershed" size={14} className="shrink-0" />
-                    <Link href={`/watersheds/${w.slug}`}>{w.name}</Link>
-                  </span>
-                </td>
-                <td>{w.kind === 'first' ? '一級' : w.kind === 'second' ? '二級' : 'その他'}</td>
-                <td className="text-right tabular-nums">
-                  <span className="inline-flex items-center gap-1 justify-end">
-                    <EntityIcon kind="dam" size={12} className="text-primary shrink-0" />
-                    {w.damCount}
-                  </span>
-                </td>
-                <td className="text-right tabular-nums">
-                  {rate != null ? (
-                    <div className="inline-flex items-center gap-2 min-w-[140px]">
+      {/* Mobile: stacked cards. */}
+      <ul className="md:hidden space-y-2">
+        {ordered.map((w) => {
+          const rate = rates.get(w.id.toString()) ?? null;
+          const kindLabel =
+            w.kind === 'first' ? '一級' : w.kind === 'second' ? '二級' : 'その他';
+          return (
+            <li
+              key={w.slug}
+              className="bg-white border border-outline-variant rounded-xl p-3"
+            >
+              <Link
+                href={`/watersheds/${w.slug}`}
+                className="font-display font-semibold inline-flex items-center gap-1.5 text-on-surface no-underline hover:text-primary"
+              >
+                <EntityIcon kind="watershed" size={14} className="shrink-0" />
+                {w.name}
+              </Link>
+              <div className="text-xs text-on-surface-variant mt-1 flex flex-wrap items-center gap-x-2">
+                <span>{kindLabel}水系</span>
+                <span aria-hidden="true">·</span>
+                <span className="inline-flex items-center gap-1">
+                  <EntityIcon kind="dam" size={11} className="text-primary shrink-0" />
+                  {w.damCount} 基
+                </span>
+              </div>
+              <div className="mt-2 flex items-center gap-3">
+                <span className="text-[11px] text-on-surface-variant w-12 shrink-0">
+                  貯水率
+                </span>
+                {rate != null ? (
+                  <>
+                    <div
+                      className="relative h-1.5 rounded-full bg-surface-container overflow-hidden flex-1"
+                      aria-label={`貯水率 ${(rate * 100).toFixed(1)}%`}
+                    >
                       <div
-                        className="relative h-1.5 rounded-full bg-surface-container overflow-hidden flex-1"
-                        aria-label={`貯水率 ${(rate * 100).toFixed(1)}%`}
-                      >
-                        <div
-                          className="absolute inset-y-0 left-0 bg-primary"
-                          style={{ width: `${rate * 100}%` }}
-                        />
-                      </div>
-                      <span className="text-xs font-semibold w-12 text-right">
-                        {fmtPct(rate)}
-                      </span>
+                        className="absolute inset-y-0 left-0 bg-primary"
+                        style={{ width: `${rate * 100}%` }}
+                      />
                     </div>
-                  ) : (
-                    <span className="text-xs text-on-surface-variant">—</span>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                    <span className="text-xs font-semibold w-12 text-right tabular-nums">
+                      {fmtPct(rate)}
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-xs text-on-surface-variant">—</span>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+
+      {/* Desktop: classic table. */}
+      <div className="hidden md:block overflow-x-auto">
+        <table>
+          <thead>
+            <tr>
+              <th>水系</th>
+              <th>区分</th>
+              <th className="text-right">ダム数</th>
+              <th className="text-right">貯水率</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ordered.map((w) => {
+              const rate = rates.get(w.id.toString()) ?? null;
+              return (
+                <tr key={w.slug}>
+                  <td>
+                    <span className="inline-flex items-center gap-1.5">
+                      <EntityIcon kind="watershed" size={14} className="shrink-0" />
+                      <Link href={`/watersheds/${w.slug}`}>{w.name}</Link>
+                    </span>
+                  </td>
+                  <td>{w.kind === 'first' ? '一級' : w.kind === 'second' ? '二級' : 'その他'}</td>
+                  <td className="text-right tabular-nums">
+                    <span className="inline-flex items-center gap-1 justify-end">
+                      <EntityIcon kind="dam" size={12} className="text-primary shrink-0" />
+                      {w.damCount}
+                    </span>
+                  </td>
+                  <td className="text-right tabular-nums">
+                    {rate != null ? (
+                      <div className="inline-flex items-center gap-2 min-w-[140px]">
+                        <div
+                          className="relative h-1.5 rounded-full bg-surface-container overflow-hidden flex-1"
+                          aria-label={`貯水率 ${(rate * 100).toFixed(1)}%`}
+                        >
+                          <div
+                            className="absolute inset-y-0 left-0 bg-primary"
+                            style={{ width: `${rate * 100}%` }}
+                          />
+                        </div>
+                        <span className="text-xs font-semibold w-12 text-right">
+                          {fmtPct(rate)}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-on-surface-variant">—</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
