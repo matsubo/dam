@@ -18,6 +18,14 @@ export const CRONTAB = `
 # real observations on its own.
 0 * * * * ingest:kasenbosai
 
+# Tokyo waterworks daily reservoir status — open data, real values for the
+# 13 dams supplying Tokyo's drinking water (Tonegawa 9 + Arakawa 4 +
+# Tamagawa 2). Page updates daily; check at 03:00 UTC = 12:00 JST and again
+# at 09:00 UTC = 18:00 JST so a same-day refresh after the morning publish
+# is captured. Idempotent — repeated runs UPSERT on (dam_id, observed_at,
+# source_id) where observed_at is snapped to today 00:00 JST.
+0 3,9 * * * ingest:tokyo-waterworks
+
 # Suimon backfill remains opt-in only. Enqueue ad-hoc jobs via add_job
 # rather than running it on a fixed cron, so we don't keep hammering the
 # upstream when there's nothing new to import.

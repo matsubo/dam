@@ -4,6 +4,7 @@ import { CRONTAB } from './crontab.ts';
 import backfillEnqueue from './tasks/backfill_suimon_enqueue.ts';
 import backfillRun from './tasks/backfill_suimon_run.ts';
 import ingestKasenbosai from './tasks/ingest_kasenbosai.ts';
+import ingestTokyoWaterworks from './tasks/ingest_tokyo_waterworks.ts';
 import match from './tasks/master_match.ts';
 import refreshDamnet from './tasks/master_refresh_damnet.ts';
 import refreshNdi from './tasks/master_refresh_ndi.ts';
@@ -27,6 +28,7 @@ async function main(): Promise<void> {
       'master:refresh:damnet': refreshDamnet,
       'master:match': match,
       'ingest:kasenbosai': ingestKasenbosai,
+      'ingest:tokyo-waterworks': ingestTokyoWaterworks,
       'backfill:suimon:enqueue': backfillEnqueue,
       'backfill:suimon:run': backfillRun,
       'quality:recompute': qualityRecompute,
