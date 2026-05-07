@@ -163,6 +163,7 @@ if [ "${kick}" = "1" ]; then
   run_kick_step "enqueue_ndi"     "SELECT graphile_worker.add_job('master:refresh:ndi',    '{}'::json);"
   run_kick_step "enqueue_damnet"  "SELECT graphile_worker.add_job('master:refresh:damnet', '{}'::json);"
   run_kick_step "enqueue_ingest"  "SELECT graphile_worker.add_job('ingest:kasenbosai',     '{}'::json);"
+  run_kick_step "enqueue_tokyo"   "SELECT graphile_worker.add_job('ingest:tokyo-waterworks','{}'::json);"
 
   obs=$(count_or_empty "SELECT COUNT(*) FROM observations")
   log "[bootstrap] observations.count after kick = '${obs}'"
