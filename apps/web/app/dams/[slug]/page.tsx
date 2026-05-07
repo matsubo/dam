@@ -9,7 +9,6 @@ import {
 } from '@dam/db/repo/dams';
 import { aggregateWatershed, findWatershedBySlug } from '@dam/db/repo/watersheds';
 import { ExternalLink } from 'lucide-react';
-import { EntityIcon } from '../../../components/entity-icon.tsx';
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -17,9 +16,11 @@ import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '../../../components/breadcrumbs.tsx';
 import { DamCard } from '../../../components/dam-card.tsx';
 import { DamLocationMap } from '../../../components/dam-location-map.tsx';
+import { EntityIcon } from '../../../components/entity-icon.tsx';
 import { ObservationChart } from '../../../components/observation-chart.tsx';
 import { QualityBadge } from '../../../components/quality-badge.tsx';
 import { ReservoirGauge } from '../../../components/reservoir-gauge.tsx';
+import { SourceBadge } from '../../../components/source-badge.tsx';
 import { StorageChangeStrip } from '../../../components/storage-change-strip.tsx';
 import { fmtCapacityMcm, fmtDate, fmtN, fmtPct } from '../../../lib/format.ts';
 import { imageCredit } from '../../../lib/image-credit.ts';
@@ -165,44 +166,47 @@ export default async function DamDetail({ params }: PageProps) {
         <header className="flex items-baseline justify-between mb-3">
           <h2 className="text-lg font-semibold">最新観測値</h2>
           {latest && (
-            <span className="text-sm text-muted">
-              {fmtDate(latest.observedAt)} · {latest.sourceId}{' '}
+            <span className="text-sm text-muted inline-flex items-baseline gap-1.5">
+              <span>{fmtDate(latest.observedAt)}</span>
+              <SourceBadge sourceId={latest.sourceId} />
               <QualityBadge flag={latest.qualityFlag} />
             </span>
           )}
         </header>
-        {latest ? (() => {
-          // Denominator policy: 利水容量 only. When the dam has no
-          // active capacity (~51% of all dams — Damnet doesn't list
-          // them), the rate isn't shown rather than mislabelling a
-          // total-capacity ratio (which is what observations.storage_rate
-          // typically stores upstream) as 貯水率.
-          const cap = d.activeCapacityM3 ? Number(d.activeCapacityM3) : null;
-          const vol = latest.storageVolumeM3 ? Number(latest.storageVolumeM3) : null;
-          const rate = cap && cap > 0 && vol != null ? Math.min(1, vol / cap) : null;
-          return (
-          <>
-          <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
-            <div className="shrink-0 flex flex-col items-center">
-              <ReservoirGauge rate={rate} size={180} />
-              <div className="text-xs text-muted mt-1">貯水率</div>
-            </div>
-            <dl className="grid grid-cols-2 md:grid-cols-2 gap-4 text-sm flex-1">
-              <Pair label="貯水量" value={fmtCapacityMcm(latest.storageVolumeM3)} />
-              <Pair label="貯水率" value={fmtPct(rate)} />
-              <Pair
-                label="流入量"
-                value={latest.inflowM3s ? `${fmtN(latest.inflowM3s)} m³/s` : '—'}
-              />
-              <Pair
-                label="放流量"
-                value={latest.outflowM3s ? `${fmtN(latest.outflowM3s)} m³/s` : '—'}
-              />
-            </dl>
-          </div>
-          </>
-          );
-        })() : (
+        {latest ? (
+          (() => {
+            // Denominator policy: 利水容量 only. When the dam has no
+            // active capacity (~51% of all dams — Damnet doesn't list
+            // them), the rate isn't shown rather than mislabelling a
+            // total-capacity ratio (which is what observations.storage_rate
+            // typically stores upstream) as 貯水率.
+            const cap = d.activeCapacityM3 ? Number(d.activeCapacityM3) : null;
+            const vol = latest.storageVolumeM3 ? Number(latest.storageVolumeM3) : null;
+            const rate = cap && cap > 0 && vol != null ? Math.min(1, vol / cap) : null;
+            return (
+              <>
+                <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
+                  <div className="shrink-0 flex flex-col items-center">
+                    <ReservoirGauge rate={rate} size={180} />
+                    <div className="text-xs text-muted mt-1">貯水率</div>
+                  </div>
+                  <dl className="grid grid-cols-2 md:grid-cols-2 gap-4 text-sm flex-1">
+                    <Pair label="貯水量" value={fmtCapacityMcm(latest.storageVolumeM3)} />
+                    <Pair label="貯水率" value={fmtPct(rate)} />
+                    <Pair
+                      label="流入量"
+                      value={latest.inflowM3s ? `${fmtN(latest.inflowM3s)} m³/s` : '—'}
+                    />
+                    <Pair
+                      label="放流量"
+                      value={latest.outflowM3s ? `${fmtN(latest.outflowM3s)} m³/s` : '—'}
+                    />
+                  </dl>
+                </div>
+              </>
+            );
+          })()
+        ) : (
           <p className="text-muted">まだ観測値がありません。</p>
         )}
       </section>
@@ -280,11 +284,7 @@ export default async function DamDetail({ params }: PageProps) {
               <p className="text-sm text-muted mb-3">同じ{watershed.name}の他のダム</p>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {otherInWatershed.map((n) => (
-                  <DamCard
-                    key={n.slug}
-                    d={n}
-                    rate={otherRates.get(n.id.toString()) ?? null}
-                  />
+                  <DamCard key={n.slug} d={n} rate={otherRates.get(n.id.toString()) ?? null} />
                 ))}
               </div>
               <p className="mt-3 text-sm">
@@ -305,8 +305,7 @@ export default async function DamDetail({ params }: PageProps) {
           <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {nearby.map((n) => {
               const km = n.distanceM / 1000;
-              const distLabel =
-                km >= 10 ? `${km.toFixed(1)} km` : `${km.toFixed(2)} km`;
+              const distLabel = km >= 10 ? `${km.toFixed(1)} km` : `${km.toFixed(2)} km`;
               const bearing = bearingFromRadians(n.bearingRad);
               const activeCap = n.activeCapacityM3 ? Number(n.activeCapacityM3) : null;
               const latest = n.latestStorageM3 ? Number(n.latestStorageM3) : null;
@@ -370,7 +369,7 @@ export default async function DamDetail({ params }: PageProps) {
 // PostGIS ST_Azimuth returns 0 = north, π/2 = east. Convert to degrees and
 // snap to 45° buckets.
 function bearingFromRadians(rad: number): { label: string; arrow: string } {
-  const deg = (((rad * 180) / Math.PI) % 360 + 360) % 360;
+  const deg = ((((rad * 180) / Math.PI) % 360) + 360) % 360;
   const idx = Math.round(deg / 45) % 8;
   const labels = ['北', '北東', '東', '南東', '南', '南西', '西', '北西'] as const;
   const arrows = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'] as const;

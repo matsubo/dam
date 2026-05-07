@@ -1,5 +1,5 @@
 import { sql } from '@dam/db/client';
-import { listDams, type DamListItem } from '@dam/db/repo/dams';
+import { type DamListItem, listDams } from '@dam/db/repo/dams';
 import { nationalStorageChange } from '@dam/db/repo/watersheds';
 import {
   ArrowRight,
@@ -44,6 +44,8 @@ interface HomeStats {
   /** Latest storage summed across the rate-able subset only — pairs with activeCapacityM3 for rate. */
   rateableStorageM3: string | null;
   rateableDamCount: bigint;
+  /** Distinct dams that have at least one non-synthetic observation in the last 30 days. */
+  realDamCount: bigint;
   oldestObs: Date | null;
 }
 
@@ -69,6 +71,10 @@ async function homeStats(): Promise<HomeStats> {
           AND d.active_capacity_m3 IS NOT NULL
         ORDER BY o.dam_id, o.observed_at DESC
       ) latest)                                                                          AS "rateableStorageM3",
+      (SELECT COUNT(DISTINCT dam_id)::BIGINT
+         FROM observations
+         WHERE observed_at > NOW() - INTERVAL '30 days'
+           AND source_id <> 'synthetic')                                                  AS "realDamCount",
       (SELECT MIN(observed_at)      FROM observations)                                   AS "oldestObs"
   `;
   const row = rows[0];
@@ -133,6 +139,7 @@ const cachedHomeStats = unstable_cache(
       activeCapacityM3: s.activeCapacityM3,
       rateableStorageM3: s.rateableStorageM3,
       rateableDamCount: Number(s.rateableDamCount),
+      realDamCount: Number(s.realDamCount),
       oldestObsIso: s.oldestObs?.toISOString() ?? null,
     };
   },
@@ -219,7 +226,11 @@ export default async function Home() {
     isAccessibleForFree: true,
     inLanguage: ['ja', 'en'],
     keywords: ['dam', 'reservoir', 'Japan', 'storage volume', 'hydrology', 'open data'],
-    spatialCoverage: { '@type': 'Place', name: 'Japan', geo: { '@type': 'GeoShape', box: '24 122 46 146' } },
+    spatialCoverage: {
+      '@type': 'Place',
+      name: 'Japan',
+      geo: { '@type': 'GeoShape', box: '24 122 46 146' },
+    },
     distribution: [
       {
         '@type': 'DataDownload',
@@ -268,22 +279,19 @@ export default async function Home() {
   };
   return (
     <>
-      {/* biome-ignore lint/security/noDangerouslySetInnerHtml: trusted JSON-LD */}
       <script
         type="application/ld+json"
-        // eslint-disable-next-line react/no-danger
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: trusted JSON-LD
         dangerouslySetInnerHTML={{ __html: JSON.stringify(datasetLd) }}
       />
-      {/* biome-ignore lint/security/noDangerouslySetInnerHtml: trusted JSON-LD */}
       <script
         type="application/ld+json"
-        // eslint-disable-next-line react/no-danger
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: trusted JSON-LD
         dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteLd) }}
       />
-      {/* biome-ignore lint/security/noDangerouslySetInnerHtml: trusted JSON-LD */}
       <script
         type="application/ld+json"
-        // eslint-disable-next-line react/no-danger
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: trusted JSON-LD
         dangerouslySetInnerHTML={{ __html: JSON.stringify(orgLd) }}
       />
       {/* Hero */}
@@ -301,8 +309,7 @@ export default async function Home() {
               <span className="text-primary">誰にでも開かれた</span>形で。
             </h1>
             <p className="text-body-lg text-on-surface-variant mb-8 max-w-xl">
-              全国 {fmt(s.damCount)} 基のダムを網羅。諸元データと
-              1 時間〜月次粒度の貯水量履歴を、
+              全国 {fmt(s.damCount)} 基のダムを網羅。諸元データと 1 時間〜月次粒度の貯水量履歴を、
               研究者・防災担当・開発者のために
               <strong className="text-on-surface">無償で公開</strong>
               しています (リアルタイム値は一次情報源を併用してください)。
@@ -349,7 +356,7 @@ export default async function Home() {
                     LIVE · Reservoir Registry
                   </div>
                   <div className="font-code text-[12px] text-primary-fixed-dim">
-                    // dam.teraren.com/api/v1/dams.json
+                    {'// dam.teraren.com/api/v1/dams.json'}
                   </div>
                 </div>
                 <div className="space-y-5">
@@ -442,9 +449,7 @@ export default async function Home() {
             </div>
             {change.current ? (
               <div className="mt-4 pt-4 border-t border-outline-variant">
-                <div className="text-xs text-on-surface-variant mb-2">
-                  全国合計貯水量の変化
-                </div>
+                <div className="text-xs text-on-surface-variant mb-2">全国合計貯水量の変化</div>
                 <StorageChangeStrip change={change} />
               </div>
             ) : null}
@@ -458,7 +463,11 @@ export default async function Home() {
               sub={yearsCovered ? `直近 ${yearsCovered} 年分` : ''}
             />
             <Stat label="直近24時間の観測" value={fmt(s.obsLast24h)} />
-            <Stat label="全国合計貯水容量" value={fmtCapacityMcm(s.totalCapacityM3)} sub="登録ダム合計(総容量)" />
+            <Stat
+              label="全国合計貯水容量"
+              value={fmtCapacityMcm(s.totalCapacityM3)}
+              sub="登録ダム合計(総容量)"
+            />
             <Stat
               label="現在の合計貯水量"
               value={fmtCapacityMcm(s.rateableStorageM3)}
@@ -468,6 +477,11 @@ export default async function Home() {
               label="観測カバー期間"
               value={yearsCovered ? `${yearsCovered} 年` : '—'}
               sub="最古〜現在"
+            />
+            <Stat
+              label="実測データ"
+              value={fmt(s.realDamCount)}
+              sub={`基（直近 30 日 / 全 ${fmt(s.damCount)} 基中）`}
             />
           </div>
         </div>
@@ -485,13 +499,7 @@ export default async function Home() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {latest.items.map((d) => {
               const series = sparklines.get(d.id.toString());
-              return (
-                <DamCard
-                  key={d.slug}
-                  d={d}
-                  {...(series ? { sparkline: series } : {})}
-                />
-              );
+              return <DamCard key={d.slug} d={d} {...(series ? { sparkline: series } : {})} />;
             })}
           </div>
           <p className="mt-6">
@@ -534,9 +542,8 @@ export default async function Home() {
             <div className="border-l-4 border-primary pl-6">
               <h2 className="font-display text-h2 font-semibold mb-3">無料 API でデータ連携。</h2>
               <p className="text-body-md text-on-surface-variant">
-                Google
-                サインインで発行できる無料の API キー (600 req/min · 100,000
-                req/day) で、クリーンな RESTful エンドポイントから構造化された JSON
+                Google サインインで発行できる無料の API キー (600 req/min · 100,000 req/day)
+                で、クリーンな RESTful エンドポイントから構造化された JSON
                 を取得。分析パイプラインにも、Web アプリにもすぐ投入できます。
               </p>
             </div>
@@ -628,6 +635,7 @@ function RateBar({ rate }: { rate: number | null }) {
     <div
       className="relative h-3 rounded-full bg-surface-container overflow-hidden"
       role="progressbar"
+      tabIndex={0}
       aria-label="全国貯水率"
       aria-valuenow={Math.round(pct)}
       aria-valuemin={0}
