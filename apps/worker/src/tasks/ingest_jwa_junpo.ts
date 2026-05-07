@@ -164,12 +164,12 @@ export function parseJwaJunpoHtml(html: string): { reportDate: Date | null; rows
   return { reportDate, rows: out };
 }
 
-interface DamMatch {
+export interface DamMatch {
   jwaName: string;
   damId: bigint;
 }
 
-async function ensureSourcePriority(): Promise<void> {
+export async function ensureSourcePriority(): Promise<void> {
   await sql`
     INSERT INTO source_priorities (source_id, priority, description, active)
     VALUES ('jwa-junpo', 290,
@@ -189,7 +189,7 @@ async function ensureSourcePriority(): Promise<void> {
  * over 「元」 to pick the currently-operating dam when redevelopment has
  * left both versions in the master.
  */
-async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
+export async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
   const matches: DamMatch[] = [];
   for (const m of NAME_MAP) {
     const rows = await sql<{ id: bigint; name: string }[]>`
