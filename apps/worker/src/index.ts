@@ -1,6 +1,7 @@
 // apps/worker/src/index.ts
 import { run } from 'graphile-worker';
 import { CRONTAB } from './crontab.ts';
+import backfillJwaJunpo from './tasks/backfill_jwa_junpo.ts';
 import backfillEnqueue from './tasks/backfill_suimon_enqueue.ts';
 import backfillRun from './tasks/backfill_suimon_run.ts';
 import ingestJwaJunpo from './tasks/ingest_jwa_junpo.ts';
@@ -33,6 +34,7 @@ async function main(): Promise<void> {
       'ingest:jwa-junpo': ingestJwaJunpo,
       'backfill:suimon:enqueue': backfillEnqueue,
       'backfill:suimon:run': backfillRun,
+      'backfill:jwa-junpo': backfillJwaJunpo,
       'quality:recompute': qualityRecompute,
       'images:refresh:damnet': refreshDamImagesDamnet,
       'images:refresh:wikipedia': refreshDamImagesWikipedia,
