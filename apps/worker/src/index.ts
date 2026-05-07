@@ -3,6 +3,7 @@ import { run } from 'graphile-worker';
 import { CRONTAB } from './crontab.ts';
 import backfillEnqueue from './tasks/backfill_suimon_enqueue.ts';
 import backfillRun from './tasks/backfill_suimon_run.ts';
+import ingestJwaJunpo from './tasks/ingest_jwa_junpo.ts';
 import ingestKasenbosai from './tasks/ingest_kasenbosai.ts';
 import ingestTokyoWaterworks from './tasks/ingest_tokyo_waterworks.ts';
 import match from './tasks/master_match.ts';
@@ -29,6 +30,7 @@ async function main(): Promise<void> {
       'master:match': match,
       'ingest:kasenbosai': ingestKasenbosai,
       'ingest:tokyo-waterworks': ingestTokyoWaterworks,
+      'ingest:jwa-junpo': ingestJwaJunpo,
       'backfill:suimon:enqueue': backfillEnqueue,
       'backfill:suimon:run': backfillRun,
       'quality:recompute': qualityRecompute,

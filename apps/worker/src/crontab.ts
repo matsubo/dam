@@ -26,6 +26,13 @@ export const CRONTAB = `
 # source_id) where observed_at is snapped to today 00:00 JST.
 0 3,9 * * * ingest:tokyo-waterworks
 
+# JWA 旬報 — 21 dams across 7 major water systems (Tonegawa, Arakawa, Kisogawa,
+# Toyokawa, Yodogawa, Yoshinogawa, Chikugogawa). Published every 10 days
+# (1st/11th/21st of each month JST). Daily polling at 04:00 UTC = 13:00 JST
+# is cheap (idempotent UPSERT on the report-date timestamp) and catches a
+# new publication within ~24 h regardless of which exact day it lands on.
+0 4 * * * ingest:jwa-junpo
+
 # Suimon backfill remains opt-in only. Enqueue ad-hoc jobs via add_job
 # rather than running it on a fixed cron, so we don't keep hammering the
 # upstream when there's nothing new to import.
