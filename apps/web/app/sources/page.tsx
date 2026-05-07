@@ -42,8 +42,15 @@ interface ObsCadenceRow {
   distinct_dams: bigint;
 }
 
+interface ObsBySourceRow {
+  source_id: string;
+  rows_30d: bigint;
+  distinct_dams_30d: bigint;
+  latest_observed_at: Date | null;
+}
+
 async function loadAll() {
-  const [sources, coverage, cadence, bucketRows, redevRows] = await Promise.all([
+  const [sources, coverage, cadence, bucketRows, redevRows, obsBySource] = await Promise.all([
     sql<SourceRow[]>`
       SELECT sp.source_id, sp.description, sp.priority, sp.active,
              lf.last_fetched_at, lf.last_status
@@ -100,13 +107,27 @@ async function loadAll() {
       FROM dams
       WHERE name ~ '[（(](?:再|元|新)[）)]'
     `,
+    sql<ObsBySourceRow[]>`
+      SELECT
+        source_id,
+        COUNT(*)::BIGINT                            AS rows_30d,
+        COUNT(DISTINCT dam_id)::BIGINT              AS distinct_dams_30d,
+        MAX(observed_at)                            AS latest_observed_at
+      FROM observations
+      WHERE observed_at > NOW() - INTERVAL '30 days'
+      GROUP BY source_id
+    `,
   ]);
+  const cov = coverage[0];
+  const cad = cadence[0];
+  if (!cov || !cad) throw new Error('sources/loadAll: aggregate query returned no rows');
   return {
     sources,
-    coverage: coverage[0]!,
-    cadence: cadence[0]!,
+    coverage: cov,
+    cadence: cad,
     buckets: bucketRows,
     redevCount: Number(redevRows[0]?.count ?? 0n),
+    obsBySource: new Map(obsBySource.map((r) => [r.source_id, r])),
   };
 }
 
@@ -140,6 +161,24 @@ const SOURCE_DETAIL: Record<
   },
   // 川の防災情報 / 水文水質データベース は **取り込まない方針**。
   // 当サイトは公的サイトと役割を分け、リアルタイム値は提供せず履歴データに集中。
+  'tokyo-waterworks': {
+    upstream: '東京都水道局 水源情報 (waterworks.metro.tokyo.lg.jp/suigen/suigen.html)',
+    license: '東京都オープンデータ (出典明示で再配布可)',
+    cadence: '日次 (毎日 12:00 / 18:00 JST に取得)',
+    what: '東京都の水源 15 ダム (利根川・荒川・多摩川 水系) の貯水量 (万m³) と貯水率 (%)。前日からの増減量。',
+  },
+  'jwa-junpo': {
+    upstream: '水資源機構 旬報 (water.go.jp/honsya/honsya/suigen/junpo/index.html)',
+    license: '統計法に基づく公的統計 (出典明示で再配布可)',
+    cadence: '10 日毎 (毎月 1 / 11 / 21 日 JST 公表; 取得は日次でポーリング)',
+    what: '水資源機構が管理する全国 26 ダムの利水容量・貯水量 (千m³)・貯水率 (現在 / 平年 / 平年比)。',
+  },
+  synthetic: {
+    upstream: '当サイトの内部生成 (シード値)',
+    license: 'CC0 (出典明示は任意)',
+    cadence: '不変 (一括投入後の更新なし)',
+    what: '上流フィードが未接続のダム向けにグラフ表示用の補完値を生成。実観測値ではない旨を UI で明示。',
+  },
 };
 
 function pct(part: bigint | number, total: bigint | number): string {
@@ -180,12 +219,14 @@ export default async function SourcesPage() {
                 <th>更新頻度</th>
                 <th>ライセンス</th>
                 <th className="text-right">優先度</th>
+                <th className="text-right">直近30日</th>
                 <th>最終取得</th>
               </tr>
             </thead>
             <tbody>
               {data.sources.map((s) => {
                 const detail = SOURCE_DETAIL[s.source_id];
+                const obs = data.obsBySource.get(s.source_id);
                 return (
                   <tr key={s.source_id}>
                     <td>
@@ -196,14 +237,26 @@ export default async function SourcesPage() {
                         </div>
                       ) : null}
                     </td>
-                    <td className="text-xs max-w-md">
-                      {detail?.what ?? s.description ?? '—'}
-                    </td>
+                    <td className="text-xs max-w-md">{detail?.what ?? s.description ?? '—'}</td>
                     <td className="text-xs">{detail?.cadence ?? '—'}</td>
                     <td className="text-xs">{detail?.license ?? '—'}</td>
                     <td className="text-right tabular-nums">{s.priority}</td>
+                    <td className="text-right text-xs tabular-nums">
+                      {obs ? (
+                        <>
+                          <div>{fmt(obs.rows_30d)} 件</div>
+                          <div className="text-[10px] text-on-surface-variant">
+                            {fmt(obs.distinct_dams_30d)} 基
+                          </div>
+                        </>
+                      ) : (
+                        <span className="text-on-surface-variant">—</span>
+                      )}
+                    </td>
                     <td className="text-xs text-on-surface-variant">
-                      {fmtDate(s.last_fetched_at)}
+                      {obs?.latest_observed_at
+                        ? fmtDate(obs.latest_observed_at)
+                        : fmtDate(s.last_fetched_at)}
                       {s.last_status ? (
                         <span className="block text-[10px]">{s.last_status}</span>
                       ) : null}
@@ -223,6 +276,7 @@ export default async function SourcesPage() {
                     <td className="text-xs">{d.cadence}</td>
                     <td className="text-xs">{d.license}</td>
                     <td className="text-right tabular-nums text-on-surface-variant">—</td>
+                    <td className="text-right text-xs text-on-surface-variant">—</td>
                     <td className="text-xs text-on-surface-variant">未取得</td>
                   </tr>
                 ))}
@@ -235,8 +289,8 @@ export default async function SourcesPage() {
       <section>
         <h2 className="text-xl font-semibold mb-3">2. ダム名寄せ (Damnet ↔ 国土数値情報)</h2>
         <p className="text-sm text-on-surface-variant mb-4 max-w-3xl">
-          土台は国土数値情報 (NDI) の {fmt(c.total)} 行のダムマスタ。これに対しダム便覧
-          (Damnet) の 2,600 件をぶつけて属性を埋めています。両者を結合する一意 ID は無いため、
+          土台は国土数値情報 (NDI) の {fmt(c.total)} 行のダムマスタ。これに対しダム便覧 (Damnet) の
+          2,600 件をぶつけて属性を埋めています。両者を結合する一意 ID は無いため、
           以下の手順でマッチさせています。
         </p>
         <ol className="list-decimal list-inside space-y-2 text-sm max-w-3xl">
@@ -245,20 +299,21 @@ export default async function SourcesPage() {
             <code className="text-xs bg-surface-variant px-1 rounded">
               NFKC → 「（再）/（元）/（新）」剥離 → 「ダム/貯水池/池」接尾辞剥離 → 小文字化
             </code>
-            。再開発前/後で別行になっている NDI 側のダム
-            ({fmt(data.redevCount)} 件 該当) を 1 つにまとめるための処理です。
+            。再開発前/後で別行になっている NDI 側のダム ({fmt(data.redevCount)} 件 該当) を 1
+            つにまとめるための処理です。
           </li>
           <li>
             <strong>キー生成</strong>:{' '}
             <code className="text-xs bg-surface-variant px-1 rounded">
               prefCode | normalizeName(name)
             </code>
-            。都道府県を必ず一致させることで、同名異所のダム (例: 同じ「中央ダム」が複数県に存在) の誤接続を防止。
+            。都道府県を必ず一致させることで、同名異所のダム (例: 同じ「中央ダム」が複数県に存在)
+            の誤接続を防止。
           </li>
           <li>
             <strong>多対 1 マッチ</strong>: NDI 側に同キーが複数行ある場合 (再/元 のペアなど) は、
-            Damnet ID は最初の 1 行にだけ付与し、属性 (利水容量・諸元) はグループ全行に
-            backfill します (Damnet の unique 制約に違反しないため)。
+            Damnet ID は最初の 1 行にだけ付与し、属性 (利水容量・諸元) はグループ全行に backfill
+            します (Damnet の unique 制約に違反しないため)。
           </li>
           <li>
             <strong>属性の上書きルール</strong>:{' '}
@@ -354,8 +409,8 @@ export default async function SourcesPage() {
         <h2 className="text-xl font-semibold mb-3">3. データ構造 (ER 図)</h2>
         <p className="text-sm text-on-surface-variant mb-4 max-w-3xl">
           中心は <strong>dams</strong> (マスタ) と <strong>observations</strong> (時系列)。
-          外部の生データ (raw_snapshots) は監査用に S3 へ保管し、解析後の値だけを
-          observations に書き戻す Lakehouse 風の構成です。
+          外部の生データ (raw_snapshots) は監査用に S3 へ保管し、解析後の値だけを observations
+          に書き戻す Lakehouse 風の構成です。
         </p>
         <div className="overflow-x-auto">
           <ErdSvg />
@@ -396,7 +451,12 @@ export default async function SourcesPage() {
                 src="Damnet"
                 rate={pct(c.with_kana, c.total)}
               />
-              <ColumnRow col="pref_code" desc="JIS 都道府県コード (01〜47)" src="NDI" rate="100 %" />
+              <ColumnRow
+                col="pref_code"
+                desc="JIS 都道府県コード (01〜47)"
+                src="NDI"
+                rate="100 %"
+              />
               <ColumnRow
                 col="location"
                 desc="緯度経度 (PostGIS geography Point, EPSG:4326)"
@@ -433,12 +493,7 @@ export default async function SourcesPage() {
                 src="NDI / Damnet"
                 rate={pct(c.with_height, c.total)}
               />
-              <ColumnRow
-                col="total_capacity_m3"
-                desc="総貯水容量"
-                src="NDI"
-                rate="100 %"
-              />
+              <ColumnRow col="total_capacity_m3" desc="総貯水容量" src="NDI" rate="100 %" />
               <ColumnRow
                 col="active_capacity_m3"
                 desc="利水容量 = 貯水率の分母として採用"
@@ -490,8 +545,8 @@ export default async function SourcesPage() {
       <section>
         <h2 className="text-xl font-semibold mb-3">5. 欠損データの分布</h2>
         <p className="text-sm text-on-surface-variant mb-4 max-w-3xl">
-          利水容量を例に、容量帯ごとの欠落率を示します。大規模ダムほどカバレッジが高く、
-          10万 m³ 未満の小規模ダム (農業用ため池, 砂防ダム等) で Damnet 未収録が顕著です。
+          利水容量を例に、容量帯ごとの欠落率を示します。大規模ダムほどカバレッジが高く、 10万 m³
+          未満の小規模ダム (農業用ため池, 砂防ダム等) で Damnet 未収録が顕著です。
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm max-w-2xl">
@@ -519,8 +574,8 @@ export default async function SourcesPage() {
           欠落の主因: ① Damnet 未収録 (主に 10 万 m³ 未満の小規模ダム), ②
           名寄せできなかった同名・別字ゆれ (
           <code className="text-xs bg-surface-variant px-1 rounded">match_review</code>{' '}
-          に堆積)。再開発バリアント
-          (<code className="text-xs bg-surface-variant px-1 rounded">（再）/（元）</code>) は
+          に堆積)。再開発バリアント (
+          <code className="text-xs bg-surface-variant px-1 rounded">（再）/（元）</code>) は
           名寄せ時に統合済み。
         </p>
       </section>
@@ -560,25 +615,23 @@ export default async function SourcesPage() {
             を自動更新。グラフ・統計はこの集計を読みます。
           </li>
           <li>
-            <strong>retention</strong>: 原始データは無期限保持 (容量効率は Timescale の
-            列圧縮)。S3 上の生スナップショット (raw_snapshots) も無期限。
+            <strong>retention</strong>: 原始データは無期限保持 (容量効率は Timescale の 列圧縮)。S3
+            上の生スナップショット (raw_snapshots) も無期限。
           </li>
           <li>
             <strong>品質フラグ</strong>:{' '}
-            <code className="text-xs bg-surface-variant px-1 rounded">quality_flag</code>{' '}
-            で「正常 / 推定 / 観測停止 / 異常値」を区別。利用者は
+            <code className="text-xs bg-surface-variant px-1 rounded">quality_flag</code> で「正常 /
+            推定 / 観測停止 / 異常値」を区別。利用者は
             <code className="text-xs bg-surface-variant px-1 rounded">quality_flag = 'ok'</code>{' '}
             のみで分析するのが安全。
           </li>
           <li className="text-amber-700">
-            <strong>提供範囲</strong>:
-            本サービスは{' '}
-            <strong>履歴データに特化</strong> しており、現在時刻の値 (リアルタイム)
-            は再配信していません。最新値が必要な場合は{' '}
+            <strong>提供範囲</strong>: 本サービスは <strong>履歴データに特化</strong>{' '}
+            しており、現在時刻の値 (リアルタイム) は再配信していません。最新値が必要な場合は{' '}
             <a
               href="https://www.river.go.jp/"
               target="_blank"
-              rel="noopener"
+              rel="noreferrer noopener"
               className="text-primary hover:underline"
             >
               川の防災情報
@@ -587,7 +640,6 @@ export default async function SourcesPage() {
           </li>
         </ul>
       </section>
-
     </div>
   );
 }
@@ -762,29 +814,14 @@ function ErdSvg() {
           <BoxLine y={row(RV_Y, 1)}>name, watershed_id (FK)</BoxLine>
         </Box>
 
-        <Box
-          x={X_LEFT}
-          y={MR_Y}
-          w={W_LEFT}
-          h={MR_H}
-          title="match_review"
-          subtitle="名寄せ保留"
-        >
+        <Box x={X_LEFT} y={MR_Y} w={W_LEFT} h={MR_H} title="match_review" subtitle="名寄せ保留">
           <BoxLine y={row(MR_Y, 0)}>source_id + ext_id (PK)</BoxLine>
           <BoxLine y={row(MR_Y, 1)}>candidate_dam_ids[]</BoxLine>
           <BoxLine y={row(MR_Y, 2)}>best_dam_id, confidence</BoxLine>
           <BoxLine y={row(MR_Y, 3)}>resolved_dam_id, _at</BoxLine>
         </Box>
 
-        <Box
-          x={X_DAMS}
-          y={DM_Y}
-          w={W_DAMS}
-          h={DM_H}
-          title="dams"
-          subtitle="ダムマスタ"
-          highlight
-        >
+        <Box x={X_DAMS} y={DM_Y} w={W_DAMS} h={DM_H} title="dams" subtitle="ダムマスタ" highlight>
           <BoxLine y={row(DM_Y, 0)}>id (PK), slug</BoxLine>
           <BoxLine y={row(DM_Y, 1)}>name, name_kana</BoxLine>
           <BoxLine y={row(DM_Y, 2)}>pref_code (CHAR(2))</BoxLine>
