@@ -1,5 +1,5 @@
 import { sql } from '@dam/db/client';
-import { type DamListItem, listDams } from '@dam/db/repo/dams';
+import { type DamListItem, listDams, lowStorageDams } from '@dam/db/repo/dams';
 import { nationalStorageChange } from '@dam/db/repo/watersheds';
 import {
   ArrowRight,
@@ -18,6 +18,7 @@ import type { Metadata } from 'next';
 import { unstable_cache } from 'next/cache';
 import Link from 'next/link';
 import { DamCard } from '../components/dam-card.tsx';
+import { DroughtAlert } from '../components/drought-alert.tsx';
 import { ENTITY_ICONS } from '../components/entity-icon.tsx';
 import { StorageChangeStrip } from '../components/storage-change-strip.tsx';
 import { fmtCapacityMcm } from '../lib/format.ts';
@@ -163,6 +164,12 @@ const cachedNationalChange = unstable_cache(
   ['home-national-change'],
   HOME_CACHE_OPTS,
 );
+const DROUGHT_THRESHOLD_PCT = 40;
+const cachedDroughtDams = unstable_cache(
+  async () => lowStorageDams(DROUGHT_THRESHOLD_PCT, 12),
+  ['home-drought-dams'],
+  HOME_CACHE_OPTS,
+);
 // unstable_cache JSON-stringifies its return value, which loses Map<>. Stash
 // as a plain object keyed by dam_id; rehydrate to a Map at the call site.
 const cachedFeaturedSparklines = unstable_cache(
@@ -176,10 +183,11 @@ const cachedFeaturedSparklines = unstable_cache(
 );
 
 export default async function Home() {
-  const [statsRaw, latestRaw, change] = await Promise.all([
+  const [statsRaw, latestRaw, change, droughtDams] = await Promise.all([
     cachedHomeStats(),
     cachedTopDams(),
     cachedNationalChange(),
+    cachedDroughtDams(),
   ]);
   // Rehydrate JSON-safe primitives back to the shapes the rest of the page
   // expects (bigint dam ids, Date oldestObs).
@@ -407,6 +415,17 @@ export default async function Home() {
           </div>
         </div>
       </section>
+
+      {/* Drought alert — surfaced near top so visitors see at-risk dams
+          before the marketing band. Renders nothing when no real-data dam
+          is below the threshold. */}
+      {droughtDams.length > 0 ? (
+        <section className="bg-white py-6">
+          <div className="max-w-7xl mx-auto px-5 md:px-10">
+            <DroughtAlert dams={droughtDams} thresholdPct={DROUGHT_THRESHOLD_PCT} />
+          </div>
+        </section>
+      ) : null}
 
       {/* Free-API band */}
       <section className="bg-primary-container py-6">

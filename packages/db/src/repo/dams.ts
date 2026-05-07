@@ -566,18 +566,36 @@ export async function storageChange(damId: bigint): Promise<StorageChange> {
   if (!r) {
     return {
       current: null,
-      h1: null, h6: null, h12: null,
-      d1: null, d7: null, d30: null, d365: null, d1825: null,
-      h1AgeS: null, h6AgeS: null, h12AgeS: null,
-      d1AgeS: null, d7AgeS: null, d30AgeS: null, d365AgeS: null, d1825AgeS: null,
+      h1: null,
+      h6: null,
+      h12: null,
+      d1: null,
+      d7: null,
+      d30: null,
+      d365: null,
+      d1825: null,
+      h1AgeS: null,
+      h6AgeS: null,
+      h12AgeS: null,
+      d1AgeS: null,
+      d7AgeS: null,
+      d30AgeS: null,
+      d365AgeS: null,
+      d1825AgeS: null,
     };
   }
   const ageS = (a: Date | null, b: Date | null): number | null =>
     a && b ? Math.round((a.getTime() - b.getTime()) / 1000) : null;
   return {
     current: r.current,
-    h1: r.h1, h6: r.h6, h12: r.h12,
-    d1: r.d1, d7: r.d7, d30: r.d30, d365: r.d365, d1825: r.d1825,
+    h1: r.h1,
+    h6: r.h6,
+    h12: r.h12,
+    d1: r.d1,
+    d7: r.d7,
+    d30: r.d30,
+    d365: r.d365,
+    d1825: r.d1825,
     h1AgeS: ageS(r.currentAt, r.h1At),
     h6AgeS: ageS(r.currentAt, r.h6At),
     h12AgeS: ageS(r.currentAt, r.h12At),
@@ -636,9 +654,7 @@ export async function nearbyDams(
  * JSON-safe. rate ∈ [0, 1] when 利水容量 + 観測値 are both present, null
  * otherwise. LATERAL DISTINCT-ON keeps this cheap even for ~200 ids.
  */
-export async function latestRateByDam(
-  damIds: bigint[],
-): Promise<Map<string, number | null>> {
+export async function latestRateByDam(damIds: bigint[]): Promise<Map<string, number | null>> {
   if (damIds.length === 0) return new Map();
   const ids = damIds.map((id) => id.toString());
   const rows = await sql<{ damId: string; rate: number | null }[]>`
@@ -662,4 +678,63 @@ export async function latestRateByDam(
   const m = new Map<string, number | null>();
   for (const r of rows) m.set(r.damId, r.rate);
   return m;
+}
+
+export interface LowStorageDam {
+  id: string;
+  name: string;
+  slug: string;
+  prefCode: string;
+  watershedSlug: string | null;
+  watershedName: string | null;
+  rate: number;
+  storageVolumeM3: string;
+  observedAt: string;
+  sourceId: string;
+}
+
+/**
+ * Dams whose latest real (non-synthetic) observation has 貯水率 below
+ * `thresholdPct`. Uses `active_capacity_m3` as the denominator (matches
+ * the rate semantics used elsewhere in the UI). Synthetic seeds are
+ * excluded — we only want to alert on genuinely measured low storage,
+ * not on the placeholder data.
+ *
+ * Returns at most `limit` rows ordered by rate ascending (worst first).
+ */
+export async function lowStorageDams(
+  thresholdPct: number,
+  limit: number,
+): Promise<LowStorageDam[]> {
+  return sql<LowStorageDam[]>`
+    SELECT
+      d.id::TEXT                                     AS id,
+      d.name,
+      d.slug,
+      d.pref_code                                    AS "prefCode",
+      w.slug                                         AS "watershedSlug",
+      w.name                                         AS "watershedName",
+      LEAST(1.0, latest.storage_volume_m3::FLOAT8 / d.active_capacity_m3::FLOAT8) AS rate,
+      latest.storage_volume_m3::TEXT                 AS "storageVolumeM3",
+      latest.observed_at::TEXT                       AS "observedAt",
+      latest.source_id                               AS "sourceId"
+    FROM dams d
+    LEFT JOIN watersheds w ON w.id = d.watershed_id
+    JOIN LATERAL (
+      SELECT o.storage_volume_m3, o.observed_at, o.source_id
+      FROM observations o
+      WHERE o.dam_id = d.id
+        AND o.storage_volume_m3 IS NOT NULL
+        AND o.source_id <> 'synthetic'
+        AND o.observed_at > NOW() - INTERVAL '30 days'
+      ORDER BY o.observed_at DESC
+      LIMIT 1
+    ) latest ON TRUE
+    WHERE d.active_capacity_m3 IS NOT NULL
+      AND d.active_capacity_m3 > 0
+      AND (latest.storage_volume_m3::FLOAT8 / d.active_capacity_m3::FLOAT8)
+          < ${thresholdPct / 100.0}
+    ORDER BY rate ASC
+    LIMIT ${limit}
+  `;
 }
