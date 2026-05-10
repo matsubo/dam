@@ -16,6 +16,12 @@
 #                                    use the default 12-month window.
 #                                    Requires BOOTSTRAP_KICK=1 (the kick
 #                                    branch is where the enqueue happens).
+#   BOOTSTRAP_KICK_MASTER=1        — When kicking, also enqueue
+#                                    master:refresh:ndi + master:refresh:damnet.
+#                                    Heavy jobs (30-60 min each) that
+#                                    saturate the worker pool — only use
+#                                    when explicitly refreshing master
+#                                    data. Requires BOOTSTRAP_KICK=1.
 #
 # We deliberately AVOID `set -eu`. A non-fatal failure in the bootstrap
 # (e.g. seed file checksum drift, observations seed timeout) shouldn't keep
@@ -163,13 +169,24 @@ if [ "${kick}" = "1" ]; then
   run_kick_step "drop_stuck_jobs" \
     "DELETE FROM graphile_worker._private_jobs WHERE attempts >= 3;"
 
-  # 3. Enqueue master refresh + observations crawl. Each call returns a row
-  # describing the queued job — psql will print it.
-  run_kick_step "enqueue_ndi"     "SELECT graphile_worker.add_job('master:refresh:ndi',    '{}'::json);"
-  run_kick_step "enqueue_damnet"  "SELECT graphile_worker.add_job('master:refresh:damnet', '{}'::json);"
+  # 3. Enqueue the cheap live-ingest jobs so prod gets fresh observation
+  # data without waiting for the next cron tick. These are small (one HTTP
+  # fetch each) and finish in seconds.
   run_kick_step "enqueue_ingest"  "SELECT graphile_worker.add_job('ingest:kasenbosai',     '{}'::json);"
   run_kick_step "enqueue_tokyo"   "SELECT graphile_worker.add_job('ingest:tokyo-waterworks','{}'::json);"
   run_kick_step "enqueue_jwa"     "SELECT graphile_worker.add_job('ingest:jwa-junpo','{}'::json);"
+
+  # 3b. Heavy master refreshes (NDI re-import, Damnet re-scrape) are now
+  # gated behind their own env. They take 30-60 min each, saturate the
+  # worker's concurrency=4 thread pool, and starve the cron scheduler — we
+  # saw the 2026-05-10 deploy wedge all daily crons for >12 hours because
+  # the kick fired them. They have their own monthly cron schedule, so a
+  # routine deploy doesn't need to re-trigger them.
+  if [ -n "${BOOTSTRAP_KICK_MASTER:-}" ]; then
+    log "[bootstrap] BOOTSTRAP_KICK_MASTER=${BOOTSTRAP_KICK_MASTER} — enqueue heavy master refreshes"
+    run_kick_step "enqueue_ndi"    "SELECT graphile_worker.add_job('master:refresh:ndi',    '{}'::json);"
+    run_kick_step "enqueue_damnet" "SELECT graphile_worker.add_job('master:refresh:damnet', '{}'::json);"
+  fi
 
   # 4. Optional one-time historical backfill of JWA junpo. Walks the 旬報
   # archive for the past N months (default 12 → ~36 page fetches × 26 dams

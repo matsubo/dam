@@ -63,6 +63,32 @@ export async function GET(): Promise<NextResponse> {
     LIMIT 20
   `.catch(() => [] as ActiveJob[]);
 
+  // Queue-depth breakdown — grouped counts so we can see at a glance which
+  // task identifier is wedging the worker (the `active_or_pending_jobs`
+  // sample above only shows the first 20). Surfaced after we hit a 12-hour
+  // worker stall on 2026-05-11 with no easy way to inspect the queue
+  // without psql access.
+  const queueDepth = await sql<
+    { task: string; pending: number; oldest_run_at: string | null; max_attempts_seen: number }[]
+  >`
+    SELECT
+      task_identifier::text             AS task,
+      COUNT(*)::int                     AS pending,
+      MIN(run_at)::text                 AS oldest_run_at,
+      MAX(attempts)::int                AS max_attempts_seen
+    FROM graphile_worker._private_jobs
+    GROUP BY task_identifier
+    ORDER BY pending DESC
+  `.catch(
+    () =>
+      [] as {
+        task: string;
+        pending: number;
+        oldest_run_at: string | null;
+        max_attempts_seen: number;
+      }[],
+  );
+
   const coverage = await sql<CoverageRow[]>`
     SELECT
       COUNT(*)::int                                                   AS dams_total,
@@ -103,6 +129,7 @@ export async function GET(): Promise<NextResponse> {
       generated_at: new Date().toISOString(),
       cron_schedule: cron,
       active_or_pending_jobs: active,
+      queue_depth_by_task: queueDepth,
       dam_coverage: {
         ...cov,
         damnet_pct: cov.dams_total ? Math.round((100 * cov.with_damnet) / cov.dams_total) : 0,
