@@ -83,6 +83,18 @@ export function ObservationChart({
     p.observedAt,
     p.storageVolumeM3 ? Number(p.storageVolumeM3) : null,
   ]);
+  // Subset of points carrying real-source observations (anything other than
+  // 'synthetic'). Plotted as discrete green dots on top of the volume line
+  // so users can see at a glance where the trend is grounded in measured
+  // values vs. seed/placeholder values. Daily/monthly continuous aggregates
+  // currently expose the source_id of the last point in each bucket, so the
+  // marker density tracks the genuine cadence of the upstream feed.
+  const realVolumePoints: Array<[string, number]> = [];
+  for (const p of points) {
+    if (p.sourceId && p.sourceId !== 'synthetic' && p.storageVolumeM3) {
+      realVolumePoints.push([p.observedAt, Number(p.storageVolumeM3)]);
+    }
+  }
   // Storage rate either comes directly from the API or is derived from
   // volume / capacity when the aggregate omits it (continuous aggregates
   // currently expose avg_storage_volume_m3 only).
@@ -105,8 +117,7 @@ export function ObservationChart({
   // Daily / monthly continuous aggregates don't carry inflow/outflow (only
   // last_storage). Hide the lines entirely when no point has a flow value
   // so the legend doesn't dangle.
-  const hasFlow =
-    inflowData.some(([, v]) => v != null) || outflowData.some(([, v]) => v != null);
+  const hasFlow = inflowData.some(([, v]) => v != null) || outflowData.some(([, v]) => v != null);
 
   // Auto-scale axis to 億 (>=1e8) or 万 (>=1e4) so labels stay legible
   // across the 6-orders-of-magnitude range of real reservoir capacities.
@@ -138,8 +149,7 @@ export function ObservationChart({
       let txt: string;
       if (v == null) txt = '—';
       else if (p.seriesName === '貯水率') txt = `${(v * 100).toFixed(1)} %`;
-      else if (p.seriesName === '流入量' || p.seriesName === '放流量')
-        txt = `${v.toFixed(2)} m³/s`;
+      else if (p.seriesName === '流入量' || p.seriesName === '放流量') txt = `${v.toFixed(2)} m³/s`;
       else txt = fmtVolume(v);
       return `${p.marker} ${p.seriesName}: <b>${txt}</b>`;
     });
@@ -185,6 +195,19 @@ export function ObservationChart({
       itemStyle: { color: '#16a34a' },
     },
   ];
+  if (realVolumePoints.length > 0) {
+    series.push({
+      type: 'scatter' as const,
+      data: realVolumePoints,
+      name: '実測',
+      yAxisIndex: 0,
+      symbol: 'circle' as const,
+      symbolSize: 7,
+      itemStyle: { color: '#059669', borderColor: '#fff', borderWidth: 1.5 },
+      z: 5,
+      tooltip: { show: true },
+    });
+  }
   if (hasFlow) {
     series.push(
       {
@@ -259,7 +282,10 @@ export function ObservationChart({
     ],
     tooltip: { trigger: 'axis' as const, formatter: tipFormatter },
     legend: {
-      data: hasFlow ? ['貯水量', '貯水率', '流入量', '放流量'] : ['貯水量', '貯水率'],
+      data: (() => {
+        const base = hasFlow ? ['貯水量', '貯水率', '流入量', '放流量'] : ['貯水量', '貯水率'];
+        return realVolumePoints.length > 0 ? [...base, '実測'] : base;
+      })(),
       top: 0,
       textStyle: { fontSize: 12 },
     },
@@ -310,7 +336,10 @@ function DataLinks({
       <a className="text-primary hover:underline" href={`${base}/${slug}/observations?${qs}`}>
         JSON
       </a>
-      <a className="text-primary hover:underline" href={`${base}/${slug}/observations?${qs}&format=csv`}>
+      <a
+        className="text-primary hover:underline"
+        href={`${base}/${slug}/observations?${qs}&format=csv`}
+      >
         CSV ダウンロード
       </a>
     </div>
