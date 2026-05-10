@@ -500,7 +500,8 @@ export default async function Home() {
             <Stat
               label="実測データ"
               value={fmt(s.realDamCount)}
-              sub={`基（直近 30 日 / 全 ${fmt(s.damCount)} 基中）`}
+              sub={`基（直近 30 日 / 全 ${fmt(s.damCount)} 基中）→ 一覧へ`}
+              href="/dams?real=1"
             />
           </div>
         </div>
@@ -678,14 +679,35 @@ function RateBar({ rate }: { rate: number | null }) {
   );
 }
 
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="bg-white border border-outline-variant rounded-xl p-4">
+function Stat({
+  label,
+  value,
+  sub,
+  href,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  href?: string;
+}) {
+  const inner = (
+    <>
       <div className="text-xs text-on-surface-variant">{label}</div>
       <div className="text-2xl font-display font-semibold tabular-nums">{value}</div>
       {sub && <div className="text-xs text-on-surface-variant mt-1">{sub}</div>}
-    </div>
+    </>
   );
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className="block bg-white border border-outline-variant rounded-xl p-4 hover:border-primary transition-colors"
+      >
+        {inner}
+      </Link>
+    );
+  }
+  return <div className="bg-white border border-outline-variant rounded-xl p-4">{inner}</div>;
 }
 
 function CtaCard({
