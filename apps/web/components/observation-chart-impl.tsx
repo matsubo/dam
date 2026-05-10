@@ -6,7 +6,7 @@
 // first-paint take 5+ s on a fresh chart mount). Production builds tree-shake
 // the same imports identically.
 import EChartsBase from 'echarts-for-react/lib/core';
-import { LineChart } from 'echarts/charts';
+import { LineChart, ScatterChart } from 'echarts/charts';
 import {
   GridComponent,
   LegendComponent,
@@ -18,6 +18,7 @@ import { CanvasRenderer } from 'echarts/renderers';
 
 echarts.use([
   LineChart,
+  ScatterChart,
   GridComponent,
   TooltipComponent,
   MarkLineComponent,
