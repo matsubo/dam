@@ -257,6 +257,12 @@ export interface DamPagedFilters {
   watershedSlug?: string | null;
   manager?: string | null;
   search?: string | null;
+  /**
+   * When true, restrict to dams with at least one non-synthetic observation
+   * in the last 30 days. Used by the /dams?real=1 view and by the homepage
+   * "実測データ" stat link.
+   */
+  realDataOnly?: boolean;
   /** 1-based. Out-of-range values clamp to [1, totalPages]. */
   page?: number;
   pageSize?: number;
@@ -276,6 +282,7 @@ export async function listDamsPaged(f: DamPagedFilters): Promise<{
 }> {
   const pageSize = Math.max(1, Math.min(200, f.pageSize ?? 50));
   const requestedPage = Math.max(1, Math.floor(f.page ?? 1));
+  const realOnly = f.realDataOnly === true;
   const totalRows = await sql<{ total: bigint }[]>`
     SELECT COUNT(*)::BIGINT AS total
     FROM dams d
@@ -284,6 +291,12 @@ export async function listDamsPaged(f: DamPagedFilters): Promise<{
       AND (${f.watershedSlug ?? null}::text IS NULL OR w.slug = ${f.watershedSlug ?? null})
       AND (${f.manager ?? null}::text IS NULL OR d.manager = ${f.manager ?? null})
       AND (${f.search ?? null}::text IS NULL OR d.name ILIKE ('%' || ${f.search ?? null} || '%'))
+      AND (NOT ${realOnly}::boolean OR EXISTS (
+        SELECT 1 FROM observations o
+        WHERE o.dam_id = d.id
+          AND o.source_id <> 'synthetic'
+          AND o.observed_at > NOW() - INTERVAL '30 days'
+      ))
   `;
   const total = Number(totalRows[0]?.total ?? 0n);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -302,6 +315,12 @@ export async function listDamsPaged(f: DamPagedFilters): Promise<{
       AND (${f.watershedSlug ?? null}::text IS NULL OR w.slug = ${f.watershedSlug ?? null})
       AND (${f.manager ?? null}::text IS NULL OR d.manager = ${f.manager ?? null})
       AND (${f.search ?? null}::text IS NULL OR d.name ILIKE ('%' || ${f.search ?? null} || '%'))
+      AND (NOT ${realOnly}::boolean OR EXISTS (
+        SELECT 1 FROM observations o
+        WHERE o.dam_id = d.id
+          AND o.source_id <> 'synthetic'
+          AND o.observed_at > NOW() - INTERVAL '30 days'
+      ))
     ORDER BY d.id
     LIMIT ${pageSize} OFFSET ${offset}
   `;

@@ -22,6 +22,8 @@ interface SP {
     watershed?: string;
     manager?: string;
     page?: string;
+    /** '1' restricts to dams with a non-synthetic observation in the last 30 days. */
+    real?: string;
   }>;
 }
 
@@ -30,17 +32,18 @@ const PAGE_SIZE = 50;
 export default async function DamsPage({ searchParams }: SP) {
   const sp = (await searchParams) ?? {};
   const requestedPage = sp.page ? Number(sp.page) : 1;
+  const realDataOnly = sp.real === '1';
   // Treat empty-string query params (e.g. `?pref=13&watershed=` produced by
   // the filter form when 水系 is unselected) as "not filtered". Without this
   // the watershed_slug = '' clause matches no rows and shows 0 results.
-  const blank = (s: string | undefined): string | null =>
-    s == null || s === '' ? null : s;
+  const blank = (s: string | undefined): string | null => (s == null || s === '' ? null : s);
   const [r, allWatersheds] = await Promise.all([
     listDamsPaged({
       pref: blank(sp.pref),
       watershedSlug: blank(sp.watershed),
       manager: blank(sp.manager),
       search: null,
+      realDataOnly,
       page: Number.isFinite(requestedPage) ? requestedPage : 1,
       pageSize: PAGE_SIZE,
     }),
@@ -59,9 +62,10 @@ export default async function DamsPage({ searchParams }: SP) {
   // 貯水率 column on the dam table — single LATERAL query, scoped to the
   // current page so cost is bounded.
   const rates = new Map(
-    Array.from(
-      (await latestRateByDam(r.items.map((d) => d.id))).entries(),
-    ).map(([k, v]) => [k, { rate: v }]),
+    Array.from((await latestRateByDam(r.items.map((d) => d.id))).entries()).map(([k, v]) => [
+      k,
+      { rate: v },
+    ]),
   );
   return (
     <div className="max-w-7xl mx-auto px-5 md:px-10 py-8">
@@ -124,10 +128,20 @@ export default async function DamsPage({ searchParams }: SP) {
             </optgroup>
           </select>
         </label>
+        <label className="flex items-center gap-1.5 text-sm">
+          <input
+            type="checkbox"
+            name="real"
+            value="1"
+            defaultChecked={realDataOnly}
+            className="size-4"
+          />
+          <span className="text-muted">実測データのみ</span>
+        </label>
         <button type="submit" className="px-3 py-1 bg-accent text-white rounded">
           絞り込む
         </button>
-        {(sp.pref || sp.watershed || sp.manager) && (
+        {(sp.pref || sp.watershed || sp.manager || realDataOnly) && (
           <a href="/dams" className="px-3 py-1 border border-gray-200 rounded">
             クリア
           </a>
@@ -144,6 +158,7 @@ export default async function DamsPage({ searchParams }: SP) {
           pref: sp.pref ?? null,
           watershed: sp.watershed ?? null,
           manager: sp.manager ?? null,
+          real: realDataOnly ? '1' : null,
         }}
         page={r.page}
         totalPages={r.totalPages}
