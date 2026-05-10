@@ -11,6 +11,11 @@
 #                                    synthetic seeder. Implied when
 #                                    BOOTSTRAP_FORCE_MASTER=1 (because
 #                                    TRUNCATE CASCADE wipes obs anyway).
+#   BOOTSTRAP_BACKFILL_JWA=N       — Enqueue a one-shot jwa-junpo backfill
+#                                    over the past N months. Set to '1' to
+#                                    use the default 12-month window.
+#                                    Requires BOOTSTRAP_KICK=1 (the kick
+#                                    branch is where the enqueue happens).
 #
 # We deliberately AVOID `set -eu`. A non-fatal failure in the bootstrap
 # (e.g. seed file checksum drift, observations seed timeout) shouldn't keep
@@ -165,6 +170,22 @@ if [ "${kick}" = "1" ]; then
   run_kick_step "enqueue_ingest"  "SELECT graphile_worker.add_job('ingest:kasenbosai',     '{}'::json);"
   run_kick_step "enqueue_tokyo"   "SELECT graphile_worker.add_job('ingest:tokyo-waterworks','{}'::json);"
   run_kick_step "enqueue_jwa"     "SELECT graphile_worker.add_job('ingest:jwa-junpo','{}'::json);"
+
+  # 4. Optional one-time historical backfill of JWA junpo. Walks the 旬報
+  # archive for the past N months (default 12 → ~36 page fetches × 26 dams
+  # → 700+ rows). Gated by a SEPARATE env so a normal BOOTSTRAP_KICK=1
+  # restart doesn't re-fetch the archive every time. UNSET
+  # BOOTSTRAP_BACKFILL_JWA after the boot succeeds.
+  if [ -n "${BOOTSTRAP_BACKFILL_JWA:-}" ]; then
+    months="${BOOTSTRAP_BACKFILL_JWA}"
+    # Treat '1' as a shorthand for the default 12-month window.
+    if [ "${months}" = "1" ]; then
+      months=12
+    fi
+    log "[bootstrap] BOOTSTRAP_BACKFILL_JWA=${BOOTSTRAP_BACKFILL_JWA} — enqueue jwa-junpo backfill (months=${months})"
+    run_kick_step "enqueue_jwa_backfill" \
+      "SELECT graphile_worker.add_job('backfill:jwa-junpo', json_build_object('months', ${months}));"
+  fi
 
   obs=$(count_or_empty "SELECT COUNT(*) FROM observations")
   log "[bootstrap] observations.count after kick = '${obs}'"
