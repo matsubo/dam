@@ -17,7 +17,10 @@ async function isServerUp(): Promise<boolean> {
   }
 }
 
-describe('agent affordances (live HTTP)', () => {
+// Bumped timeout because /sources is now slow on a local dev server (5 SQL
+// queries against the 6.7M-row observations table) and 5 s isn't enough for
+// the first cold render after a `bun --hot dev` restart.
+describe('agent affordances (live HTTP)', { timeout: 15_000 }, () => {
   test('robots.txt has Content Signals + AI bot allow blocks', async () => {
     if (!(await isServerUp())) return;
     const r = await fetch(`${BASE}/robots.txt`);
