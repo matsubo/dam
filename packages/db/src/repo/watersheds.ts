@@ -162,6 +162,8 @@ export interface WatershedAggregate {
   /** Latest storage summed over the rate-able subset only — pairs with activeCapacityM3 for rate. */
   latestStorageVolumeM3: string | null;
   observedAt: Date | null;
+  /** How many of the watershed's dams have at least one non-synthetic observation in the last 30 days. */
+  realDamCount: number;
 }
 
 export interface WatershedStorageChange {
@@ -196,9 +198,7 @@ export interface WatershedStorageChange {
  * watershed-level "now" to count) so a single stale dam doesn't poison the
  * total.
  */
-export async function watershedStorageChange(
-  watershedId: bigint,
-): Promise<WatershedStorageChange> {
+export async function watershedStorageChange(watershedId: bigint): Promise<WatershedStorageChange> {
   const rows = await sql<
     {
       bucket: string;
@@ -379,8 +379,14 @@ export async function nationalStorageChange(): Promise<WatershedStorageChange> {
     a && b ? Math.round((a.getTime() - b.getTime()) / 1000) : null;
   return {
     current: get('current'),
-    h1: get('h1'), h6: get('h6'), h12: get('h12'),
-    d1: get('d1'), d7: get('d7'), d30: get('d30'), d365: get('d365'), d1825: get('d1825'),
+    h1: get('h1'),
+    h6: get('h6'),
+    h12: get('h12'),
+    d1: get('d1'),
+    d7: get('d7'),
+    d30: get('d30'),
+    d365: get('d365'),
+    d1825: get('d1825'),
     h1AgeS: ageS(currentAt, at('h1')),
     h6AgeS: ageS(currentAt, at('h6')),
     h12AgeS: ageS(currentAt, at('h12')),
@@ -419,7 +425,11 @@ export async function aggregateWatershed(watershedId: bigint): Promise<Watershed
       (SELECT COUNT(*)::INT          FROM ds_rateable)            AS "rateableDamCount",
       (SELECT SUM(active_capacity_m3)::TEXT FROM ds_rateable)     AS "activeCapacityM3",
       (SELECT SUM(latest.storage_volume_m3)::TEXT FROM latest)    AS "latestStorageVolumeM3",
-      (SELECT MAX(latest.observed_at)             FROM latest)    AS "observedAt"
+      (SELECT MAX(latest.observed_at)             FROM latest)    AS "observedAt",
+      (SELECT COUNT(DISTINCT o.dam_id)::INT
+         FROM observations o JOIN ds ON ds.id = o.dam_id
+         WHERE o.source_id <> 'synthetic'
+           AND o.observed_at > NOW() - INTERVAL '30 days')        AS "realDamCount"
   `;
   return (
     rows[0] ?? {
@@ -429,6 +439,7 @@ export async function aggregateWatershed(watershedId: bigint): Promise<Watershed
       rateableDamCount: 0,
       latestStorageVolumeM3: null,
       observedAt: null,
+      realDamCount: 0,
     }
   );
 }
