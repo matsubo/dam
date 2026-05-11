@@ -45,9 +45,10 @@ export default async function WatershedDetail({ params }: PageProps) {
   ]);
   // Per-dam latest 貯水率 to render a progress-bar column on the table.
   const rates = new Map(
-    Array.from(
-      (await latestRateByDam(list.items.map((d) => d.id))).entries(),
-    ).map(([k, v]) => [k, { rate: v }]),
+    Array.from((await latestRateByDam(list.items.map((d) => d.id))).entries()).map(([k, v]) => [
+      k,
+      { rate: v },
+    ]),
   );
   return (
     <div className="max-w-7xl mx-auto px-5 md:px-10 py-8">
@@ -87,7 +88,13 @@ export default async function WatershedDetail({ params }: PageProps) {
               ) : null}
             </div>
             <div className="grid grid-cols-2 md:grid-cols-2 gap-4 flex-1">
-              <Stat label="ダム数" value={String(agg.damCount)} />
+              <Stat
+                label="ダム数"
+                value={String(agg.damCount)}
+                {...(agg.realDamCount > 0
+                  ? { sub: `うち実測データあり ${agg.realDamCount} 基（直近30日）` }
+                  : {})}
+              />
               <Stat label="総貯水容量" value={fmtCapacityMcm(agg.totalCapacityM3)} />
               <Stat
                 label="現在貯水量"
