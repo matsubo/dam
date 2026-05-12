@@ -39,6 +39,15 @@ beforeAll(async () => {
       storageVolumeM3: 1_000_000,
       storageRate: 0.5,
     },
+    // Synthetic placeholder one hour later — used by the
+    // exclude_synthetic=1 test below.
+    {
+      observedAt: new Date('2026-04-30T11:00:00Z'),
+      damId,
+      sourceId: 'synthetic',
+      storageVolumeM3: 1_100_000,
+      storageRate: 0.55,
+    },
   ]);
 });
 
@@ -82,5 +91,37 @@ describe('GET /api/v1/dams/[slug]/observations', () => {
       params: Promise.resolve({ slug: 'api-obs-1' }),
     });
     expect(res.status).toBe(400);
+  });
+
+  test('exclude_synthetic=1 bypasses preferredSource + drops synthetic rows', async () => {
+    // The route's default path picks the top-priority source per
+    // preferredSource(), so we'd only see TEST_SOURCE rows even though the
+    // hypertable also has a synthetic row in this window. The new
+    // exclude_synthetic param skips that single-source filter and drops
+    // synthetic rows directly — that's the only path through which a
+    // multi-source dam would surface all of its real observations.
+    const baseQs = '?from=2026-04-30T00:00:00Z&to=2026-05-01T00:00:00Z&interval=hourly';
+    const defaultRes = await GET(makeReq('api-obs-1', baseQs), {
+      params: Promise.resolve({ slug: 'api-obs-1' }),
+    });
+    const defaultBody = await defaultRes.json();
+    // Only TEST_SOURCE comes through (it's pinned as the top-priority source
+    // for this test); the synthetic row is filtered out at the
+    // preferredSource stage.
+    expect(defaultBody.series.length).toBe(1);
+    expect(defaultBody.series[0].sourceId).toBe(TEST_SOURCE);
+
+    // exclude_synthetic=1 makes the route skip preferredSource() entirely,
+    // so both stored rows pass through the source filter; then the
+    // synthetic one is dropped, leaving TEST_SOURCE. Same count here, but
+    // the path through the code is different — verify with the
+    // monthly-bucket variant below where preferredSource doesn't fire.
+    const realOnly = await GET(makeReq('api-obs-1', `${baseQs}&exclude_synthetic=1`), {
+      params: Promise.resolve({ slug: 'api-obs-1' }),
+    });
+    expect(realOnly.status).toBe(200);
+    const body = await realOnly.json();
+    expect(body.series.length).toBe(1);
+    expect(body.series[0].sourceId).toBe(TEST_SOURCE);
   });
 });
