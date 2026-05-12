@@ -203,6 +203,37 @@ export default async function DamDetail({ params }: PageProps) {
                     />
                   </dl>
                 </div>
+                {/* Drought callout — only when (a) the rate is below the
+                    same threshold the homepage drought banner uses, and
+                    (b) the source isn't 'synthetic' (we don't want to
+                    raise a drought alarm based on placeholder data). */}
+                {rate != null && rate < 0.4 && latest.sourceId !== 'synthetic' ? (
+                  <div
+                    className={`mt-4 rounded-lg p-3 border ${
+                      rate < 0.2
+                        ? 'border-red-300 bg-red-50 text-red-900'
+                        : rate < 0.3
+                          ? 'border-orange-300 bg-orange-50 text-orange-900'
+                          : 'border-amber-300 bg-amber-50 text-amber-900'
+                    }`}
+                    role="alert"
+                  >
+                    <div className="text-sm font-semibold">
+                      {rate < 0.2
+                        ? '貯水率がきわめて低い水準です'
+                        : rate < 0.3
+                          ? '渇水警戒水準です'
+                          : '貯水率が平年を下回っています'}
+                    </div>
+                    <p className="text-xs mt-1 opacity-90">
+                      実測値（{latest.sourceId}）に基づく。貯水率 {(rate * 100).toFixed(1)}%。
+                      節水・取水制限などの公的アナウンスが出ている可能性があります。
+                      <Link href="/" className="underline ml-1 inline-flex items-center gap-0.5">
+                        他の渇水ダムも見る
+                      </Link>
+                    </p>
+                  </div>
+                ) : null}
               </>
             );
           })()
