@@ -26,9 +26,11 @@ const STAGES: Stage[] = [
     title: 'アルファ',
     goal: 'セットアップと定期データ取得の正常化',
     bullets: [
-      '初期セットアップ — マスタ (ダム/水系/河川) が production に正しく投入され、起動シーケンスが冪等に動作する',
+      '初期セットアップ — マスタ (ダム/水系/河川) が production に正しく投入され、起動シーケンスが冪等に動作する ✓',
       '定期クロールの正常化 — graphile-worker の cron が NDI / ダム便覧 / 観測値ソースを安定して取り込み、失敗時のリトライ・キュー詰まり対応が確認できている',
-      '画面の主要動線 — 一覧 / 詳細 / 地図 / 統計 / API ドキュメントが本番で 200 を返し、貯水率を含む基本的な可視化がレンダリングされる',
+      '画面の主要動線 — 一覧 / 詳細 / 地図 / 統計 / API ドキュメントが本番で 200 を返し、貯水率を含む基本的な可視化がレンダリングされる ✓',
+      '実測データソース — kasenbosai / 水文水質 が政策レベルでブロックされたため、府県・公社の開放データに方向転換: 東京都水道局 (15 ダム / 日次) と 水資源機構 旬報 (26 ダム / 10 日次) を本番稼働。実測ダム 35 基をホームページ・ダム一覧・水系一覧で識別可能',
+      '渇水アラート UI — 実測値が 40% を下回るダムをホームページに掲示し、ダム詳細にも警告コールアウトを表示',
     ],
   },
   {
@@ -58,8 +60,10 @@ const STAGES: Stage[] = [
 ];
 
 function StageIcon({ status }: { status: 'in_progress' | 'pending' | 'done' }) {
-  if (status === 'done') return <CircleCheck className="text-emerald-600 shrink-0" size={22} aria-hidden="true" />;
-  if (status === 'in_progress') return <CircleDot className="text-primary shrink-0" size={22} aria-label="進行中" />;
+  if (status === 'done')
+    return <CircleCheck className="text-emerald-600 shrink-0" size={22} aria-hidden="true" />;
+  if (status === 'in_progress')
+    return <CircleDot className="text-primary shrink-0" size={22} aria-label="進行中" />;
   return <CircleDashed className="text-on-surface-variant shrink-0" size={22} aria-hidden="true" />;
 }
 

@@ -188,6 +188,11 @@ export interface DamListFilters {
   pageSize?: number;
   /** Default: 'id'. Use 'capacity' for "largest first" ordering on the home page. */
   orderBy?: 'id' | 'capacity';
+  /** When set, restrict to dams whose latest non-synthetic observation in
+   * the last 30 days came from this source_id. Useful for /api/v1/dams?source=tokyo-waterworks. */
+  source?: string | null;
+  /** When true, restrict to dams with at least one non-synthetic observation in last 30 days. */
+  realDataOnly?: boolean;
 }
 
 export interface DamListItem {
@@ -230,6 +235,8 @@ export async function listDams(
     `;
     return { items: rows, nextCursor: null };
   }
+  const realOnly = f.realDataOnly === true;
+  const source = f.source ?? null;
   const rows = await sql<DamListItem[]>`
     SELECT
       d.id, d.slug, d.name, d.pref_code AS "prefCode", d.manager,
@@ -244,6 +251,18 @@ export async function listDams(
       AND (${f.manager ?? null}::text IS NULL OR d.manager = ${f.manager ?? null})
       AND (${f.search ?? null}::text IS NULL OR d.name ILIKE ('%' || ${f.search ?? null} || '%'))
       AND (${f.cursor ?? null}::bigint IS NULL OR d.id > ${f.cursor ?? null})
+      AND (NOT ${realOnly}::boolean OR EXISTS (
+        SELECT 1 FROM observations o
+        WHERE o.dam_id = d.id
+          AND o.source_id <> 'synthetic'
+          AND o.observed_at > NOW() - INTERVAL '30 days'
+      ))
+      AND (${source}::text IS NULL OR EXISTS (
+        SELECT 1 FROM observations o
+        WHERE o.dam_id = d.id
+          AND o.source_id = ${source}
+          AND o.observed_at > NOW() - INTERVAL '30 days'
+      ))
     ORDER BY d.id
     LIMIT ${limit + 1}
   `;

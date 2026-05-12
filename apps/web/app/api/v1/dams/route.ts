@@ -23,6 +23,15 @@ const Query = z.object({
     .string()
     .regex(/^[0-9]+$/)
     .optional(),
+  /** '1' / 'true' restricts to dams with at least one non-synthetic observation in the last 30 days. */
+  real: z.enum(['0', '1', 'true', 'false']).optional(),
+  /** When set, restrict to dams with a recent observation from this source_id (e.g. tokyo-waterworks, jwa-junpo). */
+  source: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-zA-Z0-9_:-]+$/)
+    .optional(),
 });
 
 export async function GET(req: Request): Promise<Response> {
@@ -33,7 +42,8 @@ export async function GET(req: Request): Promise<Response> {
     const url = new URL(req.url);
     const parsed = Query.safeParse(Object.fromEntries(url.searchParams));
     if (!parsed.success) throw new HttpError(400, 'Invalid query');
-    const { pref, watershed, manager, search, cursor, pageSize } = parsed.data;
+    const { pref, watershed, manager, search, cursor, pageSize, real, source } = parsed.data;
+    const realDataOnly = real === '1' || real === 'true';
 
     const r = await listDams({
       pref: pref ?? null,
@@ -42,6 +52,8 @@ export async function GET(req: Request): Promise<Response> {
       search: search ?? null,
       cursor: cursor ? BigInt(cursor) : null,
       pageSize: pageSize ? Number(pageSize) : 50,
+      realDataOnly,
+      source: source ?? null,
     });
 
     const self = url.pathname + url.search;
