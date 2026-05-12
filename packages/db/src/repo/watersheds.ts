@@ -493,3 +493,29 @@ export async function ratesForWatersheds(
   for (const r of rows) m.set(r.watershedId, r.rate);
   return m;
 }
+
+/**
+ * Per-watershed count of dams with at least one non-synthetic observation in
+ * the last 30 days. One round-trip across the visible list so the watershed
+ * index page can show "実測 N 基" annotations alongside dam counts.
+ */
+export async function realDamCountsForWatersheds(
+  watershedIds: bigint[],
+): Promise<Map<string, number>> {
+  if (watershedIds.length === 0) return new Map();
+  const ids = watershedIds.map((id) => id.toString());
+  const rows = await sql<{ watershedId: string; realDamCount: number }[]>`
+    SELECT
+      d.watershed_id::TEXT  AS "watershedId",
+      COUNT(DISTINCT o.dam_id)::INT AS "realDamCount"
+    FROM dams d
+    JOIN observations o ON o.dam_id = d.id
+    WHERE d.watershed_id::TEXT = ANY(${ids}::TEXT[])
+      AND o.source_id <> 'synthetic'
+      AND o.observed_at > NOW() - INTERVAL '30 days'
+    GROUP BY d.watershed_id
+  `;
+  const m = new Map<string, number>();
+  for (const r of rows) m.set(r.watershedId, r.realDamCount);
+  return m;
+}
