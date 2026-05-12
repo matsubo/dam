@@ -1,4 +1,9 @@
-import { findDamBySlug, latestObservation, nearbyDams } from '@dam/db/repo/dams';
+import {
+  findDamBySlug,
+  latestObservation,
+  latestRateAndSourceByDam,
+  nearbyDams,
+} from '@dam/db/repo/dams';
 import { authorize, makeUnauthorized, rateLimitHeaders } from '../../../../../lib/api/auth.ts';
 import { HttpError, asProblem } from '../../../../../lib/api/error.ts';
 import { hal } from '../../../../../lib/api/response.ts';
@@ -43,10 +48,13 @@ export async function GET(
     const dam = await findDamBySlug(slug);
     if (!dam) throw new HttpError(404, 'Dam not found');
 
-    const [latest, nearby] = await Promise.all([
+    const [latest, nearby, rateAndSource] = await Promise.all([
       latestObservation(dam.id),
       nearbyDams(dam.id, 20_000, 10),
+      latestRateAndSourceByDam([dam.id]),
     ]);
+    const ras = rateAndSource.get(dam.id.toString());
+    const realSourceId = ras?.realSourceId ?? null;
 
     return hal(
       {
@@ -59,6 +67,15 @@ export async function GET(
         completedYear: dam.completedYear,
         externalIds: dam.externalIds,
         latest,
+        // Explicit dataRealness block so API consumers don't have to compare
+        // `latest.sourceId` strings or guess at the synthetic-seed boundary.
+        // hasRealDataLast30d means: at least one upstream-fed observation
+        // exists in the last 30 days. realSourceId is the source_id of the
+        // most-recent such observation (or null if none).
+        dataRealness: {
+          hasRealDataLast30d: realSourceId !== null,
+          realSourceId,
+        },
         nearby: nearby.map(damPublicView),
       },
       {
