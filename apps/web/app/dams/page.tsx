@@ -1,5 +1,5 @@
 import { PREFECTURES } from '@dam/core/prefectures';
-import { latestRateByDam, listDamsPaged } from '@dam/db/repo/dams';
+import { latestRateAndSourceByDam, listDamsPaged } from '@dam/db/repo/dams';
 import { listWatersheds } from '@dam/db/repo/watersheds';
 import type { Metadata } from 'next';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
@@ -61,12 +61,7 @@ export default async function DamsPage({ searchParams }: SP) {
     });
   // 貯水率 column on the dam table — single LATERAL query, scoped to the
   // current page so cost is bounded.
-  const rates = new Map(
-    Array.from((await latestRateByDam(r.items.map((d) => d.id))).entries()).map(([k, v]) => [
-      k,
-      { rate: v },
-    ]),
-  );
+  const rates = await latestRateAndSourceByDam(r.items.map((d) => d.id));
   return (
     <div className="max-w-7xl mx-auto px-5 md:px-10 py-8">
       <Breadcrumbs items={[{ label: 'ホーム', href: '/' }, { label: 'ダム' }]} />

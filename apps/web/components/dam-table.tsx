@@ -23,24 +23,36 @@ export interface DamRowItem {
 export interface DamRateMeta {
   /** rate ∈ [0, 1], or null when 利水容量 / 観測値 not available. */
   rate: number | null;
+  /** When set, the dam has a non-synthetic observation in the last 30 days.
+   *  Used to render a "実測" dot next to the rate bar. */
+  realSourceId?: string | null;
 }
 
-function RateBar({ rate }: { rate: number | null }) {
-  if (rate == null) return <span className="text-xs text-on-surface-variant">—</span>;
+function RateBar({ rate, realSourceId }: { rate: number | null; realSourceId?: string | null }) {
+  const dot = realSourceId ? (
+    <span
+      aria-label={`実測データ（${realSourceId}）`}
+      title={`実測データ（${realSourceId}）`}
+      className="inline-block w-2 h-2 rounded-full bg-emerald-600 shrink-0"
+    />
+  ) : null;
+  if (rate == null) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs text-on-surface-variant">
+        {dot}—
+      </span>
+    );
+  }
   return (
     <div className="inline-flex items-center gap-2 w-full md:min-w-[140px]">
+      {dot}
       <div
         className="relative h-1.5 rounded-full bg-surface-container overflow-hidden flex-1"
         aria-label={`貯水率 ${(rate * 100).toFixed(1)}%`}
       >
-        <div
-          className="absolute inset-y-0 left-0 bg-primary"
-          style={{ width: `${rate * 100}%` }}
-        />
+        <div className="absolute inset-y-0 left-0 bg-primary" style={{ width: `${rate * 100}%` }} />
       </div>
-      <span className="text-xs font-semibold w-12 text-right tabular-nums">
-        {fmtPct(rate)}
-      </span>
+      <span className="text-xs font-semibold w-12 text-right tabular-nums">{fmtPct(rate)}</span>
     </div>
   );
 }
@@ -64,10 +76,7 @@ export function DamTable({
         {rows.map((r) => {
           const rateMeta = rates && r.id != null ? rates.get(r.id.toString()) : undefined;
           return (
-            <li
-              key={r.slug}
-              className="bg-white border border-outline-variant rounded-xl p-3"
-            >
+            <li key={r.slug} className="bg-white border border-outline-variant rounded-xl p-3">
               <Link
                 href={`/dams/${r.slug}`}
                 className="font-display font-semibold inline-flex items-center gap-1.5 text-on-surface no-underline hover:text-primary"
@@ -95,7 +104,10 @@ export function DamTable({
               </div>
               {showRate ? (
                 <div className="mt-2">
-                  <RateBar rate={rateMeta?.rate ?? null} />
+                  <RateBar
+                    rate={rateMeta?.rate ?? null}
+                    realSourceId={rateMeta?.realSourceId ?? null}
+                  />
                 </div>
               ) : null}
               <div className="mt-2 text-xs text-on-surface-variant flex justify-between">
@@ -147,12 +159,13 @@ export function DamTable({
                   <td>{r.manager ?? '—'}</td>
                   {showRate ? (
                     <td className="text-right tabular-nums">
-                      <RateBar rate={rateMeta?.rate ?? null} />
+                      <RateBar
+                        rate={rateMeta?.rate ?? null}
+                        realSourceId={rateMeta?.realSourceId ?? null}
+                      />
                     </td>
                   ) : null}
-                  <td className="text-right tabular-nums">
-                    {fmtCapacityMcm(r.totalCapacityM3)}
-                  </td>
+                  <td className="text-right tabular-nums">{fmtCapacityMcm(r.totalCapacityM3)}</td>
                 </tr>
               );
             })}

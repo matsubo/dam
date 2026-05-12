@@ -1,4 +1,4 @@
-import { latestRateByDam, listDams } from '@dam/db/repo/dams';
+import { latestRateAndSourceByDam, listDams } from '@dam/db/repo/dams';
 import {
   aggregateWatershed,
   findWatershedBySlug,
@@ -43,13 +43,9 @@ export default async function WatershedDetail({ params }: PageProps) {
     watershedStorageChange(w.id),
     listDams({ watershedSlug: slug, pageSize: 200 }),
   ]);
-  // Per-dam latest 貯水率 to render a progress-bar column on the table.
-  const rates = new Map(
-    Array.from((await latestRateByDam(list.items.map((d) => d.id))).entries()).map(([k, v]) => [
-      k,
-      { rate: v },
-    ]),
-  );
+  // Per-dam latest 貯水率 + real-source flag to render the progress-bar column
+  // with a green dot next to dams that have real upstream data.
+  const rates = await latestRateAndSourceByDam(list.items.map((d) => d.id));
   return (
     <div className="max-w-7xl mx-auto px-5 md:px-10 py-8">
       <Breadcrumbs
