@@ -1,4 +1,8 @@
-import { listWatersheds, ratesForWatersheds } from '@dam/db/repo/watersheds';
+import {
+  listWatersheds,
+  ratesForWatersheds,
+  realDamCountsForWatersheds,
+} from '@dam/db/repo/watersheds';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
@@ -9,8 +13,7 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 3600;
 export const metadata: Metadata = {
   title: '水系一覧',
-  description:
-    '一級・二級水系ごとのダム数と貯水量推移。日本国内の主要 644 水系を網羅。',
+  description: '一級・二級水系ごとのダム数と貯水量推移。日本国内の主要 644 水系を網羅。',
   alternates: { canonical: '/watersheds' },
 };
 
@@ -44,7 +47,10 @@ export default async function WatershedsPage() {
   const emptyCount = all.length - ordered.length;
   // Per-watershed 貯水率: SUM(latest storage) / SUM(active_capacity) over
   // rate-able dams in each system. Single round-trip across the visible list.
-  const rates = await ratesForWatersheds(ordered.map((w) => w.id));
+  const [rates, realDamCounts] = await Promise.all([
+    ratesForWatersheds(ordered.map((w) => w.id)),
+    realDamCountsForWatersheds(ordered.map((w) => w.id)),
+  ]);
   return (
     <div className="max-w-7xl mx-auto px-5 md:px-10 py-8">
       <Breadcrumbs items={[{ label: 'ホーム', href: '/' }, { label: '水系' }]} />
@@ -62,13 +68,9 @@ export default async function WatershedsPage() {
       <ul className="md:hidden space-y-2">
         {ordered.map((w) => {
           const rate = rates.get(w.id.toString()) ?? null;
-          const kindLabel =
-            w.kind === 'first' ? '一級' : w.kind === 'second' ? '二級' : 'その他';
+          const kindLabel = w.kind === 'first' ? '一級' : w.kind === 'second' ? '二級' : 'その他';
           return (
-            <li
-              key={w.slug}
-              className="bg-white border border-outline-variant rounded-xl p-3"
-            >
+            <li key={w.slug} className="bg-white border border-outline-variant rounded-xl p-3">
               <Link
                 href={`/watersheds/${w.slug}`}
                 className="font-display font-semibold inline-flex items-center gap-1.5 text-on-surface no-underline hover:text-primary"
@@ -83,11 +85,21 @@ export default async function WatershedsPage() {
                   <EntityIcon kind="dam" size={11} className="text-primary shrink-0" />
                   {w.damCount} 基
                 </span>
+                {(() => {
+                  const rc = realDamCounts.get(w.id.toString()) ?? 0;
+                  return rc > 0 ? (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span className="inline-flex items-center gap-1 text-emerald-700">
+                        <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+                        実測 {rc} 基
+                      </span>
+                    </>
+                  ) : null;
+                })()}
               </div>
               <div className="mt-2 flex items-center gap-3">
-                <span className="text-[11px] text-on-surface-variant w-12 shrink-0">
-                  貯水率
-                </span>
+                <span className="text-[11px] text-on-surface-variant w-12 shrink-0">貯水率</span>
                 {rate != null ? (
                   <>
                     <div
@@ -120,6 +132,7 @@ export default async function WatershedsPage() {
               <th>水系</th>
               <th>区分</th>
               <th className="text-right">ダム数</th>
+              <th className="text-right">実測</th>
               <th className="text-right">貯水率</th>
             </tr>
           </thead>
@@ -140,6 +153,19 @@ export default async function WatershedsPage() {
                       <EntityIcon kind="dam" size={12} className="text-primary shrink-0" />
                       {w.damCount}
                     </span>
+                  </td>
+                  <td className="text-right tabular-nums text-xs">
+                    {(() => {
+                      const rc = realDamCounts.get(w.id.toString()) ?? 0;
+                      return rc > 0 ? (
+                        <span className="inline-flex items-center gap-1 justify-end text-emerald-700">
+                          <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+                          {rc} 基
+                        </span>
+                      ) : (
+                        <span className="text-on-surface-variant">—</span>
+                      );
+                    })()}
                   </td>
                   <td className="text-right tabular-nums">
                     {rate != null ? (
