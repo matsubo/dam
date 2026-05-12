@@ -673,6 +673,53 @@ export async function nearbyDams(
  * JSON-safe. rate ∈ [0, 1] when 利水容量 + 観測値 are both present, null
  * otherwise. LATERAL DISTINCT-ON keeps this cheap even for ~200 ids.
  */
+export interface LatestRateAndSource {
+  rate: number | null;
+  /** source_id of the latest non-synthetic observation in the last 30 days, or null. */
+  realSourceId: string | null;
+}
+
+/** Variant of latestRateByDam that also returns the latest non-synthetic
+ * source_id (within the last 30 days) so the dam list can show a "実測" dot.
+ * Same query cost as the plain version + one extra LATERAL join. */
+export async function latestRateAndSourceByDam(
+  damIds: bigint[],
+): Promise<Map<string, LatestRateAndSource>> {
+  if (damIds.length === 0) return new Map();
+  const ids = damIds.map((id) => id.toString());
+  const rows = await sql<{ damId: string; rate: number | null; realSourceId: string | null }[]>`
+    SELECT
+      d.id::TEXT AS "damId",
+      CASE
+        WHEN d.active_capacity_m3 IS NULL OR d.active_capacity_m3 <= 0 THEN NULL
+        WHEN latest.storage_volume_m3 IS NULL THEN NULL
+        ELSE LEAST(1.0, latest.storage_volume_m3::FLOAT8 / d.active_capacity_m3::FLOAT8)
+      END               AS rate,
+      real_src.source_id AS "realSourceId"
+    FROM dams d
+    LEFT JOIN LATERAL (
+      SELECT o.storage_volume_m3
+      FROM observations o
+      WHERE o.dam_id = d.id AND o.storage_volume_m3 IS NOT NULL
+      ORDER BY o.observed_at DESC
+      LIMIT 1
+    ) latest ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT o.source_id
+      FROM observations o
+      WHERE o.dam_id = d.id
+        AND o.source_id <> 'synthetic'
+        AND o.observed_at > NOW() - INTERVAL '30 days'
+      ORDER BY o.observed_at DESC
+      LIMIT 1
+    ) real_src ON TRUE
+    WHERE d.id::TEXT = ANY(${ids}::TEXT[])
+  `;
+  const m = new Map<string, LatestRateAndSource>();
+  for (const r of rows) m.set(r.damId, { rate: r.rate, realSourceId: r.realSourceId });
+  return m;
+}
+
 export async function latestRateByDam(damIds: bigint[]): Promise<Map<string, number | null>> {
   if (damIds.length === 0) return new Map();
   const ids = damIds.map((id) => id.toString());
