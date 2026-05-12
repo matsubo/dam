@@ -145,6 +145,12 @@ export interface FindWatershedSeriesOptions {
   to: Date;
   bucket: 'hourly' | 'daily' | 'monthly';
   preferredSource?: string | null;
+  /**
+   * Hourly bucket only — drops `source_id = 'synthetic'` rows from the
+   * per-dam input before bucketing. The watershed aggregate then reflects
+   * only dams whose values are actually measured.
+   */
+  excludeSynthetic?: boolean;
 }
 
 // Aggregate the watershed's storage by summing latest-bucket volumes across
@@ -153,6 +159,7 @@ export interface FindWatershedSeriesOptions {
 // double-counting partial observations.
 async function findWatershedSeriesHourly(opts: FindWatershedSeriesOptions): Promise<SeriesPoint[]> {
   const preferred = opts.preferredSource ?? null;
+  const excludeSynthetic = opts.excludeSynthetic === true;
   return sql<SeriesPoint[]>`
     WITH ds AS (SELECT id FROM dams WHERE watershed_id = ${opts.watershedId}),
     bucketed AS (
@@ -166,6 +173,7 @@ async function findWatershedSeriesHourly(opts: FindWatershedSeriesOptions): Prom
       WHERE o.observed_at >= ${opts.from}
         AND o.observed_at <  ${opts.to}
         AND (${preferred}::text IS NULL OR o.source_id = ${preferred})
+        AND (NOT ${excludeSynthetic}::boolean OR o.source_id <> 'synthetic')
       GROUP BY bucket, o.dam_id
     )
     SELECT bucket AS "observedAt",

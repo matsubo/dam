@@ -103,6 +103,30 @@ const components = {
         '`json` (HAL+JSON, 既定) または `csv`。CSV は `Content-Disposition: attachment` で返却。',
       schema: { type: 'string', enum: ['json', 'csv'], default: 'json' },
     },
+    ExcludeSynthetic: {
+      in: 'query',
+      name: 'exclude_synthetic',
+      required: false,
+      description:
+        '`1` / `true` を指定すると、シード値 (`source_id = "synthetic"`) を除外し、複数の実測ソース (例: `tokyo-waterworks` + `jwa-junpo`) を同時に返します。`hourly` バケット時のみ有効。',
+      schema: { type: 'string', enum: ['0', '1', 'true', 'false'] },
+    },
+    RealDataOnly: {
+      in: 'query',
+      name: 'real',
+      required: false,
+      description:
+        '`1` / `true` を指定すると、直近 30 日に非 synthetic 観測値があるダムのみを返します。',
+      schema: { type: 'string', enum: ['0', '1', 'true', 'false'] },
+    },
+    SourceFilter: {
+      in: 'query',
+      name: 'source',
+      required: false,
+      description:
+        '指定の `source_id` (例: `tokyo-waterworks`, `jwa-junpo`) で直近 30 日に観測値があるダムのみを返します。',
+      schema: { type: 'string', pattern: '^[a-zA-Z0-9_:-]+$', maxLength: 64 },
+    },
     Lat: {
       in: 'query',
       name: 'lat',
@@ -204,8 +228,7 @@ const components = {
           type: 'string',
           nullable: true,
           format: 'uri',
-          example:
-            'https://dambinran.damnet.or.jp/wp-content/uploads/2026/02/0699DC0100AO1L.jpg',
+          example: 'https://dambinran.damnet.or.jp/wp-content/uploads/2026/02/0699DC0100AO1L.jpg',
         },
       },
     },
@@ -220,7 +243,8 @@ const components = {
             type: {
               type: 'string',
               nullable: true,
-              description: '型式 (例: `重力式コンクリート`, `アーチ式コンクリート`, `アースフィル`, `ロックフィル` 等)',
+              description:
+                '型式 (例: `重力式コンクリート`, `アーチ式コンクリート`, `アースフィル`, `ロックフィル` 等)',
               example: '重力式コンクリート',
             },
             heightM: { type: 'string', nullable: true, example: '32.80' },
@@ -509,6 +533,8 @@ const paths = {
         { $ref: '#/components/parameters/ManagerName' },
         { $ref: '#/components/parameters/Cursor' },
         { $ref: '#/components/parameters/PageSize' },
+        { $ref: '#/components/parameters/RealDataOnly' },
+        { $ref: '#/components/parameters/SourceFilter' },
       ],
       responses: {
         '200': {
@@ -618,6 +644,7 @@ const paths = {
         { $ref: '#/components/parameters/To' },
         { $ref: '#/components/parameters/Interval' },
         { $ref: '#/components/parameters/Format' },
+        { $ref: '#/components/parameters/ExcludeSynthetic' },
       ],
       responses: {
         '200': {
@@ -760,6 +787,7 @@ const paths = {
         { $ref: '#/components/parameters/To' },
         { $ref: '#/components/parameters/Interval' },
         { $ref: '#/components/parameters/Format' },
+        { $ref: '#/components/parameters/ExcludeSynthetic' },
       ],
       responses: {
         '200': {
@@ -841,7 +869,8 @@ const paths = {
       ],
       responses: {
         '200': {
-          description: 'OK — 座標が水系に含まれる場合は対応する水系、そうでない場合は最寄りの水系を返します。',
+          description:
+            'OK — 座標が水系に含まれる場合は対応する水系、そうでない場合は最寄りの水系を返します。',
           content: {
             'application/hal+json': {
               example: {

@@ -162,8 +162,14 @@ if [ "${kick}" = "1" ]; then
   # 1. Orphan observation cleanup — rows referencing dam_id that no longer
   # exists after master TRUNCATE. Their compressed Timescale chunks trip
   # 'tuple decompression limit exceeded' in quality:recompute.
+  #
+  # SET LOCAL within the same -c session removes the 100k per-DML
+  # decompression cap, since we genuinely want to scan every chunk to
+  # find orphans. The cleanup ran for the first time on 2026-05-11
+  # against ~4.8M orphan rows and now stays small from one deploy to
+  # the next; the SET-LOCAL keeps re-runs safe regardless of size.
   run_kick_step "orphan_obs" \
-    "DELETE FROM observations WHERE dam_id NOT IN (SELECT id FROM dams);"
+    "BEGIN; SET LOCAL timescaledb.max_tuples_decompressed_per_dml_transaction = 0; DELETE FROM observations WHERE dam_id NOT IN (SELECT id FROM dams); COMMIT;"
 
   # 2. Clear stuck graphile-worker jobs (>= 3 attempts).
   run_kick_step "drop_stuck_jobs" \
