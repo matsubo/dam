@@ -289,6 +289,22 @@ const components = {
               description: 'ソース別の外部 ID。',
               example: { ndi: '716', damnet: '0699' },
             },
+            dataRealness: {
+              type: 'object',
+              description:
+                '実測データの有無。`hasRealDataLast30d` が true の場合、直近 30 日に `synthetic` 以外のソースからの観測値あり。',
+              required: ['hasRealDataLast30d', 'realSourceId'],
+              properties: {
+                hasRealDataLast30d: { type: 'boolean', example: true },
+                realSourceId: {
+                  type: 'string',
+                  nullable: true,
+                  description:
+                    '直近 30 日で最新の非 synthetic 観測値の source_id (`tokyo-waterworks`, `jwa-junpo`, 等)。',
+                  example: 'tokyo-waterworks',
+                },
+              },
+            },
           },
         },
       ],
