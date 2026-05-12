@@ -13,8 +13,14 @@ const BODY = `# Data Sources & Methodology
 | ダム便覧 (dambinran.damnet.or.jp) | 利水/有効貯水容量, purpose, type, photos | Monthly | Cite source |
 | 国土地理院 (GSI) | Elevation (DEM10B/5A), basemap tiles | Monthly | Cite source |
 | ja.wikipedia.org | Photo fallback (CC-BY-SA) | Monthly | CC-BY-SA |
-| 川の防災情報 (river.go.jp) | Realtime observations | Hourly | Public |
-| 水文水質データベース | Historical observations | Backfill | Public |
+| 東京都水道局 水源情報 | 15 ダム vol/rate/delta (利根川/荒川/多摩川) | Daily | 東京都オープンデータ |
+| 水資源機構 旬報 | 26 ダム vol/rate (7 水系) | 10-day | 公的統計 |
+
+Synthetic-seed values (\`source_id = "synthetic"\`) are used for dams
+without an upstream feed. They render in charts for continuity but the
+UI tags them as 推定値 and API consumers can request real-only data via
+\`?exclude_synthetic=1\` on the observations endpoints, or filter dams to
+those with real upstream data via \`?real=1\` on /api/v1/dams.
 
 ## Name resolution (Damnet ↔ NDI)
 
