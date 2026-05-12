@@ -1,5 +1,5 @@
 import { sql } from '@dam/db/client';
-import { findSeries, type SeriesPoint } from '@dam/db/repo/observations';
+import { type SeriesPoint, findSeries } from '@dam/db/repo/observations';
 import { preferredSource } from '@dam/db/repo/source_priorities';
 import { z } from 'zod';
 import { HttpError, asProblem } from '../../../../../../lib/api/error.ts';
@@ -12,6 +12,12 @@ const Query = z.object({
   to: z.string().min(1),
   interval: z.enum(['hourly', 'daily', 'monthly']),
   format: z.enum(['json', 'csv']).optional(),
+  /**
+   * '1' / 'true' excludes synthetic-seed rows (hourly bucket only — daily
+   * and monthly continuous aggregates collapse all sources and would need
+   * a separate raw-observation rollup to filter cleanly).
+   */
+  exclude_synthetic: z.enum(['0', '1', 'true', 'false']).optional(),
 });
 
 function toCsv(slug: string, series: SeriesPoint[]): string {
@@ -55,6 +61,7 @@ export async function GET(
       to: url.searchParams.get('to'),
       interval: url.searchParams.get('interval'),
       format: url.searchParams.get('format') ?? undefined,
+      exclude_synthetic: url.searchParams.get('exclude_synthetic') ?? undefined,
     });
     if (!parsed.success) throw new HttpError(400, 'Invalid query');
     const from = new Date(parsed.data.from);
@@ -67,13 +74,22 @@ export async function GET(
     const dam = damRows[0];
     if (!dam) throw new HttpError(404, 'Dam not found');
 
-    const preferred = parsed.data.interval === 'hourly' ? await preferredSource() : null;
+    const excludeSynthetic =
+      parsed.data.exclude_synthetic === '1' || parsed.data.exclude_synthetic === 'true';
+    // The default hourly path picks the single top-priority source so the
+    // chart shows one series. exclude_synthetic explicitly wants every
+    // non-synthetic point — bypass that single-source filter so multiple
+    // real sources can coexist (e.g. tokyo-waterworks + jwa-junpo for a
+    // dam covered by both).
+    const preferred =
+      parsed.data.interval === 'hourly' && !excludeSynthetic ? await preferredSource() : null;
     const series = await findSeries({
       damId: dam.id,
       from,
       to,
       bucket: parsed.data.interval,
       preferredSource: preferred,
+      excludeSynthetic,
     });
 
     if (parsed.data.format === 'csv') {

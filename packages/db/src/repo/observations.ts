@@ -62,10 +62,19 @@ export interface FindSeriesOptions {
   to: Date;
   bucket: 'hourly' | 'daily' | 'monthly';
   preferredSource?: string | null;
+  /**
+   * Exclude rows with `source_id = 'synthetic'` (the placeholder seed used
+   * for dams without an upstream feed). Useful for API consumers who only
+   * want measured data. Hourly bucket only — the daily/monthly continuous
+   * aggregates collapse all sources and can't be filtered after the fact
+   * without re-aggregating raw observations.
+   */
+  excludeSynthetic?: boolean;
 }
 
 async function findSeriesHourly(opts: FindSeriesOptions): Promise<SeriesPoint[]> {
   const preferred = opts.preferredSource ?? null;
+  const excludeSynthetic = opts.excludeSynthetic === true;
   return sql<SeriesPoint[]>`
     SELECT observed_at AS "observedAt",
            storage_volume_m3 AS "storageVolumeM3",
@@ -79,6 +88,7 @@ async function findSeriesHourly(opts: FindSeriesOptions): Promise<SeriesPoint[]>
       AND observed_at >= ${opts.from}
       AND observed_at <  ${opts.to}
       AND (${preferred}::text IS NULL OR source_id = ${preferred})
+      AND (NOT ${excludeSynthetic}::boolean OR source_id <> 'synthetic')
     ORDER BY observed_at
   `;
 }
@@ -141,9 +151,7 @@ export interface FindWatershedSeriesOptions {
 // all dams that have observations in that bucket. Per-dam volumes can have
 // gaps so we use last() at the bucket level rather than avg() to avoid
 // double-counting partial observations.
-async function findWatershedSeriesHourly(
-  opts: FindWatershedSeriesOptions,
-): Promise<SeriesPoint[]> {
+async function findWatershedSeriesHourly(opts: FindWatershedSeriesOptions): Promise<SeriesPoint[]> {
   const preferred = opts.preferredSource ?? null;
   return sql<SeriesPoint[]>`
     WITH ds AS (SELECT id FROM dams WHERE watershed_id = ${opts.watershedId}),
@@ -171,9 +179,7 @@ async function findWatershedSeriesHourly(
   `;
 }
 
-async function findWatershedSeriesDaily(
-  opts: FindWatershedSeriesOptions,
-): Promise<SeriesPoint[]> {
+async function findWatershedSeriesDaily(opts: FindWatershedSeriesOptions): Promise<SeriesPoint[]> {
   return sql<SeriesPoint[]>`
     WITH ds AS (SELECT id FROM dams WHERE watershed_id = ${opts.watershedId})
     SELECT day AS "observedAt",
