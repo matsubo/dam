@@ -1,0 +1,170 @@
+{
+  "_meta": {
+    "schema": "v1",
+    "generated_at": "2026-05-13",
+    "purpose": "Scored backlog of candidate upstream sources. Hand-curated URLs + DB-derived damCount via bin/score_sources.ts.",
+    "scoring": "yieldScore = damCount × cadenceWeight × legalWeight ÷ adapterCost; weights: hourly=24, daily=1, 10d=0.1, unknown=0.5; legalWeight: open=1, mixed=0.4, blocked=0.05; adapterCost: html-table=1, js-rendered=3, xml=1, pdf=5, unknown=2"
+  },
+  "covered": [
+    {
+      "id": "tokyo-waterworks",
+      "operator": "東京都水道局",
+      "url": "https://www.waterworks.metro.tokyo.lg.jp/suigen/suigen.html",
+      "format": "html-table",
+      "license": "東京都オープンデータ",
+      "cadence": "daily",
+      "legalStance": "open",
+      "dams": 15
+    },
+    {
+      "id": "jwa-junpo",
+      "operator": "水資源機構（本社 旬報）",
+      "url": "https://www.water.go.jp/honsya/honsya/suigen/junpo/index.html",
+      "format": "html-table",
+      "license": "公的統計",
+      "cadence": "10d",
+      "legalStance": "open",
+      "dams": 26
+    },
+    {
+      "id": "aitoyo",
+      "operator": "公益財団法人 愛知・豊川用水振興協会",
+      "url": "https://www.aitoyo.or.jp/fountainhead/dam/",
+      "format": "html-table",
+      "license": "公益財団法人 (出典明示)",
+      "cadence": "daily",
+      "legalStance": "open",
+      "dams": 7
+    }
+  ],
+  "candidates": [
+    {
+      "managerPattern": "神奈川県",
+      "operator": "神奈川県企業庁",
+      "url": "https://kanagawa-dam.jp/web_data/news_mizugame.html",
+      "format": "js-rendered",
+      "license": "県オープンデータ (推定)",
+      "cadence": "daily",
+      "legalStance": "open",
+      "status": "investigating",
+      "notes": "Values populated via JS; need to find the XHR JSON endpoint or use Playwright.",
+      "damCount": 9,
+      "score": 3
+    },
+    {
+      "managerPattern": "大阪府",
+      "operator": "大阪府河川防災情報",
+      "url": "https://www.osaka-kasen-portal.net/suibou/public/ja/choryuryo.html",
+      "format": "js-rendered",
+      "license": "府オープンデータ (推定)",
+      "cadence": "hourly",
+      "legalStance": "open",
+      "status": "investigating",
+      "notes": "TablePress + JS hydration; hook denied recon earlier — needs explicit go-ahead.",
+      "damCount": 15,
+      "score": 120
+    },
+    {
+      "managerPattern": "近畿地方整備局",
+      "operator": "国交省 近畿地方整備局 (琵琶湖+ダム貯水率)",
+      "url": "https://www.kkr.mlit.go.jp/river/biwakosuiidamutyosuiritsu.html",
+      "format": "html-table",
+      "license": "国 (要確認)",
+      "cadence": "daily",
+      "legalStance": "mixed",
+      "status": "investigating",
+      "damCount": 7,
+      "score": 2.8
+    },
+    {
+      "managerPattern": "中部地方整備局",
+      "operator": "国交省 中部地方整備局 渇水情報",
+      "url": "https://www.cbr.mlit.go.jp/kawatomizu/kassui_zyouhou/index.htm",
+      "format": "html-table",
+      "license": "国",
+      "cadence": "daily",
+      "legalStance": "mixed",
+      "status": "investigating",
+      "damCount": 9,
+      "score": 3.6
+    },
+    {
+      "managerPattern": "北海道",
+      "operator": "北海道（建設部河川砂防局）",
+      "url": null,
+      "format": "unknown",
+      "license": "unknown",
+      "cadence": "unknown",
+      "legalStance": "unknown",
+      "status": "needs-recon",
+      "notes": "67 道直営 + 48 道開発局農水部 + 18 道開発局建設部 + 26 北海道電力 = ~160 dams in Hokkaido. High-yield if even one aggregator exists.",
+      "damCount": 167,
+      "score": 20.9
+    },
+    {
+      "managerPattern": "福岡県|長崎県|大分県|熊本県|宮崎県|鹿児島県|佐賀県|沖縄県",
+      "operator": "九州 prefectures (合計 ~200 dams)",
+      "url": null,
+      "format": "unknown",
+      "license": "unknown",
+      "cadence": "unknown",
+      "legalStance": "unknown",
+      "status": "needs-recon",
+      "notes": "Each pref likely has its own 河川防災 site; investigate one (e.g. Fukuoka), build template adapter, generalize.",
+      "damCount": 214,
+      "score": 26.8
+    },
+    {
+      "managerPattern": "関西電力（株）|電源開発（株）|東京電力（株）|中部電力（株）|九州電力（株）|東北電力（株）|中国電力（株）|北陸電力（株）|北海道電力（株）|四国電力（株）",
+      "operator": "10 power utilities (~290 dams)",
+      "url": null,
+      "format": "unknown",
+      "license": "unknown",
+      "cadence": "unknown",
+      "legalStance": "unknown",
+      "status": "needs-recon",
+      "notes": "Most utilities don't publish dam-level real-time vol/rate publicly — usage is a competitive concern. Possibly only post-hoc PDFs. Bias to LOW probability.",
+      "damCount": 343,
+      "score": 42.9
+    },
+    {
+      "managerPattern": "weathernews",
+      "operator": "Weathernews 全国ダム貯水率マップ (aggregator)",
+      "url": "https://weathernews.jp/s/topics/map/dam.html",
+      "format": "js-rendered",
+      "license": "要確認 (民間再配布; ToS で API 利用条件確認)",
+      "cadence": "hourly",
+      "legalStance": "mixed",
+      "status": "investigating",
+      "notes": "Redistributes the policy-blocked MLIT kasenbosai data. If their ToS permits non-commercial / cited reuse, this is the biggest single yield jump (~500 dams). Needs legal review FIRST.",
+      "damCount": 0,
+      "score": 0
+    },
+    {
+      "managerPattern": "*",
+      "operator": "Wikidata SPARQL — claim P2659 (current water level)",
+      "url": "https://query.wikidata.org/",
+      "format": "sparql",
+      "license": "CC0",
+      "cadence": "unknown",
+      "legalStance": "open",
+      "status": "investigating",
+      "notes": "Long tail. Coverage probably tiny but free; useful as a 4th-rank fallback.",
+      "damCount": 0,
+      "score": 0
+    },
+    {
+      "managerPattern": "国交省 (MLIT)",
+      "operator": "国交省 川の防災情報 / 水文水質 DB (official)",
+      "url": "https://www.river.go.jp/",
+      "format": "xml",
+      "license": "blocked-for-programmatic",
+      "cadence": "hourly",
+      "legalStance": "blocked",
+      "status": "policy-blocked",
+      "notes": "Largest single source (~1000 dams) but blocked at policy level. Pursue formal partnership via 国土交通省データ標準化推進室. Bureaucratic clock measured in months.",
+      "damCount": 0,
+      "score": 0
+    }
+  ]
+}
