@@ -33,6 +33,11 @@ export const CRONTAB = `
 # new publication within ~24 h regardless of which exact day it lands on.
 0 4 * * * ingest:jwa-junpo
 
+# あいとよネット (aitoyo) — 7 dams across 木曽川 / 豊川 / 矢作川 系. Page is
+# updated daily at 24:00 JST (木曽川/豊川) or 09:00 JST (矢作川); fetch at
+# 02:00 UTC = 11:00 JST so we get fresh data for both branches.
+0 2 * * * ingest:aitoyo
+
 # Suimon backfill remains opt-in only. Enqueue ad-hoc jobs via add_job
 # rather than running it on a fixed cron, so we don't keep hammering the
 # upstream when there's nothing new to import.

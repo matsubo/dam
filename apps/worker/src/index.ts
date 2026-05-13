@@ -4,6 +4,7 @@ import { CRONTAB } from './crontab.ts';
 import backfillJwaJunpo from './tasks/backfill_jwa_junpo.ts';
 import backfillEnqueue from './tasks/backfill_suimon_enqueue.ts';
 import backfillRun from './tasks/backfill_suimon_run.ts';
+import ingestAitoyo from './tasks/ingest_aitoyo.ts';
 import ingestJwaJunpo from './tasks/ingest_jwa_junpo.ts';
 import ingestKasenbosai from './tasks/ingest_kasenbosai.ts';
 import ingestTokyoWaterworks from './tasks/ingest_tokyo_waterworks.ts';
@@ -32,6 +33,7 @@ async function main(): Promise<void> {
       'ingest:kasenbosai': ingestKasenbosai,
       'ingest:tokyo-waterworks': ingestTokyoWaterworks,
       'ingest:jwa-junpo': ingestJwaJunpo,
+      'ingest:aitoyo': ingestAitoyo,
       'backfill:suimon:enqueue': backfillEnqueue,
       'backfill:suimon:run': backfillRun,
       'backfill:jwa-junpo': backfillJwaJunpo,
