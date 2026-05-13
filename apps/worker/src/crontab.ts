@@ -43,6 +43,12 @@ export const CRONTAB = `
 # 01:00 UTC = 10:00 JST.
 0 1 * * * ingest:jwa-chikugo
 
+# かながわの水がめ JSON API — hourly cadence for 5 prefectural dams
+# (相模/城山/三保/宮ヶ瀬/道志). Page rolls a 30-hour window; cron at
+# every hour :05 captures the freshest reading shortly after the
+# source's update.
+5 * * * * ingest:kanagawa-dam
+
 # Suimon backfill remains opt-in only. Enqueue ad-hoc jobs via add_job
 # rather than running it on a fixed cron, so we don't keep hammering the
 # upstream when there's nothing new to import.

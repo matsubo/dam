@@ -74,6 +74,13 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '筑後川水系 7 ダム (松原/下筌/大山/合所/江川/寺内/小石原川) の貯水率・貯水量。',
     label: 'JWA 筑後川',
   },
+  'kanagawa-dam': {
+    upstream: 'かながわの水がめ (kanagawa-dam.jp) — JSON API `summary.php`',
+    license: '神奈川県企業庁 — 出典明示で再配布可 (推定)',
+    cadence: '時次 (1 時間粒度; 取得は毎時 :05)',
+    what: '神奈川県 5 ダム (相模/城山/三保/宮ヶ瀬/道志) の貯水位・貯水量・貯水率・流入量・放流量。',
+    label: 'かながわの水がめ',
+  },
   synthetic: {
     upstream: '当サイトの内部生成 (シード値)',
     license: 'CC0 (出典明示は任意)',
