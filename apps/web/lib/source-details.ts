@@ -67,6 +67,13 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '木曽川 4 ダム (牧尾/阿木川/味噌川/岩屋), 豊川 1 ダム (宇連), 矢作川 2 ダム (矢作/羽布) の 利水容量・貯水量・貯水率・前日差・平年貯水率。',
     label: 'あいとよネット',
   },
+  'jwa-chikugo': {
+    upstream: '水資源機構 筑後川ダム統合管理事務所 (water.go.jp/chikugo/chikugo/water-source.html)',
+    license: '公的統計 — 出典明示で再配布可',
+    cadence: '日次 (毎日 0:00 JST 値; 取得は 10:00 JST)',
+    what: '筑後川水系 7 ダム (松原/下筌/大山/合所/江川/寺内/小石原川) の貯水率・貯水量。',
+    label: 'JWA 筑後川',
+  },
   synthetic: {
     upstream: '当サイトの内部生成 (シード値)',
     license: 'CC0 (出典明示は任意)',
