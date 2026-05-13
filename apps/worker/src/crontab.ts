@@ -38,6 +38,11 @@ export const CRONTAB = `
 # 02:00 UTC = 11:00 JST so we get fresh data for both branches.
 0 2 * * * ingest:aitoyo
 
+# JWA Chikugo (筑後川 7 dams: 松原/下筌/大山/合所/江川/寺内/小石原川). Page
+# shows today 0時 JST values, refreshed during business hours. Fetch at
+# 01:00 UTC = 10:00 JST.
+0 1 * * * ingest:jwa-chikugo
+
 # Suimon backfill remains opt-in only. Enqueue ad-hoc jobs via add_job
 # rather than running it on a fixed cron, so we don't keep hammering the
 # upstream when there's nothing new to import.
