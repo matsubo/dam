@@ -7,6 +7,7 @@ import backfillRun from './tasks/backfill_suimon_run.ts';
 import ingestAitoyo from './tasks/ingest_aitoyo.ts';
 import ingestJwaChikugo from './tasks/ingest_jwa_chikugo.ts';
 import ingestJwaJunpo from './tasks/ingest_jwa_junpo.ts';
+import ingestKanagawa from './tasks/ingest_kanagawa.ts';
 import ingestKasenbosai from './tasks/ingest_kasenbosai.ts';
 import ingestTokyoWaterworks from './tasks/ingest_tokyo_waterworks.ts';
 import match from './tasks/master_match.ts';
@@ -36,6 +37,7 @@ async function main(): Promise<void> {
       'ingest:jwa-junpo': ingestJwaJunpo,
       'ingest:aitoyo': ingestAitoyo,
       'ingest:jwa-chikugo': ingestJwaChikugo,
+      'ingest:kanagawa-dam': ingestKanagawa,
       'backfill:suimon:enqueue': backfillEnqueue,
       'backfill:suimon:run': backfillRun,
       'backfill:jwa-junpo': backfillJwaJunpo,
