@@ -165,7 +165,7 @@ export default async function DamDetail({ params }: PageProps) {
       <section className="border border-gray-200 rounded p-4 mb-8">
         <header className="flex items-baseline justify-between mb-3">
           <h2 className="text-lg font-semibold">最新観測値</h2>
-          {latest && (
+          {latest && latest.sourceId !== 'synthetic' && (
             <span className="text-sm text-muted inline-flex items-baseline gap-1.5">
               <span>{fmtDate(latest.observedAt)}</span>
               <SourceBadge sourceId={latest.sourceId} />
@@ -173,7 +173,21 @@ export default async function DamDetail({ params }: PageProps) {
             </span>
           )}
         </header>
-        {latest ? (
+        {/* When the only available observation is synthetic, we suppress
+            the "latest value" block entirely. A synthetic observed_at
+            looks deceptively like a stale crawl ("最新観測値: 5/5") even
+            though it's just the seed timestamp. The chart below still
+            renders synthetic for shape. */}
+        {latest && latest.sourceId === 'synthetic' ? (
+          <p className="text-sm text-on-surface-variant">
+            このダムには実観測値の上流フィードが未接続です。下のグラフは推定値 (synthetic seed) を
+            表示しています。実測ソースとの紐付けは
+            <Link href="/sources" className="text-primary hover:underline mx-1">
+              データソース
+            </Link>
+            を参照。
+          </p>
+        ) : latest ? (
           (() => {
             // Denominator policy: 利水容量 only. When the dam has no
             // active capacity (~51% of all dams — Damnet doesn't list
