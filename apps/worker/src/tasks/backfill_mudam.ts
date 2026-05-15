@@ -100,17 +100,49 @@ export function parseDistrictDams(html: string): MudamDam[] {
   return out;
 }
 
+/**
+ * mudam.nilim.go.jp serves an intermediate-only TLS chain that Bun's
+ * bundled root store can't verify. Rather than disable TLS verification
+ * globally (would weaken every outbound call from the worker), we shell
+ * out to `curl`, which uses the OS CA bundle and resolves the chain
+ * correctly. The Dockerfile.worker installs curl.
+ */
+async function curlFetch(
+  url: string,
+  timeoutS = 20,
+): Promise<{ status: number; body: Uint8Array }> {
+  const proc = Bun.spawn(
+    [
+      'curl',
+      '-sL',
+      '--max-time',
+      String(timeoutS),
+      '-A',
+      `Mozilla/5.0 ${userAgent()}`,
+      '-w',
+      '%{http_code}',
+      '-o',
+      '-',
+      url,
+    ],
+    { stdout: 'pipe', stderr: 'pipe' },
+  );
+  const buf = await new Response(proc.stdout).arrayBuffer();
+  const exit = await proc.exited;
+  if (exit !== 0) throw new Error(`curl exited ${exit}: ${url}`);
+  // curl with -w '%{http_code}' appends the 3-digit status at the very end.
+  const bytes = new Uint8Array(buf);
+  if (bytes.length < 3) throw new Error(`curl response too short: ${url}`);
+  const statusStr = new TextDecoder('ascii').decode(bytes.slice(bytes.length - 3));
+  const status = Number(statusStr);
+  const body = bytes.slice(0, bytes.length - 3);
+  return { status, body };
+}
+
 async function fetchDistrict(district: DistrictKey): Promise<MudamDam[]> {
-  const r = await fetch(`${BASE_URL}/districtMap/${district}`, {
-    headers: { 'user-agent': `Mozilla/5.0 ${userAgent()}` },
-    signal: AbortSignal.timeout(20_000),
-    // mudam.nilim.go.jp serves an intermediate-only chain that Bun/Node's
-    // bundled trust store can't verify. Server cert itself is valid (issued
-    // by a reputable CA); we only relax the leaf-signature check.
-    tls: { rejectUnauthorized: false },
-  } as RequestInit);
-  if (r.status !== 200) throw new Error(`district ${district} HTTP ${r.status}`);
-  return parseDistrictDams(await r.text());
+  const { status, body } = await curlFetch(`${BASE_URL}/districtMap/${district}`, 20);
+  if (status !== 200) throw new Error(`district ${district} HTTP ${status}`);
+  return parseDistrictDams(new TextDecoder('utf-8').decode(body));
 }
 
 interface CsvRow {
@@ -159,16 +191,10 @@ export function parseMudamCsv(text: string): CsvRow[] {
 
 async function downloadYearCsv(damsysId: number, year: number): Promise<CsvRow[]> {
   const url = `${BASE_URL}/chronology/form02/download/csv?damsysId=${damsysId}&options=day&yearFrom=${year}&yearTo=${year}`;
-  const r = await fetch(url, {
-    headers: { 'user-agent': `Mozilla/5.0 ${userAgent()}` },
-    signal: AbortSignal.timeout(30_000),
-    tls: { rejectUnauthorized: false },
-  } as RequestInit);
-  if (r.status !== 200) return [];
+  const { status, body } = await curlFetch(url, 30);
+  if (status !== 200) return [];
   // Response is Shift_JIS; decode via TextDecoder.
-  const buf = await r.arrayBuffer();
-  const text = new TextDecoder('shift_jis').decode(buf);
-  return parseMudamCsv(text);
+  return parseMudamCsv(new TextDecoder('shift_jis').decode(body));
 }
 
 async function ensureSourcePriority(): Promise<void> {

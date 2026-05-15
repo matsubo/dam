@@ -4,6 +4,12 @@
 FROM oven/bun:1.3 AS deps
 WORKDIR /app
 
+# curl is used by the mudam backfill adapter to reach mudam.nilim.go.jp
+# (their server presents an intermediate-only chain that Bun's bundled
+# trust store can't verify; curl uses the OS CA bundle which can).
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY package.json bun.lock tsconfig.base.json ./
 COPY apps/web/package.json apps/web/package.json
 COPY apps/worker/package.json apps/worker/package.json
