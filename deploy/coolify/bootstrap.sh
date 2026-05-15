@@ -22,6 +22,14 @@
 #                                    saturate the worker pool — only use
 #                                    when explicitly refreshing master
 #                                    data. Requires BOOTSTRAP_KICK=1.
+#   BOOTSTRAP_PURGE_SYNTHETIC=1    — One-shot: DELETE every row where
+#                                    observations.source_id = 'synthetic'
+#                                    and deactivate the source_priorities
+#                                    entry so it doesn't re-seed. Touches
+#                                    ~2.7M compressed Timescale rows, so
+#                                    we lift the per-DML decompression
+#                                    cap inside the same transaction.
+#                                    UNSET after the first successful run.
 #
 # We deliberately AVOID `set -eu`. A non-fatal failure in the bootstrap
 # (e.g. seed file checksum drift, observations seed timeout) shouldn't keep
@@ -132,6 +140,35 @@ fi
 obs=$(count_or_empty "SELECT COUNT(*) FROM observations")
 log "[bootstrap] observations.count = '${obs}'"
 
+# One-shot synthetic purge. The synthetic seed was visually indistinguishable
+# from a stuck crawler ("最新観測値: 2026-05-05" on every uncovered dam),
+# so when we have a real-source story across multiple dams we drop the seed
+# entirely. SET LOCAL lifts the per-DML decompression cap for this one
+# transaction; chunks are recompressed by Timescale's policy on schedule.
+if [ "${BOOTSTRAP_PURGE_SYNTHETIC:-}" = "1" ]; then
+  log "[bootstrap] BOOTSTRAP_PURGE_SYNTHETIC=1 — deleting all synthetic observations"
+  before=$(count_or_empty "SELECT COUNT(*) FROM observations WHERE source_id = 'synthetic'")
+  log "  synthetic rows to purge: ${before}"
+  purge_log=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q -c "
+    BEGIN;
+    SET LOCAL timescaledb.max_tuples_decompressed_per_dml_transaction = 0;
+    DELETE FROM observations WHERE source_id = 'synthetic';
+    UPDATE source_priorities SET active = false WHERE source_id = 'synthetic';
+    COMMIT;
+  " 2>&1)
+  purge_status=$?
+  if [ ${purge_status} -eq 0 ]; then
+    after=$(count_or_empty "SELECT COUNT(*) FROM observations")
+    log "[bootstrap] purge OK — observations.count now ${after} (was synthetic=${before})"
+    obs="${after}"
+  else
+    log "[bootstrap] purge FAILED (status=${purge_status}, non-fatal):"
+    echo "${purge_log}" | head -30 | while IFS= read -r line; do
+      log "  ${line}"
+    done
+  fi
+fi
+
 # One-shot kick: clean up orphan observations (rows referencing dam_id that
 # no longer exists after a master TRUNCATE) and clear failed graphile-worker
 # jobs that block the queue. Then enqueue master refreshes + the kasenbosai
@@ -224,8 +261,14 @@ if [ "${force_obs}" = "1" ] && [ "${obs}" != "0" ]; then
   obs="0"
 fi
 
-if [ "${obs}" = "0" ] && [ -n "${dams}" ] && [ "${dams}" != "0" ]; then
-  log "[bootstrap] observations empty → running synthetic seeder (≈30s)"
+# Synthetic seeder: only runs when both observations is empty AND the
+# operator explicitly opts in. We dropped the auto-seed-when-empty
+# behaviour because the seed values are visually indistinguishable from
+# a stuck crawler in the UI and we now have multiple real sources.
+# To re-enable for a one-off (e.g. fresh prod bring-up), set
+# BOOTSTRAP_SEED_SYNTHETIC=1 alongside an empty observations table.
+if [ "${BOOTSTRAP_SEED_SYNTHETIC:-}" = "1" ] && [ "${obs}" = "0" ] && [ -n "${dams}" ] && [ "${dams}" != "0" ]; then
+  log "[bootstrap] BOOTSTRAP_SEED_SYNTHETIC=1 + observations empty → running synthetic seeder (≈30s)"
   if ! bun run /app/apps/web/bin/seed_synthetic_observations.ts --hourly-days 30 --years 5; then
     log "[bootstrap] synthetic seeder failed (non-fatal); continuing"
   fi
