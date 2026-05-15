@@ -38,6 +38,14 @@
 #                                    job is enqueued — the worker takes
 #                                    ~100 min for a 5-year × all-9-region
 #                                    sweep.
+#   BOOTSTRAP_REFRESH_AGGREGATES=1 — One-shot: CALL Timescale's
+#                                    refresh_continuous_aggregate for
+#                                    obs_daily and obs_monthly over the
+#                                    full mudam range (2019-now). Needed
+#                                    after a large historical insert
+#                                    (like backfill:mudam) before the
+#                                    chart UI surfaces the rows. UNSET
+#                                    after the first successful run.
 #
 # We deliberately AVOID `set -eu`. A non-fatal failure in the bootstrap
 # (e.g. seed file checksum drift, observations seed timeout) shouldn't keep
@@ -153,6 +161,23 @@ log "[bootstrap] observations.count = '${obs}'"
 # so when we have a real-source story across multiple dams we drop the seed
 # entirely. SET LOCAL lifts the per-DML decompression cap for this one
 # transaction; chunks are recompressed by Timescale's policy on schedule.
+if [ "${BOOTSTRAP_REFRESH_AGGREGATES:-}" = "1" ]; then
+  log "[bootstrap] BOOTSTRAP_REFRESH_AGGREGATES=1 — refreshing obs_daily & obs_monthly continuous aggregates"
+  refresh_log=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q -c "
+    CALL refresh_continuous_aggregate('obs_daily',   '2019-01-01', NULL);
+    CALL refresh_continuous_aggregate('obs_monthly', '2019-01-01', NULL);
+  " 2>&1)
+  refresh_status=$?
+  if [ ${refresh_status} -eq 0 ]; then
+    log "[bootstrap] continuous aggregates refreshed OK"
+  else
+    log "[bootstrap] aggregate refresh FAILED (status=${refresh_status}, non-fatal):"
+    echo "${refresh_log}" | head -30 | while IFS= read -r line; do
+      log "  ${line}"
+    done
+  fi
+fi
+
 if [ "${BOOTSTRAP_PURGE_SYNTHETIC:-}" = "1" ]; then
   log "[bootstrap] BOOTSTRAP_PURGE_SYNTHETIC=1 — deleting all synthetic observations"
   before=$(count_or_empty "SELECT COUNT(*) FROM observations WHERE source_id = 'synthetic'")
