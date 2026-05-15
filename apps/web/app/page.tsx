@@ -47,6 +47,9 @@ interface HomeStats {
   rateableDamCount: bigint;
   /** Distinct dams that have at least one non-synthetic observation in the last 30 days. */
   realDamCount: bigint;
+  /** Distinct dams that have at least one non-synthetic observation EVER
+   *  (mudam-style historical data counts; vastly larger than the 30 d figure). */
+  historicalDamCount: bigint;
   oldestObs: Date | null;
 }
 
@@ -76,6 +79,12 @@ async function homeStats(): Promise<HomeStats> {
          FROM observations
          WHERE observed_at > NOW() - INTERVAL '30 days'
            AND source_id <> 'synthetic')                                                  AS "realDamCount",
+      -- All-time distinct real-source dams. Mudam contributes here even
+      -- though its observations are 1-2 years old; the 30 d filter above
+      -- otherwise hides ~500 dams of historical coverage.
+      (SELECT COUNT(DISTINCT dam_id)::BIGINT
+         FROM observations
+         WHERE source_id <> 'synthetic')                                                  AS "historicalDamCount",
       (SELECT MIN(observed_at)      FROM observations)                                   AS "oldestObs"
   `;
   const row = rows[0];
@@ -141,6 +150,7 @@ const cachedHomeStats = unstable_cache(
       rateableStorageM3: s.rateableStorageM3,
       rateableDamCount: Number(s.rateableDamCount),
       realDamCount: Number(s.realDamCount),
+      historicalDamCount: Number(s.historicalDamCount),
       oldestObsIso: s.oldestObs?.toISOString() ?? null,
     };
   },
@@ -502,6 +512,11 @@ export default async function Home() {
               value={fmt(s.realDamCount)}
               sub={`基（直近 30 日 / 全 ${fmt(s.damCount)} 基中）→ 一覧へ`}
               href="/dams?real=1"
+            />
+            <Stat
+              label="歴史データ"
+              value={fmt(s.historicalDamCount)}
+              sub={`基（NILIM mudam 経由の過去 5 年分含む / 全 ${fmt(s.damCount)} 基中）`}
             />
           </div>
         </div>
