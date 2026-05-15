@@ -30,6 +30,14 @@
 #                                    we lift the per-DML decompression
 #                                    cap inside the same transaction.
 #                                    UNSET after the first successful run.
+#   BOOTSTRAP_BACKFILL_MUDAM=N     — Enqueue a one-shot mudam backfill
+#                                    over the past N years for ALL 9
+#                                    districts. Set to '1' for the
+#                                    default 5-year window. Requires
+#                                    BOOTSTRAP_KICK=1. UNSET after the
+#                                    job is enqueued — the worker takes
+#                                    ~100 min for a 5-year × all-9-region
+#                                    sweep.
 #
 # We deliberately AVOID `set -eu`. A non-fatal failure in the bootstrap
 # (e.g. seed file checksum drift, observations seed timeout) shouldn't keep
@@ -248,6 +256,17 @@ if [ "${kick}" = "1" ]; then
     log "[bootstrap] BOOTSTRAP_BACKFILL_JWA=${BOOTSTRAP_BACKFILL_JWA} — enqueue jwa-junpo backfill (months=${months})"
     run_kick_step "enqueue_jwa_backfill" \
       "SELECT graphile_worker.add_job('backfill:jwa-junpo', json_build_object('months', ${months}));"
+  fi
+
+  if [ -n "${BOOTSTRAP_BACKFILL_MUDAM:-}" ]; then
+    years="${BOOTSTRAP_BACKFILL_MUDAM}"
+    # Treat '1' as a shorthand for the default 5-year window.
+    if [ "${years}" = "1" ]; then
+      years=5
+    fi
+    log "[bootstrap] BOOTSTRAP_BACKFILL_MUDAM=${BOOTSTRAP_BACKFILL_MUDAM} — enqueue mudam backfill (years=${years}, all districts)"
+    run_kick_step "enqueue_mudam_backfill" \
+      "SELECT graphile_worker.add_job('backfill:mudam', json_build_object('district', 'all', 'years', ${years}));"
   fi
 
   obs=$(count_or_empty "SELECT COUNT(*) FROM observations")
