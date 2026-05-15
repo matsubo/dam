@@ -95,6 +95,13 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '滋賀県 6 ダム (日野川/石田川/宇曽川/青土/姉川/永源寺) の貯水位・流入量・放流量・60分雨量。',
     label: '滋賀県土木防災',
   },
+  'tottori-dam': {
+    upstream: '鳥取県ダム諸量情報システム (tottoridam.jp)',
+    license: '鳥取県オープンデータ — 出典明示で再配布可 (推定)',
+    cadence: '時次 (1 時間粒度; ページは 10 分毎にリフレッシュ; 取得は毎時 :09)',
+    what: '鳥取県 5 ダム (賀祥/朝鍋/佐治川/東郷/百谷) の貯水位・有効貯水量・貯水率・流入量・放流量・時間雨量。',
+    label: '鳥取県ダム情報',
+  },
   synthetic: {
     upstream: '当サイトの内部生成 (シード値)',
     license: 'CC0 (出典明示は任意)',
