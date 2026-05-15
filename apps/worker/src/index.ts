@@ -2,6 +2,7 @@
 import { run } from 'graphile-worker';
 import { CRONTAB } from './crontab.ts';
 import backfillJwaJunpo from './tasks/backfill_jwa_junpo.ts';
+import backfillMudam from './tasks/backfill_mudam.ts';
 import backfillEnqueue from './tasks/backfill_suimon_enqueue.ts';
 import backfillRun from './tasks/backfill_suimon_run.ts';
 import ingestAitoyo from './tasks/ingest_aitoyo.ts';
@@ -41,6 +42,7 @@ async function main(): Promise<void> {
       'backfill:suimon:enqueue': backfillEnqueue,
       'backfill:suimon:run': backfillRun,
       'backfill:jwa-junpo': backfillJwaJunpo,
+      'backfill:mudam': backfillMudam,
       'quality:recompute': qualityRecompute,
       'images:refresh:damnet': refreshDamImagesDamnet,
       'images:refresh:wikipedia': refreshDamImagesWikipedia,
