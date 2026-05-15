@@ -49,6 +49,11 @@ export const CRONTAB = `
 # source's update.
 5 * * * * ingest:kanagawa-dam
 
+# 滋賀県土木防災 — 6 prefectural dams, hourly. Page exposes a 23-hour
+# window per fetch; cron at every hour :07 catches today's freshest
+# value + 22 hours of context for self-healing.
+7 * * * * ingest:shiga-bousai
+
 # Suimon backfill remains opt-in only. Enqueue ad-hoc jobs via add_job
 # rather than running it on a fixed cron, so we don't keep hammering the
 # upstream when there's nothing new to import.

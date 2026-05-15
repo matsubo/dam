@@ -88,6 +88,13 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '全国 600 ダム × 日次 貯水位・流入量・放流量 (貯水量直接なし)。チャートの歴史的深さ補完用。',
     label: 'NILIM ダム諸量 DB',
   },
+  'shiga-bousai': {
+    upstream: '滋賀県土木防災情報システム (shiga-bousai.jp/dam)',
+    license: '滋賀県オープンデータ — 出典明示で再配布可 (推定)',
+    cadence: '時次 (1 時間粒度; 取得は毎時 :07)',
+    what: '滋賀県 6 ダム (日野川/石田川/宇曽川/青土/姉川/永源寺) の貯水位・流入量・放流量・60分雨量。',
+    label: '滋賀県土木防災',
+  },
   synthetic: {
     upstream: '当サイトの内部生成 (シード値)',
     license: 'CC0 (出典明示は任意)',
