@@ -102,6 +102,13 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '鳥取県 5 ダム (賀祥/朝鍋/佐治川/東郷/百谷) の貯水位・有効貯水量・貯水率・流入量・放流量・時間雨量。',
     label: '鳥取県ダム情報',
   },
+  'aomori-dam': {
+    upstream: '青森県砂防ダム情報 (kasensabo.bousai.pref.aomori.jp)',
+    license: '青森県オープンデータ — 出典明示で再配布可 (推定)',
+    cadence: '時次 (リアルタイム; 取得は毎時 :11)',
+    what: '青森県 7 ダム (下湯/浅虫/久吉/遠部/浅瀬石川/津軽/清水目) の貯水位・流入量・全放流量。',
+    label: '青森県砂防ダム',
+  },
   synthetic: {
     upstream: '当サイトの内部生成 (シード値)',
     license: 'CC0 (出典明示は任意)',

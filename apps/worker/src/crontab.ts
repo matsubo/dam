@@ -59,6 +59,10 @@ export const CRONTAB = `
 # hour catches the freshest values.
 9 * * * * ingest:tottori-dam
 
+# 青森県砂防ダム情報 — 7 dams. Page is real-time (JST minute-level
+# timestamp). Cron at :11 every hour.
+11 * * * * ingest:aomori-dam
+
 # Suimon backfill remains opt-in only. Enqueue ad-hoc jobs via add_job
 # rather than running it on a fixed cron, so we don't keep hammering the
 # upstream when there's nothing new to import.

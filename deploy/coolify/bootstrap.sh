@@ -263,6 +263,7 @@ if [ "${kick}" = "1" ]; then
   run_kick_step "enqueue_kanagawa" "SELECT graphile_worker.add_job('ingest:kanagawa-dam','{}'::json);"
   run_kick_step "enqueue_shiga"    "SELECT graphile_worker.add_job('ingest:shiga-bousai','{}'::json);"
   run_kick_step "enqueue_tottori"  "SELECT graphile_worker.add_job('ingest:tottori-dam','{}'::json);"
+  run_kick_step "enqueue_aomori"   "SELECT graphile_worker.add_job('ingest:aomori-dam','{}'::json);"
 
   # 3b. Heavy master refreshes (NDI re-import, Damnet re-scrape) are now
   # gated behind their own env. They take 30-60 min each, saturate the
