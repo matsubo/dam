@@ -81,6 +81,13 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '神奈川県 5 ダム (相模/城山/三保/宮ヶ瀬/道志) の貯水位・貯水量・貯水率・流入量・放流量。',
     label: 'かながわの水がめ',
   },
+  mudam: {
+    upstream: 'NILIM ダム諸量データベース (mudam.nilim.go.jp)',
+    license: '国の公式統計値 — 出典明示で再配布可 (robots.txt allows)',
+    cadence: '日次 (1-2 年遅れの確定値; 1998-最新まで)',
+    what: '全国 600 ダム × 日次 貯水位・流入量・放流量 (貯水量直接なし)。チャートの歴史的深さ補完用。',
+    label: 'NILIM ダム諸量 DB',
+  },
   synthetic: {
     upstream: '当サイトの内部生成 (シード値)',
     license: 'CC0 (出典明示は任意)',
