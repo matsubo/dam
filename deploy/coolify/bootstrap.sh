@@ -163,19 +163,26 @@ log "[bootstrap] observations.count = '${obs}'"
 # transaction; chunks are recompressed by Timescale's policy on schedule.
 if [ "${BOOTSTRAP_REFRESH_AGGREGATES:-}" = "1" ]; then
   log "[bootstrap] BOOTSTRAP_REFRESH_AGGREGATES=1 — refreshing obs_daily & obs_monthly continuous aggregates"
-  refresh_log=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q -c "
-    CALL refresh_continuous_aggregate('obs_daily',   '2019-01-01', NULL);
-    CALL refresh_continuous_aggregate('obs_monthly', '2019-01-01', NULL);
-  " 2>&1)
-  refresh_status=$?
-  if [ ${refresh_status} -eq 0 ]; then
-    log "[bootstrap] continuous aggregates refreshed OK"
-  else
-    log "[bootstrap] aggregate refresh FAILED (status=${refresh_status}, non-fatal):"
-    echo "${refresh_log}" | head -30 | while IFS= read -r line; do
-      log "  ${line}"
-    done
-  fi
+  # Each CALL must run OUTSIDE a transaction (Timescale's refresh procedure
+  # opens its own). Passing two CALL statements to a single `psql -c` wraps
+  # them in an implicit BEGIN/COMMIT and the first one fails. Run each via
+  # its own `psql -c` invocation so each gets its own session.
+  refresh_one() {
+    label="$1"
+    sql="$2"
+    out=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q -c "${sql}" 2>&1)
+    rc=$?
+    if [ ${rc} -eq 0 ]; then
+      log "[bootstrap] refresh.${label} OK"
+    else
+      log "[bootstrap] refresh.${label} FAILED (rc=${rc}, non-fatal):"
+      echo "${out}" | head -20 | while IFS= read -r line; do
+        log "  ${line}"
+      done
+    fi
+  }
+  refresh_one "obs_daily"   "CALL refresh_continuous_aggregate('obs_daily',   '2019-01-01', NULL);"
+  refresh_one "obs_monthly" "CALL refresh_continuous_aggregate('obs_monthly', '2019-01-01', NULL);"
 fi
 
 if [ "${BOOTSTRAP_PURGE_SYNTHETIC:-}" = "1" ]; then
