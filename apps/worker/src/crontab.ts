@@ -68,6 +68,11 @@ export const CRONTAB = `
 # from other prefectural sources.
 13 * * * * ingest:hkd-mlit-dam
 
+# 国土交通省 中国地方整備局 — 11 国管理 dams across 5 prefectures
+# (岡山/広島/山口/鳥取/島根). Single POST JSON gives all dams' current
+# values. Cron at :15 every hour.
+15 * * * * ingest:cgr-mlit-dam
+
 # Suimon backfill remains opt-in only. Enqueue ad-hoc jobs via add_job
 # rather than running it on a fixed cron, so we don't keep hammering the
 # upstream when there's nothing new to import.
