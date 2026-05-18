@@ -20,6 +20,7 @@ import ingestTottori from './tasks/ingest_tottori.ts';
 import match from './tasks/master_match.ts';
 import refreshDamnet from './tasks/master_refresh_damnet.ts';
 import refreshNdi from './tasks/master_refresh_ndi.ts';
+import qualityFreshness from './tasks/quality_freshness.ts';
 import qualityRecompute from './tasks/quality_recompute.ts';
 import refreshDamElevation from './tasks/refresh_dam_elevation.ts';
 import refreshDamImagesDamnet from './tasks/refresh_dam_images_damnet.ts';
@@ -56,6 +57,7 @@ async function main(): Promise<void> {
       'backfill:jwa-junpo': backfillJwaJunpo,
       'backfill:mudam': backfillMudam,
       'quality:recompute': qualityRecompute,
+      'quality:freshness-check': qualityFreshness,
       'images:refresh:damnet': refreshDamImagesDamnet,
       'images:refresh:wikipedia': refreshDamImagesWikipedia,
       'master:refresh:elevation': refreshDamElevation,
