@@ -78,6 +78,11 @@ export const CRONTAB = `
 # inline as JS arrays (10-min cadence at source). Cron at :17.
 17 * * * * ingest:ktr-kinu-dam
 
+# 国土交通省 北陸地方整備局 — 7 dams across 6 prefectures (福島/山形/
+# 新潟/長野/富山/石川). CSV-like tmDam.txt feed has current values for
+# all dams in one fetch. Cron at :19.
+19 * * * * ingest:hrr-mlit-dam
+
 # Suimon backfill remains opt-in only. Enqueue ad-hoc jobs via add_job
 # rather than running it on a fixed cron, so we don't keep hammering the
 # upstream when there's nothing new to import.

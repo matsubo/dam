@@ -116,6 +116,13 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '北海道開発局直轄 18 ダム (平取/忠別/豊平峡/岩尾内/漁川/定山渓/金山/鹿ノ子/新桂沢/二風谷/美利河/留萌/サンル/札内川/大雪/滝里/十勝/夕張シューパロ) の貯水位・流入量・放流量・貯水量・貯水率。',
     label: '北海道開発局ダム',
   },
+  'hrr-mlit-dam': {
+    upstream: '国土交通省 北陸地方整備局 ダム防災情報 (hrr.mlit.go.jp/river/dam-bousai)',
+    license: '国の公式統計値 — 出典明示で再配布可',
+    cadence: '時次 (元データは 10 分粒度; 取得は毎時 :19)',
+    what: '北陸地方整備局直轄 7 ダム (福島:大川 / 山形:横川 / 新潟:大石・三国川 / 長野:大町 / 富山:宇奈月 / 石川:手取川) の貯水位・流入量・放流量。',
+    label: '北陸地方整備局ダム',
+  },
   'ktr-kinu-dam': {
     upstream:
       '国土交通省 関東地方整備局 鬼怒川ダム統合管理事務所 (ktr.mlit.go.jp/kinudamu/daminfo)',

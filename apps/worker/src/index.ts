@@ -9,6 +9,7 @@ import ingestAitoyo from './tasks/ingest_aitoyo.ts';
 import ingestAomori from './tasks/ingest_aomori.ts';
 import ingestCgrMlit from './tasks/ingest_cgr_mlit.ts';
 import ingestHkdMlit from './tasks/ingest_hkd_mlit.ts';
+import ingestHrrMlit from './tasks/ingest_hrr_mlit.ts';
 import ingestJwaChikugo from './tasks/ingest_jwa_chikugo.ts';
 import ingestJwaJunpo from './tasks/ingest_jwa_junpo.ts';
 import ingestKanagawa from './tasks/ingest_kanagawa.ts';
@@ -52,6 +53,7 @@ async function main(): Promise<void> {
       'ingest:hkd-mlit-dam': ingestHkdMlit,
       'ingest:cgr-mlit-dam': ingestCgrMlit,
       'ingest:ktr-kinu-dam': ingestKtrKinu,
+      'ingest:hrr-mlit-dam': ingestHrrMlit,
       'backfill:suimon:enqueue': backfillEnqueue,
       'backfill:suimon:run': backfillRun,
       'backfill:jwa-junpo': backfillJwaJunpo,
