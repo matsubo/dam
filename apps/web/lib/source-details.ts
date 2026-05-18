@@ -116,6 +116,14 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '北海道開発局直轄 18 ダム (平取/忠別/豊平峡/岩尾内/漁川/定山渓/金山/鹿ノ子/新桂沢/二風谷/美利河/留萌/サンル/札内川/大雪/滝里/十勝/夕張シューパロ) の貯水位・流入量・放流量・貯水量・貯水率。',
     label: '北海道開発局ダム',
   },
+  'cgr-mlit-dam': {
+    upstream:
+      '国土交通省 中国地方整備局 ダム防災情報システム (cgr.mlit.go.jp/cginfo/syokai/busyo/kasen/dam_bousai)',
+    license: '国の公式統計値 — 出典明示で再配布可',
+    cadence: '時次 (取得は毎時 :15)',
+    what: '中国地方整備局直轄 11 ダム (岡山:苫田 / 広島:土師・弥栄・八田原・温井・灰塚 / 山口:島地川 / 鳥取:菅沢・殿 / 島根:志津見・尾原) の貯水位・流入量・放流量・貯水率(有効容量)・雨量。',
+    label: '中国地方整備局ダム',
+  },
   synthetic: {
     upstream: '当サイトの内部生成 (シード値)',
     license: 'CC0 (出典明示は任意)',
