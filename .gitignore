@@ -2,7 +2,9 @@ node_modules
 .next
 dist
 build
-coverage
+/coverage
+**/.vitest-coverage
+**/coverage/lcov-report
 .env
 .env.local
 .DS_Store
