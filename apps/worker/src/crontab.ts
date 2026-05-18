@@ -82,8 +82,22 @@ export const CRONTAB = `
 # rather than running it on a fixed cron, so we don't keep hammering the
 # upstream when there's nothing new to import.
 
+# mudam tail backfill — monthly increment. mudam publishes confirmed values
+# with a 1-2 year lag, so once or twice a year a new year-block of data
+# becomes available. Running over all 9 districts × 1 year is ~90 min and
+# imports any newly-published rows idempotently. 05 UTC on day 20 = 14:00
+# JST on the 20th, well-spaced from other cron storms.
+# Payload is JSON5 inside {} per graphile-worker convention.
+0 5 20 * * backfill:mudam {"district":"all","years":1}
+
 # Quality recomputation
 30 4 * * * quality:recompute
+
+# Freshness watchdog — every hour, scan source_priorities and flag any source
+# whose newest observation is older than the per-source expected window
+# (see apps/worker/src/tasks/quality_freshness.ts). Posts a digest to
+# DISCORD_FRESHNESS_WEBHOOK if set; else logs warnings only.
+35 * * * * quality:freshness-check
 
 # Cover-image and elevation refresh — monthly, staggered to avoid hitting the
 # upstream APIs all at once.
