@@ -13,6 +13,7 @@ import ingestJwaChikugo from './tasks/ingest_jwa_chikugo.ts';
 import ingestJwaJunpo from './tasks/ingest_jwa_junpo.ts';
 import ingestKanagawa from './tasks/ingest_kanagawa.ts';
 import ingestKasenbosai from './tasks/ingest_kasenbosai.ts';
+import ingestKtrKinu from './tasks/ingest_ktr_kinu.ts';
 import ingestShiga from './tasks/ingest_shiga.ts';
 import ingestTokyoWaterworks from './tasks/ingest_tokyo_waterworks.ts';
 import ingestTottori from './tasks/ingest_tottori.ts';
@@ -49,6 +50,7 @@ async function main(): Promise<void> {
       'ingest:aomori-dam': ingestAomori,
       'ingest:hkd-mlit-dam': ingestHkdMlit,
       'ingest:cgr-mlit-dam': ingestCgrMlit,
+      'ingest:ktr-kinu-dam': ingestKtrKinu,
       'backfill:suimon:enqueue': backfillEnqueue,
       'backfill:suimon:run': backfillRun,
       'backfill:jwa-junpo': backfillJwaJunpo,
