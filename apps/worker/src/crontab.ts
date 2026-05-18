@@ -73,6 +73,11 @@ export const CRONTAB = `
 # values. Cron at :15 every hour.
 15 * * * * ingest:cgr-mlit-dam
 
+# 国土交通省 関東地方整備局 鬼怒川ダム統管 — 4 dams (栃木県:
+# 五十里/川俣/川治/湯西川). realDM.html embeds the 4 dams' values
+# inline as JS arrays (10-min cadence at source). Cron at :17.
+17 * * * * ingest:ktr-kinu-dam
+
 # Suimon backfill remains opt-in only. Enqueue ad-hoc jobs via add_job
 # rather than running it on a fixed cron, so we don't keep hammering the
 # upstream when there's nothing new to import.
