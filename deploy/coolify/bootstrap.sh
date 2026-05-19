@@ -46,6 +46,11 @@
 #                                    (like backfill:mudam) before the
 #                                    chart UI surfaces the rows. UNSET
 #                                    after the first successful run.
+#   BOOTSTRAP_MATCH_KASENBOSAI=1   — One-shot: enqueue match:kasenbosai
+#                                    to scrape MLIT 川の防災情報 catalogue
+#                                    and seed external_ids.kasenbosai for
+#                                    ~900 dams. Requires BOOTSTRAP_KICK=1.
+#                                    UNSET after a successful run.
 #
 # We deliberately AVOID `set -eu`. A non-fatal failure in the bootstrap
 # (e.g. seed file checksum drift, observations seed timeout) shouldn't keep
@@ -264,6 +269,18 @@ if [ "${kick}" = "1" ]; then
   run_kick_step "enqueue_shiga"    "SELECT graphile_worker.add_job('ingest:shiga-bousai','{}'::json);"
   run_kick_step "enqueue_tottori"  "SELECT graphile_worker.add_job('ingest:tottori-dam','{}'::json);"
   run_kick_step "enqueue_aomori"   "SELECT graphile_worker.add_job('ingest:aomori-dam','{}'::json);"
+  run_kick_step "enqueue_hkd_mlit" "SELECT graphile_worker.add_job('ingest:hkd-mlit-dam','{}'::json);"
+  run_kick_step "enqueue_cgr_mlit" "SELECT graphile_worker.add_job('ingest:cgr-mlit-dam','{}'::json);"
+  run_kick_step "enqueue_ktr_kinu" "SELECT graphile_worker.add_job('ingest:ktr-kinu-dam','{}'::json);"
+  run_kick_step "enqueue_hrr_mlit" "SELECT graphile_worker.add_job('ingest:hrr-mlit-dam','{}'::json);"
+
+  # 一回限り: 川の防災情報 (kasenbosai) ダムカタログを scrape して
+  # 全国 ~900 ダムの obs_fcd を master.external_ids.kasenbosai に投入。
+  # 既存値があれば idempotent (差分のみ書き換え)。
+  if [ "${BOOTSTRAP_MATCH_KASENBOSAI:-}" = "1" ]; then
+    log "[bootstrap] BOOTSTRAP_MATCH_KASENBOSAI=1 — enqueue match:kasenbosai job"
+    run_kick_step "enqueue_match_kb" "SELECT graphile_worker.add_job('match:kasenbosai','{}'::json);"
+  fi
 
   # 3b. Heavy master refreshes (NDI re-import, Damnet re-scrape) are now
   # gated behind their own env. They take 30-60 min each, saturate the
