@@ -18,6 +18,13 @@ export const CRONTAB = `
 # real observations on its own.
 0 * * * * ingest:kasenbosai
 
+# 川の防災情報 v2 — 800+ dams via tmlist/dam/{date}/{time}/{obs_fcd}.json.
+# Requires match:kasenbosai to have seeded external_ids.kasenbosai first.
+# Snap to 10-min cadence at :03 (give the source 3 min headroom past the
+# 10-min boundary, then concurrent fetches across 800+ dams take ~3 min
+# at concurrency=8).
+3 * * * * ingest:kasenbosai-v2
+
 # Tokyo waterworks daily reservoir status — open data, real values for the
 # 13 dams supplying Tokyo's drinking water (Tonegawa 9 + Arakawa 4 +
 # Tamagawa 2). Page updates daily; check at 03:00 UTC = 12:00 JST and again

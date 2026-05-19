@@ -14,6 +14,7 @@ import ingestJwaChikugo from './tasks/ingest_jwa_chikugo.ts';
 import ingestJwaJunpo from './tasks/ingest_jwa_junpo.ts';
 import ingestKanagawa from './tasks/ingest_kanagawa.ts';
 import ingestKasenbosai from './tasks/ingest_kasenbosai.ts';
+import ingestKasenbosaiV2 from './tasks/ingest_kasenbosai_v2.ts';
 import ingestKtrKinu from './tasks/ingest_ktr_kinu.ts';
 import ingestShiga from './tasks/ingest_shiga.ts';
 import ingestTokyoWaterworks from './tasks/ingest_tokyo_waterworks.ts';
@@ -44,6 +45,7 @@ async function main(): Promise<void> {
       'master:match': match,
       'match:kasenbosai': matchKasenbosai,
       'ingest:kasenbosai': ingestKasenbosai,
+      'ingest:kasenbosai-v2': ingestKasenbosaiV2,
       'ingest:tokyo-waterworks': ingestTokyoWaterworks,
       'ingest:jwa-junpo': ingestJwaJunpo,
       'ingest:aitoyo': ingestAitoyo,
