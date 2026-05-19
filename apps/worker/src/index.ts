@@ -21,6 +21,7 @@ import ingestTottori from './tasks/ingest_tottori.ts';
 import match from './tasks/master_match.ts';
 import refreshDamnet from './tasks/master_refresh_damnet.ts';
 import refreshNdi from './tasks/master_refresh_ndi.ts';
+import matchKasenbosai from './tasks/match_kasenbosai.ts';
 import qualityFreshness from './tasks/quality_freshness.ts';
 import qualityRecompute from './tasks/quality_recompute.ts';
 import refreshDamElevation from './tasks/refresh_dam_elevation.ts';
@@ -41,6 +42,7 @@ async function main(): Promise<void> {
       'master:refresh:ndi': refreshNdi,
       'master:refresh:damnet': refreshDamnet,
       'master:match': match,
+      'match:kasenbosai': matchKasenbosai,
       'ingest:kasenbosai': ingestKasenbosai,
       'ingest:tokyo-waterworks': ingestTokyoWaterworks,
       'ingest:jwa-junpo': ingestJwaJunpo,
