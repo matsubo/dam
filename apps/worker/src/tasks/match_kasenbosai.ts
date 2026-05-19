@@ -168,6 +168,8 @@ interface MatchResult {
   distanceM: number | null;
   score: number;
   reason: string;
+  /** All proximity candidates (top 10) for match_review fallback. */
+  candidates: { id: bigint; name: string; distanceM: number }[];
 }
 
 /**
@@ -189,6 +191,7 @@ async function matchOne(d: CatalogueDam): Promise<MatchResult> {
       distanceM: null,
       score: 0,
       reason: 'empty-stem',
+      candidates: [],
     };
   }
   const point = `SRID=4326;POINT(${d.lon} ${d.lat})`;
@@ -207,6 +210,11 @@ async function matchOne(d: CatalogueDam): Promise<MatchResult> {
     ORDER BY ST_Distance(d.location::geography, ST_GeogFromText(${point}))
     LIMIT 10
   `;
+  const candidates = rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    distanceM: Math.round(r.distance_m),
+  }));
   if (rows.length === 0) {
     return {
       obsFcd: d.obsFcd,
@@ -216,6 +224,7 @@ async function matchOne(d: CatalogueDam): Promise<MatchResult> {
       distanceM: null,
       score: 0,
       reason: 'no-candidates-within-5km',
+      candidates,
     };
   }
   // Score each candidate.
@@ -248,6 +257,7 @@ async function matchOne(d: CatalogueDam): Promise<MatchResult> {
       distanceM: rows[0]?.distance_m ?? null,
       score: best?.score ?? 0,
       reason: best?.reason ?? 'low-score',
+      candidates,
     };
   }
   return {
@@ -258,6 +268,7 @@ async function matchOne(d: CatalogueDam): Promise<MatchResult> {
     distanceM: best.row.distance_m,
     score: best.score,
     reason: best.reason,
+    candidates,
   };
 }
 
@@ -268,6 +279,35 @@ async function writeExternalId(damId: bigint, obsFcd: string): Promise<void> {
                      || jsonb_build_object('kasenbosai', ${obsFcd}::text)
     WHERE id = ${damId}
       AND COALESCE(external_ids->>'kasenbosai', '') <> ${obsFcd}
+  `;
+}
+
+async function writeMatchReview(d: CatalogueDam, m: MatchResult): Promise<void> {
+  const candidateIds = m.candidates.map((c) => c.id);
+  const payload = {
+    catalogue: { obsNm: d.obsNm, lat: d.lat, lon: d.lon, ofcCd: d.ofcCd, kbPrefCd: d.kbPrefCd },
+    bestReason: m.reason,
+    bestDistanceM: m.distanceM,
+    candidates: m.candidates.map((c) => ({
+      id: c.id.toString(),
+      name: c.name,
+      distanceM: c.distanceM,
+    })),
+  };
+  await sql`
+    INSERT INTO match_review (
+      source_id, source_external_id, candidate_dam_ids, best_dam_id, confidence, payload
+    )
+    VALUES (
+      'kasenbosai', ${d.obsFcd}, ${candidateIds}::bigint[],
+      ${m.damId}, ${m.score}::numeric, ${sql.json(payload)}
+    )
+    ON CONFLICT (source_id, source_external_id) DO UPDATE
+      SET candidate_dam_ids = EXCLUDED.candidate_dam_ids,
+          best_dam_id       = EXCLUDED.best_dam_id,
+          confidence        = EXCLUDED.confidence,
+          payload           = EXCLUDED.payload
+      WHERE match_review.resolved_dam_id IS NULL
   `;
 }
 
@@ -285,10 +325,16 @@ const task: Task = async (rawPayload, helpers) => {
   let matched = 0;
   let alreadySet = 0;
   let unmatched = 0;
+  let needsReview = 0;
   for (const d of cat) {
     const m = await matchOne(d);
     if (m.damId == null) {
       unmatched += 1;
+      // Surface candidates for human review when there were any nearby dams.
+      if (m.candidates.length > 0) {
+        await writeMatchReview(d, m);
+        needsReview += 1;
+      }
       continue;
     }
     // Check current external_ids.kasenbosai to track new vs existing.
@@ -304,9 +350,14 @@ const task: Task = async (rawPayload, helpers) => {
         `  ok ${m.obsNm.padEnd(14)} → ${m.damName} (${Math.round(m.distanceM ?? 0)} m, ${m.reason})`,
       );
     }
+    // Also stage uncertain auto-matches (score < 0.8) for review.
+    if (m.score < 0.8) {
+      await writeMatchReview(d, m);
+      needsReview += 1;
+    }
   }
   log(
-    `match:kasenbosai done — fetched=${cat.length} newly-matched=${matched} already-set=${alreadySet} unmatched=${unmatched}`,
+    `match:kasenbosai done — fetched=${cat.length} newly-matched=${matched} already-set=${alreadySet} unmatched=${unmatched} needs-review=${needsReview}`,
   );
 };
 
