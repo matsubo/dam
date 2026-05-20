@@ -116,6 +116,13 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '北海道開発局直轄 18 ダム (平取/忠別/豊平峡/岩尾内/漁川/定山渓/金山/鹿ノ子/新桂沢/二風谷/美利河/留萌/サンル/札内川/大雪/滝里/十勝/夕張シューパロ) の貯水位・流入量・放流量・貯水量・貯水率。',
     label: '北海道開発局ダム',
   },
+  'chiba-suisei': {
+    upstream: '千葉県 水政課 県内ダムの貯水状況 (pref.chiba.lg.jp/suisei/chosui)',
+    license: '千葉県オープンデータ — 出典明示で再配布可 (推定)',
+    cadence: '日次 (毎日 9:00 JST 値; 取得は 11:30 JST)',
+    what: '千葉県内 23 ダム (水道用 20 + 工業用水 3) の貯水容量・貯水量(m³)・貯水率(%)。',
+    label: '千葉県水政課',
+  },
   kasenbosai: {
     upstream: '国土交通省 川の防災情報 (river.go.jp) — tmlist/dam per-obs JSON',
     license: '国の公式統計値 — 出典明示で再配布可',
