@@ -65,18 +65,28 @@ async function loadCoverage() {
       ORDER BY COUNT(DISTINCT dam_id) DESC
     `,
     sql<PrefRow[]>`
+      WITH per_pref AS (
+        SELECT pref_code, COUNT(*)::BIGINT AS total
+        FROM dams
+        WHERE pref_code IS NOT NULL
+        GROUP BY pref_code
+      ),
+      covered AS (
+        SELECT d.pref_code, COUNT(DISTINCT o.dam_id)::BIGINT AS covered
+        FROM dams d
+        JOIN observations o ON o.dam_id = d.id
+        WHERE d.pref_code IS NOT NULL
+          AND o.observed_at > NOW() - INTERVAL '30 days'
+          AND o.source_id <> 'synthetic'
+        GROUP BY d.pref_code
+      )
       SELECT
-        d.pref_code AS "prefCode",
-        COUNT(*)::BIGINT AS "damTotal",
-        COUNT(DISTINCT o.dam_id) FILTER (
-          WHERE o.observed_at > NOW() - INTERVAL '30 days'
-            AND o.source_id <> 'synthetic'
-        )::BIGINT AS "damsCovered"
-      FROM dams d
-      LEFT JOIN observations o ON o.dam_id = d.id
-      WHERE d.pref_code IS NOT NULL
-      GROUP BY d.pref_code
-      ORDER BY d.pref_code
+        p.pref_code AS "prefCode",
+        p.total     AS "damTotal",
+        COALESCE(c.covered, 0::BIGINT) AS "damsCovered"
+      FROM per_pref p
+      LEFT JOIN covered c ON c.pref_code = p.pref_code
+      ORDER BY p.pref_code
     `,
   ]);
   const h = headline[0];
