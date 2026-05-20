@@ -90,6 +90,10 @@ export const CRONTAB = `
 # all dams in one fetch. Cron at :19.
 19 * * * * ingest:hrr-mlit-dam
 
+# 千葉県 県内ダムの貯水状況 — 23 dams (水道用+工業用水). Daily 9 JST
+# publish. Fetch at 02:30 UTC = 11:30 JST, giving upstream 2.5h headroom.
+30 2 * * * ingest:chiba-suisei
+
 # Suimon backfill remains opt-in only. Enqueue ad-hoc jobs via add_job
 # rather than running it on a fixed cron, so we don't keep hammering the
 # upstream when there's nothing new to import.
