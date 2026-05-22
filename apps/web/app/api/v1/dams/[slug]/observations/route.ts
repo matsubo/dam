@@ -1,6 +1,6 @@
 import { sql } from '@dam/db/client';
 import { type SeriesPoint, findSeries } from '@dam/db/repo/observations';
-import { preferredSource } from '@dam/db/repo/source_priorities';
+import { preferredSourceForDam } from '@dam/db/repo/source_priorities';
 import { z } from 'zod';
 import { HttpError, asProblem } from '../../../../../../lib/api/error.ts';
 import { hal } from '../../../../../../lib/api/response.ts';
@@ -76,13 +76,16 @@ export async function GET(
 
     const excludeSynthetic =
       parsed.data.exclude_synthetic === '1' || parsed.data.exclude_synthetic === 'true';
-    // The default hourly path picks the single top-priority source so the
-    // chart shows one series. exclude_synthetic explicitly wants every
-    // non-synthetic point — bypass that single-source filter so multiple
-    // real sources can coexist (e.g. tokyo-waterworks + jwa-junpo for a
-    // dam covered by both).
+    // The default hourly path picks the highest-priority source that
+    // actually has observations FOR THIS DAM in the window, so the chart
+    // shows a single coherent series. Falling back to a global pick (the
+    // earlier behaviour) caused empty hourly graphs for any dam whose data
+    // lived under a non-top-priority source. exclude_synthetic explicitly
+    // wants every non-synthetic point — bypass the source filter then.
     const preferred =
-      parsed.data.interval === 'hourly' && !excludeSynthetic ? await preferredSource() : null;
+      parsed.data.interval === 'hourly' && !excludeSynthetic
+        ? await preferredSourceForDam(dam.id, from, to)
+        : null;
     const series = await findSeries({
       damId: dam.id,
       from,
