@@ -99,6 +99,11 @@ export const CRONTAB = `
 # :21 every hour, spaced from the other prefectural sources.
 21 * * * * ingest:okayama-bousai
 
+# 新潟県河川防災情報システム — ~20 県管理ダム (防災Web servlet dk=4 table).
+# Session cookie + single Shift_JIS table fetch gives every dam's level /
+# 貯水率 / inflow / outflow. Cron at :23 every hour.
+23 * * * * ingest:niigata-bousai
+
 # Suimon backfill remains opt-in only. Enqueue ad-hoc jobs via add_job
 # rather than running it on a fixed cron, so we don't keep hammering the
 # upstream when there's nothing new to import.
