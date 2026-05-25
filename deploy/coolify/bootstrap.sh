@@ -276,6 +276,7 @@ if [ "${kick}" = "1" ]; then
   run_kick_step "enqueue_kasenbosai_v2" "SELECT graphile_worker.add_job('ingest:kasenbosai-v2','{}'::json);"
   run_kick_step "enqueue_chiba"        "SELECT graphile_worker.add_job('ingest:chiba-suisei','{}'::json);"
   run_kick_step "enqueue_okayama"      "SELECT graphile_worker.add_job('ingest:okayama-bousai','{}'::json);"
+  run_kick_step "enqueue_niigata"      "SELECT graphile_worker.add_job('ingest:niigata-bousai','{}'::json);"
 
   # 一回限り: 川の防災情報 (kasenbosai) ダムカタログを scrape して
   # 全国 ~900 ダムの obs_fcd を master.external_ids.kasenbosai に投入。

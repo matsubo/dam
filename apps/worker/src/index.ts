@@ -17,6 +17,7 @@ import ingestKanagawa from './tasks/ingest_kanagawa.ts';
 import ingestKasenbosai from './tasks/ingest_kasenbosai.ts';
 import ingestKasenbosaiV2 from './tasks/ingest_kasenbosai_v2.ts';
 import ingestKtrKinu from './tasks/ingest_ktr_kinu.ts';
+import ingestNiigata from './tasks/ingest_niigata.ts';
 import ingestOkayama from './tasks/ingest_okayama.ts';
 import ingestShiga from './tasks/ingest_shiga.ts';
 import ingestTokyoWaterworks from './tasks/ingest_tokyo_waterworks.ts';
@@ -62,6 +63,7 @@ async function main(): Promise<void> {
       'ingest:hrr-mlit-dam': ingestHrrMlit,
       'ingest:chiba-suisei': ingestChiba,
       'ingest:okayama-bousai': ingestOkayama,
+      'ingest:niigata-bousai': ingestNiigata,
       'backfill:suimon:enqueue': backfillEnqueue,
       'backfill:suimon:run': backfillRun,
       'backfill:jwa-junpo': backfillJwaJunpo,
