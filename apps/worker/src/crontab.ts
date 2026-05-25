@@ -94,6 +94,11 @@ export const CRONTAB = `
 # publish. Fetch at 02:30 UTC = 11:30 JST, giving upstream 2.5h headroom.
 30 2 * * * ingest:chiba-suisei
 
+# おかやま防災ポータル — ~15 県管理ダム (JSON feed, 30分更新). A pointer
+# fetch yields the freshest snapshot file with every dam's values. Cron at
+# :21 every hour, spaced from the other prefectural sources.
+21 * * * * ingest:okayama-bousai
+
 # Suimon backfill remains opt-in only. Enqueue ad-hoc jobs via add_job
 # rather than running it on a fixed cron, so we don't keep hammering the
 # upstream when there's nothing new to import.

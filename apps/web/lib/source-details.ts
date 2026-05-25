@@ -123,6 +123,13 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '千葉県内 23 ダム (水道用 20 + 工業用水 3) の貯水容量・貯水量(m³)・貯水率(%)。',
     label: '千葉県水政課',
   },
+  'okayama-bousai': {
+    upstream: 'おかやま防災ポータル (bousai.pref.okayama.jp)',
+    license: '岡山県オープンデータ — 出典明示で再配布可 (推定)',
+    cadence: '時次 (元データは 30 分粒度; 取得は毎時 :21)',
+    what: '岡山県管理 ~15 ダム (旭川/鳴滝/河平/三室川/黒木/香々美/久賀/津川/黒谷/鬼ヶ岳/大佐/日笠/槙谷/楢井 ほか) の貯水位・有効貯水量・貯水率・流入量・全放流量。',
+    label: 'おかやま防災ポータル',
+  },
   kasenbosai: {
     upstream: '国土交通省 川の防災情報 (river.go.jp) — tmlist/dam per-obs JSON',
     license: '国の公式統計値 — 出典明示で再配布可',
