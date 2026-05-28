@@ -144,6 +144,14 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '兵庫県管理 ~20 ダム (青野/生野/引原/安室/金出地/与布土/諭鶴羽 ほか) の貯水位・貯水量(m³)・全流入量・全放流量。BODIK オープンデータ CSV。',
     label: '兵庫県オープンデータ',
   },
+  'tochigi-bodik': {
+    upstream:
+      '栃木県河川水位・雨量情報システム ダム諸量 (data.bodik.jp/dataset/090000_river_dam_parameter)',
+    license: 'CC-BY 4.0 — 出典明示で再配布可',
+    cadence: '時次 (元データは 10 分粒度; 取得は毎時 :27)',
+    what: '栃木県管理 7 ダム (寺山/塩原/西荒川/東荒川/三河沢/中禅寺/松田川) の貯水位・貯水量(m³)・全流入量・全放流量。BODIK NGSI-v2 CSV。',
+    label: '栃木県オープンデータ',
+  },
   kasenbosai: {
     upstream: '国土交通省 川の防災情報 (river.go.jp) — tmlist/dam per-obs JSON',
     license: '国の公式統計値 — 出典明示で再配布可',
