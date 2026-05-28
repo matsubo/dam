@@ -108,6 +108,11 @@ export const CRONTAB = `
 # Single CSV fetch gives level / 貯水量(千m³) / inflow / outflow. Cron at :25.
 25 * * * * ingest:hyogo-bodik
 
+# 栃木県河川水位・雨量情報システム — 7観測所 (BODIK ダム諸量 NGSI-v2 CSV,
+# CC-BY 4.0, 10分更新). dateObserved is ISO UTC, waterStorage in 千m³.
+# Cron at :27.
+27 * * * * ingest:tochigi-bodik
+
 # Suimon backfill remains opt-in only. Enqueue ad-hoc jobs via add_job
 # rather than running it on a fixed cron, so we don't keep hammering the
 # upstream when there's nothing new to import.
