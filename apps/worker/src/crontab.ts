@@ -127,6 +127,11 @@ export const CRONTAB = `
 # is sole coverage (not in tottori-dam). Cron at :33.
 33 * * * * ingest:tottori-bousai
 
+# 福岡市関連9ダム — BODIK open data (CC-BY), hourly Shift-JIS CSV.
+# Storage in 千m³ (南畑/五ケ山/脊振/曲渕/江川/久原/長谷/猪野/瑞梅寺).
+# Cron at :35.
+35 * * * * ingest:fukuoka-bodik
+
 # Suimon backfill remains opt-in only. Enqueue ad-hoc jobs via add_job
 # rather than running it on a fixed cron, so we don't keep hammering the
 # upstream when there's nothing new to import.

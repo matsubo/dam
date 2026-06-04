@@ -173,6 +173,14 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '鳥取県管理 6 ダム (百谷/佐治川/東郷/賀祥/朝鍋/菅沢) の貯水位・有効貯水量(千m³)・全流入量・全放流量・貯水率。菅沢ダムは本ソース唯一の観測源。',
     label: '鳥取県防災Web',
   },
+  'fukuoka-bodik': {
+    upstream:
+      '福岡市関連9ダム貯水量 — BODIK オープンデータ (data.bodik.jp/dataset/401307_mizukanri)',
+    license: 'CC-BY 4.0 (出典明示で商用利用可)',
+    cadence: '時次 (毎時更新; 取得は毎時 :35)',
+    what: '福岡市水道局管理 9 ダム (南畑/五ケ山/脊振/曲渕/江川/久原/長谷/猪野/瑞梅寺) の有効貯水量(千m³)。水位・流量は非公開。',
+    label: '福岡市関連ダム',
+  },
   kasenbosai: {
     upstream: '国土交通省 川の防災情報 (river.go.jp) — tmlist/dam per-obs JSON',
     license: '国の公式統計値 — 出典明示で再配布可',
