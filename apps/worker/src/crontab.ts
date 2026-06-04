@@ -113,6 +113,11 @@ export const CRONTAB = `
 # Cron at :27.
 27 * * * * ingest:tochigi-bodik
 
+# 広島県防災Web — 18 ダム (JSON feed, 10分更新). Pointer + list feed; storage
+# in 千m³. Prefectural (managerCd 23/24/26) + 5 MLIT dams already in
+# cgr-mlit-dam (priority 304 wins for those). Cron at :29.
+29 * * * * ingest:hiroshima-bousai
+
 # Suimon backfill remains opt-in only. Enqueue ad-hoc jobs via add_job
 # rather than running it on a fixed cron, so we don't keep hammering the
 # upstream when there's nothing new to import.

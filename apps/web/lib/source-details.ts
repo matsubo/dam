@@ -152,6 +152,13 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '栃木県管理 7 ダム (寺山/塩原/西荒川/東荒川/三河沢/中禅寺/松田川) の貯水位・貯水量(m³)・全流入量・全放流量。BODIK NGSI-v2 CSV。',
     label: '栃木県オープンデータ',
   },
+  'hiroshima-bousai': {
+    upstream: '広島県防災Web (bousai.pref.hiroshima.lg.jp/dam) — /data/dam/list/{ts}.json',
+    license: '公開情報 — 出典明示で再配布可',
+    cadence: '時次 (元データは 10 分粒度; 取得は毎時 :29)',
+    what: '広島県管理 18 ダムの貯水位・有効貯水量(千m³)・全流入量・全放流量・貯水率。県管理 12 + 国管理 5 (cgr-mlit-dam と重複) + 農水省 1。',
+    label: '広島県防災Web',
+  },
   kasenbosai: {
     upstream: '国土交通省 川の防災情報 (river.go.jp) — tmlist/dam per-obs JSON',
     license: '国の公式統計値 — 出典明示で再配布可',
