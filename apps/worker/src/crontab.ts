@@ -118,6 +118,10 @@ export const CRONTAB = `
 # cgr-mlit-dam (priority 304 wins for those). Cron at :29.
 29 * * * * ingest:hiroshima-bousai
 
+# 大阪府河川防災情報 — 3 県管理ダム (安威川/箕面川/狭山池). Single JSON fetch;
+# displayDt is YYYYMMDDHHMM JST. Cron at :31.
+31 * * * * ingest:osaka-bousai
+
 # Suimon backfill remains opt-in only. Enqueue ad-hoc jobs via add_job
 # rather than running it on a fixed cron, so we don't keep hammering the
 # upstream when there's nothing new to import.
