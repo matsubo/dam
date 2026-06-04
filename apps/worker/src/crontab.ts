@@ -122,6 +122,11 @@ export const CRONTAB = `
 # displayDt is YYYYMMDDHHMM JST. Cron at :31.
 31 * * * * ingest:osaka-bousai
 
+# 鳥取県防災Web — 6 ダム (百谷/佐治川/東郷/賀祥/朝鍋/菅沢). Same Remix SPA
+# framework as 広島県防災Web; pointer + list JSON; storage in 千m³. 菅沢ダム
+# is sole coverage (not in tottori-dam). Cron at :33.
+33 * * * * ingest:tottori-bousai
+
 # Suimon backfill remains opt-in only. Enqueue ad-hoc jobs via add_job
 # rather than running it on a fixed cron, so we don't keep hammering the
 # upstream when there's nothing new to import.

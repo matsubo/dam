@@ -166,6 +166,13 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '広島県管理 18 ダムの貯水位・有効貯水量(千m³)・全流入量・全放流量・貯水率。県管理 12 + 国管理 5 (cgr-mlit-dam と重複) + 農水省 1。',
     label: '広島県防災Web',
   },
+  'tottori-bousai': {
+    upstream: '鳥取県防災Web (bousai.pref.tottori.lg.jp/dam) — /data/dam/list/{ts}.json',
+    license: '公開情報 — 出典明示で再配布可',
+    cadence: '時次 (元データは 10 分粒度; 取得は毎時 :33)',
+    what: '鳥取県管理 6 ダム (百谷/佐治川/東郷/賀祥/朝鍋/菅沢) の貯水位・有効貯水量(千m³)・全流入量・全放流量・貯水率。菅沢ダムは本ソース唯一の観測源。',
+    label: '鳥取県防災Web',
+  },
   kasenbosai: {
     upstream: '国土交通省 川の防災情報 (river.go.jp) — tmlist/dam per-obs JSON',
     license: '国の公式統計値 — 出典明示で再配布可',
