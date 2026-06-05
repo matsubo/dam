@@ -144,6 +144,12 @@ export const CRONTAB = `
 # Cron at :35.
 35 * * * * ingest:fukuoka-bodik
 
+# 岐阜県 川の防災情報 ダム諸量 — 14 ダム (UTF-8 HTML, hourly).
+# 阿多岐/大ヶ洞/岩村/中野方/丹生川/矢作/小里川/横山/徳山/丸山/阿木川/岩屋/牧尾/味噌川.
+# Priority 308 upgrades overlapping jwa-chubu/aitoyo dams from daily to hourly.
+# Cron at :10 every hour.
+10 * * * * ingest:gifu-kasen
+
 # 水資源機構 関東支社 利根川/荒川系 — 13 facilities (9 Tone + 4 Ara).
 # Daily 0時 JST static HTML; 万m³ units. New dams: 藤原/相俣/薗原/八ッ場/二瀬.
 # Overlap dams (矢木沢/奈良俣/下久保/草木/浦山/滝沢) get daily cadence. Cron at :39.

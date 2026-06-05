@@ -12,6 +12,7 @@ import ingestAomori from './tasks/ingest_aomori.ts';
 import ingestCgrMlit from './tasks/ingest_cgr_mlit.ts';
 import ingestChiba from './tasks/ingest_chiba.ts';
 import ingestFukuokaBodik from './tasks/ingest_fukuoka_bodik.ts';
+import ingestGifuKasen from './tasks/ingest_gifu_kasen.ts';
 import ingestHiroshima from './tasks/ingest_hiroshima.ts';
 import ingestHkdMlit from './tasks/ingest_hkd_mlit.ts';
 import ingestHrrMlit from './tasks/ingest_hrr_mlit.ts';
@@ -113,6 +114,7 @@ async function main(): Promise<void> {
       'ingest:nagasaki-kasen': ingestNagasaki,
       'ingest:yamagata-bousai': ingestYamagata,
       'ingest:fukuoka-bodik': ingestFukuokaBodik,
+      'ingest:gifu-kasen': ingestGifuKasen,
       'backfill:kagoshima-bodik': backfillKagoshima,
       'backfill:suimon:enqueue': backfillEnqueue,
       'backfill:suimon:run': backfillRun,
