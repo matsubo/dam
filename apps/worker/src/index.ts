@@ -30,6 +30,7 @@ import ingestKasenbosai from './tasks/ingest_kasenbosai.ts';
 import ingestKasenbosaiV2 from './tasks/ingest_kasenbosai_v2.ts';
 import ingestKkrMlit from './tasks/ingest_kkr_mlit.ts';
 import ingestKtrKinu from './tasks/ingest_ktr_kinu.ts';
+import ingestMiyagi from './tasks/ingest_miyagi_kasen.ts';
 import ingestMiyazaki from './tasks/ingest_miyazaki_bousai.ts';
 import ingestNiigata from './tasks/ingest_niigata.ts';
 import ingestOita from './tasks/ingest_oita_bousai.ts';
@@ -102,6 +103,7 @@ async function main(): Promise<void> {
       'ingest:shimokubo': ingestShimokubo,
       'ingest:ibaraki-bousai': ingestIbaraki,
       'ingest:iwate-kasen': ingestIwate,
+      'ingest:miyagi-kasen': ingestMiyagi,
       'ingest:miyazaki-bousai': ingestMiyazaki,
       'ingest:yamagata-bousai': ingestYamagata,
       'ingest:fukuoka-bodik': ingestFukuokaBodik,

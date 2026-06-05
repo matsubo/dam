@@ -184,6 +184,11 @@ export const CRONTAB = `
 # storage volume (千m³) but no 貯水率. Cron at :53.
 53 * * * * ingest:ibaraki-bousai
 
+# 宮城県土木総合情報システム ダム現況表 — 21 ダム (18 県管理 + 3 国管理).
+# Gamen42Servlet: 1 request = all dams. 10 columns: level / 貯水量(10³m³) /
+# inflow / outflow / 貯水率(利水容量). Cron at :06 every hour.
+6 * * * * ingest:miyagi-kasen
+
 # 宮崎県河川・砂防水位観測所 — 13 県管理ダム (防災Web servlet, Shift_JIS,
 # no session). 8 columns: level / inflow / outflow (no storage volume).
 # Cron at :55.
