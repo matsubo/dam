@@ -267,6 +267,12 @@ export const CRONTAB = `
 # Cron at :55.
 55 * * * * ingest:miyazaki-bousai
 
+# 福島県河川流域総合情報システム — 11 県管理ダム (こまち/千五沢/堀川/真野/木戸/
+# 小玉/高柴/四時/日中/東山/田島). JST-dated JSON URL; item_10=貯水位 /
+# item_50=流入量 / item_70=放流量 / item_1_70=時間雨量 (no storage volume).
+# Same framework as 石川県河川総合情報システム. Cron at :34.
+34 * * * * ingest:fukushima-kasen
+
 # 岩手県河川情報システム — 10 県管理ダム (Gamen32Servlet, Shift_JIS, one
 # request per station). Columns: level / 貯水量(千m³) / inflow / outflow.
 # Cron at :57.
