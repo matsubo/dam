@@ -35,6 +35,7 @@ import ingestTochigi from './tasks/ingest_tochigi.ts';
 import ingestTokyoWaterworks from './tasks/ingest_tokyo_waterworks.ts';
 import ingestTottori from './tasks/ingest_tottori.ts';
 import ingestTottoriBousai from './tasks/ingest_tottori_bousai.ts';
+import ingestYamagata from './tasks/ingest_yamagata_bousai.ts';
 import match from './tasks/master_match.ts';
 import refreshDamnet from './tasks/master_refresh_damnet.ts';
 import refreshNdi from './tasks/master_refresh_ndi.ts';
@@ -89,6 +90,7 @@ async function main(): Promise<void> {
       'ingest:tottori-bousai': ingestTottoriBousai,
       'ingest:shimane-bousai': ingestShimaneBousai,
       'ingest:shimokubo': ingestShimokubo,
+      'ingest:yamagata-bousai': ingestYamagata,
       'ingest:fukuoka-bodik': ingestFukuokaBodik,
       'backfill:suimon:enqueue': backfillEnqueue,
       'backfill:suimon:run': backfillRun,

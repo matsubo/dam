@@ -161,6 +161,12 @@ export const CRONTAB = `
 # 下久保ダム. Priority 297. Cron at :49.
 49 * * * * ingest:shimokubo
 
+# 山形県河川・砂防情報 — ~17 ダム (県管理13 + 国管理4: 長井/寒河江/白川/月山).
+# 防災Web JSON feed (dk=4, Shift_JIS), 10分更新. Level + storage (千m³) + rate +
+# inflow + outflow. Priority 308, matching other 防災Web prefectural sources.
+# Cron at :51 (spaced from shimokubo :49 and ktr-kinu :17).
+51 * * * * ingest:yamagata-bousai
+
 # 島根県防災Web — 14 県管理ダム (布部/山佐/三瓶/波積/八戸/浜田/第二浜田/大長見/
 # 御部/益田川/笹倉/大峠/銚子/美田). Same Remix SPA framework as 広島/鳥取県防災Web;
 # pointer + list JSON; storage in 千m³. 国直轄 (尾原/志津見) also appear but
