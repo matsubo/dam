@@ -35,6 +35,7 @@ import ingestJwaToneAra from './tasks/ingest_jwa_toneara.ts';
 import ingestJwaToyokawa from './tasks/ingest_jwa_toyokawa.ts';
 import ingestJwaYoshino from './tasks/ingest_jwa_yoshino.ts';
 import ingestKagawa from './tasks/ingest_kagawa_bousai.ts';
+import ingestKagoshimaBousai from './tasks/ingest_kagoshima_bousai.ts';
 import ingestKanagawa from './tasks/ingest_kanagawa.ts';
 import ingestKasenbosai from './tasks/ingest_kasenbosai.ts';
 import ingestKasenbosaiV2 from './tasks/ingest_kasenbosai_v2.ts';
@@ -170,6 +171,7 @@ async function main(): Promise<void> {
       'ingest:ehime-bousai': ingestEhimeBousai,
       'ingest:toyama-bousai': ingestToyamaBousai,
       'ingest:nara-kasen': ingestNaraKasen,
+      'ingest:kagoshima-bousai': ingestKagoshimaBousai,
       'backfill:kagoshima-bodik': backfillKagoshima,
       'backfill:suimon:enqueue': backfillEnqueue,
       'backfill:suimon:run': backfillRun,
