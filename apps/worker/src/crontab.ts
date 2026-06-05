@@ -199,6 +199,11 @@ export const CRONTAB = `
 # inflow / outflow / 貯水率(利水容量). Cron at :06 every hour.
 6 * * * * ingest:miyagi-kasen
 
+# 熊本県防災情報システム 地方別ダム情報 — 6 ダム (市房/氷川/石打/上津浦/亀川/路木).
+# Shift_JIS JS page; DspDat[] array; 有効貯水量(千m³) / 貯水位 / 全流入量 / 全放流量 /
+# 貯水率(有効容量). 60分更新. Cron at :04 every hour.
+4 * * * * ingest:kumamoto-bousai
+
 # 宮崎県河川・砂防水位観測所 — 13 県管理ダム (防災Web servlet, Shift_JIS,
 # no session). 8 columns: level / inflow / outflow (no storage volume).
 # Cron at :55.

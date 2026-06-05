@@ -30,6 +30,7 @@ import ingestKasenbosai from './tasks/ingest_kasenbosai.ts';
 import ingestKasenbosaiV2 from './tasks/ingest_kasenbosai_v2.ts';
 import ingestKkrMlit from './tasks/ingest_kkr_mlit.ts';
 import ingestKtrKinu from './tasks/ingest_ktr_kinu.ts';
+import ingestKumamoto from './tasks/ingest_kumamoto_bousai.ts';
 import ingestMiyagi from './tasks/ingest_miyagi_kasen.ts';
 import ingestMiyazaki from './tasks/ingest_miyazaki_bousai.ts';
 import ingestNagasaki from './tasks/ingest_nagasaki_kasen.ts';
@@ -83,6 +84,7 @@ async function main(): Promise<void> {
       'ingest:aitoyo': ingestAitoyo,
       'ingest:jwa-chikugo': ingestJwaChikugo,
       'ingest:kanagawa-dam': ingestKanagawa,
+      'ingest:kumamoto-bousai': ingestKumamoto,
       'ingest:kkr-mlit-dam': ingestKkrMlit,
       'ingest:shiga-bousai': ingestShiga,
       'ingest:tottori-dam': ingestTottori,
