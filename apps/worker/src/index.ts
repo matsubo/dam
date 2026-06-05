@@ -6,6 +6,7 @@ import backfillKagoshima from './tasks/backfill_kagoshima_bodik.ts';
 import backfillMudam from './tasks/backfill_mudam.ts';
 import backfillEnqueue from './tasks/backfill_suimon_enqueue.ts';
 import backfillRun from './tasks/backfill_suimon_run.ts';
+import ingestAichiKasen from './tasks/ingest_aichi_kasen.ts';
 import ingestAitoyo from './tasks/ingest_aitoyo.ts';
 import ingestAkita from './tasks/ingest_akita_kasen.ts';
 import ingestAomori from './tasks/ingest_aomori.ts';
@@ -115,6 +116,7 @@ async function main(): Promise<void> {
       'ingest:yamagata-bousai': ingestYamagata,
       'ingest:fukuoka-bodik': ingestFukuokaBodik,
       'ingest:gifu-kasen': ingestGifuKasen,
+      'ingest:aichi-kasen': ingestAichiKasen,
       'backfill:kagoshima-bodik': backfillKagoshima,
       'backfill:suimon:enqueue': backfillEnqueue,
       'backfill:suimon:run': backfillRun,
