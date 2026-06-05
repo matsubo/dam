@@ -318,6 +318,17 @@ export const CRONTAB = `
 # inflow + outflow. Updated every 10 min. Cron at :39.
 39 * * * * ingest:kagawa-bousai
 
+# 静岡県 河川・砂防情報システム ダム諸量現況表 — 県管理ダム (防災Web HTML, Shift_JIS).
+# URL: kasen.pref.shizuoka.lg.jp (geo-blocked outside Japan; works from production).
+# Header-detection parser handles variable column layout. Cron at :55.
+55 * * * * ingest:shizuoka-bousai
+
+# 愛媛県 河川砂防総合情報システム ダム諸量現況表 — 県管理ダム (防災Web HTML, Shift_JIS).
+# URL: kasen.pref.ehime.jp (geo-blocked outside Japan; works from production).
+# National dams (野村/鹿野川 via skr-hiji, 富郷/柳瀬 via jwa-yoshino) already covered.
+# Cron at :57.
+57 * * * * ingest:ehime-bousai
+
 # 佐賀県河川砂防情報システム ダム現況表 — 19 県管理ダム (岸川/庭木/繁昌/天ヶ瀬/
 # 平木場/伊岐佐/都川内/井手口川/竜門/有田/古木場/本部/矢筈/狩立日ノ峯/中木庭/
 # 岩屋川内/横竹/深浦/河内). Transposed Shift_JIS HTML table; 3 pages (7+7+5
