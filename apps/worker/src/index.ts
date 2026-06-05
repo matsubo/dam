@@ -60,6 +60,7 @@ import ingestTottori from './tasks/ingest_tottori.ts';
 import ingestTottoriBousai from './tasks/ingest_tottori_bousai.ts';
 import ingestToyamaBousai from './tasks/ingest_toyama_bousai.ts';
 import ingestYamagata from './tasks/ingest_yamagata_bousai.ts';
+import ingestYamanashi from './tasks/ingest_yamanashi_dam.ts';
 import match from './tasks/master_match.ts';
 import refreshDamnet from './tasks/master_refresh_damnet.ts';
 import refreshNdi from './tasks/master_refresh_ndi.ts';
@@ -135,6 +136,7 @@ async function main(): Promise<void> {
       'ingest:miyazaki-bousai': ingestMiyazaki,
       'ingest:nagasaki-kasen': ingestNagasaki,
       'ingest:yamagata-bousai': ingestYamagata,
+      'ingest:yamanashi-dam': ingestYamanashi,
       'ingest:fukuoka-bodik': ingestFukuokaBodik,
       'ingest:fukushima-kasen': ingestFukushimaKasen,
       'ingest:gifu-kasen': ingestGifuKasen,
