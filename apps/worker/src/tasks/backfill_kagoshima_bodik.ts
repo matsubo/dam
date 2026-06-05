@@ -24,9 +24,9 @@
 // To import only recent years:
 //   add_job('backfill:kagoshima-bodik', { fromYear: 2024 })
 
-import { unzipSync } from 'fflate';
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { unzipSync } from 'fflate';
 import type { Task } from 'graphile-worker';
 
 const BODIK_PACKAGE_ID = '1b0c5baf-e309-4ad3-8c31-a4dc3cc9781f';
@@ -120,11 +120,12 @@ export function parseKagoshimaCsv(text: string): ParsedRow[] {
       waterLevelM: rawLevel !== null ? rawLevel / 100 : null,
       storageVolumeM3: rawStorage !== null ? rawStorage * 1_000 : null,
       // Prefer 治水貯水率 if available, else 利水貯水率
-      storageRate: rawRateTreatment !== null
-        ? rawRateTreatment / 10
-        : rawRateUsage !== null
-          ? rawRateUsage / 10
-          : null,
+      storageRate:
+        rawRateTreatment !== null
+          ? rawRateTreatment / 10
+          : rawRateUsage !== null
+            ? rawRateUsage / 10
+            : null,
       inflowM3s: rawInflow !== null ? rawInflow / 1_000 : null,
       outflowM3s: rawOutflow !== null ? rawOutflow / 1_000 : null,
     });

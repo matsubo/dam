@@ -44,6 +44,7 @@ import ingestNiigata from './tasks/ingest_niigata.ts';
 import ingestOita from './tasks/ingest_oita_bousai.ts';
 import ingestOkayama from './tasks/ingest_okayama.ts';
 import ingestOsaka from './tasks/ingest_osaka.ts';
+import ingestQsrTuruta from './tasks/ingest_qsr_turuta.ts';
 import ingestShiga from './tasks/ingest_shiga.ts';
 import ingestShimaneBousai from './tasks/ingest_shimane_bousai.ts';
 import ingestShimokubo from './tasks/ingest_shimokubo.ts';
@@ -101,6 +102,7 @@ async function main(): Promise<void> {
       'ingest:cgr-mlit-dam': ingestCgrMlit,
       'ingest:ktr-kinu-dam': ingestKtrKinu,
       'ingest:ktr-tone-dam': ingestKtrTone,
+      'ingest:qsr-turuta-dam': ingestQsrTuruta,
       'ingest:hrr-mlit-dam': ingestHrrMlit,
       'ingest:chiba-suisei': ingestChiba,
       'ingest:okayama-bousai': ingestOkayama,

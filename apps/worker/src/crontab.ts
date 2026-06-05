@@ -129,6 +129,10 @@ export const CRONTAB = `
 # Single JSON gives all dams' current hourly values. Cron at :20.
 20 * * * * ingest:ktr-tone-dam
 
+# 国土交通省 九州地方整備局 鶴田ダム管理所 — 鶴田ダム (川内川水系, 鹿児島/46).
+# EUC-JP HTML table, 10分更新; type=2 endpoint, 7 cols. Cron at :22.
+22 * * * * ingest:qsr-turuta-dam
+
 # 千葉県 県内ダムの貯水状況 — 23 dams (水道用+工業用水). Daily 9 JST
 # publish. Fetch at 02:30 UTC = 11:30 JST, giving upstream 2.5h headroom.
 30 2 * * * ingest:chiba-suisei
