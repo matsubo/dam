@@ -16,13 +16,6 @@ export const CRONTAB = `
 0 3 5 * * master:refresh:damnet
 0 4 * * * master:match
 
-# Observation ingest. Hourly cadence keeps storage charts fresh without
-# hammering upstream — the kasenbosai adapter only fetches dams that have an
-# external_ids->>'kasenbosai' set, so empty matches are cheap. Once
-# beta-stage name-matching populates those IDs, this cron starts producing
-# real observations on its own.
-0 * * * * ingest:kasenbosai
-
 # 川の防災情報 v2 — 800+ dams via tmlist/dam/{date}/{time}/{obs_fcd}.json.
 # Requires match:kasenbosai to have seeded external_ids.kasenbosai first.
 # Snap to 10-min cadence at :03 (give the source 3 min headroom past the
