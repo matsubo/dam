@@ -74,6 +74,20 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '筑後川水系 7 ダム (松原/下筌/大山/合所/江川/寺内/小石原川) の貯水率・貯水量。',
     label: 'JWA 筑後川',
   },
+  'jwa-toneara': {
+    upstream: '水資源機構 関東支社 (water.go.jp/honsya/honsya/suigen/sokuhou/toneara/index.html)',
+    license: '公的統計 — 出典明示で再配布可',
+    cadence: '日次 (毎日 0:00 JST 値; 取得は毎時 :39)',
+    what: '利根川水系 9 施設 (矢木沢/奈良俣/藤原/相俣/薗原/八ッ場/下久保/草木/渡良瀬貯水池) と荒川水系 4 施設 (二瀬/滝沢/浦山/荒川貯水池) の貯水量(万m³)・貯水率。藤原/相俣/薗原/八ッ場/二瀬は新規カバレッジ。',
+    label: 'JWA 利根川/荒川',
+  },
+  'jwa-chubu': {
+    upstream: '水資源機構 中部支社 (water.go.jp/mizu/chubu/report/)',
+    license: '公的統計 — 出典明示で再配布可',
+    cadence: '日次 (取得は毎時 :41)',
+    what: '木曽川水系 6 ダム (牧尾/阿木川/味噌川/岩屋/中里/徳山) の貯水量(千m³)・貯水率・流入量・放流量。中里ダムは新規カバレッジ; 他 5 ダムは jwa-junpo より日次で詳細なデータを提供。',
+    label: 'JWA 中部支社',
+  },
   'kanagawa-dam': {
     upstream: 'かながわの水がめ (kanagawa-dam.jp) — JSON API `summary.php`',
     license: '神奈川県企業庁 — 出典明示で再配布可 (推定)',

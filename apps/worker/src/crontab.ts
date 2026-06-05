@@ -132,6 +132,15 @@ export const CRONTAB = `
 # Cron at :35.
 35 * * * * ingest:fukuoka-bodik
 
+# 水資源機構 関東支社 利根川/荒川系 — 13 facilities (9 Tone + 4 Ara).
+# Daily 0時 JST static HTML; 万m³ units. New dams: 藤原/相俣/薗原/八ッ場/二瀬.
+# Overlap dams (矢木沢/奈良俣/下久保/草木/浦山/滝沢) get daily cadence. Cron at :39.
+39 * * * * ingest:jwa-toneara
+
+# 水資源機構 中部支社 木曽川水系 — 6 dams (牧尾/阿木川/味噌川/岩屋/中里/徳山).
+# Daily static HTML; 千m³ storage + inflow/outflow. New: 中里ダム. Cron at :41.
+41 * * * * ingest:jwa-chubu
+
 # 島根県防災Web — 14 県管理ダム (布部/山佐/三瓶/波積/八戸/浜田/第二浜田/大長見/
 # 御部/益田川/笹倉/大峠/銚子/美田). Same Remix SPA framework as 広島/鳥取県防災Web;
 # pointer + list JSON; storage in 千m³. 国直轄 (尾原/志津見) also appear but
