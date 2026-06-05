@@ -182,6 +182,11 @@ export const CRONTAB = `
 # Cron at :57.
 57 * * * * ingest:iwate-kasen
 
+# 大分県河川情報 ダム諸量現況表 — 10 県管理ダム (防災Web HTML table, Shift_JIS,
+# no session). 10 columns: level / inflow / 貯水量(千m³) / 貯水率 / outflow.
+# Cron at :59.
+59 * * * * ingest:oita-bousai
+
 # 島根県防災Web — 14 県管理ダム (布部/山佐/三瓶/波積/八戸/浜田/第二浜田/大長見/
 # 御部/益田川/笹倉/大峠/銚子/美田). Same Remix SPA framework as 広島/鳥取県防災Web;
 # pointer + list JSON; storage in 千m³. 国直轄 (尾原/志津見) also appear but
