@@ -13,6 +13,7 @@ import ingestAkita from './tasks/ingest_akita_kasen.ts';
 import ingestAomori from './tasks/ingest_aomori.ts';
 import ingestCgrMlit from './tasks/ingest_cgr_mlit.ts';
 import ingestChiba from './tasks/ingest_chiba.ts';
+import ingestEhimeBousai from './tasks/ingest_ehime_bousai.ts';
 import ingestFukuiBousai from './tasks/ingest_fukui_bousai.ts';
 import ingestFukuokaBodik from './tasks/ingest_fukuoka_bodik.ts';
 import ingestFukushimaKasen from './tasks/ingest_fukushima_kasen.ts';
@@ -61,6 +62,7 @@ import ingestSaitama from './tasks/ingest_saitama_suibo.ts';
 import ingestShiga from './tasks/ingest_shiga.ts';
 import ingestShimaneBousai from './tasks/ingest_shimane_bousai.ts';
 import ingestShimokubo from './tasks/ingest_shimokubo.ts';
+import ingestShizuokaBousai from './tasks/ingest_shizuoka_bousai.ts';
 import ingestSkrHiji from './tasks/ingest_skr_hiji.ts';
 import ingestTochigi from './tasks/ingest_tochigi.ts';
 import ingestTokushima from './tasks/ingest_tokushima_bousai.ts';
@@ -164,6 +166,8 @@ async function main(): Promise<void> {
       'ingest:gifu-kasen': ingestGifuKasen,
       'ingest:aichi-kasen': ingestAichiKasen,
       'ingest:fukui-bousai': ingestFukuiBousai,
+      'ingest:shizuoka-bousai': ingestShizuokaBousai,
+      'ingest:ehime-bousai': ingestEhimeBousai,
       'ingest:toyama-bousai': ingestToyamaBousai,
       'ingest:nara-kasen': ingestNaraKasen,
       'backfill:kagoshima-bodik': backfillKagoshima,
