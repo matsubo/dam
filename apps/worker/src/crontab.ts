@@ -167,6 +167,11 @@ export const CRONTAB = `
 # Cron at :51 (spaced from shimokubo :49 and ktr-kinu :17).
 51 * * * * ingest:yamagata-bousai
 
+# 茨城県河川防災情報 — 7 県管理ダム (小山/飯田/藤井川/竜神/十王/花貫/花園).
+# 防災Web HTML table (Shift_JIS), no session required. 9 columns including
+# storage volume (千m³) but no 貯水率. Cron at :53.
+53 * * * * ingest:ibaraki-bousai
+
 # 島根県防災Web — 14 県管理ダム (布部/山佐/三瓶/波積/八戸/浜田/第二浜田/大長見/
 # 御部/益田川/笹倉/大峠/銚子/美田). Same Remix SPA framework as 広島/鳥取県防災Web;
 # pointer + list JSON; storage in 千m³. 国直轄 (尾原/志津見) also appear but
