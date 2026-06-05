@@ -91,6 +91,12 @@ export const CRONTAB = `
 # Priority 302. Cron daily at 03:00 UTC = 12:00 JST.
 0 3 * * * ingest:jwa-chiba-bouso
 
+# 沖縄県企業局 — 倉敷ダム (県管理) / 山城ダム (企業局管理) 日次 (CSV, 午前0時時点).
+# Source: www.eb.pref.okinawa.jp/js/chart/dam-youryou.csv
+# 5-row CSV with storage volume (千m³) and rate (%) per group.
+# Priority 302. Cron daily at 03:00 UTC = 12:00 JST.
+0 3 * * * ingest:okinawa-eb
+
 # 国土交通省 北海道開発局 — 18 直轄 dams (info-dam.hdb.hkd.mlit.go.jp).
 # Page table has 10-minute cadence; we fetch hourly at :13 to spread load
 # from other prefectural sources.
