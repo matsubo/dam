@@ -97,6 +97,18 @@ export const CRONTAB = `
 # Cron at :14 every hour.
 14 * * * * ingest:fukui-bousai
 
+# 奈良県河川情報システム モバイル ダム現況 — 5 ダム (Shift_JIS HTML, ~10分更新).
+# 岩井川/天理/白川/初瀬/大門. 貯水位/流入量/放流量のみ (no storage).
+# Each dam is a separate table; latest row has "MM/DD HH:MM" JST timestamp.
+# Cron at :18 every hour.
+18 * * * * ingest:nara-kasen
+
+# 富山県 県内ダム情報実況表 — 16 ダム (Salesforce public page, hourly).
+# 室牧/上市川/和田川/利賀川/白岩川/子撫川/角川/熊野川/上市川第二/朝日小川/
+# 布施川/城端/境川/大谷/久婦須川/舟川. Columns: 全流入量/全放流量/貯水位のみ.
+# No storage volume. HTML numeric entity-encoded. Cron at :16 every hour.
+16 * * * * ingest:toyama-bousai
+
 # 国土交通省 中国地方整備局 — 11 国管理 dams across 5 prefectures
 # (岡山/広島/山口/鳥取/島根). Single POST JSON gives all dams' current
 # values. Cron at :15 every hour.
