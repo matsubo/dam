@@ -24,6 +24,7 @@ import ingestNiigata from './tasks/ingest_niigata.ts';
 import ingestOkayama from './tasks/ingest_okayama.ts';
 import ingestOsaka from './tasks/ingest_osaka.ts';
 import ingestShiga from './tasks/ingest_shiga.ts';
+import ingestShimaneBousai from './tasks/ingest_shimane_bousai.ts';
 import ingestTochigi from './tasks/ingest_tochigi.ts';
 import ingestTokyoWaterworks from './tasks/ingest_tokyo_waterworks.ts';
 import ingestTottori from './tasks/ingest_tottori.ts';
@@ -75,6 +76,7 @@ async function main(): Promise<void> {
       'ingest:hiroshima-bousai': ingestHiroshima,
       'ingest:osaka-bousai': ingestOsaka,
       'ingest:tottori-bousai': ingestTottoriBousai,
+      'ingest:shimane-bousai': ingestShimaneBousai,
       'ingest:fukuoka-bodik': ingestFukuokaBodik,
       'backfill:suimon:enqueue': backfillEnqueue,
       'backfill:suimon:run': backfillRun,
