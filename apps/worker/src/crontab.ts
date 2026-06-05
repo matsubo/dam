@@ -272,6 +272,12 @@ export const CRONTAB = `
 # level + inflow + outflow + hourly rain (no storage volume). Cron at :36.
 36 * * * * ingest:yamanashi-dam
 
+# 長野県 河川砂防情報ステーション ダム諸量 — 17 県管理ダム (松川/片桐/箕輪/横川/
+# 奈良井/裾花/奥裾花/古谷/内村/豊丘/余地/北山/浅川/水上/小仁熊/湯川/金原).
+# Same JSON pattern as 石川/福島 (sabo-nagano.jp); uses "value"/"level" keys
+# (not "val"/"lvl"); has item_20 storage volume (×1000 m³). Cron at :33.
+33 * * * * ingest:nagano-kasen
+
 # 福島県河川流域総合情報システム — 11 県管理ダム (こまち/千五沢/堀川/真野/木戸/
 # 小玉/高柴/四時/日中/東山/田島). JST-dated JSON URL; item_10=貯水位 /
 # item_50=流入量 / item_70=放流量 / item_1_70=時間雨量 (no storage volume).
@@ -287,6 +293,19 @@ export const CRONTAB = `
 # no session). 10 columns: level / inflow / 貯水量(千m³) / 貯水率 / outflow.
 # Cron at :59.
 59 * * * * ingest:oita-bousai
+
+# かがわ防災Webポータル ダム諸量 — 18 ダム (椛川/門入/千足/内海/吉田/内場/野口/
+# 長柄/前山/殿川/粟井/五名/田万/大川/大内/五郷/府中/粟地). Single JSON fetch;
+# clean structured data with storageRate + storageVolumeM3 + waterLevel +
+# inflow + outflow. Updated every 10 min. Cron at :39.
+39 * * * * ingest:kagawa-bousai
+
+# 佐賀県河川砂防情報システム ダム現況表 — 19 県管理ダム (岸川/庭木/繁昌/天ヶ瀬/
+# 平木場/伊岐佐/都川内/井手口川/竜門/有田/古木場/本部/矢筈/狩立日ノ峯/中木庭/
+# 岩屋川内/横竹/深浦/河内). Transposed Shift_JIS HTML table; 3 pages (7+7+5
+# dams) fetched in parallel. Dam names are column headers (not row labels).
+# Cron at :40.
+40 * * * * ingest:saga-bousai
 
 # 高知県水防情報システム ダム諸量現況表 — 11 ダム (和食/永瀬/鎌井谷/鏡/桐見/坂本/
 # 以布利川 [pref] + 早明浦/大渡/中筋川/横瀬川 [国交省]). Pre-generated static

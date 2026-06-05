@@ -31,6 +31,7 @@ import ingestJwaKisoRt from './tasks/ingest_jwa_kiso_rt.ts';
 import ingestJwaToneAra from './tasks/ingest_jwa_toneara.ts';
 import ingestJwaToyokawa from './tasks/ingest_jwa_toyokawa.ts';
 import ingestJwaYoshino from './tasks/ingest_jwa_yoshino.ts';
+import ingestKagawa from './tasks/ingest_kagawa_bousai.ts';
 import ingestKanagawa from './tasks/ingest_kanagawa.ts';
 import ingestKasenbosai from './tasks/ingest_kasenbosai.ts';
 import ingestKasenbosaiV2 from './tasks/ingest_kasenbosai_v2.ts';
@@ -41,6 +42,7 @@ import ingestKtrTone from './tasks/ingest_ktr_tone_dam.ts';
 import ingestKumamoto from './tasks/ingest_kumamoto_bousai.ts';
 import ingestMiyagi from './tasks/ingest_miyagi_kasen.ts';
 import ingestMiyazaki from './tasks/ingest_miyazaki_bousai.ts';
+import ingestNagano from './tasks/ingest_nagano_kasen.ts';
 import ingestNagasaki from './tasks/ingest_nagasaki_kasen.ts';
 import ingestNaraKasen from './tasks/ingest_nara_kasen.ts';
 import ingestNiigata from './tasks/ingest_niigata.ts';
@@ -50,6 +52,7 @@ import ingestOsaka from './tasks/ingest_osaka.ts';
 import ingestQsrRyumon from './tasks/ingest_qsr_ryumon.ts';
 import ingestQsrToukan from './tasks/ingest_qsr_toukan.ts';
 import ingestQsrTuruta from './tasks/ingest_qsr_turuta.ts';
+import ingestSagaBousai from './tasks/ingest_saga_bousai.ts';
 import ingestShiga from './tasks/ingest_shiga.ts';
 import ingestShimaneBousai from './tasks/ingest_shimane_bousai.ts';
 import ingestShimokubo from './tasks/ingest_shimokubo.ts';
@@ -132,6 +135,9 @@ async function main(): Promise<void> {
       'ingest:shimokubo': ingestShimokubo,
       'ingest:ibaraki-bousai': ingestIbaraki,
       'ingest:kochi-bousai': ingestKochi,
+      'ingest:kagawa-bousai': ingestKagawa,
+      'ingest:nagano-kasen': ingestNagano,
+      'ingest:saga-bousai': ingestSagaBousai,
       'ingest:ishikawa-kasen': ingestIshikawa,
       'ingest:iwate-kasen': ingestIwate,
       'ingest:miyagi-kasen': ingestMiyagi,
