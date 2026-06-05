@@ -99,7 +99,7 @@ describe('parseOitaTable', () => {
     expect(r?.waterLevelM).toBeCloseTo(154.19);
     expect(r?.inflowM3s).toBeCloseTo(2.46);
     expect(r?.storageVolumeM3).toBe(1_004_000);
-    expect(r?.storageRate).toBeCloseTo(100.0);
+    expect(r?.storageRate).toBeCloseTo(1.0);
     expect(r?.outflowM3s).toBeCloseTo(3.13);
   });
 
@@ -120,7 +120,7 @@ describe('parseOitaTable', () => {
     ]);
     const rows = parseOitaTable(html);
     expect(rows[0]?.storageVolumeM3).toBe(11_688_000);
-    expect(rows[0]?.storageRate).toBeCloseTo(52.4);
+    expect(rows[0]?.storageRate).toBeCloseTo(0.524);
   });
 
   test('inflow is column [6], outflow is column [9]', () => {
@@ -209,7 +209,7 @@ describe('parseOitaTable', () => {
       ),
     ]);
     expect(parseOitaTable(html)[0]?.waterLevelM).toBeCloseTo(238.2);
-    expect(parseOitaTable(html)[0]?.storageRate).toBeCloseTo(102.4);
+    expect(parseOitaTable(html)[0]?.storageRate).toBeCloseTo(1.024);
   });
 
   test('returns empty array for empty HTML', () => {

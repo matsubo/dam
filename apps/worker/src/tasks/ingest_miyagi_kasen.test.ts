@@ -101,7 +101,7 @@ describe('parseMiyagiTable', () => {
     expect(rows[0]?.storageVolumeM3).toBeCloseTo(21135 * 1000);
     expect(rows[0]?.inflowM3s).toBeCloseTo(6.94);
     expect(rows[0]?.outflowM3s).toBeCloseTo(4.85);
-    expect(rows[0]?.storageRate).toBeCloseTo(84.5);
+    expect(rows[0]?.storageRate).toBeCloseTo(0.845);
   });
 
   test('storageVolumeM3 is 10^3 m^3 units converted (× 1000)', () => {

@@ -56,7 +56,7 @@ describe('parseYamaguchiHtml', () => {
     expect(row?.yamaguchiName).toBe('小瀬川ダム');
     expect(row?.observedAt.toISOString()).toBe('2026-06-05T12:00:00.000Z');
     expect(row?.waterLevelM).toBeCloseTo(213.33);
-    expect(row?.storageRate).toBeCloseTo(63.7);
+    expect(row?.storageRate).toBeCloseTo(0.637);
     expect(row?.inflowM3s).toBeCloseTo(3.89);
     expect(row?.outflowM3s).toBeCloseTo(4.83);
   });

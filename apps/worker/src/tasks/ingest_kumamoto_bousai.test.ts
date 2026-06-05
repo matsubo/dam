@@ -59,7 +59,7 @@ describe('parseDspDatEntry', () => {
     expect(row?.outflowM3s).toBeCloseTo(19.6);
     // 19793 × 1000 = 19,793,000 m³
     expect(row?.storageVolumeM3).toBe(19_793_000);
-    expect(row?.storageRate).toBeCloseTo(56.45);
+    expect(row?.storageRate).toBeCloseTo(0.5645);
   });
 
   test('strips ↑↓→ arrow indicators from numeric fields', () => {
@@ -102,7 +102,7 @@ describe('parseDspDatEntry', () => {
     const row = parseDspDatEntry(withZero);
     expect(row?.kumamotoName).toBe('石打ダム');
     expect(row?.storageVolumeM3).toBe(234_000);
-    expect(row?.storageRate).toBeCloseTo(20.7);
+    expect(row?.storageRate).toBeCloseTo(0.207);
   });
 });
 
@@ -147,6 +147,6 @@ describe('parseKumamotoPage', () => {
     const html = makePage([HIKAWA_ENTRY]);
     const rows = parseKumamotoPage(html);
     expect(rows[0]?.storageVolumeM3).toBe(1_310_000);
-    expect(rows[0]?.storageRate).toBeCloseTo(22.2);
+    expect(rows[0]?.storageRate).toBeCloseTo(0.222);
   });
 });

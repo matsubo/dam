@@ -130,7 +130,7 @@ describe('parseAllDamsJson', () => {
     expect(rows[0]?.observedAt.toISOString()).toBe('2026-06-05T06:30:00.000Z');
     expect(rows[0]?.waterLevelM).toBeCloseTo(64.77);
     expect(rows[0]?.storageVolumeM3).toBeCloseTo(97 * 1000);
-    expect(rows[0]?.storageRate).toBeCloseTo(36.7);
+    expect(rows[0]?.storageRate).toBeCloseTo(0.367);
     expect(rows[0]?.inflowM3s).toBeCloseTo(0.01);
     expect(rows[0]?.outflowM3s).toBeCloseTo(0.01);
   });

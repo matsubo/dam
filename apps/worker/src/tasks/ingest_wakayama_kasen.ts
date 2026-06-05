@@ -155,8 +155,11 @@ interface DamMatch {
 }
 
 async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
+  // Include Nara (29) and Mie (24) alongside Wakayama (30): the 22077xxx/22088xxx
+  // KKR dams in this source (猿谷/川迫/九尾/大滝/大迫/津風呂/坂本/池原/七色/二津野/小森/風屋)
+  // sit in the 熊野川/北山川 watershed spanning all three prefectures.
   const masters = await sql<{ id: bigint; name: string }[]>`
-    SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
+    SELECT id, name FROM dams WHERE pref_code = ANY(ARRAY['24', '29', '30']) ORDER BY id
   `;
   const out: DamMatch[] = [];
 
