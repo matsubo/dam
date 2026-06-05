@@ -62,6 +62,20 @@ export function parseMiyagiTimestamp(s: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * "YYYY-MM-DD-HH-MM" JST (from commonParam.dispDate) → UTC Date.
+ * The site now renders 観測時刻 dynamically; dispDate in the inline JS is the
+ * authoritative timestamp when the label element is empty.
+ */
+export function parseMiyagiDispDate(s: string): Date | null {
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const d = new Date(
+    Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]) - 9, Number(m[5]), 0),
+  );
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 function parseNum(s: string): number | null {
   const clean = s.replace(/[^\d.\-]/g, '');
   if (!clean) return null;
@@ -70,10 +84,18 @@ function parseNum(s: string): number | null {
 }
 
 export function parseMiyagiTable(html: string): ParsedRow[] {
-  // Extract observation timestamp
-  const tsMatch = html.match(/観測時刻[：:]\s*(\d{4})年(\d{2})月(\d{2})日\s+(\d{2})時(\d{2})分/);
-  if (!tsMatch) return [];
-  const observedAt = parseMiyagiTimestamp(tsMatch[0]);
+  // Primary: inline "観測時刻：YYYY年MM月DD日 HH時MM分" label (older site format).
+  // Fallback: commonParam.dispDate "YYYY-MM-DD-HH-MM" injected by JS (current format).
+  const tsLabelMatch = html.match(
+    /観測時刻[：:]\s*(\d{4})年(\d{2})月(\d{2})日\s+(\d{2})時(\d{2})分/,
+  );
+  const dispDateMatch = html.match(/dispDate:(\d{4}-\d{2}-\d{2}-\d{2}-\d{2})/);
+
+  const observedAt = tsLabelMatch
+    ? parseMiyagiTimestamp(tsLabelMatch[0])
+    : dispDateMatch
+      ? parseMiyagiDispDate(dispDateMatch[1] ?? '')
+      : null;
   if (!observedAt) return [];
 
   const rows: ParsedRow[] = [];
