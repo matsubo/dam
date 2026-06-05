@@ -226,6 +226,12 @@ export const CRONTAB = `
 # Upgrades jwa-chubu (daily, priority 296) to hourly. Priority 297. Cron at :47.
 47 * * * * ingest:jwa-kiso-rt
 
+# 群馬県水位雨量情報システム ダム現況表 — 7 県管理ダム hourly (Shift_JIS HTML,
+# 坂本/霧積/塩沢/四万川/道平川/大仁田/桐生川). One fetch per station index (1–7);
+# timestamp "MM月DD日HH時mm分現在" JST (no year); volume in 千m³; arrow
+# indicators (→↑↓) stripped. Priority 308. Cron at :48.
+48 * * * * ingest:gunma-kasen
+
 # 水資源機構 利根川上流総合管理所 下久保ダム — 1 dam (群馬/埼玉境). JSON feed
 # (UTF-8-BOM), 10分更新. Upgrades jwa-toneara (daily, priority 296) → hourly for
 # 下久保ダム. Priority 297. Cron at :49.
