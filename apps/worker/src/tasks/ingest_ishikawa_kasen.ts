@@ -90,7 +90,9 @@ interface IshikawaJson {
 export function parseIshikawaTimestamp(ts: string): Date | null {
   const m = ts.match(/^(\d{4})-(\d{2})-(\d{2})-(\d{2})-(\d{2})$/);
   if (!m) return null;
-  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]) - 9, Number(m[5]), 0));
+  const d = new Date(
+    Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]) - 9, Number(m[5]), 0),
+  );
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
@@ -133,7 +135,12 @@ export function parseIshikawaJson(json: IshikawaJson): ParsedRow[] {
     const inflowM3s = parseVal(latest.item_50?.val);
     const outflowM3s = parseVal(latest.item_70?.val);
 
-    if (waterLevelM === null && storageVolumeM3 === null && inflowM3s === null && outflowM3s === null) {
+    if (
+      waterLevelM === null &&
+      storageVolumeM3 === null &&
+      inflowM3s === null &&
+      outflowM3s === null
+    ) {
       continue;
     }
 

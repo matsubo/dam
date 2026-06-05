@@ -1,11 +1,7 @@
 // apps/worker/src/tasks/ingest_ishikawa_kasen.test.ts
 
 import { describe, expect, test } from 'bun:test';
-import {
-  buildUrl,
-  parseIshikawaJson,
-  parseIshikawaTimestamp,
-} from './ingest_ishikawa_kasen.ts';
+import { buildUrl, parseIshikawaJson, parseIshikawaTimestamp } from './ingest_ishikawa_kasen.ts';
 
 describe('parseIshikawaTimestamp', () => {
   test('parses "YYYY-MM-DD-HH-mm" (JST) → UTC', () => {
@@ -28,7 +24,10 @@ describe('parseIshikawaTimestamp', () => {
 describe('buildUrl', () => {
   test('generates correct URL from UTC time (JST date)', () => {
     // 2026-06-05 17:00 UTC = 2026-06-06 02:00 JST → date 20260606
-    const url = buildUrl(new Date('2026-06-05T17:00:00.000Z'), 'https://kasen.pref.ishikawa.lg.jp/dyn/dps/timeline');
+    const url = buildUrl(
+      new Date('2026-06-05T17:00:00.000Z'),
+      'https://kasen.pref.ishikawa.lg.jp/dyn/dps/timeline',
+    );
     expect(url).toBe(
       'https://kasen.pref.ishikawa.lg.jp/dyn/dps/timeline/20260606/20260606_1_dam_60.json',
     );
@@ -36,7 +35,10 @@ describe('buildUrl', () => {
 
   test('uses JST date (before midnight UTC maps to previous JST date)', () => {
     // 2026-06-05 08:00 UTC = 2026-06-05 17:00 JST → date 20260605
-    const url = buildUrl(new Date('2026-06-05T08:00:00.000Z'), 'https://kasen.pref.ishikawa.lg.jp/dyn/dps/timeline');
+    const url = buildUrl(
+      new Date('2026-06-05T08:00:00.000Z'),
+      'https://kasen.pref.ishikawa.lg.jp/dyn/dps/timeline',
+    );
     expect(url).toBe(
       'https://kasen.pref.ishikawa.lg.jp/dyn/dps/timeline/20260605/20260605_1_dam_60.json',
     );
