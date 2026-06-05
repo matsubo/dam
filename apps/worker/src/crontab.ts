@@ -147,6 +147,12 @@ export const CRONTAB = `
 # Cron at :27.
 27 * * * * ingest:tochigi-bodik
 
+# 石川県河川総合情報システム ダム諸量 — 11 県管理ダム hourly JSON.
+# 八ヶ川/新内川/内川/赤瀬/我谷/九谷/小屋/北河内/辰巳/犀川/大日川.
+# item_10=貯水位 / item_20=貯水量(千m³) / item_50=流入量 / item_70=放流量.
+# Cron at :28 every hour.
+28 * * * * ingest:ishikawa-kasen
+
 # 広島県防災Web — 18 ダム (JSON feed, 10分更新). Pointer + list feed; storage
 # in 千m³. Prefectural (managerCd 23/24/26) + 5 MLIT dams already in
 # cgr-mlit-dam (priority 304 wins for those). Cron at :29.
