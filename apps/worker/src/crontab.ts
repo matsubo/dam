@@ -132,6 +132,17 @@ export const CRONTAB = `
 # EUC-JP HTML table, 10分更新; type=2 endpoint, 7 cols. Cron at :22.
 22 * * * * ingest:qsr-turuta-dam
 
+# 国土交通省 九州地方整備局 竜門ダム管理所 — 竜門ダム (佐田川水系, 福岡/40).
+# PHP key-value endpoint (data.php?key=); 6 keys fetched in parallel: time /
+# ryunyu / houryu / chosuiryo / chosuii / chosuiritsu. Full data: storage +
+# rate + level + inflow + outflow. Cron at :24.
+24 * * * * ingest:qsr-ryumon-dam
+
+# 国土交通省 九州地方整備局 筑後川ダム統合管理事務所 — 2 国管理ダム (筑後川水系, 大分/44).
+# 松原ダム / 下筌ダム. Single HTML page with 2 tables (one per dam); one data
+# row each. level + inflow + 全放流量 + hourly rain (no storage). Cron at :26.
+26 * * * * ingest:qsr-toukan-dam
+
 # 国土交通省 四国地方整備局 肱川ダム統合管理事務所 — 野村・鹿野川ダム (肱川水系, 愛媛/38).
 # www1.river.go.jp CGI (EUC-JP HTML + IFRAME), 10分更新; 2 dams, 4 HTTP requests.
 # Cron at :23.
