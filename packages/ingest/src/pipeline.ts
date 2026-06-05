@@ -48,27 +48,37 @@ export async function runIngestForAdapter(
     try {
       const raw = await adapter.fetchRaw(target, ctx);
       if (!raw) continue; // unchanged (e.g. 304)
-      const ext = extensionFor(raw.contentType);
-      const key = rawSnapshotKey(adapter.id, target.targetId, ctx.runAt, ext);
-      const uri = `s3://${process.env.S3_BUCKET ?? 'dam-raw'}/${key}`;
-      await putSnapshot(key, raw.bytes, raw.contentType);
-      const rawId = await recordRawSnapshot({
-        sourceId: adapter.id,
-        targetId: target.targetId,
-        fetchedAt: ctx.runAt,
-        storageUri: uri,
-        httpStatus: raw.status,
-        etag: raw.etag ?? null,
-        bytes: raw.bytes.byteLength,
-        contentType: raw.contentType,
-      });
-      rawSnapshots++;
+
+      // Store raw snapshot — non-fatal: if S3 is unavailable observations
+      // still write with rawSnapshotId=null.
+      let rawId: bigint | null = null;
+      try {
+        const ext = extensionFor(raw.contentType);
+        const key = rawSnapshotKey(adapter.id, target.targetId, ctx.runAt, ext);
+        const uri = `s3://${process.env.S3_BUCKET ?? 'dam-raw'}/${key}`;
+        await putSnapshot(key, raw.bytes, raw.contentType);
+        rawId = await recordRawSnapshot({
+          sourceId: adapter.id,
+          targetId: target.targetId,
+          fetchedAt: ctx.runAt,
+          storageUri: uri,
+          httpStatus: raw.status,
+          etag: raw.etag ?? null,
+          bytes: raw.bytes.byteLength,
+          contentType: raw.contentType,
+        });
+        rawSnapshots++;
+      } catch (snapErr) {
+        console.error(
+          `ingest ${adapter.id} ${target.targetId}: snapshot storage skipped: ${(snapErr as Error).message}`,
+        );
+      }
 
       let parsed: ParsedReading[];
       try {
         parsed = await adapter.parse(raw, target);
       } catch (e) {
-        await markParseError(rawId, (e as Error).message);
+        if (rawId != null) await markParseError(rawId, (e as Error).message);
         errors++;
         continue;
       }
@@ -98,7 +108,7 @@ export async function runIngestForAdapter(
         });
       }
       observationsWritten += await upsertObservations(inputs);
-      await markParsed(rawId);
+      if (rawId != null) await markParsed(rawId);
     } catch (e) {
       console.error(`ingest ${adapter.id} ${target.targetId}: ${(e as Error).message}`);
       errors++;

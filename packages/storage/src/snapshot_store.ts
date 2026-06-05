@@ -1,5 +1,27 @@
-import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import {
+  CreateBucketCommand,
+  GetObjectCommand,
+  HeadBucketCommand,
+  PutObjectCommand,
+} from '@aws-sdk/client-s3';
 import { bucket, s3 } from './client.ts';
+
+/**
+ * Create the S3/MinIO bucket if it does not already exist.
+ * Safe to call repeatedly; ignores BucketAlreadyOwnedByYou.
+ */
+export async function ensureBucket(): Promise<void> {
+  try {
+    await s3.send(new HeadBucketCommand({ Bucket: bucket }));
+  } catch {
+    try {
+      await s3.send(new CreateBucketCommand({ Bucket: bucket }));
+    } catch (e: unknown) {
+      const code = (e as { Code?: string } | undefined)?.Code;
+      if (code !== 'BucketAlreadyOwnedByYou' && code !== 'BucketAlreadyExists') throw e;
+    }
+  }
+}
 
 export function rawSnapshotKey(
   source: string,
