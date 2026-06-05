@@ -62,7 +62,7 @@ describe('parseFukuiPage', () => {
     const rows = parseFukuiPage(SAMPLE_PAGE);
     const r = rows.find((x) => x.fukuiName === '永平寺ダム');
     expect(r).toBeDefined();
-    expect(r?.storageRate).toBeCloseTo(99.55);
+    expect(r?.storageRate).toBeCloseTo(0.9955);
     expect(r?.waterLevelM).toBeCloseTo(319.76);
     expect(r?.storageVolumeM3).toBe(438_000);
     expect(r?.inflowM3s).toBeCloseTo(0.17);
@@ -80,7 +80,7 @@ describe('parseFukuiPage', () => {
     const r = rows.find((x) => x.fukuiName === '真名川ダム');
     expect(r).toBeDefined();
     expect(r?.storageVolumeM3).toBeNull();
-    expect(r?.storageRate).toBeCloseTo(55.9);
+    expect(r?.storageRate).toBeCloseTo(0.559);
     expect(r?.inflowM3s).toBeCloseTo(2.36);
     expect(r?.outflowM3s).toBeCloseTo(10.46);
   });
