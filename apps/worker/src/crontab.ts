@@ -141,6 +141,11 @@ export const CRONTAB = `
 # Daily static HTML; 千m³ storage + inflow/outflow. New: 中里ダム. Cron at :41.
 41 * * * * ingest:jwa-chubu
 
+# 水資源機構 中部支社 豊川水系 — 2 dams (宇連/大島). Real-time page updated
+# every ~10 min; water level (EL.m) + 有効貯水量(m³) + inflow/outflow. Upgrades
+# 宇連/大島 from daily (aitoyo) to hourly cadence. Cron at :43.
+43 * * * * ingest:jwa-toyokawa
+
 # 島根県防災Web — 14 県管理ダム (布部/山佐/三瓶/波積/八戸/浜田/第二浜田/大長見/
 # 御部/益田川/笹倉/大峠/銚子/美田). Same Remix SPA framework as 広島/鳥取県防災Web;
 # pointer + list JSON; storage in 千m³. 国直轄 (尾原/志津見) also appear but
