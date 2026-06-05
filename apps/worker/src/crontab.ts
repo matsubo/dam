@@ -151,6 +151,11 @@ export const CRONTAB = `
 # 早明浦ダムのみ利水貯水率[速報値]あり (四国の水不足指標). Cron at :45.
 45 * * * * ingest:jwa-yoshino
 
+# 水資源機構 中部支社 木曽川水系 実時計 — 6 dams (牧尾/味噌川/阿木川/岩屋/徳山/中里).
+# Real-time page (~10 min cadence); 貯水位(EL.m) + 有効貯水量(10³m³) + inflow/outflow.
+# Upgrades jwa-chubu (daily, priority 296) to hourly. Priority 297. Cron at :47.
+47 * * * * ingest:jwa-kiso-rt
+
 # 島根県防災Web — 14 県管理ダム (布部/山佐/三瓶/波積/八戸/浜田/第二浜田/大長見/
 # 御部/益田川/笹倉/大峠/銚子/美田). Same Remix SPA framework as 広島/鳥取県防災Web;
 # pointer + list JSON; storage in 千m³. 国直轄 (尾原/志津見) also appear but
