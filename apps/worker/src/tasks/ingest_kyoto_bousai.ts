@@ -137,8 +137,10 @@ interface DamMatch {
 }
 
 async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
+  // Include Nara (29) alongside Kyoto (26): 布目ダム is managed by 水資源機構 and
+  // sits in Nara pref, but appears in the Kyoto data feed.
   const masters = await sql<{ id: bigint; name: string }[]>`
-    SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
+    SELECT id, name FROM dams WHERE pref_code = ANY(ARRAY['26', '29']) ORDER BY id
   `;
   const out: DamMatch[] = [];
 
