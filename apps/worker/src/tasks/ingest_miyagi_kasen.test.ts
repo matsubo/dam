@@ -1,7 +1,12 @@
 // apps/worker/src/tasks/ingest_miyagi_kasen.test.ts
 
 import { describe, expect, test } from 'bun:test';
-import { type ParsedRow, parseMiyagiTable, parseMiyagiTimestamp } from './ingest_miyagi_kasen.ts';
+import {
+  type ParsedRow,
+  parseMiyagiDispDate,
+  parseMiyagiTable,
+  parseMiyagiTimestamp,
+} from './ingest_miyagi_kasen.ts';
 
 // Build a minimal Gamen42Servlet HTML fragment
 function makeHtml(
@@ -84,6 +89,19 @@ describe('parseMiyagiTimestamp', () => {
     expect(parseMiyagiTimestamp('bad')).toBeNull();
     expect(parseMiyagiTimestamp('')).toBeNull();
     expect(parseMiyagiTimestamp('2026-06-05 15:00')).toBeNull();
+  });
+});
+
+describe('parseMiyagiDispDate', () => {
+  test('parses YYYY-MM-DD-HH-MM JST → UTC', () => {
+    // 2026-06-06-08-00 JST = 2026-06-05T23:00:00.000Z
+    const d = parseMiyagiDispDate('2026-06-06-08-00');
+    expect(d?.toISOString()).toBe('2026-06-05T23:00:00.000Z');
+  });
+
+  test('returns null for non-matching input', () => {
+    expect(parseMiyagiDispDate('bad')).toBeNull();
+    expect(parseMiyagiDispDate('2026年06月06日 08時00分')).toBeNull();
   });
 });
 
@@ -178,5 +196,25 @@ describe('parseMiyagiTable', () => {
     const rows = parseMiyagiTable(html);
     // outflow is vals[4]=4.85, NOT the negative vals[5]=-2.09
     expect(rows[0]?.outflowM3s).toBeCloseTo(4.85);
+  });
+
+  test('falls back to commonParam.dispDate when 観測時刻 label is empty (current site format)', () => {
+    // The site now injects the date via JS into an empty div; the static HTML
+    // contains only `commonParam = "dispDate:YYYY-MM-DD-HH-MM$..."`.
+    const datDivs = SAMPLE_VALS_OKURA.map(
+      (v) => `<div class="dat2" style="color:#000000">${v}</div>`,
+    ).join('\n');
+    const html = `<html>
+  <script>var commonParam = "dispDate:2026-06-06-08-00$stationNo:104007011";</script>
+  <div id="timeobservation">観測時刻：</div>
+  <span class="nam" id=0 onClick="chengeGamen2('Gamen41Servlet','stationNo','104007011')">大倉ダム
+  </span>
+  ${datDivs}
+</html>`;
+    const rows = parseMiyagiTable(html);
+    expect(rows).toHaveLength(1);
+    // 2026-06-06T08:00 JST = 2026-06-05T23:00:00.000Z
+    expect(rows[0]?.observedAt.toISOString()).toBe('2026-06-05T23:00:00.000Z');
+    expect(rows[0]?.waterLevelM).toBeCloseTo(268.11);
   });
 });
