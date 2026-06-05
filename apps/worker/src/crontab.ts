@@ -30,6 +30,12 @@ export const CRONTAB = `
 # at concurrency=8).
 3 * * * * ingest:kasenbosai-v2
 
+# Seed / refresh external_ids.kasenbosai by sweeping the kawabou dam catalogue
+# GeoJSON (49 prefecture files, ~900 dams) and matching by name + distance.
+# Weekly on Monday 03:30 UTC (12:30 JST). After first run this cron keeps new
+# dams matched as the kawabou catalogue grows.
+30 3 * * 1 match:kasenbosai
+
 # Tokyo waterworks daily reservoir status — open data, real values for the
 # 13 dams supplying Tokyo's drinking water (Tonegawa 9 + Arakawa 4 +
 # Tamagawa 2). Page updates daily; check at 03:00 UTC = 12:00 JST and again
