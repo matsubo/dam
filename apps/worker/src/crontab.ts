@@ -184,6 +184,11 @@ export const CRONTAB = `
 # storage volume (千m³) but no 貯水率. Cron at :53.
 53 * * * * ingest:ibaraki-bousai
 
+# 長崎県河川砂防情報 ダム情報 — 35 ダム (lv / 貯水量(千m³) / 貯水率 / in / out).
+# JSON API (dt_range.json → snapshot URL). 30分更新. Cron at :02 and :32 to
+# catch both the :00 and :30 snapshots each hour.
+2,32 * * * * ingest:nagasaki-kasen
+
 # 宮城県土木総合情報システム ダム現況表 — 21 ダム (18 県管理 + 3 国管理).
 # Gamen42Servlet: 1 request = all dams. 10 columns: level / 貯水量(10³m³) /
 # inflow / outflow / 貯水率(利水容量). Cron at :06 every hour.
