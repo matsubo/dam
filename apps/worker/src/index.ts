@@ -7,6 +7,7 @@ import backfillMudam from './tasks/backfill_mudam.ts';
 import backfillEnqueue from './tasks/backfill_suimon_enqueue.ts';
 import backfillRun from './tasks/backfill_suimon_run.ts';
 import ingestAitoyo from './tasks/ingest_aitoyo.ts';
+import ingestAkita from './tasks/ingest_akita_kasen.ts';
 import ingestAomori from './tasks/ingest_aomori.ts';
 import ingestCgrMlit from './tasks/ingest_cgr_mlit.ts';
 import ingestChiba from './tasks/ingest_chiba.ts';
@@ -80,6 +81,7 @@ async function main(): Promise<void> {
       'ingest:kanagawa-dam': ingestKanagawa,
       'ingest:shiga-bousai': ingestShiga,
       'ingest:tottori-dam': ingestTottori,
+      'ingest:akita-kasen': ingestAkita,
       'ingest:aomori-dam': ingestAomori,
       'ingest:hkd-mlit-dam': ingestHkdMlit,
       'ingest:cgr-mlit-dam': ingestCgrMlit,
