@@ -6,6 +6,11 @@
 // Note: graphile-worker's crontab parser only allows [_a-zA-Z][_a-zA-Z0-9:_-]*
 // for task identifiers, so we use colons instead of dots.
 export const CRONTAB = `
+# 秋田県河川砂防情報システム ダム一覧表 — 18 県管理ダム (防災Web HTML table, Shift_JIS,
+# no session). 12 columns: level / inflow / outflow (no storage volume).
+# Cron at :01.
+1 * * * * ingest:akita-kasen
+
 # Master refresh
 0 3 1 * * master:refresh:ndi
 0 3 5 * * master:refresh:damnet
