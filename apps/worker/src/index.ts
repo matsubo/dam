@@ -19,6 +19,7 @@ import ingestJwaChubu from './tasks/ingest_jwa_chubu.ts';
 import ingestJwaJunpo from './tasks/ingest_jwa_junpo.ts';
 import ingestJwaToneAra from './tasks/ingest_jwa_toneara.ts';
 import ingestJwaToyokawa from './tasks/ingest_jwa_toyokawa.ts';
+import ingestJwaYoshino from './tasks/ingest_jwa_yoshino.ts';
 import ingestKanagawa from './tasks/ingest_kanagawa.ts';
 import ingestKasenbosai from './tasks/ingest_kasenbosai.ts';
 import ingestKasenbosaiV2 from './tasks/ingest_kasenbosai_v2.ts';
@@ -64,6 +65,7 @@ async function main(): Promise<void> {
       'ingest:jwa-toneara': ingestJwaToneAra,
       'ingest:jwa-chubu': ingestJwaChubu,
       'ingest:jwa-toyokawa': ingestJwaToyokawa,
+      'ingest:jwa-yoshino': ingestJwaYoshino,
       'ingest:aitoyo': ingestAitoyo,
       'ingest:jwa-chikugo': ingestJwaChikugo,
       'ingest:kanagawa-dam': ingestKanagawa,
