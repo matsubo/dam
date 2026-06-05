@@ -73,7 +73,8 @@ export function parseFukuiPage(html: string): ParsedRow[] {
     const observedAt = parseFukuiTimestamp(m[2] ?? '');
     if (!observedAt) continue;
 
-    const storageRate = parseVal(m[3] ?? '');
+    const storageRatePct = parseVal(m[3] ?? '');
+    const storageRate = storageRatePct !== null ? storageRatePct / 100 : null;
     const waterLevelM = parseVal(m[4] ?? '');
     const rawStorage = parseVal(m[5] ?? '');
     const inflowM3s = parseVal(m[6] ?? '');

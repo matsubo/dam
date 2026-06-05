@@ -109,7 +109,8 @@ export function parseYamaguchiHtml(html: string, name: string): ParsedRow | null
   if (!observedAt) return null;
 
   const waterLevelM = parseVal(cells[1] ?? '');
-  const storageRate = parseVal(cells[2] ?? '');
+  const storageRatePct = parseVal(cells[2] ?? '');
+  const storageRate = storageRatePct !== null ? storageRatePct / 100 : null;
   const inflowM3s = parseVal(cells[3] ?? '');
   const outflowM3s = parseVal(cells[4] ?? '');
 

@@ -1,134 +1,160 @@
 // apps/worker/src/tasks/ingest_shimane_bousai.ts
 //
-// 島根県防災Web dam telemetry.
+// 島根県水防情報システム (suibou-shimane.jp) ダム諸量 — 19 ダム, hourly.
 //
-// Source: https://www.bousai.pref.shimane.lg.jp (Remix SPA, same framework as
-// 広島県防災Web and 鳥取県防災Web). Pointer → list JSON pattern:
+//   県管理 (14): 布部/山佐/三瓶/波積/八戸/浜田/第二浜田/大長見/御部/益田川/
+//                笹倉/大峠/銚子/美田
+//   追加 (5):   嵯峨谷/津田川/清瀧/三成/木都賀 (station 600-604)
 //
-//   /data/dam/data.json                    → { latestDateTimestamp }
-//   /data/dam/list/{YYYY-MM-DD-HH-mm}.json → { items: [...] }
+// Note: 国直轄 (尾原/志津見) are already covered by cgr-mlit-dam (priority 304),
+// which wins preferredSource for those dams via lower priority number.
 //
-// 14 dams: 布部/山佐/三瓶/波積/八戸/浜田/第二浜田/大長見/御部/益田川/
-//          笹倉/大峠/銚子/美田 — all prefectural (島根県土木部所管).
-// 国直轄 (尾原/志津見) are already covered by cgr-mlit-dam at priority 304.
+// Source URL:
+//   https://www.suibou-shimane.jp/dyn/dps/json/YYYYMMDD/dam60.json  (JST date)
+//   Updated ~every 60 min. Single JSON with one timestamp key + "update".
 //
-// source_priorities: cgr-mlit=304 wins for any overlap; shimane-bousai=313
-// writes observations for all 14 dams but cgr wins preferredSource for MLIT
-// ones. The 12 pure-prefectural dams are new coverage.
+// JSON structure:
+//   { "YYYY-MM-DD-HH-MM": { "8193_7_N": { "7_10": {dt, st}, ... } }, "update": "..." }
 //
-// damEffectiveStorageQuantities is in 千m³ (× 1000 → m³); same unit as
-// hiroshima-bousai and tottori-bousai.
+// Item codes (st==0 = valid; st==-1 = 未収集):
+//   7_10  貯水位 [EL.m]
+//   7_20  貯水量 [千m³]
+//   7_41  利水貯水率(洪水期) [%]
+//   7_42  利水貯水率(非洪水期) [%]
+//   7_50  流入量 [m³/s]
+//   7_70  全放流量 [m³/s]
 //
+// Priority 313 (lower than cgr-mlit-dam 304, so CGR wins for 尾原/志津見).
 // Cron: hourly at :37.
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
 import type { Task } from 'graphile-worker';
 
-const BASE_URL = process.env.SHIMANE_BOUSAI_URL ?? 'https://www.bousai.pref.shimane.lg.jp';
+const BASE_URL = process.env.SHIMANE_BOUSAI_URL ?? 'https://www.suibou-shimane.jp';
+
 const PREF_CODE = '32';
 const SOURCE_ID = 'shimane-bousai';
 
-interface ShimaneBousaiItem {
-  name: string;
-  observatoryId: number;
-  managerCd: string;
-  dataTimestamp: string;
-  damQuantitiesLevel: number | null;
-  damQuantitiesLevelFlg: string;
-  damInflowQuantities: number | null;
-  damInflowQuantitiesFlg: string;
-  damTotalReleaseQuantities: number | null;
-  damTotalReleaseQuantitiesFlg: string;
-  damEffectiveStorageQuantities: number | null;
-  damEffectiveStorageQuantitiesFlg: string;
-  storageRateEffectiveCapacity: number | null;
-  storageRateEffectiveCapacityFlg: string;
-  storageRateWaterUseCapacity: number | null;
-  storageRateWaterUseCapacityFlg: string;
+// Station map from /pc/dam/2110.html (TRANS-02-0708193NNNN-01 → 8193_7_N).
+const STATIONS: ReadonlyArray<{ stationId: string; name: string }> = [
+  { stationId: '8193_7_1', name: '布部ダム' },
+  { stationId: '8193_7_2', name: '山佐ダム' },
+  { stationId: '8193_7_3', name: '三瓶ダム' },
+  { stationId: '8193_7_4', name: '八戸ダム' },
+  { stationId: '8193_7_5', name: '浜田ダム' },
+  { stationId: '8193_7_7', name: '御部ダム' },
+  { stationId: '8193_7_9', name: '銚子ダム' },
+  { stationId: '8193_7_10', name: '美田ダム' },
+  { stationId: '8193_7_11', name: '大長見ダム' },
+  { stationId: '8193_7_13', name: '笹倉ダム' },
+  { stationId: '8193_7_14', name: '大峠ダム' },
+  { stationId: '8193_7_16', name: '益田川ダム' },
+  { stationId: '8193_7_17', name: '第二浜田ダム' },
+  { stationId: '8193_7_18', name: '波積ダム' },
+  { stationId: '8193_7_600', name: '嵯峨谷ダム' },
+  { stationId: '8193_7_601', name: '津田川ダム' },
+  { stationId: '8193_7_602', name: '清瀧ダム' },
+  { stationId: '8193_7_603', name: '三成ダム' },
+  { stationId: '8193_7_604', name: '木都賀ダム' },
+];
+
+// --- types ------------------------------------------------------------------
+
+interface StationData {
+  [itemCode: string]: { dt: string; st: number };
+}
+
+interface SnapshotData {
+  [timestampOrUpdate: string]: { [stationId: string]: StationData } | string;
 }
 
 export interface ParsedRow {
-  observatoryId: string;
-  observatoryName: string;
+  stationId: string;
+  shimaneName: string;
   observedAt: Date;
   waterLevelM: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
   storageVolumeM3: number | null;
   storageRate: number | null;
+  inflowM3s: number | null;
+  outflowM3s: number | null;
 }
 
-/** Parse 「YYYY-MM-DD HH:MM:SS」 (JST) → UTC Date. */
+// --- parsing ----------------------------------------------------------------
+
+/** "YYYY-MM-DD-HH-MM" JST → UTC Date. */
 export function parseShimaneTimestamp(s: string): Date | null {
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/);
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})-(\d{2})-(\d{2})$/);
   if (!m) return null;
-  return new Date(
-    Date.UTC(
-      Number(m[1]),
-      Number(m[2]) - 1,
-      Number(m[3]),
-      Number(m[4]) - 9,
-      Number(m[5]),
-      Number(m[6]),
-    ),
+  const d = new Date(
+    Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]) - 9, Number(m[5]), 0),
   );
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/** Strip ダム suffix and （再）/（元）annotations. */
-export function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .trim();
+/** Extract numeric value if station item is valid (st == 0). */
+function getItem(station: StationData, code: string): number | null {
+  const item = station[code];
+  if (!item || item.st !== 0) return null;
+  const n = Number(item.dt);
+  return Number.isFinite(n) ? n : null;
 }
 
-function gated(value: number | null, flg: string): number | null {
-  return flg === '0' && typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
+export function parseShimaneSnapshot(data: Record<string, unknown>): ParsedRow[] {
+  const tsKeys = Object.keys(data).filter((k) => k !== 'update');
+  if (!tsKeys.length) return [];
 
-/** Convert feed items to observation rows, dropping all-null dams. */
-export function parseShimaneItems(items: ShimaneBousaiItem[]): ParsedRow[] {
-  const out: ParsedRow[] = [];
-  for (const it of items) {
-    const observedAt = parseShimaneTimestamp(it.dataTimestamp ?? '');
-    if (!observedAt) continue;
+  // Take the most recent timestamp key.
+  const ts = tsKeys.sort().at(-1) ?? '';
+  const observedAt = parseShimaneTimestamp(ts);
+  if (!observedAt) return [];
 
-    const level = gated(it.damQuantitiesLevel, it.damQuantitiesLevelFlg);
-    const inflow = gated(it.damInflowQuantities, it.damInflowQuantitiesFlg);
-    const outflow = gated(it.damTotalReleaseQuantities, it.damTotalReleaseQuantitiesFlg);
-    const storageThouM3 = gated(
-      it.damEffectiveStorageQuantities,
-      it.damEffectiveStorageQuantitiesFlg,
-    );
-    const storage = storageThouM3 != null ? storageThouM3 * 1000 : null;
-    const ratePct =
-      gated(it.storageRateEffectiveCapacity, it.storageRateEffectiveCapacityFlg) ??
-      gated(it.storageRateWaterUseCapacity, it.storageRateWaterUseCapacityFlg);
+  const snapshot = data[ts] as Record<string, StationData>;
+  const rows: ParsedRow[] = [];
 
-    if (level == null && inflow == null && outflow == null && storage == null && ratePct == null) {
+  for (const { stationId, name } of STATIONS) {
+    const st = snapshot[stationId];
+    if (!st) continue;
+
+    const waterLevelM = getItem(st, '7_10');
+    const storageThouM3 = getItem(st, '7_20');
+    const storageVolM3 = storageThouM3 !== null ? storageThouM3 * 1_000 : null;
+    const ratePct = getItem(st, '7_41') ?? getItem(st, '7_42');
+    const storageRate = ratePct !== null ? Math.max(0, Math.min(1, ratePct / 100)) : null;
+    const inflowM3s = getItem(st, '7_50');
+    const outflowM3s = getItem(st, '7_70');
+
+    if (
+      waterLevelM === null &&
+      storageVolM3 === null &&
+      storageRate === null &&
+      inflowM3s === null &&
+      outflowM3s === null
+    )
       continue;
-    }
 
-    out.push({
-      observatoryId: String(it.observatoryId),
-      observatoryName: it.name,
+    rows.push({
+      stationId,
+      shimaneName: name,
       observedAt,
-      waterLevelM: level,
-      inflowM3s: inflow,
-      outflowM3s: outflow,
-      storageVolumeM3: storage,
-      storageRate: ratePct != null ? Math.max(0, Math.min(1, ratePct / 100)) : null,
+      waterLevelM,
+      storageVolumeM3: storageVolM3,
+      storageRate,
+      inflowM3s,
+      outflowM3s,
     });
   }
-  return out;
+
+  return rows;
 }
+
+// --- DB helpers -------------------------------------------------------------
 
 async function ensureSourcePriority(): Promise<void> {
   await sql`
     INSERT INTO source_priorities (source_id, priority, description, active)
     VALUES (${SOURCE_ID}, 313,
-            '島根県防災Web — hourly, 14ダム (布部/山佐/三瓶/波積/八戸/浜田/第二浜田/大長見/御部/益田川/笹倉/大峠/銚子/美田; JSON feed)',
+            '島根県水防情報システム (suibou-shimane.jp) — 19ダム hourly JSON',
             true)
     ON CONFLICT (source_id) DO UPDATE
       SET priority    = EXCLUDED.priority,
@@ -137,26 +163,17 @@ async function ensureSourcePriority(): Promise<void> {
   `;
 }
 
-interface DamMatch {
-  observatoryId: string;
-  damId: bigint;
+export function normalizeName(s: string): string {
+  return s
+    .replace(/[（(][^）)]*[）)]/g, '')
+    .replace(/ダム$/, '')
+    .replace(/貯水池$/, '')
+    .trim();
 }
 
-export function chooseMaster(stem: string, masters: { id: bigint; name: string }[]): bigint | null {
-  let best: { id: bigint; rank: number } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (mStem === stem) rank = 0;
-    else if (m.name === `${stem}ダム`) rank = 1;
-    else if (mStem.startsWith(stem)) rank = 2;
-    else if (mStem.includes(stem)) rank = 3;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-      best = { id: m.id, rank };
-    }
-  }
-  return best?.id ?? null;
+interface DamMatch {
+  stationId: string;
+  damId: bigint;
 }
 
 async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
@@ -164,34 +181,45 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out: DamMatch[] = [];
+
   for (const r of rows) {
-    const stem = normalizeName(r.observatoryName);
+    const stem = normalizeName(r.shimaneName);
     if (!stem) continue;
-    const damId = chooseMaster(stem, masters);
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for ${r.observatoryName} (${r.observatoryId})`);
+
+    let best: { id: bigint; rank: number } | null = null;
+    for (const m of masters) {
+      const mStem = normalizeName(m.name);
+      let rank: number;
+      if (m.name === r.shimaneName) rank = 0;
+      else if (mStem === stem) rank = 1;
+      else if (m.name === `${stem}ダム`) rank = 2;
+      else if (mStem.startsWith(stem)) rank = 3;
+      else if (mStem.includes(stem)) rank = 4;
+      else continue;
+      if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
+        best = { id: m.id, rank };
+      }
+    }
+
+    if (!best) {
+      log(`${SOURCE_ID}: no master match for "${r.shimaneName}" (${r.stationId})`);
       continue;
     }
-    out.push({ observatoryId: r.observatoryId, damId });
+
+    out.push({ stationId: r.stationId, damId: best.id });
     await sql`
       UPDATE dams
       SET external_ids = COALESCE(external_ids, '{}'::jsonb)
-                       || jsonb_build_object(${SOURCE_ID}::text, ${r.observatoryId}::text)
-      WHERE id = ${damId}
-        AND COALESCE(external_ids->>${SOURCE_ID}, '') <> ${r.observatoryId}
+                       || jsonb_build_object(${SOURCE_ID}::text, ${r.stationId}::text)
+      WHERE id = ${best.id}
+        AND COALESCE(external_ids->>${SOURCE_ID}, '') <> ${r.stationId}
     `;
   }
+
   return out;
 }
 
-async function fetchJson<T>(path: string, ua: string): Promise<T | null> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { 'user-agent': ua },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (res.status !== 200) return null;
-  return (await res.json()) as T;
-}
+// --- task -------------------------------------------------------------------
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
@@ -201,31 +229,31 @@ const task: Task = async (_payload, helpers) => {
     process.env.HTTP_USER_AGENT ??
     'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
 
-  const pointer = await fetchJson<{ latestDateTimestamp: string }>('/data/dam/data.json', ua);
-  const latest = pointer?.latestDateTimestamp;
-  if (!latest) {
-    log(`${SOURCE_ID}: could not read latestDateTimestamp; abort`);
-    return;
-  }
-  const slug = latest.slice(0, 16).replace(/[ :]/g, '-');
-  const snapshot = await fetchJson<{ items: ShimaneBousaiItem[] }>(
-    `/data/dam/list/${slug}.json`,
-    ua,
-  );
-  if (!snapshot?.items) {
-    log(`${SOURCE_ID}: snapshot ${slug} missing items; abort`);
+  // Use JST date to build the URL (data files are keyed by JST calendar date).
+  const jstDate = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const day = jstDate.toISOString().slice(0, 10).replace(/-/g, '');
+  const url = `${BASE_URL}/dyn/dps/json/${day}/dam60.json`;
+
+  const res = await fetch(url, {
+    headers: { 'user-agent': ua },
+    signal: AbortSignal.timeout(20_000),
+  });
+
+  if (res.status !== 200) {
+    log(`${SOURCE_ID}: HTTP ${res.status} for ${url}; aborting`);
     return;
   }
 
-  const parsed = parseShimaneItems(snapshot.items);
-  log(`${SOURCE_ID}: parsed ${parsed.length}/${snapshot.items.length} dams at ${latest}`);
+  const data = (await res.json()) as Record<string, unknown>;
+  const rows = parseShimaneSnapshot(data);
+  log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
 
-  const matches = await matchMaster(parsed, log);
-  const damByObs = new Map(matches.map((m) => [m.observatoryId, m.damId]));
+  const matches = await matchMaster(rows, log);
+  const damByStation = new Map(matches.map((m) => [m.stationId, m.damId]));
 
   const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of parsed) {
-    const damId = damByObs.get(p.observatoryId);
+  for (const p of rows) {
+    const damId = damByStation.get(p.stationId);
     if (!damId) continue;
     inputs.push({
       observedAt: p.observedAt,
@@ -241,8 +269,9 @@ const task: Task = async (_payload, helpers) => {
       qualityFlag: 0,
     });
   }
+
   const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${parsed.length} matched=${matches.length} written=${written}`);
+  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${matches.length} written=${written}`);
 };
 
 export default task;

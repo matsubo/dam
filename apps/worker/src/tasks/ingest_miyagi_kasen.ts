@@ -117,7 +117,10 @@ export function parseMiyagiTable(html: string): ParsedRow[] {
       })(),
       inflowM3s: parseNum(vals[3] ?? ''),
       outflowM3s: parseNum(vals[4] ?? ''),
-      storageRate: parseNum(vals[8] ?? ''),
+      storageRate: (() => {
+        const r = parseNum(vals[8] ?? '');
+        return r !== null ? r / 100 : null;
+      })(),
     });
   }
 

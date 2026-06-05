@@ -97,7 +97,10 @@ export function parseOitaTable(html: string): ParsedRow[] {
       waterLevelM: parseNum(cleanCell(cells[5] ?? '')),
       inflowM3s: parseNum(cleanCell(cells[6] ?? '')),
       storageVolumeM3: storageThou !== null ? storageThou * 1_000 : null,
-      storageRate: parseNum(cleanCell(cells[8] ?? '')),
+      storageRate: (() => {
+        const r = parseNum(cleanCell(cells[8] ?? ''));
+        return r !== null ? r / 100 : null;
+      })(),
       outflowM3s: parseNum(cleanCell(cells[9] ?? '')),
     });
   }
