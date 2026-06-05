@@ -124,6 +124,11 @@ export const CRONTAB = `
 # all dams in one fetch. Cron at :19.
 19 * * * * ingest:hrr-mlit-dam
 
+# 国土交通省 関東地方整備局 利根川ダム統合管理事務所 — 9 国管理ダム
+# (矢木沢/奈良俣/藤原/相俣/薗原/八ッ場/下久保/草木/渡良瀬貯水池).
+# Single JSON gives all dams' current hourly values. Cron at :20.
+20 * * * * ingest:ktr-tone-dam
+
 # 千葉県 県内ダムの貯水状況 — 23 dams (水道用+工業用水). Daily 9 JST
 # publish. Fetch at 02:30 UTC = 11:30 JST, giving upstream 2.5h headroom.
 30 2 * * * ingest:chiba-suisei

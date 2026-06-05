@@ -34,6 +34,7 @@ import ingestKasenbosai from './tasks/ingest_kasenbosai.ts';
 import ingestKasenbosaiV2 from './tasks/ingest_kasenbosai_v2.ts';
 import ingestKkrMlit from './tasks/ingest_kkr_mlit.ts';
 import ingestKtrKinu from './tasks/ingest_ktr_kinu.ts';
+import ingestKtrTone from './tasks/ingest_ktr_tone_dam.ts';
 import ingestKumamoto from './tasks/ingest_kumamoto_bousai.ts';
 import ingestMiyagi from './tasks/ingest_miyagi_kasen.ts';
 import ingestMiyazaki from './tasks/ingest_miyazaki_bousai.ts';
@@ -99,6 +100,7 @@ async function main(): Promise<void> {
       'ingest:hkd-mlit-dam': ingestHkdMlit,
       'ingest:cgr-mlit-dam': ingestCgrMlit,
       'ingest:ktr-kinu-dam': ingestKtrKinu,
+      'ingest:ktr-tone-dam': ingestKtrTone,
       'ingest:hrr-mlit-dam': ingestHrrMlit,
       'ingest:chiba-suisei': ingestChiba,
       'ingest:okayama-bousai': ingestOkayama,
