@@ -133,6 +133,11 @@ export const CRONTAB = `
 # EUC-JP HTML table, 10分更新; type=2 endpoint, 7 cols. Cron at :22.
 22 * * * * ingest:qsr-turuta-dam
 
+# 国土交通省 四国地方整備局 肱川ダム統合管理事務所 — 野村・鹿野川ダム (肱川水系, 愛媛/38).
+# www1.river.go.jp CGI (EUC-JP HTML + IFRAME), 10分更新; 2 dams, 4 HTTP requests.
+# Cron at :23.
+23 * * * * ingest:skr-hiji-dam
+
 # 千葉県 県内ダムの貯水状況 — 23 dams (水道用+工業用水). Daily 9 JST
 # publish. Fetch at 02:30 UTC = 11:30 JST, giving upstream 2.5h headroom.
 30 2 * * * ingest:chiba-suisei

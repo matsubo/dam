@@ -48,6 +48,7 @@ import ingestQsrTuruta from './tasks/ingest_qsr_turuta.ts';
 import ingestShiga from './tasks/ingest_shiga.ts';
 import ingestShimaneBousai from './tasks/ingest_shimane_bousai.ts';
 import ingestShimokubo from './tasks/ingest_shimokubo.ts';
+import ingestSkrHiji from './tasks/ingest_skr_hiji.ts';
 import ingestTochigi from './tasks/ingest_tochigi.ts';
 import ingestTokushima from './tasks/ingest_tokushima_bousai.ts';
 import ingestTokyoWaterworks from './tasks/ingest_tokyo_waterworks.ts';
@@ -103,6 +104,7 @@ async function main(): Promise<void> {
       'ingest:ktr-kinu-dam': ingestKtrKinu,
       'ingest:ktr-tone-dam': ingestKtrTone,
       'ingest:qsr-turuta-dam': ingestQsrTuruta,
+      'ingest:skr-hiji-dam': ingestSkrHiji,
       'ingest:hrr-mlit-dam': ingestHrrMlit,
       'ingest:chiba-suisei': ingestChiba,
       'ingest:okayama-bousai': ingestOkayama,
