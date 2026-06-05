@@ -54,6 +54,7 @@ import ingestQsrRyumon from './tasks/ingest_qsr_ryumon.ts';
 import ingestQsrToukan from './tasks/ingest_qsr_toukan.ts';
 import ingestQsrTuruta from './tasks/ingest_qsr_turuta.ts';
 import ingestSagaBousai from './tasks/ingest_saga_bousai.ts';
+import ingestSaitama from './tasks/ingest_saitama_suibo.ts';
 import ingestShiga from './tasks/ingest_shiga.ts';
 import ingestShimaneBousai from './tasks/ingest_shimane_bousai.ts';
 import ingestShimokubo from './tasks/ingest_shimokubo.ts';
@@ -141,6 +142,7 @@ async function main(): Promise<void> {
       'ingest:kagawa-bousai': ingestKagawa,
       'ingest:nagano-kasen': ingestNagano,
       'ingest:saga-bousai': ingestSagaBousai,
+      'ingest:saitama-suibo': ingestSaitama,
       'ingest:wakayama-kasen': ingestWakayama,
       'ingest:ishikawa-kasen': ingestIshikawa,
       'ingest:iwate-kasen': ingestIwate,

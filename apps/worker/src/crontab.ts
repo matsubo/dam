@@ -319,6 +319,12 @@ export const CRONTAB = `
 # Priority 308. Cron at :42.
 42 * * * * ingest:kyoto-bousai
 
+# 埼玉県 川の防災情報 ダム諸量 — 9 ダム (合角/有間/権現堂調節池 [県管理] +
+# 渡良瀬遊水地/二瀬/荒川第一調節池/浦山/滝沢/下久保 [国管理]).
+# UTF-8 CSV; timestamp YYYYMMDDHHmm JST; volume in 千m³; missing as "c"/"*".
+# Priority 308. Cron at :44.
+44 * * * * ingest:saitama-suibo
+
 # 高知県水防情報システム ダム諸量現況表 — 11 ダム (和食/永瀬/鎌井谷/鏡/桐見/坂本/
 # 以布利川 [pref] + 早明浦/大渡/中筋川/横瀬川 [国交省]). Pre-generated static
 # Shift_JIS HTML (tableStatusDam_0_1_0_now.html); no servlet call needed.
