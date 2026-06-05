@@ -132,6 +132,12 @@ export const CRONTAB = `
 # Cron at :35.
 35 * * * * ingest:fukuoka-bodik
 
+# 島根県防災Web — 14 県管理ダム (布部/山佐/三瓶/波積/八戸/浜田/第二浜田/大長見/
+# 御部/益田川/笹倉/大峠/銚子/美田). Same Remix SPA framework as 広島/鳥取県防災Web;
+# pointer + list JSON; storage in 千m³. 国直轄 (尾原/志津見) also appear but
+# cgr-mlit-dam (priority 304) wins preferredSource for those. Cron at :37.
+37 * * * * ingest:shimane-bousai
+
 # Suimon backfill remains opt-in only. Enqueue ad-hoc jobs via add_job
 # rather than running it on a fixed cron, so we don't keep hammering the
 # upstream when there's nothing new to import.

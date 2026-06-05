@@ -181,6 +181,13 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '福岡市水道局管理 9 ダム (南畑/五ケ山/脊振/曲渕/江川/久原/長谷/猪野/瑞梅寺) の有効貯水量(千m³)。水位・流量は非公開。',
     label: '福岡市関連ダム',
   },
+  'shimane-bousai': {
+    upstream: '島根県防災Web (bousai.pref.shimane.lg.jp/dam) — /data/dam/list/{ts}.json',
+    license: '公開情報 — 出典明示で再配布可',
+    cadence: '時次 (元データは 10 分粒度; 取得は毎時 :37)',
+    what: '島根県土木部管理 14 ダム (布部/山佐/三瓶/波積/八戸/浜田/第二浜田/大長見/御部/益田川/笹倉/大峠/銚子/美田) の貯水位・有効貯水量(千m³)・全流入量・全放流量・貯水率。県直轄ダムの新規カバレッジ。',
+    label: '島根県防災Web',
+  },
   kasenbosai: {
     upstream: '国土交通省 川の防災情報 (river.go.jp) — tmlist/dam per-obs JSON',
     license: '国の公式統計値 — 出典明示で再配布可',
