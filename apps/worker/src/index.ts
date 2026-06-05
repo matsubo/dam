@@ -37,6 +37,7 @@ import ingestKumamoto from './tasks/ingest_kumamoto_bousai.ts';
 import ingestMiyagi from './tasks/ingest_miyagi_kasen.ts';
 import ingestMiyazaki from './tasks/ingest_miyazaki_bousai.ts';
 import ingestNagasaki from './tasks/ingest_nagasaki_kasen.ts';
+import ingestNaraKasen from './tasks/ingest_nara_kasen.ts';
 import ingestNiigata from './tasks/ingest_niigata.ts';
 import ingestOita from './tasks/ingest_oita_bousai.ts';
 import ingestOkayama from './tasks/ingest_okayama.ts';
@@ -49,6 +50,7 @@ import ingestTokushima from './tasks/ingest_tokushima_bousai.ts';
 import ingestTokyoWaterworks from './tasks/ingest_tokyo_waterworks.ts';
 import ingestTottori from './tasks/ingest_tottori.ts';
 import ingestTottoriBousai from './tasks/ingest_tottori_bousai.ts';
+import ingestToyamaBousai from './tasks/ingest_toyama_bousai.ts';
 import ingestYamagata from './tasks/ingest_yamagata_bousai.ts';
 import match from './tasks/master_match.ts';
 import refreshDamnet from './tasks/master_refresh_damnet.ts';
@@ -119,6 +121,8 @@ async function main(): Promise<void> {
       'ingest:gifu-kasen': ingestGifuKasen,
       'ingest:aichi-kasen': ingestAichiKasen,
       'ingest:fukui-bousai': ingestFukuiBousai,
+      'ingest:toyama-bousai': ingestToyamaBousai,
+      'ingest:nara-kasen': ingestNaraKasen,
       'backfill:kagoshima-bodik': backfillKagoshima,
       'backfill:suimon:enqueue': backfillEnqueue,
       'backfill:suimon:run': backfillRun,
