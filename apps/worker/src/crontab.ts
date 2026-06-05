@@ -288,6 +288,13 @@ export const CRONTAB = `
 # Cron at :59.
 59 * * * * ingest:oita-bousai
 
+# 高知県水防情報システム ダム諸量現況表 — 11 ダム (和食/永瀬/鎌井谷/鏡/桐見/坂本/
+# 以布利川 [pref] + 早明浦/大渡/中筋川/横瀬川 [国交省]). Pre-generated static
+# Shift_JIS HTML (tableStatusDam_0_1_0_now.html); no servlet call needed.
+# Provides storageRate + storageVolumeM3 + waterLevel + inflow + outflow.
+# Priority 308. Cron at :38.
+38 * * * * ingest:kochi-bousai
+
 # 島根県防災Web — 14 県管理ダム (布部/山佐/三瓶/波積/八戸/浜田/第二浜田/大長見/
 # 御部/益田川/笹倉/大峠/銚子/美田). Same Remix SPA framework as 広島/鳥取県防災Web;
 # pointer + list JSON; storage in 千m³. 国直轄 (尾原/志津見) also appear but
