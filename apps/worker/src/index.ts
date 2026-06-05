@@ -15,6 +15,7 @@ import ingestHkdMlit from './tasks/ingest_hkd_mlit.ts';
 import ingestHrrMlit from './tasks/ingest_hrr_mlit.ts';
 import ingestHyogo from './tasks/ingest_hyogo.ts';
 import ingestIbaraki from './tasks/ingest_ibaraki_bousai.ts';
+import ingestIwate from './tasks/ingest_iwate_kasen.ts';
 import ingestJwaChikugo from './tasks/ingest_jwa_chikugo.ts';
 import ingestJwaChubu from './tasks/ingest_jwa_chubu.ts';
 import ingestJwaJunpo from './tasks/ingest_jwa_junpo.ts';
@@ -93,6 +94,7 @@ async function main(): Promise<void> {
       'ingest:shimane-bousai': ingestShimaneBousai,
       'ingest:shimokubo': ingestShimokubo,
       'ingest:ibaraki-bousai': ingestIbaraki,
+      'ingest:iwate-kasen': ingestIwate,
       'ingest:miyazaki-bousai': ingestMiyazaki,
       'ingest:yamagata-bousai': ingestYamagata,
       'ingest:fukuoka-bodik': ingestFukuokaBodik,
