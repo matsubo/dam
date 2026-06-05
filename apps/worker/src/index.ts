@@ -67,6 +67,7 @@ import ingestTottoriBousai from './tasks/ingest_tottori_bousai.ts';
 import ingestToyamaBousai from './tasks/ingest_toyama_bousai.ts';
 import ingestWakayama from './tasks/ingest_wakayama_kasen.ts';
 import ingestYamagata from './tasks/ingest_yamagata_bousai.ts';
+import ingestYamaguchi from './tasks/ingest_yamaguchi_bousai.ts';
 import ingestYamanashi from './tasks/ingest_yamanashi_dam.ts';
 import match from './tasks/master_match.ts';
 import refreshDamnet from './tasks/master_refresh_damnet.ts';
@@ -144,6 +145,7 @@ async function main(): Promise<void> {
       'ingest:saga-bousai': ingestSagaBousai,
       'ingest:saitama-suibo': ingestSaitama,
       'ingest:wakayama-kasen': ingestWakayama,
+      'ingest:yamaguchi-bousai': ingestYamaguchi,
       'ingest:ishikawa-kasen': ingestIshikawa,
       'ingest:iwate-kasen': ingestIwate,
       'ingest:miyagi-kasen': ingestMiyagi,
