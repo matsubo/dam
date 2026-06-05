@@ -184,6 +184,11 @@ export const CRONTAB = `
 # storage volume (千m³) but no 貯水率. Cron at :53.
 53 * * * * ingest:ibaraki-bousai
 
+# 徳島県河川砂防水位観測所 ダム諸量情報 — 7 ダム (Shift_JIS HTML, 10分更新).
+# 長安口/福井/川口/正木/宮川内/棚野/池田(水). 3 cols: 貯水位/流入量/放流量.
+# Per-dam timestamps "MM/DD HH:MM" JST. Cron at :08 every hour.
+8 * * * * ingest:tokushima-bousai
+
 # 長崎県河川砂防情報 ダム情報 — 35 ダム (lv / 貯水量(千m³) / 貯水率 / in / out).
 # JSON API (dt_range.json → snapshot URL). 30分更新. Cron at :02 and :32 to
 # catch both the :00 and :30 snapshots each hour.
