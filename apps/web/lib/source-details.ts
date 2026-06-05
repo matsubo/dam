@@ -81,6 +81,13 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '利根川水系 9 施設 (矢木沢/奈良俣/藤原/相俣/薗原/八ッ場/下久保/草木/渡良瀬貯水池) と荒川水系 4 施設 (二瀬/滝沢/浦山/荒川貯水池) の貯水量(万m³)・貯水率。藤原/相俣/薗原/八ッ場/二瀬は新規カバレッジ。',
     label: 'JWA 利根川/荒川',
   },
+  'jwa-toyokawa': {
+    upstream: '水資源機構 中部支社 豊川水系 (water.go.jp/mizu/chubu/realtime/index_2.html)',
+    license: '公的統計 — 出典明示で再配布可',
+    cadence: '時次 (元データは ~10 分粒度; 取得は毎時 :43)',
+    what: '豊川水系 2 ダム (宇連/大島) の貯水位(EL.m)・有効貯水量(m³)・流入量・放流量。リアルタイム観測; jwa-junpo (10 日) / aitoyo (日次) より高頻度。',
+    label: 'JWA 豊川',
+  },
   'jwa-chubu': {
     upstream: '水資源機構 中部支社 (water.go.jp/mizu/chubu/report/)',
     license: '公的統計 — 出典明示で再配布可',
