@@ -88,6 +88,14 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '豊川水系 2 ダム (宇連/大島) の貯水位(EL.m)・有効貯水量(m³)・流入量・放流量。リアルタイム観測; jwa-junpo (10 日) / aitoyo (日次) より高頻度。',
     label: 'JWA 豊川',
   },
+  'jwa-yoshino': {
+    upstream:
+      '水資源機構 吉野川上流総合管理所 (water.go.jp/mizu/ikeda/mizuinfo/dyn/html/p0001/60/p000101.html)',
+    license: '公的統計 — 出典明示で再配布可',
+    cadence: '時次 (元データは 5 分粒度で自動更新; 取得は毎時 :45)',
+    what: '吉野川水系 5 ダム (池田/早明浦/新宮/富郷/柳瀬) の貯水位(EL.m)・流入量・全放流量。早明浦ダムのみ利水貯水率[速報値]も提供 (四国の水不足予測の主要指標)。jwa-junpo (10 日) より高頻度で水位も追加。',
+    label: 'JWA 吉野川',
+  },
   'jwa-chubu': {
     upstream: '水資源機構 中部支社 (water.go.jp/mizu/chubu/report/)',
     license: '公的統計 — 出典明示で再配布可',

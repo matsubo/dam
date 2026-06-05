@@ -146,6 +146,11 @@ export const CRONTAB = `
 # 宇連/大島 from daily (aitoyo) to hourly cadence. Cron at :43.
 43 * * * * ingest:jwa-toyokawa
 
+# 水資源機構 吉野川上流総合管理所 — 5 dams (池田/早明浦/新宮/富郷/柳瀬).
+# Hourly real-time page (UTF-8); 貯水位(EL.m) + 流入量 + 全放流量 for all 5.
+# 早明浦ダムのみ利水貯水率[速報値]あり (四国の水不足指標). Cron at :45.
+45 * * * * ingest:jwa-yoshino
+
 # 島根県防災Web — 14 県管理ダム (布部/山佐/三瓶/波積/八戸/浜田/第二浜田/大長見/
 # 御部/益田川/笹倉/大峠/銚子/美田). Same Remix SPA framework as 広島/鳥取県防災Web;
 # pointer + list JSON; storage in 千m³. 国直轄 (尾原/志津見) also appear but
