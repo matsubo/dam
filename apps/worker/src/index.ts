@@ -1,4 +1,5 @@
 // apps/worker/src/index.ts
+import { ensureBucket } from '@dam/storage/snapshot_store';
 import { run } from 'graphile-worker';
 import { CRONTAB } from './crontab.ts';
 import backfillJwaJunpo from './tasks/backfill_jwa_junpo.ts';
@@ -69,6 +70,10 @@ import refreshDamImagesWikipedia from './tasks/refresh_dam_images_wikipedia.ts';
 async function main(): Promise<void> {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error('DATABASE_URL not set');
+
+  await ensureBucket().catch((e: unknown) => {
+    console.error(`storage: ensureBucket failed (continuing): ${(e as Error).message}`);
+  });
 
   const runner = await run({
     connectionString: url,
