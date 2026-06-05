@@ -85,6 +85,12 @@ export const CRONTAB = `
 # (or cached page); UPSERT on (dam_id, observed_at, source_id) is idempotent.
 0 3 * * * ingest:kkr-mlit-dam
 
+# 水資源機構 千葉用水総合管理所 房総導水路管理所 — 長柄ダム / 東金ダム 日次 (HTML, 閉庁日除く).
+# Manually updated page: water level (EL.m) + storage rate (%) at midnight JST.
+# Not on 千葉県水道局 page — JWA-managed, not prefecture-managed.
+# Priority 302. Cron daily at 03:00 UTC = 12:00 JST.
+0 3 * * * ingest:jwa-chiba-bouso
+
 # 国土交通省 北海道開発局 — 18 直轄 dams (info-dam.hdb.hkd.mlit.go.jp).
 # Page table has 10-minute cadence; we fetch hourly at :13 to spread load
 # from other prefectural sources.
