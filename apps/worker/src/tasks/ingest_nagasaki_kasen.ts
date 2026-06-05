@@ -111,7 +111,10 @@ export function parseAllDamsJson(raw: AllDamsJson, masters: Map<number, string>)
       observedAt,
       waterLevelM: parseNum(item.lv),
       storageVolumeM3: pondageRaw !== null ? pondageRaw * 1_000 : null,
-      storageRate: parseNum(item.rate),
+      storageRate: (() => {
+        const r = parseNum(item.rate);
+        return r !== null ? r / 100 : null;
+      })(),
       inflowM3s: parseNum(item.in),
       outflowM3s: parseNum(item.dis),
     });

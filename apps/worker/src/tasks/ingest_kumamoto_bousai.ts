@@ -95,7 +95,10 @@ export function parseDspDatEntry(raw: string): ParsedRow | null {
     inflowM3s: parseNum(fields[4] ?? ''),
     outflowM3s: parseNum(fields[5] ?? ''),
     storageVolumeM3: effectiveKm3 !== null ? effectiveKm3 * 1_000 : null,
-    storageRate: parseNum(fields[9] ?? ''),
+    storageRate: (() => {
+      const r = parseNum(fields[9] ?? '');
+      return r !== null ? r / 100 : null;
+    })(),
   };
 }
 
