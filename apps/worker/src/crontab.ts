@@ -91,6 +91,12 @@ export const CRONTAB = `
 # from other prefectural sources.
 13 * * * * ingest:hkd-mlit-dam
 
+# 福井県 河川・砂防総合情報システム ダム諸量現況表 — 13 ダム (防災Web Shift_JIS, hourly).
+# 永平寺/二ツ屋/浄土寺川/龍ヶ鼻/笹生川/桝谷/広野/河内川/大津呂/開谷/滝波 + 真名川/九頭竜(KKR).
+# Priority 308 upgrades kkr-mlit-dam (daily, priority 302) for 真名川/九頭竜.
+# Cron at :14 every hour.
+14 * * * * ingest:fukui-bousai
+
 # 国土交通省 中国地方整備局 — 11 国管理 dams across 5 prefectures
 # (岡山/広島/山口/鳥取/島根). Single POST JSON gives all dams' current
 # values. Cron at :15 every hour.
