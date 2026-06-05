@@ -75,6 +75,10 @@ export const CRONTAB = `
 # timestamp). Cron at :11 every hour.
 11 * * * * ingest:aomori-dam
 
+# 愛知県 川の防災情報 ダム表 — 2 県管理ダム (雨山/木瀬). UTF-8 HTML; 10分更新.
+# Stores 24h of 10-min data per fetch. Cron at :12 every hour.
+12 * * * * ingest:aichi-kasen
+
 # 国土交通省 近畿地方整備局 — 12 国管理ダム 貯水率 (JSON feed, 日次, 土日祝除く).
 # managawa/kuzuryu (Fukui), amagase/hiyoshi (Kyoto), muro/syourenji/takayama/
 # nunome/hinati/otaki/sarutani (Nara/Mie), hitokura (Hyogo). storageRate only.
