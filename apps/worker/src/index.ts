@@ -32,6 +32,7 @@ import ingestKkrMlit from './tasks/ingest_kkr_mlit.ts';
 import ingestKtrKinu from './tasks/ingest_ktr_kinu.ts';
 import ingestMiyagi from './tasks/ingest_miyagi_kasen.ts';
 import ingestMiyazaki from './tasks/ingest_miyazaki_bousai.ts';
+import ingestNagasaki from './tasks/ingest_nagasaki_kasen.ts';
 import ingestNiigata from './tasks/ingest_niigata.ts';
 import ingestOita from './tasks/ingest_oita_bousai.ts';
 import ingestOkayama from './tasks/ingest_okayama.ts';
@@ -105,6 +106,7 @@ async function main(): Promise<void> {
       'ingest:iwate-kasen': ingestIwate,
       'ingest:miyagi-kasen': ingestMiyagi,
       'ingest:miyazaki-bousai': ingestMiyazaki,
+      'ingest:nagasaki-kasen': ingestNagasaki,
       'ingest:yamagata-bousai': ingestYamagata,
       'ingest:fukuoka-bodik': ingestFukuokaBodik,
       'backfill:kagoshima-bodik': backfillKagoshima,
