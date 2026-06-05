@@ -75,6 +75,13 @@ export const CRONTAB = `
 # timestamp). Cron at :11 every hour.
 11 * * * * ingest:aomori-dam
 
+# 国土交通省 近畿地方整備局 — 12 国管理ダム 貯水率 (JSON feed, 日次, 土日祝除く).
+# managawa/kuzuryu (Fukui), amagase/hiyoshi (Kyoto), muro/syourenji/takayama/
+# nunome/hinati/otaki/sarutani (Nara/Mie), hitokura (Hyogo). storageRate only.
+# Cron at 03:00 UTC = 12:00 JST on weekdays. Weekend runs return same data
+# (or cached page); UPSERT on (dam_id, observed_at, source_id) is idempotent.
+0 3 * * * ingest:kkr-mlit-dam
+
 # 国土交通省 北海道開発局 — 18 直轄 dams (info-dam.hdb.hkd.mlit.go.jp).
 # Page table has 10-minute cadence; we fetch hourly at :13 to spread load
 # from other prefectural sources.
