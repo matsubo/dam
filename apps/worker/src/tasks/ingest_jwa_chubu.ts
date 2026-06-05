@@ -34,6 +34,7 @@ interface ParsedRow {
   chubuName: string;
   storageVolumeThouM3: number;
   storageRatePct: number;
+  waterLevelM: number | null;
   inflowM3s: number | null;
   outflowM3s: number | null;
 }
@@ -108,6 +109,7 @@ export function parseChubuHtml(html: string): { reportDate: Date | null; rows: P
     // Try labeled extraction first (most reliable).
     let volume = extractLabeled(section, '貯水量');
     const rate = extractLabeled(section, '貯水率');
+    const waterLevel = extractLabeled(section, '貯水位');
     const inflow = extractLabeled(section, '流入量');
     const outflow = extractLabeled(section, '放流量');
 
@@ -124,6 +126,7 @@ export function parseChubuHtml(html: string): { reportDate: Date | null; rows: P
       chubuName: m.chubuName,
       storageVolumeThouM3: volume,
       storageRatePct: rate,
+      waterLevelM: waterLevel,
       inflowM3s: inflow,
       outflowM3s: outflow,
     });
@@ -226,7 +229,7 @@ const task: Task = async (_payload, helpers) => {
       storageRate: Math.max(0, Math.min(1, row.storageRatePct / 100)),
       inflowM3s: row.inflowM3s,
       outflowM3s: row.outflowM3s,
-      waterLevelM: null,
+      waterLevelM: row.waterLevelM,
       rainfallMm: null,
       rawSnapshotId: null,
       qualityFlag: 0,

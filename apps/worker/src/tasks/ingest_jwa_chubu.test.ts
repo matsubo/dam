@@ -27,10 +27,12 @@ describe('parseChubuHtml', () => {
     rate: string,
     inflow: string,
     outflow: string,
+    level?: string,
   ): string =>
     `<div class="dam-block">
       <h3>${name}</h3>
       <table>
+        ${level !== undefined ? `<tr><th>貯水位</th><td>${level} EL.m</td></tr>` : ''}
         <tr><th>貯水量</th><td>${vol}千m³</td></tr>
         <tr><th>貯水率</th><td>${rate}%</td></tr>
         <tr><th>流入量</th><td>${inflow}m³/s</td></tr>
@@ -55,10 +57,18 @@ describe('parseChubuHtml', () => {
     expect(makio?.storageRatePct).toBeCloseTo(81.9);
     expect(makio?.inflowM3s).toBeCloseTo(22.59);
     expect(makio?.outflowM3s).toBeCloseTo(1.48);
+    expect(makio?.waterLevelM).toBeNull(); // no level in this section
 
     const nakazato = rows.find((r) => r.chubuName === '中里ダム');
     expect(nakazato?.storageVolumeThouM3).toBe(6565);
     expect(nakazato?.storageRatePct).toBeCloseTo(41.0);
+  });
+
+  test('extracts water level (EL.m) when present in section', () => {
+    const html = makeHtml(makeDamSection('牧尾ダム', '55,660', '81.9', '22.59', '1.48', '875.61'));
+    const { rows } = parseChubuHtml(html);
+    const makio = rows.find((r) => r.chubuName === '牧尾ダム');
+    expect(makio?.waterLevelM).toBeCloseTo(875.61);
   });
 
   test('skips unknown dam names', () => {
