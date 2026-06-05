@@ -313,6 +313,12 @@ export const CRONTAB = `
 # Priority 308. Cron at :41.
 41 * * * * ingest:wakayama-kasen
 
+# 京都府 河川防災情報 ダム諸量現況表 — 6 ダム (大野/畑川 [大野ダム管理] +
+# 天ヶ瀬 [淀川ダム統管] + 日吉/高山/布目 [水資源機構]).
+# Shift_JIS HTML; standard row-per-dam table; volume in ×10³m³.
+# Priority 308. Cron at :42.
+42 * * * * ingest:kyoto-bousai
+
 # 高知県水防情報システム ダム諸量現況表 — 11 ダム (和食/永瀬/鎌井谷/鏡/桐見/坂本/
 # 以布利川 [pref] + 早明浦/大渡/中筋川/横瀬川 [国交省]). Pre-generated static
 # Shift_JIS HTML (tableStatusDam_0_1_0_now.html); no servlet call needed.

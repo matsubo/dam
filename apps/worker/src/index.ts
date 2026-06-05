@@ -40,6 +40,7 @@ import ingestKochi from './tasks/ingest_kochi_bousai.ts';
 import ingestKtrKinu from './tasks/ingest_ktr_kinu.ts';
 import ingestKtrTone from './tasks/ingest_ktr_tone_dam.ts';
 import ingestKumamoto from './tasks/ingest_kumamoto_bousai.ts';
+import ingestKyoto from './tasks/ingest_kyoto_bousai.ts';
 import ingestMiyagi from './tasks/ingest_miyagi_kasen.ts';
 import ingestMiyazaki from './tasks/ingest_miyazaki_bousai.ts';
 import ingestNagano from './tasks/ingest_nagano_kasen.ts';
@@ -136,6 +137,7 @@ async function main(): Promise<void> {
       'ingest:shimokubo': ingestShimokubo,
       'ingest:ibaraki-bousai': ingestIbaraki,
       'ingest:kochi-bousai': ingestKochi,
+      'ingest:kyoto-bousai': ingestKyoto,
       'ingest:kagawa-bousai': ingestKagawa,
       'ingest:nagano-kasen': ingestNagano,
       'ingest:saga-bousai': ingestSagaBousai,
