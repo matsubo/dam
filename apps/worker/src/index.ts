@@ -29,6 +29,7 @@ import ingestKasenbosaiV2 from './tasks/ingest_kasenbosai_v2.ts';
 import ingestKtrKinu from './tasks/ingest_ktr_kinu.ts';
 import ingestMiyazaki from './tasks/ingest_miyazaki_bousai.ts';
 import ingestNiigata from './tasks/ingest_niigata.ts';
+import ingestOita from './tasks/ingest_oita_bousai.ts';
 import ingestOkayama from './tasks/ingest_okayama.ts';
 import ingestOsaka from './tasks/ingest_osaka.ts';
 import ingestShiga from './tasks/ingest_shiga.ts';
@@ -86,6 +87,7 @@ async function main(): Promise<void> {
       'ingest:chiba-suisei': ingestChiba,
       'ingest:okayama-bousai': ingestOkayama,
       'ingest:niigata-bousai': ingestNiigata,
+      'ingest:oita-bousai': ingestOita,
       'ingest:hyogo-bodik': ingestHyogo,
       'ingest:tochigi-bodik': ingestTochigi,
       'ingest:hiroshima-bousai': ingestHiroshima,
