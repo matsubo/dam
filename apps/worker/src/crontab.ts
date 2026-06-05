@@ -307,6 +307,12 @@ export const CRONTAB = `
 # Cron at :40.
 40 * * * * ingest:saga-bousai
 
+# 和歌山県河川／雨量防災情報 ダム諸量 — 19 ダム (広川/二川/椿山/七川/切目川/殿山/
+# 小匠 [pref] + 猿谷/九尾/川迫/大滝/大迫/津風呂 [国直轄・吉野川系] + 坂本/池原/七色/
+# 二津野/小森/風屋 [国直轄・北山川系]). Single EUC-JP CSV (dinfo.csv); no header.
+# Priority 308. Cron at :41.
+41 * * * * ingest:wakayama-kasen
+
 # 高知県水防情報システム ダム諸量現況表 — 11 ダム (和食/永瀬/鎌井谷/鏡/桐見/坂本/
 # 以布利川 [pref] + 早明浦/大渡/中筋川/横瀬川 [国交省]). Pre-generated static
 # Shift_JIS HTML (tableStatusDam_0_1_0_now.html); no servlet call needed.

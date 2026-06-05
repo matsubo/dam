@@ -63,6 +63,7 @@ import ingestTokyoWaterworks from './tasks/ingest_tokyo_waterworks.ts';
 import ingestTottori from './tasks/ingest_tottori.ts';
 import ingestTottoriBousai from './tasks/ingest_tottori_bousai.ts';
 import ingestToyamaBousai from './tasks/ingest_toyama_bousai.ts';
+import ingestWakayama from './tasks/ingest_wakayama_kasen.ts';
 import ingestYamagata from './tasks/ingest_yamagata_bousai.ts';
 import ingestYamanashi from './tasks/ingest_yamanashi_dam.ts';
 import match from './tasks/master_match.ts';
@@ -138,6 +139,7 @@ async function main(): Promise<void> {
       'ingest:kagawa-bousai': ingestKagawa,
       'ingest:nagano-kasen': ingestNagano,
       'ingest:saga-bousai': ingestSagaBousai,
+      'ingest:wakayama-kasen': ingestWakayama,
       'ingest:ishikawa-kasen': ingestIshikawa,
       'ingest:iwate-kasen': ingestIwate,
       'ingest:miyagi-kasen': ingestMiyagi,
