@@ -193,6 +193,11 @@ export const CRONTAB = `
 # cgr-mlit-dam (priority 304) wins preferredSource for those. Cron at :37.
 37 * * * * ingest:shimane-bousai
 
+# 鹿児島県 BODIK ダム諸量 — 3 dams (大和/川辺/西之谷), 10-min, 2008+, CC-BY.
+# Historical ZIP archives (monthly updates). Run on demand:
+#   add_job('backfill:kagoshima-bodik', { fromYear: 2024 })  -- recent years
+#   add_job('backfill:kagoshima-bodik', {})                  -- full 2008+ history
+
 # Suimon backfill remains opt-in only. Enqueue ad-hoc jobs via add_job
 # rather than running it on a fixed cron, so we don't keep hammering the
 # upstream when there's nothing new to import.

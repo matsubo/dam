@@ -2,6 +2,7 @@
 import { run } from 'graphile-worker';
 import { CRONTAB } from './crontab.ts';
 import backfillJwaJunpo from './tasks/backfill_jwa_junpo.ts';
+import backfillKagoshima from './tasks/backfill_kagoshima_bodik.ts';
 import backfillMudam from './tasks/backfill_mudam.ts';
 import backfillEnqueue from './tasks/backfill_suimon_enqueue.ts';
 import backfillRun from './tasks/backfill_suimon_run.ts';
@@ -100,6 +101,7 @@ async function main(): Promise<void> {
       'ingest:miyazaki-bousai': ingestMiyazaki,
       'ingest:yamagata-bousai': ingestYamagata,
       'ingest:fukuoka-bodik': ingestFukuokaBodik,
+      'backfill:kagoshima-bodik': backfillKagoshima,
       'backfill:suimon:enqueue': backfillEnqueue,
       'backfill:suimon:run': backfillRun,
       'backfill:jwa-junpo': backfillJwaJunpo,
