@@ -329,6 +329,11 @@ export const CRONTAB = `
 # Cron at :57.
 57 * * * * ingest:ehime-bousai
 
+# 鹿児島県防災ポータル ダム情報 — 県管理ダム (JSON API, globally accessible).
+# NOTE: Returns empty items during normal conditions; populated only during
+# active flood/disaster events. Adapter exits early when no data present.
+56 * * * * ingest:kagoshima-bousai
+
 # 佐賀県河川砂防情報システム ダム現況表 — 19 県管理ダム (岸川/庭木/繁昌/天ヶ瀬/
 # 平木場/伊岐佐/都川内/井手口川/竜門/有田/古木場/本部/矢筈/狩立日ノ峯/中木庭/
 # 岩屋川内/横竹/深浦/河内). Transposed Shift_JIS HTML table; 3 pages (7+7+5
