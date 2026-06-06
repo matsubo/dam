@@ -122,11 +122,19 @@ async function ensureSourcePriority(): Promise<void> {
 }
 
 function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/貯水池$/, '')
-    .trim();
+  return (
+    s
+      .replace(/[（(][^）)]*[）)]/g, '')
+      .replace(/ダム$/, '')
+      .replace(/貯水池$/, '')
+      // Normalise 第N kanji numerals → Arabic so "第二" matches master "第2".
+      .replace(/第一/g, '第1')
+      .replace(/第二/g, '第2')
+      .replace(/第三/g, '第3')
+      .replace(/第四/g, '第4')
+      .replace(/第五/g, '第5')
+      .trim()
+  );
 }
 
 interface DamMatch {
