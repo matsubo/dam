@@ -127,7 +127,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     await sql`
       UPDATE dams
       SET external_ids = COALESCE(external_ids, '{}'::jsonb)
-                       || jsonb_build_object(${SOURCE_ID}, ${r.pageName}::text)
+                       || jsonb_build_object(${SOURCE_ID}::text, ${r.pageName}::text)
       WHERE id = ${r0.id}
         AND COALESCE(external_ids->>${SOURCE_ID}, '') <> ${r.pageName}
     `;
