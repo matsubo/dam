@@ -148,8 +148,10 @@ interface DamMatch {
 }
 
 async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
+  // Include Hiroshima (34) alongside Yamaguchi (35): 小瀬川ダム sits on the
+  // prefectural boundary and is registered under pref_code='34' in the master.
   const masters = await sql<{ id: bigint; name: string }[]>`
-    SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
+    SELECT id, name FROM dams WHERE pref_code = ANY(ARRAY['34', '35']) ORDER BY id
   `;
   const out: DamMatch[] = [];
 
