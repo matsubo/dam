@@ -9,4 +9,24 @@
 set -e
 
 echo "[pre-push] bun test"
-exec bun test apps packages
+
+# Probe the local DB. Integration tests (repo/, pipeline, reconciler, storage,
+# adapter importers, API routes) require a live PostgreSQL + MinIO instance.
+# When the local DB is not up, skip those paths so unit tests still gate the push.
+DB_HOST="localhost"
+DB_PORT="${DATABASE_PORT:-5433}"
+
+if nc -z "$DB_HOST" "$DB_PORT" 2>/dev/null; then
+  exec bun test apps packages
+else
+  echo "[pre-push] No DB at ${DB_HOST}:${DB_PORT} — skipping integration tests"
+  exec bun test apps packages \
+    --path-ignore-patterns "packages/db/src/repo/**" \
+    --path-ignore-patterns "packages/ingest/**" \
+    --path-ignore-patterns "packages/reconciler/**" \
+    --path-ignore-patterns "packages/storage/**" \
+    --path-ignore-patterns "packages/adapters/damnet/**" \
+    --path-ignore-patterns "packages/adapters/ndi/**" \
+    --path-ignore-patterns "apps/web/app/api/**" \
+    --path-ignore-patterns "apps/web/lib/api/**"
+fi
