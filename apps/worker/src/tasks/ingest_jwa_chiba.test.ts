@@ -69,7 +69,7 @@ describe('parseDam', () => {
     expect(row).not.toBeNull();
     expect(row?.htmlName).toBe('長柄ダム');
     expect(row?.waterLevelM).toBeCloseTo(74.18);
-    expect(row?.storageRate).toBeCloseTo(92.5);
+    expect(row?.storageRate).toBeCloseTo(0.925);
     expect(row?.observedAt).toBe(now);
   });
 
@@ -77,7 +77,7 @@ describe('parseDam', () => {
     const row = parseDam(SAMPLE_HTML, '東金ダム', now);
     expect(row).not.toBeNull();
     expect(row?.waterLevelM).toBeCloseTo(42.86);
-    expect(row?.storageRate).toBeCloseTo(89.8);
+    expect(row?.storageRate).toBeCloseTo(0.898);
   });
 
   test('returns null for unknown dam', () => {
@@ -94,7 +94,7 @@ describe('parseDam', () => {
     `;
     const row = parseDam(htmlNoLevel, '長柄ダム', now);
     expect(row?.waterLevelM).toBeNull();
-    expect(row?.storageRate).toBeCloseTo(92.5);
+    expect(row?.storageRate).toBeCloseTo(0.925);
   });
 
   test('handles missing storage rate comment gracefully', () => {
@@ -117,9 +117,9 @@ describe('parseJwaChibaHtml', () => {
     const nagara = rows.find((r) => r.htmlName === '長柄ダム');
     const togane = rows.find((r) => r.htmlName === '東金ダム');
     expect(nagara?.waterLevelM).toBeCloseTo(74.18);
-    expect(nagara?.storageRate).toBeCloseTo(92.5);
+    expect(nagara?.storageRate).toBeCloseTo(0.925);
     expect(togane?.waterLevelM).toBeCloseTo(42.86);
-    expect(togane?.storageRate).toBeCloseTo(89.8);
+    expect(togane?.storageRate).toBeCloseTo(0.898);
   });
 
   test('returns correct UTC timestamp', () => {
@@ -137,6 +137,6 @@ describe('parseJwaChibaHtml', () => {
     const rows = parseJwaChibaHtml(SAMPLE_HTML);
     const togane = rows.find((r) => r.htmlName === '東金ダム');
     // Should parse correctly despite the end comment saying 取水率
-    expect(togane?.storageRate).toBeCloseTo(89.8);
+    expect(togane?.storageRate).toBeCloseTo(0.898);
   });
 });
