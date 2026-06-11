@@ -76,10 +76,10 @@ export function parseDam(html: string, htmlName: string, observedAt: Date): Pars
   const levelMatch = levelSection.match(/E\.L\.\s*([\d.]+)\s*m/);
   const waterLevelM = levelMatch ? Number(levelMatch[1]) : null;
 
-  // Storage rate: "貯水率　　92.5 %"
+  // Storage rate: "貯水率　　92.5 %" → divide by 100 → [0, 1] fraction
   const rateSection = extractBetweenComments(html, `↓↓↓↓↓${htmlName}の貯水率を入力↓↓↓↓↓`);
   const rateMatch = rateSection.match(/([\d.]+)\s*%/);
-  const storageRate = rateMatch ? Number(rateMatch[1]) : null;
+  const storageRate = rateMatch ? Math.max(0, Math.min(1, Number(rateMatch[1]) / 100)) : null;
 
   if (waterLevelM === null && storageRate === null) return null;
 

@@ -100,7 +100,10 @@ export function ObservationChart({
   // currently expose avg_storage_volume_m3 only).
   const rateData: Array<[string, number | null]> = points.map((p) => {
     const direct = p.storageRate ? Number(p.storageRate) : null;
-    if (direct != null && Number.isFinite(direct)) return [p.observedAt, direct];
+    if (direct != null && Number.isFinite(direct)) {
+      // Clamp to [0, 1] to guard against legacy obs_daily rows with wrong scale
+      return [p.observedAt, Math.max(0, Math.min(1, direct))];
+    }
     if (capacityM3 && capacityM3 > 0 && p.storageVolumeM3) {
       return [p.observedAt, Number(p.storageVolumeM3) / capacityM3];
     }
