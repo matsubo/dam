@@ -45,9 +45,11 @@ export function parseFukuokaTimestamp(s: string): Date | null {
   );
 }
 
-/** Strip ダム suffix and parenthetical annotations. */
+/** Strip ダム suffix and parenthetical annotations. Normalize small ヶ/ヵ to full ケ/カ. */
 export function normalizeName(s: string): string {
   return s
+    .replace(/ヶ/g, 'ケ')
+    .replace(/ヵ/g, 'カ')
     .replace(/[（(][^）)]*[）)]/g, '')
     .replace(/ダム$/, '')
     .trim();

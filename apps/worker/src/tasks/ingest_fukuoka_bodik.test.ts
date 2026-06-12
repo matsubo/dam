@@ -43,6 +43,12 @@ describe('normalizeName', () => {
   it('strips annotations', () => {
     expect(normalizeName('江川（仮）ダム')).toBe('江川');
   });
+
+  it('normalizes small ヶ to full ケ', () => {
+    // master uses 五ヶ山 (U+30F6 small ヶ); CSV sends 五ケ山 (U+30B1 full ケ)
+    expect(normalizeName('五ヶ山')).toBe('五ケ山');
+    expect(normalizeName('五ケ山')).toBe('五ケ山');
+  });
 });
 
 describe('parseFukuokaRows', () => {

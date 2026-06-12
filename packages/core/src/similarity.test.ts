@@ -13,6 +13,11 @@ describe('normalizeJaName', () => {
   test('lowercases and trims latin', () => {
     expect(normalizeJaName(' Yamba Dam ')).toBe('yamba');
   });
+
+  test('normalizes small ヶ/ヵ to full ケ/カ', () => {
+    expect(normalizeJaName('五ヶ山')).toBe('五ケ山');
+    expect(normalizeJaName('宮ヵ瀬ダム')).toBe('宮カ瀬');
+  });
 });
 
 describe('trigramSimilarity', () => {
