@@ -1,5 +1,7 @@
 export function normalizeJaName(input: string): string {
   let s = input.normalize('NFKC').trim();
+  // small ヶ (U+30F6) and ヵ (U+30F5) are interchangeable with full ケ/カ in place names
+  s = s.replace(/ヶ/g, 'ケ').replace(/ヵ/g, 'カ');
   // strip parenthesized readings
   s = s.replace(/[（(].*?[)）]/g, '');
   // strip "ダム" / "貯水池" suffix
