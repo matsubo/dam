@@ -104,6 +104,7 @@ export default async function DamDetail({ params }: PageProps) {
                 fill
                 sizes="80px"
                 className="object-cover"
+                unoptimized={d.imageUrl.includes('wikimedia.org')}
               />
             </div>
             {(() => {
