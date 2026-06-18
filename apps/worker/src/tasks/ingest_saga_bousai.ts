@@ -192,7 +192,8 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
       else if (mStem === stem) rank = 1;
       else if (m.name === `${stem}ダム`) rank = 2;
       else if (mStem.startsWith(stem)) rank = 3;
-      else if (mStem.includes(stem)) rank = 4;
+      else if (stem.startsWith(mStem) && mStem.length >= 2) rank = 4;
+      else if (mStem.includes(stem)) rank = 5;
       else continue;
       if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
         best = { id: m.id, rank };

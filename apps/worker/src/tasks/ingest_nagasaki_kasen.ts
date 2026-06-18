@@ -151,12 +151,32 @@ interface DamMatch {
 }
 
 async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
+  // Load any dams that were pre-seeded with a nagasaki-kasen external_id
+  // (e.g. け知ダム added via migration with dam_cd=2030).  Matching by
+  // external_id is more reliable than name matching for dams whose name in
+  // the JSON differs from the master.
+  const seeded = await sql<{ id: bigint; damCd: number }[]>`
+    SELECT id, (external_ids->>${SOURCE_ID})::int AS "damCd"
+    FROM dams
+    WHERE pref_code = ${PREF_CODE}
+      AND external_ids ? ${SOURCE_ID}
+      AND external_ids->>${SOURCE_ID} ~ '^\\d+$'
+  `;
+  const byExternalId = new Map<number, bigint>(seeded.map((r) => [r.damCd, r.id]));
+
   const masters = await sql<{ id: bigint; name: string }[]>`
     SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out: DamMatch[] = [];
 
   for (const r of rows) {
+    // Prefer pre-seeded external_id match (highest confidence).
+    const seededId = byExternalId.get(r.damCd);
+    if (seededId) {
+      out.push({ damCd: r.damCd, damId: seededId });
+      continue;
+    }
+
     const stem = normalizeName(r.damName);
     if (!stem) continue;
 
