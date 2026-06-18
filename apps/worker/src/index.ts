@@ -84,6 +84,7 @@ import qualityRecompute from './tasks/quality_recompute.ts';
 import refreshDamElevation from './tasks/refresh_dam_elevation.ts';
 import refreshDamImagesDamnet from './tasks/refresh_dam_images_damnet.ts';
 import refreshDamImagesWikipedia from './tasks/refresh_dam_images_wikipedia.ts';
+import storageRateRecompute from './tasks/storage_rate_recompute.ts';
 
 async function main(): Promise<void> {
   const url = process.env.DATABASE_URL;
@@ -178,6 +179,7 @@ async function main(): Promise<void> {
       'backfill:jwa-junpo': backfillJwaJunpo,
       'backfill:mudam': backfillMudam,
       'quality:recompute': qualityRecompute,
+      'storageRate:recompute': storageRateRecompute,
       'quality:freshness-check': qualityFreshness,
       'images:refresh:damnet': refreshDamImagesDamnet,
       'images:refresh:wikipedia': refreshDamImagesWikipedia,

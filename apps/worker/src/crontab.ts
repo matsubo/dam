@@ -399,6 +399,10 @@ export const CRONTAB = `
 # Quality recomputation
 30 4 * * * quality:recompute
 
+# Storage rate backfill — runs daily just after quality recompute,
+# filling in storage_rate from volume / capacity for sources that don't provide it.
+45 4 * * * storageRate:recompute
+
 # Freshness watchdog — every hour, scan source_priorities and flag any source
 # whose newest observation is older than the per-source expected window
 # (see apps/worker/src/tasks/quality_freshness.ts). Posts a digest to
