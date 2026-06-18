@@ -47,6 +47,8 @@ interface HomeStats {
   rateableDamCount: bigint;
   /** Distinct dams that have at least one non-synthetic observation in the last 30 days. */
   realDamCount: bigint;
+  /** Distinct dams with storage_rate IS NOT NULL in the last 30 days (direct from source or backfilled). */
+  storageRateDamCount: bigint;
   /** Distinct dams that have at least one non-synthetic observation EVER
    *  (mudam-style historical data counts; vastly larger than the 30 d figure). */
   historicalDamCount: bigint;
@@ -79,6 +81,11 @@ async function homeStats(): Promise<HomeStats> {
          FROM observations
          WHERE observed_at > NOW() - INTERVAL '30 days'
            AND source_id <> 'synthetic')                                                  AS "realDamCount",
+      (SELECT COUNT(DISTINCT dam_id)::BIGINT
+         FROM observations
+         WHERE observed_at > NOW() - INTERVAL '30 days'
+           AND source_id <> 'synthetic'
+           AND storage_rate IS NOT NULL)                                                  AS "storageRateDamCount",
       -- All-time distinct real-source dams. Mudam contributes here even
       -- though its observations are 1-2 years old; the 30 d filter above
       -- otherwise hides ~500 dams of historical coverage.
@@ -150,6 +157,7 @@ const cachedHomeStats = unstable_cache(
       rateableStorageM3: s.rateableStorageM3,
       rateableDamCount: Number(s.rateableDamCount),
       realDamCount: Number(s.realDamCount),
+      storageRateDamCount: Number(s.storageRateDamCount),
       historicalDamCount: Number(s.historicalDamCount),
       oldestObsIso: s.oldestObs?.toISOString() ?? null,
     };
@@ -483,6 +491,32 @@ export default async function Home() {
               </div>
             ) : null}
           </div>
+          {/* Coverage bar: dams with storage_rate / total dams */}
+          {(() => {
+            const pct =
+              s.damCount > 0 ? ((s.storageRateDamCount / s.damCount) * 100).toFixed(1) : null;
+            return (
+              <div className="bg-white border border-outline-variant rounded-xl p-4 mb-3 flex items-center gap-4 flex-wrap">
+                <div className="text-sm font-medium text-on-surface whitespace-nowrap">
+                  貯水率取得ダムカバレッジ
+                </div>
+                <div className="flex-1 min-w-[160px]">
+                  <div className="h-2 bg-surface-container-low rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary rounded-full"
+                      style={{ width: pct ? `${pct}%` : '0%' }}
+                    />
+                  </div>
+                </div>
+                <div className="text-xl font-display font-semibold tabular-nums whitespace-nowrap">
+                  {pct ? `${pct} %` : '—'}
+                </div>
+                <div className="basis-full text-xs text-on-surface-variant">
+                  {`直近 30 日に貯水率データあり: ${fmt(s.storageRateDamCount)} 基 / 全 ${fmt(s.damCount)} 基`}
+                </div>
+              </div>
+            );
+          })()}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Stat label="ダム" value={fmt(s.damCount)} sub="登録済み" />
             <Stat label="水系" value={fmt(s.watershedCount)} sub="一級・二級・その他" />
