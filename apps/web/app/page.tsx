@@ -49,6 +49,10 @@ interface HomeStats {
   realDamCount: bigint;
   /** Distinct dams with storage_rate IS NOT NULL in the last 30 days (direct from source or backfilled). */
   storageRateDamCount: bigint;
+  /** Dams with height_m >= 15 (ダム法の定義: 提高15m以上). Used as the denominator for 貯水率取得ダムカバレッジ. */
+  riverDamCount: bigint;
+  /** Distinct dams (height_m >= 15) with storage_rate in the last 30 days. Numerator for coverage. */
+  storageRateRiverDamCount: bigint;
   /** Distinct dams that have at least one non-synthetic observation EVER
    *  (mudam-style historical data counts; vastly larger than the 30 d figure). */
   historicalDamCount: bigint;
@@ -86,6 +90,14 @@ async function homeStats(): Promise<HomeStats> {
          WHERE observed_at > NOW() - INTERVAL '30 days'
            AND source_id <> 'synthetic'
            AND storage_rate IS NOT NULL)                                                  AS "storageRateDamCount",
+      (SELECT COUNT(*)::BIGINT FROM dams WHERE height_m >= 15)                           AS "riverDamCount",
+      (SELECT COUNT(DISTINCT o.dam_id)::BIGINT
+         FROM observations o
+         JOIN dams d ON d.id = o.dam_id
+         WHERE d.height_m >= 15
+           AND o.observed_at > NOW() - INTERVAL '30 days'
+           AND o.source_id <> 'synthetic'
+           AND o.storage_rate IS NOT NULL)                                                AS "storageRateRiverDamCount",
       -- All-time distinct real-source dams. Mudam contributes here even
       -- though its observations are 1-2 years old; the 30 d filter above
       -- otherwise hides ~500 dams of historical coverage.
@@ -158,6 +170,8 @@ const cachedHomeStats = unstable_cache(
       rateableDamCount: Number(s.rateableDamCount),
       realDamCount: Number(s.realDamCount),
       storageRateDamCount: Number(s.storageRateDamCount),
+      riverDamCount: Number(s.riverDamCount),
+      storageRateRiverDamCount: Number(s.storageRateRiverDamCount),
       historicalDamCount: Number(s.historicalDamCount),
       oldestObsIso: s.oldestObs?.toISOString() ?? null,
     };
@@ -491,10 +505,12 @@ export default async function Home() {
               </div>
             ) : null}
           </div>
-          {/* Coverage bar: dams with storage_rate / total dams */}
+          {/* Coverage bar: dams with storage_rate / river management dams (height >= 15 m) */}
           {(() => {
             const pct =
-              s.damCount > 0 ? ((s.storageRateDamCount / s.damCount) * 100).toFixed(1) : null;
+              s.riverDamCount > 0
+                ? ((s.storageRateRiverDamCount / s.riverDamCount) * 100).toFixed(1)
+                : null;
             return (
               <div className="bg-white border border-outline-variant rounded-xl p-4 mb-3 flex items-center gap-4 flex-wrap">
                 <div className="text-sm font-medium text-on-surface whitespace-nowrap">
@@ -512,7 +528,7 @@ export default async function Home() {
                   {pct ? `${pct} %` : '—'}
                 </div>
                 <div className="basis-full text-xs text-on-surface-variant">
-                  {`直近 30 日に貯水率データあり: ${fmt(s.storageRateDamCount)} 基 / 全 ${fmt(s.damCount)} 基`}
+                  {`直近 30 日に貯水率データあり: ${fmt(s.storageRateRiverDamCount)} 基 / 河川管理ダム ${fmt(s.riverDamCount)} 基（高さ 15 m 以上）`}
                 </div>
               </div>
             );
