@@ -3,6 +3,8 @@ import {
   detectColumns,
   parseBousaiTimestamp,
   parseBousaiWebTable,
+  parseSiposJson,
+  parseSiposTimestamp,
 } from './ingest_shizuoka_bousai.ts';
 
 describe('parseBousaiTimestamp', () => {
@@ -190,5 +192,110 @@ describe('parseBousaiWebTable', () => {
     <tr><td>水門A</td><td>2026/06/05 10:00</td><td>10.5</td></tr>
     </table>`;
     expect(parseBousaiWebTable(html)).toHaveLength(0);
+  });
+});
+
+// --- SIPOS (静岡県土木総合防災情報) tests ------------------------------------
+
+describe('parseSiposTimestamp', () => {
+  test('parses YYYYMMDDHHmm JST → UTC', () => {
+    const d = parseSiposTimestamp('202606221930');
+    // 19:30 JST = 10:30 UTC
+    expect(d?.toISOString()).toBe('2026-06-22T10:30:00.000Z');
+  });
+
+  test('handles midnight crossover (00:xx JST → previous UTC day)', () => {
+    const d = parseSiposTimestamp('202606220800');
+    // 08:00 JST = -1:00 UTC → previous day 23:00
+    expect(d?.toISOString()).toBe('2026-06-21T23:00:00.000Z');
+  });
+
+  test('returns null for malformed string', () => {
+    expect(parseSiposTimestamp('bad')).toBeNull();
+    expect(parseSiposTimestamp('2026060')).toBeNull();
+    expect(parseSiposTimestamp('')).toBeNull();
+  });
+});
+
+describe('parseSiposJson', () => {
+  const MASTER = {
+    '2201200': '奥野ダム',
+    '2201201': '太田川ダム',
+    '8567001': '長島ダム（国）',
+  };
+
+  function makeEntry(overrides: Record<string, number> = {}) {
+    return {
+      lwtrlv: 13787, // ÷100 → 137.87m
+      data_storagerate: 986, // ÷1000 → 0.986
+      stwvol: 1558, // ×1000 → 1,558,000m³
+      wflvol_in: 66, // ÷100 → 0.66m³/s
+      wflvol_out: 349, // ÷100 → 3.49m³/s
+      ...overrides,
+    };
+  }
+
+  test('scales lwtrlv / 100 → waterLevelM', () => {
+    const data = { '2201200': { dam: [makeEntry({ lwtrlv: 13787 })] } };
+    const readings = parseSiposJson(data, MASTER, '202606221930');
+    expect(readings[0]?.waterLevelM).toBeCloseTo(137.87);
+  });
+
+  test('scales data_storagerate / 1000 → storageRate fraction', () => {
+    const data = { '2201200': { dam: [makeEntry({ data_storagerate: 986 })] } };
+    const readings = parseSiposJson(data, MASTER, '202606221930');
+    expect(readings[0]?.storageRate).toBeCloseTo(0.986);
+  });
+
+  test('scales stwvol * 1000 → storageVolumeM3', () => {
+    const data = { '2201200': { dam: [makeEntry({ stwvol: 1558 })] } };
+    const readings = parseSiposJson(data, MASTER, '202606221930');
+    expect(readings[0]?.storageVolumeM3).toBe(1_558_000);
+  });
+
+  test('scales wflvol_in and wflvol_out / 100 → m³/s', () => {
+    const data = { '2201200': { dam: [makeEntry({ wflvol_in: 66, wflvol_out: 349 })] } };
+    const readings = parseSiposJson(data, MASTER, '202606221930');
+    expect(readings[0]?.inflowM3s).toBeCloseTo(0.66);
+    expect(readings[0]?.outflowM3s).toBeCloseTo(3.49);
+  });
+
+  test('returns null for no-data sentinel (-1111111111)', () => {
+    const data = { '2201200': { dam: [makeEntry({ lwtrlv: -1111111111, stwvol: -1111111111 })] } };
+    const readings = parseSiposJson(data, MASTER, '202606221930');
+    expect(readings[0]?.waterLevelM).toBeNull();
+    expect(readings[0]?.storageVolumeM3).toBeNull();
+  });
+
+  test('returns null for not-available sentinel (-999999999)', () => {
+    const data = { '2201200': { dam: [makeEntry({ data_storagerate: -999999999 })] } };
+    const readings = parseSiposJson(data, MASTER, '202606221930');
+    expect(readings[0]?.storageRate).toBeNull();
+  });
+
+  test('uses master names for pointName', () => {
+    const data = {
+      '2201200': { dam: [makeEntry()] },
+      '8567001': { dam: [makeEntry({ lwtrlv: 45000 })] },
+    };
+    const readings = parseSiposJson(data, MASTER, '202606221930');
+    const okuno = readings.find((r) => r.pointCode === '2201200');
+    const nagashima = readings.find((r) => r.pointCode === '8567001');
+    expect(okuno?.pointName).toBe('奥野ダム');
+    expect(nagashima?.pointName).toBe('長島ダム（国）');
+  });
+
+  test('sets observedAt from timestamp', () => {
+    const data = { '2201200': { dam: [makeEntry()] } };
+    const readings = parseSiposJson(data, MASTER, '202606221930');
+    expect(readings[0]?.observedAt?.toISOString()).toBe('2026-06-22T10:30:00.000Z');
+  });
+
+  test('skips missing point codes', () => {
+    const data = { '2201200': { dam: [makeEntry()] } };
+    const readings = parseSiposJson(data, MASTER, '202606221930');
+    // Only 1 of 6 point codes has data
+    expect(readings).toHaveLength(1);
+    expect(readings[0]?.pointCode).toBe('2201200');
   });
 });
