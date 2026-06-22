@@ -3,15 +3,15 @@
 import { describe, expect, test } from 'bun:test';
 import { type ParsedRow, parseOitaTable, parseOitaTimestamp } from './ingest_oita_bousai.ts';
 
-// Oita table has TWO tables. The data table (index 1) has 10 columns:
+// Oita table: the data table is the FIRST table (index 0) with 10 columns:
 // Col 0: 管理者名, Col 1: 河川名, Col 2: 局名(dam, inside <a class="site">),
 // Col 3: 所在地, Col 4: 最新観測時刻 (YYYY&nbsp;MM/DD&nbsp;HH:MM JST),
 // Col 5: 貯水位[m], Col 6: 流入量[m³/s], Col 7: 貯水量[千m³],
 // Col 8: 貯水率[%], Col 9: 放流量[m³/s]
+// A second table (legend) follows but is ignored.
 function makeHtml(rows: string[]): string {
   const dataRows = rows.join('\n');
   return `
-    <table><tr><td>dummy header table</td></tr></table>
     <table>
       <tr>
         <th>管理者名</th><th>河川名</th><th>局名</th><th>所在地</th>
@@ -24,6 +24,7 @@ function makeHtml(rows: string[]): string {
       </tr>
       ${dataRows}
     </table>
+    <table><tr><td>凡例</td></tr><tr><td>サーチャージ水位超過</td></tr></table>
   `;
 }
 
@@ -236,8 +237,8 @@ describe('parseOitaTable', () => {
     expect(rows[0]?.oitaName).toBe('稲葉貯水池');
   });
 
-  test('uses second table (index 1), not first', () => {
-    // The first table is a dummy header; only the second has dam data.
+  test('uses first table (index 0), not second', () => {
+    // The first table has dam data; the second is the legend.
     const html = makeHtml([
       makeRow(
         '竹田土木',
