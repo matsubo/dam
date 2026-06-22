@@ -329,6 +329,12 @@ export const CRONTAB = `
 # Cron at :57.
 57 * * * * ingest:ehime-bousai
 
+# 兵庫県 丹波農林振興事務所 ダムテレメータ — 6 dams (鍔市/八幡谷/藤岡/佐仲/黒石/大杉).
+# Tanba area dams; Shift_JIS HTML single-latest-value display. PSNO=2,4 currently
+# offline (0000/00/00 timestamps). Storage volume in direct m³ (not 千m³).
+# URL: tndam.pref.hyogo.lg.jp/dam/DamData.jsp?PSNO={1-6}. Cron at :53.
+53 * * * * ingest:tndam-hyogo
+
 # 鹿児島県防災ポータル ダム情報 — 県管理ダム (JSON API, globally accessible).
 # NOTE: Returns empty items during normal conditions; populated only during
 # active flood/disaster events. Adapter exits early when no data present.
