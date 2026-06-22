@@ -74,7 +74,7 @@ export function parseOitaTimestamp(s: string): Date | null {
 export function parseOitaTable(html: string): ParsedRow[] {
   const rows: ParsedRow[] = [];
   const tableMatch = html.match(/<table[\s\S]*?<\/table>/gi);
-  const dataTable = tableMatch?.[1] ?? '';
+  const dataTable = tableMatch?.[0] ?? '';
 
   const trList = Array.from(dataTable.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)).map((tr) =>
     Array.from((tr[1] ?? '').matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)).map((c) => c[1] ?? ''),
