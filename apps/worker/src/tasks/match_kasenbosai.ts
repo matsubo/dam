@@ -11,18 +11,24 @@
 // [lon, lat]. The full sweep returns ~900 dams across 49 prefecture codes.
 //
 // Matching strategy (per kasenbosai dam):
-//   1. Find master candidates where ST_DWithin(point, location, 5000) AND
-//      name LIKE for any contiguous-3char substring of the kasenbosai name.
-//   2. Score: exact name match = 1.0, name-contains = 0.8, name-near = 0.6.
-//   3. Distance tie-break: nearer beats farther within same score.
-//   4. Record candidates with score >= 0.6; the matcher writes only the
-//      top-scored row's external_ids.kasenbosai.
+//   1. Find master candidates within 5 km of the kasenbosai coordinates.
+//   2. Score using normalizeJaName on both sides (handles ヶ↔ケ, ヵ↔カ,
+//      NFKC, strip ダム/貯水池 suffix, strip parenthetical readings):
+//        exact  (normalised names equal)       → 1.0
+//        contains (one normalised name ⊂ other) → 0.8
+//        trigram similarity ≥ 0.70 within 3 km  → 0.65
+//        distance < 500 m only                  → 0.60
+//        otherwise                              → 0.40 (below threshold)
+//   3. Distance tie-break: nearer beats farther within same score tier.
+//   4. Write external_ids.kasenbosai for score ≥ 0.6; stage score < 0.8
+//      for human review in match_review.
 //
 // Triggered ad-hoc:
 //   add_job('match:kasenbosai', { date?: 'YYYYMMDD', time?: 'HHMM' })
 // With no payload, uses the most recent 5-minute snapshot in JST.
 
 import { PREFECTURES } from '@dam/core/prefectures';
+import { normalizeJaName, trigramSimilarity } from '@dam/core/similarity';
 import { sql } from '@dam/db/client';
 import type { Task } from 'graphile-worker';
 
@@ -173,16 +179,14 @@ interface MatchResult {
 }
 
 /**
- * For one catalogue dam, find the best master match. Strategy:
- *   1. Find candidates within 5 km of (lat, lon) in the same prefecture.
- *   2. Among them, prefer exact name (1.0), name-contains (0.8), distance-only (0.6).
- *   3. Tie-break by distance.
+ * For one catalogue dam, find the best master match.
+ * Uses normaliseJaName on both sides for ヶ↔ケ, suffix stripping, etc.
  */
 async function matchOne(d: CatalogueDam): Promise<MatchResult> {
   const jisPref = kbPrefToJis(d.kbPrefCd);
-  // Build a clean substring for name LIKE (strip trailing "ダム").
-  const stem = d.obsNm.replace(/ダム$/, '').trim();
-  if (!stem) {
+  // Normalised stem: handles ヶ↔ケ, ヵ↔カ, NFKC, strips ダム/貯水池 and parens.
+  const normStem = normalizeJaName(d.obsNm);
+  if (!normStem) {
     return {
       obsFcd: d.obsFcd,
       obsNm: d.obsNm,
@@ -227,22 +231,29 @@ async function matchOne(d: CatalogueDam): Promise<MatchResult> {
       candidates,
     };
   }
-  // Score each candidate.
+  // Score each candidate using normalised names so ヶ↔ケ and suffix variants
+  // (ダム vs 貯水池) do not cause false mismatches.
   let best: { row: (typeof rows)[number]; score: number; reason: string } | null = null;
   for (const r of rows) {
-    const rName = r.name;
+    const normR = normalizeJaName(r.name);
     let score = 0;
     let reason = '';
-    if (rName === stem || rName === `${stem}ダム`) {
+    if (normR === normStem) {
       score = 1.0;
       reason = 'exact-name';
-    } else if (rName.includes(stem) || stem.includes(rName.replace(/ダム$/, ''))) {
+    } else if (normR.includes(normStem) || normStem.includes(normR)) {
       score = 0.8;
       reason = 'name-contains';
     } else {
-      // Distance-only candidates: low confidence unless extremely close.
-      score = r.distance_m < 500 ? 0.6 : 0.4;
-      reason = `distance-only (${Math.round(r.distance_m)}m)`;
+      const sim = trigramSimilarity(normR, normStem);
+      if (sim >= 0.7 && r.distance_m < 3000) {
+        // Decent trigram overlap + nearby → cautious accept
+        score = 0.65;
+        reason = `trigram-${sim.toFixed(2)}`;
+      } else {
+        score = r.distance_m < 500 ? 0.6 : 0.4;
+        reason = `distance-only (${Math.round(r.distance_m)}m)`;
+      }
     }
     if (best == null || score > best.score) {
       best = { row: r, score, reason };
