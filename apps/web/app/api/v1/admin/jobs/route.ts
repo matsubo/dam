@@ -1,23 +1,22 @@
-// Public read-only endpoint for confirming cron health and master-data
-// coverage from outside the container. Surfaces:
+// Admin endpoint for cron health, coverage stats, and one-shot job dispatch.
 //
-//   - last_runs       Recent successful job completions per task identifier.
-//                     graphile-worker doesn't keep a full run-log; we read
-//                     last_executed_at + completed counts from
-//                     _private_known_crontabs (only the entries declared in
-//                     CRONTAB).
-//   - active_jobs     Currently-queued / in-flight jobs (attempts, last_error,
-//                     run_at). >0 attempts means the job retried.
-//   - dam_coverage    Master-data realness counters: how many dams have each
-//                     external_id source attached.
-//   - observations    Row-count + per-source breakdown (synthetic vs real).
+// GET  — public read-only stats (no auth required):
+//   - cron_schedule   Last execution timestamps per crontab identifier.
+//   - active_jobs     Currently-queued / in-flight jobs.
+//   - queue_depth     Per-task pending counts for quick queue inspection.
+//   - dam_coverage    external_id source attachment counts.
+//   - observations    Row-count + per-source breakdown (last 30d).
 //
-// No auth required — these are aggregate counts, no PII or secrets. Useful
-// for the operator (and the public roadmap audience) to verify alpha #2
-// '定期データ取得の正常化' is actually delivering data.
+// POST — enqueue a one-shot graphile-worker job (requires ADMIN_SECRET):
+//   Authorization: Bearer <ADMIN_SECRET>
+//   Body: { "task": "match:kasenbosai", "payload": {} }
+//   Returns: { "job_id": number }
+//
+// ADMIN_SECRET is set in the worker/web environment. If unset, POST is
+// disabled (returns 503) to avoid accidental exposure.
 
 import { sql } from '@dam/db/client';
-import { NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -147,6 +146,7 @@ export async function GET(): Promise<NextResponse> {
       },
       _links: {
         self: { href: '/api/v1/admin/jobs' },
+        self_post: { href: '/api/v1/admin/jobs', method: 'POST' },
         roadmap: { href: '/roadmap' },
       },
     },
@@ -155,5 +155,69 @@ export async function GET(): Promise<NextResponse> {
         'cache-control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=300',
       },
     },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// POST — enqueue a one-shot graphile-worker job
+// ---------------------------------------------------------------------------
+
+const ALLOWED_TASKS = new Set([
+  'match:kasenbosai',
+  'master:refresh:ndi',
+  'master:refresh:damnet',
+  'master:match',
+  'quality:freshness-check',
+  'quality:recompute',
+  'storageRate:recompute',
+]);
+
+interface TriggerBody {
+  task: string;
+  payload?: Record<string, unknown>;
+}
+
+export async function POST(req: NextRequest): Promise<NextResponse> {
+  const secret = process.env.ADMIN_SECRET;
+  if (!secret) {
+    return NextResponse.json({ error: 'ADMIN_SECRET not configured' }, { status: 503 });
+  }
+
+  const auth = req.headers.get('authorization') ?? '';
+  if (auth !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  let body: TriggerBody;
+  try {
+    body = (await req.json()) as TriggerBody;
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  const { task, payload = {} } = body;
+  if (typeof task !== 'string' || !ALLOWED_TASKS.has(task)) {
+    return NextResponse.json(
+      { error: `Unknown task "${task}". Allowed: ${[...ALLOWED_TASKS].join(', ')}` },
+      { status: 400 },
+    );
+  }
+
+  const rows = await sql<{ id: bigint }[]>`
+    SELECT graphile_worker.add_job(
+      ${task},
+      ${sql.json(payload)},
+      max_attempts := 3
+    ) AS id
+  `;
+
+  return NextResponse.json(
+    {
+      enqueued: true,
+      task,
+      job_id: rows[0]?.id?.toString() ?? null,
+      _links: { self: { href: '/api/v1/admin/jobs', method: 'POST' } },
+    },
+    { status: 202 },
   );
 }
