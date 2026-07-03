@@ -75,6 +75,44 @@ describe('parseKasenbosaiObsValue quality codes', () => {
     expect(parsed?.storageRate).toBeCloseTo(0.42, 6);
   });
 
+  test('storCap=0 with valid Ccd but no rate is a phantom → volume null', () => {
+    // 大峠ダム pattern: publishes water level + flow, but storCap=0 with a
+    // "valid" Ccd=0 and BOTH rate fields missing (Ccd=160). The 0 is a
+    // non-reporting placeholder, not a real empty reservoir, so it must not
+    // become a phantom 0 m³ / 0.0%.
+    const parsed = parseKasenbosaiObsValue({
+      storLvl: 99.51,
+      storLvlCcd: 0,
+      storCap: 0,
+      storCapCcd: 0,
+      storPcntIrr: 0,
+      storPcntIrrCcd: 160,
+      storPcntEff: 0,
+      storPcntEffCcd: 160,
+      allSink: 0.74,
+      allDisch: 0.71,
+      obsTime: '2026/07/03 16:40',
+    });
+    expect(parsed?.storageVolumeM3).toBeNull();
+    expect(parsed?.storageRate).toBeNull();
+    expect(parsed?.waterLevelM).toBe(99.51);
+    expect(parsed?.outflowM3s).toBe(0.71);
+  });
+
+  test('storCap=0 WITH a valid 0% rate is a real empty reading → kept', () => {
+    // A genuinely empty 穴あき flood-control dam reports a valid 0% rate
+    // alongside the 0 volume; that must be preserved as a real observation.
+    const parsed = parseKasenbosaiObsValue({
+      storCap: 0,
+      storCapCcd: 0,
+      storPcntEff: 0,
+      storPcntEffCcd: 0,
+      obsTime: '2026/07/03 16:40',
+    });
+    expect(parsed?.storageVolumeM3).toBe(0);
+    expect(parsed?.storageRate).toBe(0);
+  });
+
   test('unparseable obsTime → null', () => {
     expect(parseKasenbosaiObsValue({ storCap: 1, obsTime: 'garbage' })).toBeNull();
   });

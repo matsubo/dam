@@ -122,12 +122,18 @@ export function parseKasenbosaiObsValue(ov: ApiObsValue): ParsedKasenbosaiObs | 
   if (!observedAt) return null;
   // Convert vol from 千m³ → m³.
   const storCap = validOrNull(ov.storCap, ov.storCapCcd);
-  const storageVolumeM3 = storCap != null ? storCap * 1000 : null;
   // Prefer effective-capacity 貯水率; fall back to 利水. Convert % → fraction.
   const ratePct =
     validOrNull(ov.storPcntEff, ov.storPcntEffCcd) ??
     validOrNull(ov.storPcntIrr, ov.storPcntIrrCcd);
   const storageRate = ratePct != null ? ratePct / 100 : null;
+  // A storCap of exactly 0 with no corroborating rate is kasenbosai's
+  // "this dam doesn't publish volume" placeholder (e.g. 大峠ダム — reports
+  // level + flow but storCap=0/Ccd=0 while both rate fields are missing),
+  // not a real empty reservoir. A genuinely empty dam reports a valid 0%
+  // rate alongside the 0, so keep it only when the rate corroborates.
+  const storageVolumeM3 =
+    storCap == null || (storCap === 0 && storageRate == null) ? null : storCap * 1000;
   return {
     observedAt,
     storageVolumeM3,
