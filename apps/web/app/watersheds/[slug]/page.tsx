@@ -13,6 +13,7 @@ import { EntityIcon } from '../../../components/entity-icon.tsx';
 import { ObservationChart } from '../../../components/observation-chart.tsx';
 import { ReservoirGauge } from '../../../components/reservoir-gauge.tsx';
 import { StorageChangeStrip } from '../../../components/storage-change-strip.tsx';
+import { estimateDepletionDays } from '../../../lib/depletion.ts';
 import { fmtCapacityMcm, fmtDate, fmtPct } from '../../../lib/format.ts';
 
 export const dynamic = 'force-dynamic';
@@ -135,6 +136,32 @@ export default async function WatershedDetail({ params }: PageProps) {
           <div className="mt-5">
             <div className="text-xs text-muted mb-2">水系合計貯水量の変化</div>
             <StorageChangeStrip change={change} />
+            {(() => {
+              const daysLeft = estimateDepletionDays({
+                currentM3: change.current ? Number(change.current) : null,
+                pastM3: change.d30 ? Number(change.d30) : null,
+                days: 30,
+              });
+              if (daysLeft == null || daysLeft > 180) return null;
+              return (
+                <div
+                  className={`mt-3 rounded-lg p-3 border text-sm ${
+                    daysLeft <= 30
+                      ? 'border-red-300 bg-red-50 text-red-900'
+                      : daysLeft <= 90
+                        ? 'border-orange-300 bg-orange-50 text-orange-900'
+                        : 'border-amber-300 bg-amber-50 text-amber-900'
+                  }`}
+                >
+                  <span className="font-semibold">
+                    直近30日の減少ペースが続くと、約 {daysLeft} 日で貯水量ゼロの計算
+                  </span>
+                  <span className="block text-xs mt-1 opacity-90">
+                    実績ペースの単純外挿であり、降雨・放流調整は考慮していません。取水制限などの判断は必ず公的発表をご確認ください。
+                  </span>
+                </div>
+              );
+            })()}
           </div>
         ) : null}
       </section>
