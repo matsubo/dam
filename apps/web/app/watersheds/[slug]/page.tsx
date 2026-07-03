@@ -64,22 +64,24 @@ export default async function WatershedDetail({ params }: PageProps) {
       </p>
 
       {(() => {
-        // Rate uses 利水容量 as the denominator and only counts dams whose
-        // 利水容量 is known. Excluded dams contribute to total capacity but
-        // not to the rate calc.
-        const activeCap = agg.activeCapacityM3 ? Number(agg.activeCapacityM3) : null;
+        // Rate pairs the observed cohort's storage with the SAME cohort's
+        // 利水容量 — dams without a fresh observation stay out of both sides,
+        // so missing data can't drag the watershed rate down.
+        const observedCap = agg.observedActiveCapacityM3
+          ? Number(agg.observedActiveCapacityM3)
+          : null;
         const rate =
-          agg.latestStorageVolumeM3 && activeCap && activeCap > 0
-            ? Math.min(1, Number(agg.latestStorageVolumeM3) / activeCap)
+          agg.latestStorageVolumeM3 && observedCap && observedCap > 0
+            ? Math.min(1, Number(agg.latestStorageVolumeM3) / observedCap)
             : null;
         return (
           <section className="flex flex-col md:flex-row gap-6 items-center md:items-stretch mb-8">
             <div className="shrink-0 flex flex-col items-center justify-center bg-white border border-outline-variant rounded-xl p-4">
               <ReservoirGauge rate={rate} size={180} />
               <div className="text-xs text-on-surface-variant mt-1">水系合計貯水率</div>
-              {agg.rateableDamCount < agg.damCount ? (
+              {agg.observedDamCount < agg.damCount ? (
                 <div className="text-[10px] text-on-surface-variant mt-1 text-center">
-                  ({agg.rateableDamCount}/{agg.damCount} 基集計)
+                  ({agg.observedDamCount}/{agg.damCount} 基集計)
                 </div>
               ) : null}
             </div>
@@ -103,7 +105,9 @@ export default async function WatershedDetail({ params }: PageProps) {
                 sub={
                   agg.rateableDamCount === 0
                     ? '利水容量データなし'
-                    : `現在貯水量 ÷ 利水容量(${agg.rateableDamCount}基)`
+                    : agg.observedDamCount === 0
+                      ? '直近7日の実測なし'
+                      : `現在貯水量 ÷ 利水容量(実測${agg.observedDamCount}基)`
                 }
               />
             </div>
@@ -116,7 +120,7 @@ export default async function WatershedDetail({ params }: PageProps) {
         <ObservationChart
           slug={rawSlug}
           kind="watershed"
-          capacityM3={agg.activeCapacityM3 ? Number(agg.activeCapacityM3) : null}
+          capacityM3={agg.observedActiveCapacityM3 ? Number(agg.observedActiveCapacityM3) : null}
         />
         {change.current ? (
           <div className="mt-5">

@@ -155,16 +155,31 @@ export interface WatershedAggregate {
   damCount: number;
   /** Sum of 総貯水容量 over all dams — used as a "size" indicator. */
   totalCapacityM3: string | null;
-  /** Sum of 利水容量 over the rate-able subset only. Used as the rate denominator. */
+  /** Sum of 利水容量 over the rate-able subset (informational; NOT the rate denominator). */
   activeCapacityM3: string | null;
-  /** Number of dams contributing to activeCapacity / latestStorage (i.e. those with active_capacity_m3 IS NOT NULL). */
+  /** Dams with active_capacity_m3 IS NOT NULL. */
   rateableDamCount: number;
-  /** Latest storage summed over the rate-able subset only — pairs with activeCapacityM3 for rate. */
+  /** Latest storage summed over the observed cohort — pairs with observedActiveCapacityM3 for rate. */
   latestStorageVolumeM3: string | null;
+  /**
+   * Rate-able dams with an observation inside the freshness window. The rate
+   * numerator and denominator are both restricted to this cohort so dams
+   * without (fresh) data can't deflate the rate.
+   */
+  observedDamCount: number;
+  /** Sum of 利水容量 over the observed cohort only — the rate denominator. */
+  observedActiveCapacityM3: string | null;
   observedAt: Date | null;
   /** How many of the watershed's dams have at least one non-synthetic observation in the last 30 days. */
   realDamCount: number;
 }
+
+/**
+ * An observation only participates in watershed/national rate aggregation if
+ * it is at most this old. Anything staler drops the dam out of both the
+ * numerator AND the denominator, keeping the two cohorts identical.
+ */
+export const RATE_FRESHNESS_DAYS = 7;
 
 export interface WatershedStorageChange {
   current: string | null;
@@ -399,12 +414,13 @@ export async function nationalStorageChange(): Promise<WatershedStorageChange> {
 }
 
 export async function aggregateWatershed(watershedId: bigint): Promise<WatershedAggregate> {
-  // Two cohorts:
-  //   `ds`        — every dam in the watershed (used for damCount + total capacity)
-  //   `ds_rateable` — dams with active_capacity_m3 (used for the storage-rate
-  //                  numerator/denominator pair). Excluding null-active dams
-  //                  here keeps the watershed rate honest: we don't mix
-  //                  total-capacity dams into the active-capacity ratio.
+  // Three cohorts:
+  //   `ds`          — every dam in the watershed (damCount + total capacity)
+  //   `ds_rateable` — dams with active_capacity_m3 (informational capacity sum)
+  //   `latest`      — rate-able dams with a fresh observation. The rate
+  //                   numerator (storage) and denominator (observed active
+  //                   capacity) both come from this cohort; a dam with no
+  //                   fresh data influences neither side.
   const rows = await sql<WatershedAggregate[]>`
     WITH ds AS (
       SELECT id, total_capacity_m3, active_capacity_m3
@@ -414,9 +430,13 @@ export async function aggregateWatershed(watershedId: bigint): Promise<Watershed
       SELECT id, active_capacity_m3 FROM ds WHERE active_capacity_m3 IS NOT NULL
     ),
     latest AS (
-      SELECT DISTINCT ON (o.dam_id) o.dam_id, o.observed_at, o.storage_volume_m3
+      SELECT DISTINCT ON (o.dam_id)
+             o.dam_id, o.observed_at, o.storage_volume_m3,
+             ds_rateable.active_capacity_m3
       FROM observations o
       JOIN ds_rateable ON ds_rateable.id = o.dam_id
+      WHERE o.storage_volume_m3 IS NOT NULL
+        AND o.observed_at > NOW() - make_interval(days => ${RATE_FRESHNESS_DAYS})
       ORDER BY o.dam_id, o.observed_at DESC
     )
     SELECT
@@ -425,6 +445,8 @@ export async function aggregateWatershed(watershedId: bigint): Promise<Watershed
       (SELECT COUNT(*)::INT          FROM ds_rateable)            AS "rateableDamCount",
       (SELECT SUM(active_capacity_m3)::TEXT FROM ds_rateable)     AS "activeCapacityM3",
       (SELECT SUM(latest.storage_volume_m3)::TEXT FROM latest)    AS "latestStorageVolumeM3",
+      (SELECT COUNT(*)::INT          FROM latest)                 AS "observedDamCount",
+      (SELECT SUM(latest.active_capacity_m3)::TEXT FROM latest)   AS "observedActiveCapacityM3",
       (SELECT MAX(latest.observed_at)             FROM latest)    AS "observedAt",
       (SELECT COUNT(DISTINCT o.dam_id)::INT
          FROM observations o JOIN ds ON ds.id = o.dam_id
@@ -438,6 +460,8 @@ export async function aggregateWatershed(watershedId: bigint): Promise<Watershed
       activeCapacityM3: null,
       rateableDamCount: 0,
       latestStorageVolumeM3: null,
+      observedDamCount: 0,
+      observedActiveCapacityM3: null,
       observedAt: null,
       realDamCount: 0,
     }
@@ -446,10 +470,12 @@ export async function aggregateWatershed(watershedId: bigint): Promise<Watershed
 
 /**
  * Batch per-watershed 貯水率: SUM(latest storage_volume_m3) /
- * SUM(active_capacity_m3) over rate-able dams in each requested watershed.
+ * SUM(active_capacity_m3) over the OBSERVED cohort — rate-able dams with an
+ * observation inside the freshness window. Dams without fresh data are
+ * excluded from numerator and denominator alike.
  * Result keyed by `watershed_id::TEXT` so callers can join on string ids
- * without dragging bigint through JSON. rate ∈ [0, 1] when both numerator
- * and denominator are present; null otherwise.
+ * without dragging bigint through JSON. rate ∈ [0, 1] when the observed
+ * cohort is non-empty; null otherwise.
  *
  * Used by /watersheds list to render a 貯水率 progress bar per row in
  * one round-trip rather than 644 separate aggregateWatershed() calls.
@@ -472,16 +498,16 @@ export async function ratesForWatersheds(
       FROM observations o
       JOIN ds ON ds.id = o.dam_id
       WHERE o.storage_volume_m3 IS NOT NULL
+        AND o.observed_at > NOW() - make_interval(days => ${RATE_FRESHNESS_DAYS})
       ORDER BY o.dam_id, o.observed_at DESC
     )
     SELECT
       ds.watershed_id::TEXT AS "watershedId",
       CASE
-        WHEN SUM(ds.active_capacity_m3) > 0
-          AND SUM(latest.storage_volume_m3) IS NOT NULL
+        WHEN SUM(ds.active_capacity_m3) FILTER (WHERE latest.dam_id IS NOT NULL) > 0
         THEN LEAST(1.0,
           SUM(latest.storage_volume_m3)::FLOAT8 /
-          SUM(ds.active_capacity_m3)::FLOAT8
+          SUM(ds.active_capacity_m3) FILTER (WHERE latest.dam_id IS NOT NULL)::FLOAT8
         )
         ELSE NULL
       END AS rate
