@@ -1,3 +1,4 @@
+import { watershedSeasonalNorm } from '@dam/db/repo/seasonal';
 import { aggregateWatershed, findWatershedBySlug } from '@dam/db/repo/watersheds';
 import { authorize, makeUnauthorized, rateLimitHeaders } from '../../../../../../lib/api/auth.ts';
 import { HttpError, asProblem } from '../../../../../../lib/api/error.ts';
@@ -16,10 +17,13 @@ export async function GET(
     const { slug } = await params;
     const w = await findWatershedBySlug(slug);
     if (!w) throw new HttpError(404, 'Watershed not found');
-    const agg = await aggregateWatershed(w.id);
+    const [agg, seasonalNorm] = await Promise.all([
+      aggregateWatershed(w.id),
+      watershedSeasonalNorm(w.id),
+    ]);
 
     return hal(
-      { ...agg },
+      { ...agg, seasonalNorm },
       {
         self: { href: `/api/v1/watersheds/${slug}/aggregate` },
         watershed: { href: `/api/v1/watersheds/${slug}` },

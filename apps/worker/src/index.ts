@@ -2,6 +2,7 @@
 import { ensureBucket } from '@dam/storage/snapshot_store';
 import { run } from 'graphile-worker';
 import { CRONTAB } from './crontab.ts';
+import aggregatesRefresh from './tasks/aggregates_refresh.ts';
 import backfillJwaJunpo from './tasks/backfill_jwa_junpo.ts';
 import backfillKagoshima from './tasks/backfill_kagoshima_bodik.ts';
 import backfillMudam from './tasks/backfill_mudam.ts';
@@ -182,6 +183,7 @@ async function main(): Promise<void> {
       'backfill:mudam': backfillMudam,
       'quality:recompute': qualityRecompute,
       'storageRate:recompute': storageRateRecompute,
+      'aggregates:refresh': aggregatesRefresh,
       'quality:freshness-check': qualityFreshness,
       'images:refresh:damnet': refreshDamImagesDamnet,
       'images:refresh:wikipedia': refreshDamImagesWikipedia,
