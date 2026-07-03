@@ -205,19 +205,30 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const rows = await sql<{ id: bigint }[]>`
-    SELECT graphile_worker.add_job(
-      ${task},
-      ${sql.json(payload)},
-      max_attempts := 3
-    ) AS id
-  `;
+  // add_job returns a graphile_worker.jobs composite; select .id out of it.
+  // The payload param is typed `json`, but sql.json() binds as jsonb, so cast
+  // explicitly or PostgreSQL can't resolve the overload.
+  let rows: { job_id: string | null }[];
+  try {
+    rows = await sql<{ job_id: string | null }[]>`
+      SELECT (graphile_worker.add_job(
+        ${task}::text,
+        ${sql.json(payload)}::json,
+        max_attempts := 3
+      )).id::TEXT AS job_id
+    `;
+  } catch (e) {
+    return NextResponse.json(
+      { error: `Failed to enqueue: ${(e as Error).message}` },
+      { status: 500 },
+    );
+  }
 
   return NextResponse.json(
     {
       enqueued: true,
       task,
-      job_id: rows[0]?.id?.toString() ?? null,
+      job_id: rows[0]?.job_id ?? null,
       _links: { self: { href: '/api/v1/admin/jobs', method: 'POST' } },
     },
     { status: 202 },
