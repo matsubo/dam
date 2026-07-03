@@ -146,8 +146,8 @@ afterAll(async () => {
       await sql`DELETE FROM dams WHERE id = ${row.id}`;
     }
   }
-
-  await sql.end();
+  // Do NOT sql.end() here: the client is shared module state and later test
+  // files in the same `bun test` process still need it.
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -184,9 +184,12 @@ describe('storageRate:recompute task', () => {
     expect(rate).not.toBeCloseTo(0.8); // 8M / 10M = 0.8 — wrong if overwritten
   });
 
-  test('fills storage_rate from volume / capacity for recent NULL-rate observations', async () => {
+  test('fills storage_rate when 利水容量 becomes known after the observation', async () => {
     if (!dbAvailable) return;
 
+    // Since trigger 0036 fills storage_rate inline at INSERT time, the only
+    // rows the batch task still needs to fix are those whose dam gained
+    // active_capacity_m3 AFTER the observation landed. Seed in that order.
     const capacity = 5_000_000;
     const volume = 3_500_000;
     const expectedRate = volume / capacity; // 0.7
@@ -194,7 +197,7 @@ describe('storageRate:recompute task', () => {
     const damId = await insertTestDam(sql, {
       slug: 'sr-recompute-test-fills-recent',
       name: 'SR Recompute Test — Fills Recent',
-      activeCapacityM3: capacity,
+      activeCapacityM3: null, // capacity not yet known at observation time
     });
 
     const observedAt = new Date(Date.now() - 30 * 60 * 1000); // 30 min ago
@@ -202,12 +205,13 @@ describe('storageRate:recompute task', () => {
       damId,
       observedAt,
       storageVolumeM3: volume,
-      storageRate: null, // must be filled
+      storageRate: null,
     });
 
     const affectedBefore = await fetchStorageRate(sql, damId, observedAt);
     expect(affectedBefore).toBeNull();
 
+    await sql`UPDATE dams SET active_capacity_m3 = ${capacity} WHERE id = ${damId}`;
     await runRecomputeRecent(sql);
 
     const rate = await fetchStorageRate(sql, damId, observedAt);
@@ -221,10 +225,12 @@ describe('storageRate:recompute task', () => {
     const capacity = 4_000_000;
     const volume = 5_000_000; // over-full — rate would be 1.25 without clamping
 
+    // Same late-capacity ordering as above so the row reaches the batch task
+    // with storage_rate still NULL (trigger 0036 would otherwise fill it).
     const damId = await insertTestDam(sql, {
       slug: 'sr-recompute-test-clamp',
       name: 'SR Recompute Test — Clamp',
-      activeCapacityM3: capacity,
+      activeCapacityM3: null,
     });
 
     const observedAt = new Date(Date.now() - 45 * 60 * 1000); // 45 min ago
@@ -235,6 +241,7 @@ describe('storageRate:recompute task', () => {
       storageRate: null,
     });
 
+    await sql`UPDATE dams SET active_capacity_m3 = ${capacity} WHERE id = ${damId}`;
     await runRecomputeRecent(sql);
 
     const rate = await fetchStorageRate(sql, damId, observedAt);
