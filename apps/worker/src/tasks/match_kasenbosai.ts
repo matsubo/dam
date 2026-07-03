@@ -293,8 +293,11 @@ async function writeExternalId(damId: bigint, obsFcd: string): Promise<void> {
   `;
 }
 
-async function writeMatchReview(d: CatalogueDam, m: MatchResult): Promise<void> {
-  const candidateIds = m.candidates.map((c) => c.id);
+export async function writeMatchReview(d: CatalogueDam, m: MatchResult): Promise<void> {
+  // Bind candidate ids as a text[] then cast to bigint[]. The client pins a
+  // custom bigint type parser, which makes postgres.js mis-serialize a
+  // bigint[] param as a scalar (→ "cannot cast type bigint to bigint[]").
+  const candidateIds = m.candidates.map((c) => c.id.toString());
   const payload = {
     catalogue: { obsNm: d.obsNm, lat: d.lat, lon: d.lon, ofcCd: d.ofcCd, kbPrefCd: d.kbPrefCd },
     bestReason: m.reason,
