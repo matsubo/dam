@@ -40,11 +40,15 @@ interface HomeStats {
   obsTotal: bigint;
   obsLast24h: bigint;
   totalCapacityM3: string | null;
-  /** Sum of 利水容量 across the rate-able subset only (active_capacity_m3 IS NOT NULL). Used as the denominator. */
+  /** Sum of 利水容量 across the rate-able subset (informational; NOT the rate denominator). */
   activeCapacityM3: string | null;
-  /** Latest storage summed across the rate-able subset only — pairs with activeCapacityM3 for rate. */
+  /** Latest storage summed across the observed cohort — pairs with observedActiveCapacityM3 for rate. */
   rateableStorageM3: string | null;
   rateableDamCount: bigint;
+  /** Rate-able dams with a fresh (7 d) observation. Rate numerator and denominator both come from this cohort. */
+  observedDamCount: bigint;
+  /** Sum of 利水容量 over the observed cohort only — the 全国貯水率 denominator. */
+  observedActiveCapacityM3: string | null;
   /** Distinct dams that have at least one non-synthetic observation in the last 30 days. */
   realDamCount: bigint;
   /** Distinct dams with storage_rate IS NOT NULL in the last 30 days (direct from source or backfilled). */
@@ -64,7 +68,20 @@ async function homeStats(): Promise<HomeStats> {
   // takes seconds. Use TimescaleDB's purpose-built approximate_row_count()
   // — it sums chunk-level pg_class.reltuples (the parent table's reltuples
   // is always 0 because rows live in children), instant after ANALYZE.
+  // `fresh` is the observed cohort: rate-able dams whose latest observation
+  // is at most 7 days old. 全国貯水率 numerator (storage) and denominator
+  // (active capacity) both sum over this cohort — a dam without fresh data
+  // must not deflate the rate by contributing capacity only.
   const rows = await sql<HomeStats[]>`
+    WITH fresh AS (
+      SELECT DISTINCT ON (o.dam_id) o.dam_id, o.storage_volume_m3, d.active_capacity_m3
+      FROM observations o
+      JOIN dams d ON d.id = o.dam_id
+      WHERE o.observed_at > NOW() - INTERVAL '7 days'
+        AND o.storage_volume_m3 IS NOT NULL
+        AND d.active_capacity_m3 IS NOT NULL
+      ORDER BY o.dam_id, o.observed_at DESC
+    )
     SELECT
       (SELECT COUNT(*)::BIGINT      FROM dams)                                           AS "damCount",
       (SELECT COUNT(*)::BIGINT      FROM watersheds)                                     AS "watershedCount",
@@ -73,14 +90,9 @@ async function homeStats(): Promise<HomeStats> {
       (SELECT SUM(total_capacity_m3)::TEXT FROM dams)                                    AS "totalCapacityM3",
       (SELECT SUM(active_capacity_m3)::TEXT FROM dams WHERE active_capacity_m3 IS NOT NULL) AS "activeCapacityM3",
       (SELECT COUNT(*)::BIGINT      FROM dams WHERE active_capacity_m3 IS NOT NULL)      AS "rateableDamCount",
-      (SELECT SUM(volume)::TEXT FROM (
-        SELECT DISTINCT ON (o.dam_id) o.storage_volume_m3 AS volume
-        FROM observations o
-        JOIN dams d ON d.id = o.dam_id
-        WHERE o.observed_at > NOW() - INTERVAL '7 days'
-          AND d.active_capacity_m3 IS NOT NULL
-        ORDER BY o.dam_id, o.observed_at DESC
-      ) latest)                                                                          AS "rateableStorageM3",
+      (SELECT SUM(storage_volume_m3)::TEXT FROM fresh)                                   AS "rateableStorageM3",
+      (SELECT COUNT(*)::BIGINT      FROM fresh)                                          AS "observedDamCount",
+      (SELECT SUM(active_capacity_m3)::TEXT FROM fresh)                                  AS "observedActiveCapacityM3",
       (SELECT COUNT(DISTINCT dam_id)::BIGINT
          FROM observations
          WHERE observed_at > NOW() - INTERVAL '30 days'
@@ -168,6 +180,8 @@ const cachedHomeStats = unstable_cache(
       activeCapacityM3: s.activeCapacityM3,
       rateableStorageM3: s.rateableStorageM3,
       rateableDamCount: Number(s.rateableDamCount),
+      observedDamCount: Number(s.observedDamCount),
+      observedActiveCapacityM3: s.observedActiveCapacityM3,
       realDamCount: Number(s.realDamCount),
       storageRateDamCount: Number(s.storageRateDamCount),
       riverDamCount: Number(s.riverDamCount),
@@ -236,11 +250,11 @@ export default async function Home() {
       await cachedFeaturedSparklines(latest.items.map((d) => d.id.toString()).join(',')),
     ),
   );
-  // 全国貯水率: 利水容量 (active_capacity_m3) を分母にして、利水容量データを
-  // 持つダムだけで集計。Damnet 未収録の小型ダムは集計から除外。
+  // 全国貯水率: 直近7日に実測のあるダムだけで、貯水量合計 ÷ 利水容量合計。
+  // 実測のないダムは分子にも分母にも入れない（容量だけ混ぜると率が下振れする）。
   const overallRate =
-    s.activeCapacityM3 && s.rateableStorageM3 && Number(s.activeCapacityM3) > 0
-      ? Math.min(1, Number(s.rateableStorageM3) / Number(s.activeCapacityM3))
+    s.observedActiveCapacityM3 && s.rateableStorageM3 && Number(s.observedActiveCapacityM3) > 0
+      ? Math.min(1, Number(s.rateableStorageM3) / Number(s.observedActiveCapacityM3))
       : null;
   const yearsCovered = s.oldestObs
     ? Math.max(1, Math.round((Date.now() - s.oldestObs.getTime()) / (365 * 24 * 3600 * 1000)))
@@ -495,7 +509,7 @@ export default async function Home() {
                 {overallRate != null ? `${(overallRate * 100).toFixed(1)} %` : '—'}
               </div>
               <div className="basis-full text-xs text-on-surface-variant">
-                {`現在貯水量 ÷ 利水容量（直近 7 日の最新値、利水容量データのある ${fmt(s.rateableDamCount)} 基で集計）`}
+                {`現在貯水量 ÷ 利水容量（直近 7 日に実測のある ${fmt(s.observedDamCount)} 基で集計）`}
               </div>
             </div>
             {change.current ? (
@@ -550,7 +564,7 @@ export default async function Home() {
             <Stat
               label="現在の合計貯水量"
               value={fmtCapacityMcm(s.rateableStorageM3)}
-              sub={`直近 7 日 · ${fmt(s.rateableDamCount)} 基`}
+              sub={`直近 7 日 · ${fmt(s.observedDamCount)} 基`}
             />
             <Stat
               label="観測カバー期間"
