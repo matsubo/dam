@@ -17,6 +17,7 @@
 
 import { sql } from '@dam/db/client';
 import { type NextRequest, NextResponse } from 'next/server';
+import type { JSONValue } from 'postgres';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -174,7 +175,7 @@ const ALLOWED_TASKS = new Set([
 
 interface TriggerBody {
   task: string;
-  payload?: Record<string, unknown>;
+  payload?: Record<string, JSONValue>;
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {

@@ -75,13 +75,13 @@ export function parseToyamaPage(html: string): ParsedRow[] {
   const rows: ParsedRow[] = [];
   const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/g;
 
-  for (const rowM of tbodyMatch[1].matchAll(rowRe)) {
-    const rowHtml = rowM[1];
+  for (const rowM of (tbodyMatch[1] ?? '').matchAll(rowRe)) {
+    const rowHtml = rowM[1] ?? '';
 
     // Dam name — anchor text is numeric-entity-encoded
     const nameM = rowHtml.match(/data-title="ダム名"[^>]*>[\s\S]*?target="_blank">([\s\S]*?)<\/a>/);
     if (!nameM) continue;
-    const toyamaName = decodeNumericEntities(nameM[1]).trim();
+    const toyamaName = decodeNumericEntities(nameM[1] ?? '').trim();
     if (!toyamaName) continue;
 
     // Inflow and outflow are plain ASCII digits
@@ -94,8 +94,8 @@ export function parseToyamaPage(html: string): ParsedRow[] {
     let waterLevelM: number | null = null;
     const levelCellM = rowHtml.match(/data-title="貯水位 \(m\)">([\s\S]*?)<\/td>/);
     if (levelCellM) {
-      const spanM = levelCellM[1].match(/<span[^>]*>\s*([\d.]+)\s*<\/span>/);
-      waterLevelM = spanM ? parseNum(spanM[1]) : null;
+      const spanM = (levelCellM[1] ?? '').match(/<span[^>]*>\s*([\d.]+)\s*<\/span>/);
+      waterLevelM = parseNum(spanM?.[1] ?? '');
     }
 
     if (waterLevelM === null && inflowM3s === null && outflowM3s === null) continue;

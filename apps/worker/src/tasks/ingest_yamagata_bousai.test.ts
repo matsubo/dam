@@ -95,7 +95,7 @@ describe('parseYamagataJson', () => {
         data5: '86.4',
       },
     };
-    const rows = parseYamagataJson(json as Parameters<typeof parseYamagataJson>[0]);
+    const rows = parseYamagataJson(json as unknown as Parameters<typeof parseYamagataJson>[0]);
     expect(rows[0]?.observedAt?.toISOString()).toBe('2026-06-05T04:30:00.000Z');
   });
 

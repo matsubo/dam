@@ -60,7 +60,13 @@ function parseNum(s: string): number | null {
 export function parseShimokuboTimestamp(s: string): Date | null {
   const m = s.match(/^(\d{4})\/(\d{2})\/(\d{2})\s+(\d{1,2}):(\d{2})$/);
   if (!m) return null;
-  const [, yr, mo, dy, hr, mi] = m.map(Number);
+  const [yr, mo, dy, hr, mi] = m.slice(1, 6).map(Number) as [
+    number,
+    number,
+    number,
+    number,
+    number,
+  ];
   const d = new Date(Date.UTC(yr, mo - 1, dy, hr - 9, mi, 0, 0));
   return Number.isNaN(d.getTime()) ? null : d;
 }
@@ -68,7 +74,7 @@ export function parseShimokuboTimestamp(s: string): Date | null {
 function latestData10(records: DamRecord[], name: string): string | null {
   const rec = records.find((r) => r.name === name);
   if (!rec || rec.datas.length === 0) return null;
-  return rec.datas[rec.datas.length - 1].data10 ?? null;
+  return rec.datas[rec.datas.length - 1]?.data10 ?? null;
 }
 
 export function parseShimokuboJson(json: ShimokuboJson): ParsedReading {

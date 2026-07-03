@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { nationalStorageChange, watershedStorageChange } from './watersheds.ts';
 import { sql } from '../client.ts';
+import { nationalStorageChange, watershedStorageChange } from './watersheds.ts';
 
 // Smoke-only: these aggregate over real seeded data, so we only assert shape
 // and basic invariants. The detailed math is covered by storage_change.test
@@ -16,24 +16,24 @@ describe('nationalStorageChange', () => {
     'returns the full shape with eight buckets',
     async () => {
       const c = await nationalStorageChange();
-    // shape
-    for (const k of ['current', 'h1', 'h6', 'h12', 'd1', 'd7', 'd30', 'd365', 'd1825'] as const) {
-      // each bucket field exists, even if null
-      expect(k in c).toBe(true);
-    }
-    // ageS fields exist for each non-current bucket
-    for (const k of [
-      'h1AgeS',
-      'h6AgeS',
-      'h12AgeS',
-      'd1AgeS',
-      'd7AgeS',
-      'd30AgeS',
-      'd365AgeS',
-      'd1825AgeS',
-    ] as const) {
-      expect(k in c).toBe(true);
-    }
+      // shape
+      for (const k of ['current', 'h1', 'h6', 'h12', 'd1', 'd7', 'd30', 'd365', 'd1825'] as const) {
+        // each bucket field exists, even if null
+        expect(k in c).toBe(true);
+      }
+      // ageS fields exist for each non-current bucket
+      for (const k of [
+        'h1AgeS',
+        'h6AgeS',
+        'h12AgeS',
+        'd1AgeS',
+        'd7AgeS',
+        'd30AgeS',
+        'd365AgeS',
+        'd1825AgeS',
+      ] as const) {
+        expect(k in c).toBe(true);
+      }
     },
     NATIONAL_TIMEOUT,
   );
@@ -43,10 +43,10 @@ describe('nationalStorageChange', () => {
     async () => {
       // Skip the assertion if there are no rate-able dams — keeps the test
       // green on a fresh DB before seeding.
-      const [{ n }] = await sql<{ n: bigint }[]>`
+      const rows = await sql<{ n: bigint }[]>`
         SELECT COUNT(*)::BIGINT AS n FROM dams WHERE active_capacity_m3 IS NOT NULL
       `;
-      if (Number(n) === 0) return;
+      if (Number(rows[0]?.n ?? 0n) === 0) return;
       const c = await nationalStorageChange();
       expect(c.current).not.toBeNull();
       expect(Number(c.current)).toBeGreaterThan(0);
@@ -59,8 +59,8 @@ describe('watershedStorageChange', () => {
   test(
     'returns the full shape for a real watershed',
     async () => {
-    // Pick an arbitrary watershed that has rate-able dams.
-    const [pick] = await sql<{ id: bigint }[]>`
+      // Pick an arbitrary watershed that has rate-able dams.
+      const [pick] = await sql<{ id: bigint }[]>`
       SELECT w.id
       FROM watersheds w
       JOIN dams d ON d.watershed_id = w.id
@@ -68,11 +68,11 @@ describe('watershedStorageChange', () => {
       GROUP BY w.id
       LIMIT 1
     `;
-    if (!pick) return; // empty seed — nothing to assert
-    const c = await watershedStorageChange(pick.id);
-    expect('current' in c).toBe(true);
-    expect('h1' in c).toBe(true);
-    expect('d1825' in c).toBe(true);
+      if (!pick) return; // empty seed — nothing to assert
+      const c = await watershedStorageChange(pick.id);
+      expect('current' in c).toBe(true);
+      expect('h1' in c).toBe(true);
+      expect('d1825' in c).toBe(true);
     },
     NATIONAL_TIMEOUT,
   );

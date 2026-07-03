@@ -68,7 +68,13 @@ function parseNum(s: string): number | null {
 export function parseYamagataTimestamp(s: string): Date | null {
   const m = s.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/);
   if (!m) return null;
-  const [, yr, mo, dy, hr, mi] = m.map(Number);
+  const [yr, mo, dy, hr, mi] = m.slice(1, 6).map(Number) as [
+    number,
+    number,
+    number,
+    number,
+    number,
+  ];
   const d = new Date(Date.UTC(yr, mo - 1, dy, hr - 9, mi, 0, 0));
   return Number.isNaN(d.getTime()) ? null : d;
 }
