@@ -20,6 +20,7 @@ import Link from 'next/link';
 import { DamCard } from '../components/dam-card.tsx';
 import { DroughtAlert } from '../components/drought-alert.tsx';
 import { ENTITY_ICONS } from '../components/entity-icon.tsx';
+import { LocateWatershedButton } from '../components/locate-watershed-button.tsx';
 import { StorageChangeStrip } from '../components/storage-change-strip.tsx';
 import { fmtCapacityMcm } from '../lib/format.ts';
 
@@ -372,6 +373,7 @@ export default async function Home() {
               <Link href="/dams" className="btn-primary text-base">
                 ダムを探す
               </Link>
+              <LocateWatershedButton />
               <Link href="/api/docs" className="btn-outline text-base">
                 API 仕様を見る
               </Link>
