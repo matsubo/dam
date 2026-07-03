@@ -36,13 +36,19 @@ const CONCURRENCY = Number(process.env.KASENBOSAI_CONCURRENCY ?? '8');
 const PER_REQUEST_TIMEOUT_MS = 10_000;
 const INTER_REQUEST_DELAY_MS = 50;
 
-interface ApiObsValue {
+export interface ApiObsValue {
   storLvl?: number | null;
+  storLvlCcd?: number | null;
   storCap?: number | null;
+  storCapCcd?: number | null;
   storPcntIrr?: number | null;
+  storPcntIrrCcd?: number | null;
   storPcntEff?: number | null;
+  storPcntEffCcd?: number | null;
   allSink?: number | null;
+  allSinkCcd?: number | null;
   allDisch?: number | null;
+  allDischCcd?: number | null;
   obsTime?: string;
 }
 interface ApiResponse {
@@ -91,6 +97,47 @@ function numOrNull(v: number | null | undefined): number | null {
   return v;
 }
 
+/**
+ * A value only counts when its per-field quality code (Ccd) is 0 or absent.
+ * The feed reports missing 貯水量/貯水率 as value 0 with Ccd=160 — taking
+ * those at face value stored phantom "empty reservoir" observations.
+ */
+function validOrNull(v: number | null | undefined, ccd: number | null | undefined): number | null {
+  if (ccd != null && ccd !== 0) return null;
+  return numOrNull(v);
+}
+
+export interface ParsedKasenbosaiObs {
+  observedAt: Date;
+  storageVolumeM3: number | null;
+  storageRate: number | null;
+  inflowM3s: number | null;
+  outflowM3s: number | null;
+  waterLevelM: number | null;
+}
+
+export function parseKasenbosaiObsValue(ov: ApiObsValue): ParsedKasenbosaiObs | null {
+  if (!ov.obsTime) return null;
+  const observedAt = parseKasenbosaiTimestamp(ov.obsTime);
+  if (!observedAt) return null;
+  // Convert vol from 千m³ → m³.
+  const storCap = validOrNull(ov.storCap, ov.storCapCcd);
+  const storageVolumeM3 = storCap != null ? storCap * 1000 : null;
+  // Prefer effective-capacity 貯水率; fall back to 利水. Convert % → fraction.
+  const ratePct =
+    validOrNull(ov.storPcntEff, ov.storPcntEffCcd) ??
+    validOrNull(ov.storPcntIrr, ov.storPcntIrrCcd);
+  const storageRate = ratePct != null ? ratePct / 100 : null;
+  return {
+    observedAt,
+    storageVolumeM3,
+    storageRate,
+    inflowM3s: validOrNull(ov.allSink, ov.allSinkCcd),
+    outflowM3s: validOrNull(ov.allDisch, ov.allDischCcd),
+    waterLevelM: validOrNull(ov.storLvl, ov.storLvlCcd),
+  };
+}
+
 async function ensureSourcePriority(): Promise<void> {
   await sql`
     INSERT INTO source_priorities (source_id, priority, description, active)
@@ -137,24 +184,13 @@ async function fetchOne(
     return null;
   }
   const ov = payload.obsValue;
-  if (!ov || !ov.obsTime) return null;
-  const observedAt = parseKasenbosaiTimestamp(ov.obsTime);
-  if (!observedAt) return null;
-  // Convert vol from 千m³ → m³.
-  const storageVolumeM3 =
-    ov.storCap != null && Number.isFinite(ov.storCap) ? ov.storCap * 1000 : null;
-  // Prefer effective-capacity 貯水率; fall back to 利水. Convert % → fraction.
-  const ratePct = numOrNull(ov.storPcntEff) ?? numOrNull(ov.storPcntIrr);
-  const storageRate = ratePct != null ? ratePct / 100 : null;
+  if (!ov) return null;
+  const parsed = parseKasenbosaiObsValue(ov);
+  if (!parsed) return null;
   return {
-    observedAt,
+    ...parsed,
     damId: target.damId,
     sourceId: SOURCE_ID,
-    storageVolumeM3,
-    storageRate,
-    inflowM3s: numOrNull(ov.allSink),
-    outflowM3s: numOrNull(ov.allDisch),
-    waterLevelM: numOrNull(ov.storLvl),
     rainfallMm: null,
     rawSnapshotId: null,
     qualityFlag: 0,
