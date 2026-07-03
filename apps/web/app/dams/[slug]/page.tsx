@@ -7,6 +7,7 @@ import {
   nearbyDams,
   storageChange,
 } from '@dam/db/repo/dams';
+import { damSeasonalNorm } from '@dam/db/repo/seasonal';
 import { aggregateWatershed, findWatershedBySlug } from '@dam/db/repo/watersheds';
 import { ExternalLink } from 'lucide-react';
 import type { Metadata } from 'next';
@@ -53,7 +54,7 @@ export default async function DamDetail({ params }: PageProps) {
   const slug = decodeURIComponent(rawSlug);
   const d = await findDamBySlug(slug);
   if (!d) notFound();
-  const [latest, change, nearby, watershed, watershedDams] = await Promise.all([
+  const [latest, change, nearby, watershed, watershedDams, norm] = await Promise.all([
     latestObservation(d.id),
     storageChange(d.id),
     nearbyDams(d.id, 20_000, 6),
@@ -61,6 +62,7 @@ export default async function DamDetail({ params }: PageProps) {
     d.watershedSlug
       ? listDams({ watershedSlug: d.watershedSlug, pageSize: 12 })
       : Promise.resolve({ items: [], nextCursor: null }),
+    damSeasonalNorm(d.id),
   ]);
   const watershedAgg = watershed ? await aggregateWatershed(watershed.id) : null;
   const otherInWatershed = watershedDams.items.filter((w) => w.id !== d.id).slice(0, 6);
@@ -216,6 +218,21 @@ export default async function DamDetail({ params }: PageProps) {
                       label="放流量"
                       value={latest.outflowM3s ? `${fmtN(latest.outflowM3s)} m³/s` : '—'}
                     />
+                    {norm && Number(norm.normVolumeM3) > 0 ? (
+                      <div className="col-span-2">
+                        <div className="text-xs text-muted">平年比</div>
+                        <div className="text-base tabular-nums">
+                          {Math.round(
+                            (Number(norm.currentVolumeM3) / Number(norm.normVolumeM3)) * 100,
+                          )}{' '}
+                          %
+                          <span className="text-xs text-muted ml-2">
+                            例年この時期 {fmtCapacityMcm(norm.normVolumeM3)}（過去{norm.years}
+                            年平均）
+                          </span>
+                        </div>
+                      </div>
+                    ) : null}
                   </dl>
                 </div>
                 {/* Drought callout — only when (a) the rate is below the

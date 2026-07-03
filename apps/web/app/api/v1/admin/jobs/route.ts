@@ -171,6 +171,7 @@ const ALLOWED_TASKS = new Set([
   'quality:freshness-check',
   'quality:recompute',
   'storageRate:recompute',
+  'aggregates:refresh',
 ]);
 
 interface TriggerBody {

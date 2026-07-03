@@ -402,6 +402,12 @@ export const CRONTAB = `
 # Payload is JSON5 inside {} per graphile-worker convention.
 0 5 20 * * backfill:mudam {"district":"all","years":1}
 
+# Continuous-aggregate full-history refresh — the obs_daily policy only
+# covers the trailing 60 days, so freshly backfilled history (mudam) never
+# materializes on its own and 平年比 queries read obs_daily. Runs 3 h after
+# the mudam tail backfill starts (that run takes ~90 min).
+0 8 20 * * aggregates:refresh
+
 # Quality recomputation
 30 4 * * * quality:recompute
 

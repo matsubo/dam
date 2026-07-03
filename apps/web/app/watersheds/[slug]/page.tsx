@@ -1,4 +1,5 @@
 import { latestRateAndSourceByDam, listDams } from '@dam/db/repo/dams';
+import { watershedSeasonalNorm } from '@dam/db/repo/seasonal';
 import {
   aggregateWatershed,
   findWatershedBySlug,
@@ -38,10 +39,11 @@ export default async function WatershedDetail({ params }: PageProps) {
   const slug = decodeURIComponent(rawSlug);
   const w = await findWatershedBySlug(slug);
   if (!w) notFound();
-  const [agg, change, list] = await Promise.all([
+  const [agg, change, list, norm] = await Promise.all([
     aggregateWatershed(w.id),
     watershedStorageChange(w.id),
     listDams({ watershedSlug: slug, pageSize: 200 }),
+    watershedSeasonalNorm(w.id),
   ]);
   // Per-dam latest 貯水率 + real-source flag to render the progress-bar column
   // with a green dot next to dams that have real upstream data.
@@ -110,6 +112,13 @@ export default async function WatershedDetail({ params }: PageProps) {
                       : `現在貯水量 ÷ 利水容量(実測${agg.observedDamCount}基)`
                 }
               />
+              {norm && Number(norm.normVolumeM3) > 0 ? (
+                <Stat
+                  label="平年比"
+                  value={`${Math.round((Number(norm.currentVolumeM3) / Number(norm.normVolumeM3)) * 100)} %`}
+                  sub={`例年この時期 ${fmtCapacityMcm(norm.normVolumeM3)}（過去${norm.years}年・${norm.damCount}基）`}
+                />
+              ) : null}
             </div>
           </section>
         );
