@@ -1,6 +1,40 @@
 import { sql } from '@dam/db/client';
 import type { Task } from 'graphile-worker';
 
+/**
+ * Null out phantom zero-storage readings across ALL sources.
+ *
+ * Several feeds (kasenbosai, and prefecture 河川防災 sources like
+ * ishikawa-kasen / nagano-kasen / miyagi-kasen) publish a literal 0 貯水量 for
+ * dams that simply don't measure reservoir volume — they report level + flow
+ * only. Stored as 0, trigger 0036 then derives a phantom 0.0%, and the dam
+ * lands on the drought list despite passing water.
+ *
+ * Guard: only (dam, source) pairs whose ENTIRE storage series is zero. A
+ * genuinely drawn-down reservoir has non-zero history, so its 0 is preserved.
+ * Runs over recent rows only (writes stay small); the all-zero check scans the
+ * dam's full history so a single real reading anywhere protects it. Idempotent
+ * and self-healing — new placeholder rows from the 10-min feeds are cleaned on
+ * the next daily pass. Supersedes the one-shot migrations 0038/0039.
+ */
+export async function nullPhantomZeroSeries(db: typeof sql): Promise<number> {
+  const res = await db`
+    UPDATE observations o
+    SET storage_volume_m3 = NULL,
+        storage_rate      = NULL
+    WHERE o.observed_at > NOW() - INTERVAL '48 hours'
+      AND o.storage_volume_m3 = 0
+      AND (o.dam_id, o.source_id) IN (
+        SELECT dam_id, source_id
+        FROM observations
+        WHERE storage_volume_m3 IS NOT NULL
+        GROUP BY dam_id, source_id
+        HAVING MAX(storage_volume_m3) = 0
+      )
+  `;
+  return res.count;
+}
+
 const task: Task = async (_payload, helpers) => {
   await sql.begin(async (tx) => {
     // Allow decompression of compressed chunks within this transaction.
@@ -42,6 +76,11 @@ const task: Task = async (_payload, helpers) => {
         )
     `;
     helpers.logger.info(`quality:recompute marked ${mismatch.count} rows mismatched`);
+
+    // 3. Null phantom zero-storage placeholders (all-zero (dam, source)
+    //    series) so non-reporting dams don't sit on the drought list at 0.0%.
+    const nulled = await nullPhantomZeroSeries(tx as unknown as typeof sql);
+    helpers.logger.info(`quality:recompute nulled ${nulled} phantom zero-storage rows`);
   });
 };
 
