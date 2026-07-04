@@ -115,6 +115,54 @@ export async function GET(): Promise<NextResponse> {
     SELECT GREATEST(0, approximate_row_count('observations'))::bigint::int AS n
   `.catch(() => [{ n: 0 }] as { n: number }[]);
 
+  // obs_daily health — diagnoses why 平年比 (seasonal norm) may be empty.
+  // The continuous aggregate's refresh policy only maintains the trailing
+  // 60 days, so historical buckets near the current DOY only exist if a full
+  // refresh (aggregates:refresh) has run. This surfaces whether that history
+  // is materialized and how many dams can actually produce a seasonal norm.
+  const obsDaily = await sql<
+    {
+      total: number;
+      older_than_60d: number;
+      min_day: string | null;
+      max_day: string | null;
+      dams_with_doy_history: number;
+      dams_with_fresh_obs: number;
+      dams_with_both: number;
+    }[]
+  >`
+    WITH od_old AS (
+      SELECT dam_id, day, last_storage_volume_m3 FROM obs_daily
+      WHERE day < NOW() - INTERVAL '60 days'
+    ),
+    doy AS (
+      SELECT dam_id
+      FROM od_old
+      WHERE last_storage_volume_m3 IS NOT NULL
+        AND LEAST(
+              ABS(EXTRACT(DOY FROM day) - EXTRACT(DOY FROM NOW())),
+              366 - ABS(EXTRACT(DOY FROM day) - EXTRACT(DOY FROM NOW()))
+            ) <= 7
+      GROUP BY dam_id
+      HAVING COUNT(*) >= 5
+    ),
+    fresh AS (
+      SELECT DISTINCT o.dam_id
+      FROM observations o JOIN dams d ON d.id = o.dam_id
+      WHERE o.storage_volume_m3 IS NOT NULL
+        AND d.active_capacity_m3 IS NOT NULL
+        AND o.observed_at > NOW() - INTERVAL '7 days'
+    )
+    SELECT
+      (SELECT COUNT(*)::int FROM obs_daily)                                   AS total,
+      (SELECT COUNT(*)::int FROM od_old)                                      AS older_than_60d,
+      (SELECT MIN(day)::text FROM obs_daily)                                  AS min_day,
+      (SELECT MAX(day)::text FROM obs_daily)                                  AS max_day,
+      (SELECT COUNT(*)::int FROM doy)                                         AS dams_with_doy_history,
+      (SELECT COUNT(*)::int FROM fresh)                                       AS dams_with_fresh_obs,
+      (SELECT COUNT(*)::int FROM doy JOIN fresh USING (dam_id))               AS dams_with_both
+  `.catch((e: unknown) => [{ error: (e as Error).message }] as never);
+
   const cov = coverage[0] ?? {
     dams_total: 0,
     with_damnet: 0,
@@ -141,6 +189,7 @@ export async function GET(): Promise<NextResponse> {
         approximate_total: totalApprox[0]?.n ?? 0,
         last_30d_by_source: obsBySource,
       },
+      obs_daily_health: obsDaily[0] ?? null,
       data_realness: {
         only_synthetic_seen: synthSeen && !realSeen,
         any_real_observation_in_30d: realSeen,
