@@ -224,6 +224,8 @@ const ALLOWED_TASKS = new Set([
   'quality:recompute',
   'storageRate:recompute',
   'aggregates:refresh',
+  'backfill:kagoshima-bodik',
+  'backfill:mudam',
 ]);
 
 interface TriggerBody {
