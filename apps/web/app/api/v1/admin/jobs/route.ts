@@ -129,6 +129,7 @@ export async function GET(): Promise<NextResponse> {
       dams_with_doy_history: number;
       dams_with_fresh_obs: number;
       dams_with_both: number;
+      both_slugs: string[];
     }[]
   >`
     WITH od_old AS (
@@ -160,7 +161,9 @@ export async function GET(): Promise<NextResponse> {
       (SELECT MAX(day)::text FROM obs_daily)                                  AS max_day,
       (SELECT COUNT(*)::int FROM doy)                                         AS dams_with_doy_history,
       (SELECT COUNT(*)::int FROM fresh)                                       AS dams_with_fresh_obs,
-      (SELECT COUNT(*)::int FROM doy JOIN fresh USING (dam_id))               AS dams_with_both
+      (SELECT COUNT(*)::int FROM doy JOIN fresh USING (dam_id))               AS dams_with_both,
+      (SELECT COALESCE(json_agg(d.slug ORDER BY d.slug), '[]'::json)
+         FROM doy JOIN fresh USING (dam_id) JOIN dams d ON d.id = doy.dam_id) AS both_slugs
   `.catch((e: unknown) => [{ error: (e as Error).message }] as never);
 
   const cov = coverage[0] ?? {
