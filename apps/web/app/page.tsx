@@ -1,6 +1,6 @@
 import { sql } from '@dam/db/client';
 import { type DamListItem, listDams, lowStorageDams } from '@dam/db/repo/dams';
-import { nationalStorageChange } from '@dam/db/repo/watersheds';
+import { driestWatersheds, nationalStorageChange } from '@dam/db/repo/watersheds';
 import {
   ArrowRight,
   BadgeCheck,
@@ -22,6 +22,7 @@ import { DroughtAlert } from '../components/drought-alert.tsx';
 import { ENTITY_ICONS } from '../components/entity-icon.tsx';
 import { LocateWatershedButton } from '../components/locate-watershed-button.tsx';
 import { StorageChangeStrip } from '../components/storage-change-strip.tsx';
+import { WatershedSpotlight } from '../components/watershed-spotlight.tsx';
 import { fmtCapacityMcm } from '../lib/format.ts';
 
 // force-dynamic skips Next's build-time prerender (which would fail because
@@ -217,6 +218,11 @@ const cachedDroughtDams = unstable_cache(
   ['home-drought-dams'],
   HOME_CACHE_OPTS,
 );
+const cachedDriestWatersheds = unstable_cache(
+  async () => driestWatersheds(6, 3),
+  ['home-driest-watersheds'],
+  HOME_CACHE_OPTS,
+);
 // unstable_cache JSON-stringifies its return value, which loses Map<>. Stash
 // as a plain object keyed by dam_id; rehydrate to a Map at the call site.
 const cachedFeaturedSparklines = unstable_cache(
@@ -230,11 +236,12 @@ const cachedFeaturedSparklines = unstable_cache(
 );
 
 export default async function Home() {
-  const [statsRaw, latestRaw, change, droughtDams] = await Promise.all([
+  const [statsRaw, latestRaw, change, droughtDams, driest] = await Promise.all([
     cachedHomeStats(),
     cachedTopDams(),
     cachedNationalChange(),
     cachedDroughtDams(),
+    cachedDriestWatersheds(),
   ]);
   // Rehydrate JSON-safe primitives back to the shapes the rest of the page
   // expects (bigint dam ids, Date oldestObs).
@@ -471,6 +478,17 @@ export default async function Home() {
         <section className="bg-white py-6">
           <div className="max-w-7xl mx-auto px-5 md:px-10">
             <DroughtAlert dams={droughtDams} thresholdPct={DROUGHT_THRESHOLD_PCT} />
+          </div>
+        </section>
+      ) : null}
+
+      {/* Watershed spotlight — the driest 水系 as colour-coded tiles, so the
+          per-watershed 貯水率 (the site's core signal) is visible from the
+          front door, not buried on /watersheds. */}
+      {driest.length > 0 ? (
+        <section className="py-6">
+          <div className="max-w-7xl mx-auto px-5 md:px-10">
+            <WatershedSpotlight items={driest} />
           </div>
         </section>
       ) : null}

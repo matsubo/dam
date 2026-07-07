@@ -545,3 +545,68 @@ export async function realDamCountsForWatersheds(
   for (const r of rows) m.set(r.watershedId, r.realDamCount);
   return m;
 }
+
+export interface DriestWatershed {
+  slug: string;
+  name: string;
+  kind: 'first' | 'second' | 'other';
+  rate: number;
+  realDamCount: number;
+}
+
+/**
+ * The lowest-貯水率 watersheds — for a "where is water scarce" spotlight.
+ * Rate uses the same observed-cohort formula as ratesForWatersheds (fresh
+ * storage ÷ fresh active capacity). Only systems with at least `minReal`
+ * dams carrying a non-synthetic 30-day observation qualify, so a single
+ * low reading can't crown a whole watershed "driest". Ascending by rate.
+ */
+export async function driestWatersheds(limit: number, minReal: number): Promise<DriestWatershed[]> {
+  return sql<DriestWatershed[]>`
+    WITH ds AS (
+      SELECT d.id, d.watershed_id, d.active_capacity_m3
+      FROM dams d
+      WHERE d.watershed_id IS NOT NULL
+        AND d.active_capacity_m3 IS NOT NULL
+    ),
+    latest AS (
+      SELECT DISTINCT ON (o.dam_id) o.dam_id, o.storage_volume_m3
+      FROM observations o
+      JOIN ds ON ds.id = o.dam_id
+      WHERE o.storage_volume_m3 IS NOT NULL
+        AND o.observed_at > NOW() - make_interval(days => ${RATE_FRESHNESS_DAYS})
+      ORDER BY o.dam_id, o.observed_at DESC
+    ),
+    rated AS (
+      SELECT
+        ds.watershed_id,
+        LEAST(1.0,
+          SUM(latest.storage_volume_m3)::FLOAT8 /
+          NULLIF(SUM(ds.active_capacity_m3) FILTER (WHERE latest.dam_id IS NOT NULL), 0)::FLOAT8
+        ) AS rate
+      FROM ds
+      LEFT JOIN latest ON latest.dam_id = ds.id
+      GROUP BY ds.watershed_id
+    ),
+    reals AS (
+      SELECT d.watershed_id, COUNT(DISTINCT o.dam_id)::INT AS real_count
+      FROM dams d
+      JOIN observations o ON o.dam_id = d.id
+      WHERE d.watershed_id IS NOT NULL
+        AND o.source_id <> 'synthetic'
+        AND o.observed_at > NOW() - INTERVAL '30 days'
+      GROUP BY d.watershed_id
+    )
+    SELECT
+      w.slug, w.name, w.kind,
+      rated.rate                       AS rate,
+      COALESCE(reals.real_count, 0)    AS "realDamCount"
+    FROM rated
+    JOIN watersheds w ON w.id = rated.watershed_id
+    LEFT JOIN reals ON reals.watershed_id = rated.watershed_id
+    WHERE rated.rate IS NOT NULL
+      AND COALESCE(reals.real_count, 0) >= ${minReal}
+    ORDER BY rated.rate ASC
+    LIMIT ${limit}
+  `;
+}

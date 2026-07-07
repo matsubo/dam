@@ -7,6 +7,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
 import { EntityIcon } from '../../components/entity-icon.tsx';
+import { WatershedSpotlight } from '../../components/watershed-spotlight.tsx';
 import { fmtPct } from '../../lib/format.ts';
 import { rateBand } from '../../lib/rate-color.ts';
 
@@ -88,39 +89,16 @@ export default async function WatershedsPage() {
 
       {/* Water-shortage spotlight — the lowest-rate systems, colour-coded. */}
       {driest.length > 0 ? (
-        <section className="mb-6">
-          <h2 className="text-sm font-semibold text-on-surface mb-2 inline-flex items-center gap-1.5">
-            <span aria-hidden className="w-2 h-2 rounded-full" style={{ background: '#dc2626' }} />
-            貯水率の低い水系
-          </h2>
-          <ul className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-            {driest.map(({ w, rate }) => {
-              const band = rateBand(rate);
-              return (
-                <li key={w.slug}>
-                  <Link
-                    href={`/watersheds/${w.slug}`}
-                    className="block bg-white border border-outline-variant rounded-xl p-3 no-underline hover:border-primary transition-colors"
-                    style={{ borderLeft: `4px solid ${band.color}` }}
-                  >
-                    <div className="font-display font-semibold text-on-surface truncate">
-                      {w.name}
-                    </div>
-                    <div
-                      className="text-2xl font-display font-bold tabular-nums leading-tight"
-                      style={{ color: band.color }}
-                    >
-                      {fmtPct(rate)}
-                    </div>
-                    <div className="text-[11px]" style={{ color: band.color }}>
-                      {band.label}
-                    </div>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
+        <div className="mb-6">
+          <WatershedSpotlight
+            items={driest.map(({ w, rate }) => ({
+              slug: w.slug,
+              name: w.name,
+              rate,
+              realDamCount: realDamCounts.get(w.id.toString()) ?? 0,
+            }))}
+          />
+        </div>
       ) : null}
 
       {/* Colour legend so the coding is self-explanatory. */}
