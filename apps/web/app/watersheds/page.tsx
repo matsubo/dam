@@ -8,6 +8,16 @@ import Link from 'next/link';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
 import { EntityIcon } from '../../components/entity-icon.tsx';
 import { fmtPct } from '../../lib/format.ts';
+import { rateBand } from '../../lib/rate-color.ts';
+
+// Legend bands shown once at the top so the colour coding is self-explanatory.
+const LEGEND: { at: number; label: string }[] = [
+  { at: 0.1, label: '危機的' },
+  { at: 0.3, label: '渇水警戒' },
+  { at: 0.5, label: 'やや低い' },
+  { at: 0.7, label: '平常' },
+  { at: 0.95, label: '十分' },
+];
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 3600;
@@ -51,6 +61,17 @@ export default async function WatershedsPage() {
     ratesForWatersheds(ordered.map((w) => w.id)),
     realDamCountsForWatersheds(ordered.map((w) => w.id)),
   ]);
+  // Water-shortage spotlight: the lowest-rate systems surface at the very top
+  // so an ordinary visitor sees at a glance where water is scarce. Only count
+  // systems with enough real observation to be meaningful (実測 >= 3 dams).
+  const driest = ordered
+    .map((w) => ({ w, rate: rates.get(w.id.toString()) ?? null }))
+    .filter(
+      (x): x is { w: (typeof ordered)[number]; rate: number } =>
+        x.rate != null && (realDamCounts.get(x.w.id.toString()) ?? 0) >= 3,
+    )
+    .sort((a, b) => a.rate - b.rate)
+    .slice(0, 6);
   return (
     <div className="max-w-7xl mx-auto px-5 md:px-10 py-8">
       <Breadcrumbs items={[{ label: 'ホーム', href: '/' }, { label: '水系' }]} />
@@ -64,6 +85,62 @@ export default async function WatershedsPage() {
         {totals.second} · その他 {totals.other}）
         {emptyCount > 0 ? `、うち ${emptyCount} 水系はダム登録なし` : ''}。
       </p>
+
+      {/* Water-shortage spotlight — the lowest-rate systems, colour-coded. */}
+      {driest.length > 0 ? (
+        <section className="mb-6">
+          <h2 className="text-sm font-semibold text-on-surface mb-2 inline-flex items-center gap-1.5">
+            <span aria-hidden className="w-2 h-2 rounded-full" style={{ background: '#dc2626' }} />
+            貯水率の低い水系
+          </h2>
+          <ul className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+            {driest.map(({ w, rate }) => {
+              const band = rateBand(rate);
+              return (
+                <li key={w.slug}>
+                  <Link
+                    href={`/watersheds/${w.slug}`}
+                    className="block bg-white border border-outline-variant rounded-xl p-3 no-underline hover:border-primary transition-colors"
+                    style={{ borderLeft: `4px solid ${band.color}` }}
+                  >
+                    <div className="font-display font-semibold text-on-surface truncate">
+                      {w.name}
+                    </div>
+                    <div
+                      className="text-2xl font-display font-bold tabular-nums leading-tight"
+                      style={{ color: band.color }}
+                    >
+                      {fmtPct(rate)}
+                    </div>
+                    <div className="text-[11px]" style={{ color: band.color }}>
+                      {band.label}
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
+
+      {/* Colour legend so the coding is self-explanatory. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-4 text-[11px] text-on-surface-variant">
+        <span>貯水率:</span>
+        {LEGEND.map((b) => {
+          const band = rateBand(b.at);
+          return (
+            <span key={b.label} className="inline-flex items-center gap-1">
+              <span
+                aria-hidden
+                className="w-2.5 h-2.5 rounded-sm"
+                style={{ background: band.color }}
+              />
+              {band.label}
+            </span>
+          );
+        })}
+      </div>
+
       {/* Mobile: stacked cards. */}
       <ul className="md:hidden space-y-2">
         {ordered.map((w) => {
@@ -103,15 +180,18 @@ export default async function WatershedsPage() {
                 {rate != null ? (
                   <>
                     <div
-                      className="relative h-1.5 rounded-full bg-surface-container overflow-hidden flex-1"
-                      aria-label={`貯水率 ${(rate * 100).toFixed(1)}%`}
+                      className="relative h-2 rounded-full bg-surface-container overflow-hidden flex-1"
+                      aria-label={`貯水率 ${(rate * 100).toFixed(1)}% ${rateBand(rate).label}`}
                     >
                       <div
-                        className="absolute inset-y-0 left-0 bg-primary"
-                        style={{ width: `${rate * 100}%` }}
+                        className="absolute inset-y-0 left-0 rounded-full"
+                        style={{ width: `${rate * 100}%`, background: rateBand(rate).color }}
                       />
                     </div>
-                    <span className="text-xs font-semibold w-12 text-right tabular-nums">
+                    <span
+                      className="text-xs font-bold w-12 text-right tabular-nums"
+                      style={{ color: rateBand(rate).color }}
+                    >
                       {fmtPct(rate)}
                     </span>
                   </>
@@ -171,15 +251,18 @@ export default async function WatershedsPage() {
                     {rate != null ? (
                       <div className="inline-flex items-center gap-2 min-w-[140px]">
                         <div
-                          className="relative h-1.5 rounded-full bg-surface-container overflow-hidden flex-1"
-                          aria-label={`貯水率 ${(rate * 100).toFixed(1)}%`}
+                          className="relative h-2 rounded-full bg-surface-container overflow-hidden flex-1"
+                          aria-label={`貯水率 ${(rate * 100).toFixed(1)}% ${rateBand(rate).label}`}
                         >
                           <div
-                            className="absolute inset-y-0 left-0 bg-primary"
-                            style={{ width: `${rate * 100}%` }}
+                            className="absolute inset-y-0 left-0 rounded-full"
+                            style={{ width: `${rate * 100}%`, background: rateBand(rate).color }}
                           />
                         </div>
-                        <span className="text-xs font-semibold w-12 text-right">
+                        <span
+                          className="text-xs font-bold w-12 text-right"
+                          style={{ color: rateBand(rate).color }}
+                        >
                           {fmtPct(rate)}
                         </span>
                       </div>
