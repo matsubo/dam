@@ -1,16 +1,10 @@
 // Trapezoidal "bucket" reservoir gauge. Water fills from the bottom to
-// (capacity × rate). Colour follows the same blue→teal→green→yellow→orange
-// ramp as the map markers so the visual encoding stays consistent.
+// (capacity × rate). Colour follows the shared rate-band scale so the gauge,
+// the map markers, and the watershed list all speak one visual language.
 
-// High % = safe (blue), low % = danger (red). Same scale as the /map markers
-// so the two visual languages stay aligned.
-function rateColor(rate: number): string {
-  if (rate < 0.2) return '#dc2626'; // critically low — red
-  if (rate < 0.4) return '#f97316'; // low — orange
-  if (rate < 0.6) return '#eab308'; // mid — yellow
-  if (rate < 0.8) return '#16a34a'; // healthy — green
-  return '#1e6dff'; // safe / full — blue
-}
+import { rateBand } from '../lib/rate-color.ts';
+
+const rateColor = (rate: number): string => rateBand(rate).color;
 
 export function ReservoirGauge({
   rate,
@@ -85,7 +79,15 @@ export function ReservoirGauge({
         const xR = w - topInset - (botInset - topInset) * tf;
         return (
           <g key={t}>
-            <line x1={xR - 6} y1={y} x2={xR} y2={y} stroke="#1a1c1e" strokeWidth="1.5" opacity="0.55" />
+            <line
+              x1={xR - 6}
+              y1={y}
+              x2={xR}
+              y2={y}
+              stroke="#1a1c1e"
+              strokeWidth="1.5"
+              opacity="0.55"
+            />
             <text
               x={xR + 4}
               y={y + 3}
