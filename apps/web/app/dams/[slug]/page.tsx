@@ -23,6 +23,7 @@ import { QualityBadge } from '../../../components/quality-badge.tsx';
 import { ReservoirGauge } from '../../../components/reservoir-gauge.tsx';
 import { SourceBadge } from '../../../components/source-badge.tsx';
 import { StorageChangeStrip } from '../../../components/storage-change-strip.tsx';
+import { flowStatus } from '../../../lib/flow-status.ts';
 import { fmtCapacityMcm, fmtDate, fmtN, fmtPct } from '../../../lib/format.ts';
 import { imageCredit } from '../../../lib/image-credit.ts';
 
@@ -218,6 +219,31 @@ export default async function DamDetail({ params }: PageProps) {
                       label="放流量"
                       value={latest.outflowM3s ? `${fmtN(latest.outflowM3s)} m³/s` : '—'}
                     />
+                    {(() => {
+                      const inN = latest.inflowM3s != null ? Number(latest.inflowM3s) : null;
+                      const outN = latest.outflowM3s != null ? Number(latest.outflowM3s) : null;
+                      const fs = flowStatus(inN, outN);
+                      if (!fs) return null;
+                      const tone =
+                        fs.tone === 'drain'
+                          ? { dot: '#f97316', text: 'text-orange-700' }
+                          : fs.tone === 'fill'
+                            ? { dot: '#1e6dff', text: 'text-blue-700' }
+                            : { dot: '#6b7280', text: 'text-on-surface-variant' };
+                      return (
+                        <div className="col-span-2">
+                          <div className="text-xs text-muted">水収支</div>
+                          <div className={`text-sm inline-flex items-center gap-1.5 ${tone.text}`}>
+                            <span
+                              aria-hidden
+                              className="w-2 h-2 rounded-full shrink-0"
+                              style={{ background: tone.dot }}
+                            />
+                            {fs.label}
+                          </div>
+                        </div>
+                      );
+                    })()}
                     {norm && Number(norm.normVolumeM3) > 0 ? (
                       <div className="col-span-2">
                         <div className="text-xs text-muted">平年比</div>
