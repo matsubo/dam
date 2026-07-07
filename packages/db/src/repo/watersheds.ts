@@ -551,17 +551,22 @@ export interface DriestWatershed {
   name: string;
   kind: 'first' | 'second' | 'other';
   rate: number;
-  realDamCount: number;
+  /** Rate-able dams that actually back this rate (fresh obs + 利水容量). */
+  observedDamCount: number;
 }
 
 /**
  * The lowest-貯水率 watersheds — for a "where is water scarce" spotlight.
  * Rate uses the same observed-cohort formula as ratesForWatersheds (fresh
- * storage ÷ fresh active capacity). Only systems with at least `minReal`
- * dams carrying a non-synthetic 30-day observation qualify, so a single
- * low reading can't crown a whole watershed "driest". Ascending by rate.
+ * storage ÷ fresh active capacity). Only systems whose rate is backed by at
+ * least `minObserved` rate-able dams qualify — a watershed rate derived from
+ * one low dam isn't representative and mustn't headline as "危機的".
+ * Ascending by rate.
  */
-export async function driestWatersheds(limit: number, minReal: number): Promise<DriestWatershed[]> {
+export async function driestWatersheds(
+  limit: number,
+  minObserved: number,
+): Promise<DriestWatershed[]> {
   return sql<DriestWatershed[]>`
     WITH ds AS (
       SELECT d.id, d.watershed_id, d.active_capacity_m3
@@ -580,6 +585,7 @@ export async function driestWatersheds(limit: number, minReal: number): Promise<
     rated AS (
       SELECT
         ds.watershed_id,
+        COUNT(latest.dam_id)::INT AS observed_count,
         LEAST(1.0,
           SUM(latest.storage_volume_m3)::FLOAT8 /
           NULLIF(SUM(ds.active_capacity_m3) FILTER (WHERE latest.dam_id IS NOT NULL), 0)::FLOAT8
@@ -587,25 +593,15 @@ export async function driestWatersheds(limit: number, minReal: number): Promise<
       FROM ds
       LEFT JOIN latest ON latest.dam_id = ds.id
       GROUP BY ds.watershed_id
-    ),
-    reals AS (
-      SELECT d.watershed_id, COUNT(DISTINCT o.dam_id)::INT AS real_count
-      FROM dams d
-      JOIN observations o ON o.dam_id = d.id
-      WHERE d.watershed_id IS NOT NULL
-        AND o.source_id <> 'synthetic'
-        AND o.observed_at > NOW() - INTERVAL '30 days'
-      GROUP BY d.watershed_id
     )
     SELECT
       w.slug, w.name, w.kind,
-      rated.rate                       AS rate,
-      COALESCE(reals.real_count, 0)    AS "realDamCount"
+      rated.rate            AS rate,
+      rated.observed_count  AS "observedDamCount"
     FROM rated
     JOIN watersheds w ON w.id = rated.watershed_id
-    LEFT JOIN reals ON reals.watershed_id = rated.watershed_id
     WHERE rated.rate IS NOT NULL
-      AND COALESCE(reals.real_count, 0) >= ${minReal}
+      AND rated.observed_count >= ${minObserved}
     ORDER BY rated.rate ASC
     LIMIT ${limit}
   `;
