@@ -1,4 +1,5 @@
 import {
+  driestWatersheds,
   listWatersheds,
   ratesForWatersheds,
   realDamCountsForWatersheds,
@@ -58,21 +59,14 @@ export default async function WatershedsPage() {
   const emptyCount = all.length - ordered.length;
   // Per-watershed 貯水率: SUM(latest storage) / SUM(active_capacity) over
   // rate-able dams in each system. Single round-trip across the visible list.
-  const [rates, realDamCounts] = await Promise.all([
+  // Water-shortage spotlight: lowest-rate systems whose rate is backed by
+  // >= 3 rate-able dams (so a single low dam can't headline a watershed).
+  // Same query the home page uses — one shared, representative definition.
+  const [rates, realDamCounts, driest] = await Promise.all([
     ratesForWatersheds(ordered.map((w) => w.id)),
     realDamCountsForWatersheds(ordered.map((w) => w.id)),
+    driestWatersheds(6, 3),
   ]);
-  // Water-shortage spotlight: the lowest-rate systems surface at the very top
-  // so an ordinary visitor sees at a glance where water is scarce. Only count
-  // systems with enough real observation to be meaningful (実測 >= 3 dams).
-  const driest = ordered
-    .map((w) => ({ w, rate: rates.get(w.id.toString()) ?? null }))
-    .filter(
-      (x): x is { w: (typeof ordered)[number]; rate: number } =>
-        x.rate != null && (realDamCounts.get(x.w.id.toString()) ?? 0) >= 3,
-    )
-    .sort((a, b) => a.rate - b.rate)
-    .slice(0, 6);
   return (
     <div className="max-w-7xl mx-auto px-5 md:px-10 py-8">
       <Breadcrumbs items={[{ label: 'ホーム', href: '/' }, { label: '水系' }]} />
@@ -90,14 +84,7 @@ export default async function WatershedsPage() {
       {/* Water-shortage spotlight — the lowest-rate systems, colour-coded. */}
       {driest.length > 0 ? (
         <div className="mb-6">
-          <WatershedSpotlight
-            items={driest.map(({ w, rate }) => ({
-              slug: w.slug,
-              name: w.name,
-              rate,
-              realDamCount: realDamCounts.get(w.id.toString()) ?? 0,
-            }))}
-          />
+          <WatershedSpotlight items={driest} />
         </div>
       ) : null}
 

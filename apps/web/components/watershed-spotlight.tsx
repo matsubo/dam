@@ -6,7 +6,8 @@ export interface SpotlightWatershed {
   slug: string;
   name: string;
   rate: number;
-  realDamCount: number;
+  /** Rate-able dams backing the rate — shown so a small sample is transparent. */
+  observedDamCount: number;
 }
 
 /**
@@ -50,7 +51,7 @@ export function WatershedSpotlight({ items }: { items: SpotlightWatershed[] }) {
                 </div>
                 <div className="text-[11px] flex items-center justify-between">
                   <span style={{ color: band.color }}>{band.label}</span>
-                  <span className="text-on-surface-variant">実測{w.realDamCount}</span>
+                  <span className="text-on-surface-variant">{w.observedDamCount}基集計</span>
                 </div>
               </Link>
             </li>

@@ -98,8 +98,8 @@ describe('driestWatersheds', () => {
     expect(li).toBeLessThan(hi);
   });
 
-  test('minReal filter excludes systems with too few observed dams', async () => {
-    // Require 4 real dams — our test systems have only 3, so neither appears.
+  test('minObserved filter excludes systems with too few rate-able dams', async () => {
+    // Require 4 rate-able dams — our systems have only 3, so neither appears.
     const rows = await driestWatersheds(50, 4);
     expect(rows.some((r) => r.slug === 'dw-low' || r.slug === 'dw-high')).toBe(false);
   });
