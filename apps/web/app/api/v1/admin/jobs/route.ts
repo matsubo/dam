@@ -98,6 +98,42 @@ export async function GET(): Promise<NextResponse> {
     FROM dams
   `;
 
+  // Coverage gaps — the hunting map for the coverage push. River-management
+  // dams (height >= 15 m) with NO real observation in 30 days, grouped two
+  // ways: by prefecture (which regional source to build/fix next) and by
+  // manager (which operator publishes data we haven't wired). Top 15 each.
+  const gapsByPref = await sql<{ pref: string; uncovered: number; total: number }[]>`
+    WITH covered AS (
+      SELECT DISTINCT dam_id FROM observations
+      WHERE observed_at > NOW() - INTERVAL '30 days' AND source_id <> 'synthetic'
+    )
+    SELECT
+      d.pref_code::text AS pref,
+      COUNT(*) FILTER (WHERE covered.dam_id IS NULL)::int AS uncovered,
+      COUNT(*)::int AS total
+    FROM dams d
+    LEFT JOIN covered ON covered.dam_id = d.id
+    WHERE d.height_m >= 15
+    GROUP BY d.pref_code
+    ORDER BY uncovered DESC
+    LIMIT 15
+  `.catch(() => [] as { pref: string; uncovered: number; total: number }[]);
+  const gapsByManager = await sql<{ manager: string; uncovered: number }[]>`
+    WITH covered AS (
+      SELECT DISTINCT dam_id FROM observations
+      WHERE observed_at > NOW() - INTERVAL '30 days' AND source_id <> 'synthetic'
+    )
+    SELECT
+      COALESCE(d.manager, '(不明)')::text AS manager,
+      COUNT(*)::int AS uncovered
+    FROM dams d
+    LEFT JOIN covered ON covered.dam_id = d.id
+    WHERE d.height_m >= 15 AND covered.dam_id IS NULL
+    GROUP BY d.manager
+    ORDER BY uncovered DESC
+    LIMIT 15
+  `.catch(() => [] as { manager: string; uncovered: number }[]);
+
   // observations.source_id is TEXT (FK to source_priorities.source_id which
   // is the table PK). Counts limited to last 30 days to keep this cheap on
   // a 6.7 M-row hypertable; total approximate count is reported separately.
@@ -193,6 +229,7 @@ export async function GET(): Promise<NextResponse> {
         last_30d_by_source: obsBySource,
       },
       obs_daily_health: obsDaily[0] ?? null,
+      coverage_gaps: { by_prefecture: gapsByPref, by_manager: gapsByManager },
       data_realness: {
         only_synthetic_seen: synthSeen && !realSeen,
         any_real_observation_in_30d: realSeen,
