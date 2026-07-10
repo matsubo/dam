@@ -28,9 +28,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const slug = decodeURIComponent(rawSlug);
   const w = await findWatershedBySlug(slug);
   if (!w) return { title: '水系が見つかりません' };
+  // Search intent is "〇〇川水系 貯水率" — lead with 水系 + 貯水率.
   return {
-    title: w.name,
-    description: `${w.name}に属するダムの一覧と貯水量集計。`,
+    title: `${w.name}水系の貯水率・ダム一覧`,
+    description: `${w.name}水系の現在の貯水率（水系合計）と、属するダムの貯水量・貯水率一覧。渇水状況の確認に。毎時間更新。`,
     alternates: { canonical: `/watersheds/${slug}` },
   };
 }
@@ -60,7 +61,7 @@ export default async function WatershedDetail({ params }: PageProps) {
       />
       <h1 className="text-3xl font-semibold mb-2 inline-flex items-center gap-2">
         <EntityIcon kind="watershed" size={28} className="text-primary shrink-0" />
-        <span>{w.name}</span>
+        <span>{w.name}水系の貯水率</span>
       </h1>
       <p className="text-muted mb-6">
         {w.kind === 'first' ? '一級水系' : w.kind === 'second' ? '二級水系' : 'その他'}

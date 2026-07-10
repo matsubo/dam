@@ -31,7 +31,7 @@ import { fmtCapacityMcm } from '../lib/format.ts';
 // shared across requests at runtime.
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
-  title: { absolute: 'Dam Data Platform — 日本のダム貯水量' },
+  title: { absolute: '日本のダム貯水率・貯水量マップ — Dam Data Platform' },
   description: '日本全国のダム諸元と貯水量履歴。長期トレンドを 1 時間〜月次の粒度で参照。',
   alternates: { canonical: '/' },
 };

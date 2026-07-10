@@ -23,6 +23,7 @@ import { QualityBadge } from '../../../components/quality-badge.tsx';
 import { ReservoirGauge } from '../../../components/reservoir-gauge.tsx';
 import { SourceBadge } from '../../../components/source-badge.tsx';
 import { StorageChangeStrip } from '../../../components/storage-change-strip.tsx';
+import { damDisplayName } from '../../../lib/dam-name.ts';
 import { flowStatus } from '../../../lib/flow-status.ts';
 import { fmtCapacityMcm, fmtDate, fmtN, fmtPct } from '../../../lib/format.ts';
 import { imageCredit } from '../../../lib/image-credit.ts';
@@ -42,11 +43,18 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const slug = decodeURIComponent(rawSlug);
   const d = await findDamBySlug(slug);
   if (!d) return { title: 'ダムが見つかりません' };
+  // Search intent is "〇〇ダム 貯水率" — the display name carries the ダム
+  // suffix and the title/description lead with 貯水率.
+  const dn = damDisplayName(d.name);
+  const pref = PREF_NAME.get(d.prefCode) ?? d.prefCode;
   return {
-    title: `${d.name}（${PREF_NAME.get(d.prefCode) ?? d.prefCode}）`,
-    description: `${d.name}の貯水量・流入量・放流量の最新データと推移。${d.manager ?? ''}が管理。`,
+    title: `${dn}の貯水率・貯水量（${pref}）`,
+    description: `${dn}（${pref}）の現在の貯水率・貯水量・流入量・放流量と推移グラフ。${d.manager ? `${d.manager}が管理。` : ''}1時間ごとに更新。`,
     alternates: { canonical: `/dams/${slug}` },
-    openGraph: { title: d.name, description: `${d.manager ?? ''}が管理するダム` },
+    openGraph: {
+      title: `${dn}の貯水率・貯水量`,
+      description: `${dn}（${pref}）の現在の貯水率と貯水量の推移`,
+    },
   };
 }
 
@@ -55,6 +63,7 @@ export default async function DamDetail({ params }: PageProps) {
   const slug = decodeURIComponent(rawSlug);
   const d = await findDamBySlug(slug);
   if (!d) notFound();
+  const dn = damDisplayName(d.name);
   const [latest, change, nearby, watershed, watershedDams, norm] = await Promise.all([
     latestObservation(d.id),
     storageChange(d.id),
@@ -76,7 +85,8 @@ export default async function DamDetail({ params }: PageProps) {
   const ld = {
     '@context': 'https://schema.org',
     '@type': 'Place',
-    name: d.name,
+    name: dn,
+    alternateName: d.name,
     geo: { '@type': 'GeoCoordinates', latitude: d.lat, longitude: d.lng },
     address: {
       '@type': 'PostalAddress',
@@ -131,7 +141,7 @@ export default async function DamDetail({ params }: PageProps) {
         ) : null}
         <h1 className="text-3xl font-semibold inline-flex items-center gap-2">
           <EntityIcon kind="dam" size={28} className="text-primary shrink-0" />
-          <span>{d.name}</span>
+          <span>{dn}の貯水率・貯水量</span>
         </h1>
       </div>
       <p className="text-muted mb-6">
