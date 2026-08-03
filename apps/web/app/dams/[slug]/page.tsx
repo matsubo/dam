@@ -203,12 +203,17 @@ export default async function DamDetail({ params }: PageProps) {
           </p>
         ) : latest ? (
           (() => {
-            // Denominator policy: 利水容量 only. When the dam has no
-            // active capacity (~51% of all dams — Damnet doesn't list
-            // them), the rate isn't shown rather than mislabelling a
-            // total-capacity ratio (which is what observations.storage_rate
-            // typically stores upstream) as 貯水率.
-            const cap = d.activeCapacityM3 ? Number(d.activeCapacityM3) : null;
+            // Denominator policy: 利水容量 only — never mislabel a
+            // total-capacity ratio as 貯水率. Prefer
+            // latest.effectiveActiveCapacityM3 over the dam's static
+            // activeCapacityM3: for sources in source_priorities.trusted_rate_basis,
+            // it's back-solved from that source's own season-aware 利水容量
+            // rate (see issue #17 — 八田原ダム's static Damnet capacity omits
+            // the much smaller 洪水期 figure); otherwise it's the same static
+            // value as before.
+            const cap = latest.effectiveActiveCapacityM3
+              ? Number(latest.effectiveActiveCapacityM3)
+              : null;
             const vol = latest.storageVolumeM3 ? Number(latest.storageVolumeM3) : null;
             const rate = cap && cap > 0 && vol != null ? Math.min(1, vol / cap) : null;
             return (
@@ -406,7 +411,9 @@ export default async function DamDetail({ params }: PageProps) {
               const km = n.distanceM / 1000;
               const distLabel = km >= 10 ? `${km.toFixed(1)} km` : `${km.toFixed(2)} km`;
               const bearing = bearingFromRadians(n.bearingRad);
-              const activeCap = n.activeCapacityM3 ? Number(n.activeCapacityM3) : null;
+              const activeCap = n.effectiveActiveCapacityM3
+                ? Number(n.effectiveActiveCapacityM3)
+                : null;
               const latest = n.latestStorageM3 ? Number(n.latestStorageM3) : null;
               const rate =
                 latest != null && activeCap != null && activeCap > 0

@@ -167,7 +167,13 @@ export interface WatershedAggregate {
    * without (fresh) data can't deflate the rate.
    */
   observedDamCount: number;
-  /** Sum of 利水容量 over the observed cohort only — the rate denominator. */
+  /**
+   * Sum of 利水容量 over the observed cohort only — the rate denominator. Per
+   * dam this is the static active_capacity_m3, UNLESS that dam's latest
+   * observation came from a source_priorities.trusted_rate_basis source with
+   * its own storage_rate, in which case it's back-solved (volume/rate) from
+   * that trusted, season-aware rate instead. See issue #17.
+   */
   observedActiveCapacityM3: string | null;
   observedAt: Date | null;
   /** How many of the watershed's dams have at least one non-synthetic observation in the last 30 days. */
@@ -432,9 +438,13 @@ export async function aggregateWatershed(watershedId: bigint): Promise<Watershed
     latest AS (
       SELECT DISTINCT ON (o.dam_id)
              o.dam_id, o.observed_at, o.storage_volume_m3,
-             ds_rateable.active_capacity_m3
+             effective_active_capacity_m3(
+               ds_rateable.active_capacity_m3, o.storage_volume_m3, o.storage_rate,
+               COALESCE(sp.trusted_rate_basis, false)
+             ) AS active_capacity_m3
       FROM observations o
       JOIN ds_rateable ON ds_rateable.id = o.dam_id
+      LEFT JOIN source_priorities sp ON sp.source_id = o.source_id
       WHERE o.storage_volume_m3 IS NOT NULL
         AND o.observed_at > NOW() - make_interval(days => ${RATE_FRESHNESS_DAYS})
       ORDER BY o.dam_id, o.observed_at DESC
@@ -494,26 +504,38 @@ export async function ratesForWatersheds(
     ),
     latest AS (
       SELECT DISTINCT ON (o.dam_id)
-             o.dam_id, o.storage_volume_m3
+             o.dam_id, o.storage_volume_m3, o.storage_rate, o.source_id
       FROM observations o
       JOIN ds ON ds.id = o.dam_id
       WHERE o.storage_volume_m3 IS NOT NULL
         AND o.observed_at > NOW() - make_interval(days => ${RATE_FRESHNESS_DAYS})
       ORDER BY o.dam_id, o.observed_at DESC
+    ),
+    per_dam AS (
+      SELECT
+        ds.watershed_id,
+        latest.dam_id,
+        latest.storage_volume_m3,
+        effective_active_capacity_m3(
+          ds.active_capacity_m3, latest.storage_volume_m3, latest.storage_rate,
+          COALESCE(sp.trusted_rate_basis, false)
+        ) AS eff_cap
+      FROM ds
+      LEFT JOIN latest ON latest.dam_id = ds.id
+      LEFT JOIN source_priorities sp ON sp.source_id = latest.source_id
     )
     SELECT
-      ds.watershed_id::TEXT AS "watershedId",
+      per_dam.watershed_id::TEXT AS "watershedId",
       CASE
-        WHEN SUM(ds.active_capacity_m3) FILTER (WHERE latest.dam_id IS NOT NULL) > 0
+        WHEN SUM(per_dam.eff_cap) FILTER (WHERE per_dam.dam_id IS NOT NULL) > 0
         THEN LEAST(1.0,
-          SUM(latest.storage_volume_m3)::FLOAT8 /
-          SUM(ds.active_capacity_m3) FILTER (WHERE latest.dam_id IS NOT NULL)::FLOAT8
+          SUM(per_dam.storage_volume_m3)::FLOAT8 /
+          SUM(per_dam.eff_cap) FILTER (WHERE per_dam.dam_id IS NOT NULL)::FLOAT8
         )
         ELSE NULL
       END AS rate
-    FROM ds
-    LEFT JOIN latest ON latest.dam_id = ds.id
-    GROUP BY ds.watershed_id
+    FROM per_dam
+    GROUP BY per_dam.watershed_id
   `;
   const m = new Map<string, number | null>();
   for (const r of rows) m.set(r.watershedId, r.rate);
@@ -575,24 +597,36 @@ export async function driestWatersheds(
         AND d.active_capacity_m3 IS NOT NULL
     ),
     latest AS (
-      SELECT DISTINCT ON (o.dam_id) o.dam_id, o.storage_volume_m3
+      SELECT DISTINCT ON (o.dam_id) o.dam_id, o.storage_volume_m3, o.storage_rate, o.source_id
       FROM observations o
       JOIN ds ON ds.id = o.dam_id
       WHERE o.storage_volume_m3 IS NOT NULL
         AND o.observed_at > NOW() - make_interval(days => ${RATE_FRESHNESS_DAYS})
       ORDER BY o.dam_id, o.observed_at DESC
     ),
-    rated AS (
+    per_dam AS (
       SELECT
         ds.watershed_id,
-        COUNT(latest.dam_id)::INT AS observed_count,
-        LEAST(1.0,
-          SUM(latest.storage_volume_m3)::FLOAT8 /
-          NULLIF(SUM(ds.active_capacity_m3) FILTER (WHERE latest.dam_id IS NOT NULL), 0)::FLOAT8
-        ) AS rate
+        latest.dam_id,
+        latest.storage_volume_m3,
+        effective_active_capacity_m3(
+          ds.active_capacity_m3, latest.storage_volume_m3, latest.storage_rate,
+          COALESCE(sp.trusted_rate_basis, false)
+        ) AS eff_cap
       FROM ds
       LEFT JOIN latest ON latest.dam_id = ds.id
-      GROUP BY ds.watershed_id
+      LEFT JOIN source_priorities sp ON sp.source_id = latest.source_id
+    ),
+    rated AS (
+      SELECT
+        watershed_id,
+        COUNT(dam_id)::INT AS observed_count,
+        LEAST(1.0,
+          SUM(storage_volume_m3)::FLOAT8 /
+          NULLIF(SUM(eff_cap) FILTER (WHERE dam_id IS NOT NULL), 0)::FLOAT8
+        ) AS rate
+      FROM per_dam
+      GROUP BY watershed_id
     )
     SELECT
       w.slug, w.name, w.kind,
