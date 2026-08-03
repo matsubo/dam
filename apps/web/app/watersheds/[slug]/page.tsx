@@ -104,6 +104,15 @@ export default async function WatershedDetail({ params }: PageProps) {
                 {...(agg.observedAt ? { sub: fmtDate(agg.observedAt) } : {})}
               />
               <Stat
+                label="利水容量"
+                value={fmtCapacityMcm(agg.observedActiveCapacityM3)}
+                sub={
+                  agg.observedDamCount > 0
+                    ? `実測${agg.observedDamCount}基の合計（貯水率の分母）`
+                    : '実測なし'
+                }
+              />
+              <Stat
                 label="貯水率"
                 value={fmtPct(rate)}
                 sub={
