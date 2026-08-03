@@ -73,7 +73,8 @@ describe('parseKochiTable', () => {
   test('和食ダム: all fields parsed correctly', () => {
     const r = parseKochiTable(SAMPLE_HTML).find((x) => x.kochiName === '和食ダム');
     expect(r).toBeDefined();
-    expect(r?.storageRate).toBeCloseTo(0.463);
+    // 利水容量ベース column [7] = 97.30, not 有効容量ベース column [6] = 46.30.
+    expect(r?.storageRate).toBeCloseTo(0.973);
     expect(r?.storageVolumeM3).toBeCloseTo(374_000);
     expect(r?.waterLevelM).toBeCloseTo(87.72);
     expect(r?.inflowM3s).toBeCloseTo(0.163);
@@ -83,7 +84,8 @@ describe('parseKochiTable', () => {
   test('早明浦ダム: large storage volume parsed correctly', () => {
     const r = parseKochiTable(SAMPLE_HTML).find((x) => x.kochiName === '早明浦ダム');
     expect(r).toBeDefined();
-    expect(r?.storageRate).toBeCloseTo(0.672);
+    // 利水容量ベース column [7] = 100.00, not 有効容量ベース column [6] = 67.20.
+    expect(r?.storageRate).toBeCloseTo(1.0);
     expect(r?.storageVolumeM3).toBeCloseTo(194_160_000);
     expect(r?.waterLevelM).toBeCloseTo(328.87);
     expect(r?.inflowM3s).toBeCloseTo(78.94);
@@ -91,7 +93,8 @@ describe('parseKochiTable', () => {
   });
 
   test('storageRate clamped to [0, 1]', () => {
-    const html = SAMPLE_HTML.replace('46.30', '105.00');
+    // 97.30 is 和食ダム's 利水容量ベース column [7] — the one actually used.
+    const html = SAMPLE_HTML.replace('97.30', '105.00');
     const rows = parseKochiTable(html);
     const r = rows.find((x) => x.kochiName === '和食ダム');
     expect(r?.storageRate).toBe(1);

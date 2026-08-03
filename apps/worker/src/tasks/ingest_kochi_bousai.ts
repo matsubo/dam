@@ -16,8 +16,8 @@
 //   [3]  フリガナ
 //   [4]  所在地
 //   [5]  最新観測時刻  "YYYY/MM/DD HH:MM" JST
-//   [6]  貯水率[%]   (有効容量ベース)  → storageRate ÷ 100
-//   [7]  貯水率[%]   (利水容量ベース)  (unused)
+//   [6]  貯水率[%]   (有効容量ベース)  fallback if [7] missing
+//   [7]  貯水率[%]   (利水容量ベース)  → storageRate ÷ 100 (preferred)
 //   [8]  貯水位[m]
 //   [9]  貯水量[10³m³]                 → storageVolumeM3 × 1000
 //   [10] 流入量[m³/s]
@@ -93,7 +93,12 @@ export function parseKochiTable(html: string): ParsedRow[] {
     const ts = cleanCell(rawCells[5] ?? '');
     const observedAt = parseKochiTimestamp(ts);
 
-    const ratePct = parseNum(cleanCell(rawCells[6] ?? ''));
+    // Prefer 利水容量ベース [7] over 有効容量ベース [6] so this matches the
+    // site's own 貯水率 definition (storage_volume_m3/active_capacity_m3,
+    // 利水容量) — the two can diverge sharply for flood-control dams during
+    // 洪水期 (see issue #17). Fall back to [6] if [7] is unavailable.
+    const ratePct =
+      parseNum(cleanCell(rawCells[7] ?? '')) ?? parseNum(cleanCell(rawCells[6] ?? ''));
     const volRaw = parseNum(cleanCell(rawCells[9] ?? ''));
 
     rows.push({

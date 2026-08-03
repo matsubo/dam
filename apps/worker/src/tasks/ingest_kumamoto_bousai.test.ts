@@ -59,7 +59,8 @@ describe('parseDspDatEntry', () => {
     expect(row?.outflowM3s).toBeCloseTo(19.6);
     // 19793 × 1000 = 19,793,000 m³
     expect(row?.storageVolumeM3).toBe(19_793_000);
-    expect(row?.storageRate).toBeCloseTo(0.5645);
+    // field[10] 貯水率(利水容量) = 68.73, not field[9] 貯水率(有効容量) = 56.45.
+    expect(row?.storageRate).toBeCloseTo(0.6873);
   });
 
   test('strips ↑↓→ arrow indicators from numeric fields', () => {
@@ -102,7 +103,8 @@ describe('parseDspDatEntry', () => {
     const row = parseDspDatEntry(withZero);
     expect(row?.kumamotoName).toBe('石打ダム');
     expect(row?.storageVolumeM3).toBe(234_000);
-    expect(row?.storageRate).toBeCloseTo(0.207);
+    // field[10] 貯水率(利水容量) = 44.30, not field[9] 貯水率(有効容量) = 20.70.
+    expect(row?.storageRate).toBeCloseTo(0.443);
   });
 });
 
@@ -147,6 +149,7 @@ describe('parseKumamotoPage', () => {
     const html = makePage([HIKAWA_ENTRY]);
     const rows = parseKumamotoPage(html);
     expect(rows[0]?.storageVolumeM3).toBe(1_310_000);
-    expect(rows[0]?.storageRate).toBeCloseTo(0.222);
+    // field[10] 貯水率(利水容量) = 93.57, not field[9] 貯水率(有効容量) = 22.20.
+    expect(rows[0]?.storageRate).toBeCloseTo(0.9357);
   });
 });
