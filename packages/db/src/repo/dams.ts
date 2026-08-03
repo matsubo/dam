@@ -446,23 +446,38 @@ export interface LatestObservation {
   rainfallMm: string | null;
   qualityFlag: number;
   sourceId: string;
+  /**
+   * 利水容量 to use as the 貯水率 denominator for THIS observation: the dam's
+   * static active_capacity_m3, unless this row's source_id is a
+   * trusted_rate_basis source with its own storage_rate, in which case it's
+   * back-solved (volume/rate) from that trusted, season-aware rate. See
+   * issue #17 — dams like 八田原ダム operate under a much smaller 洪水期
+   * capacity than the static Damnet figure.
+   */
+  effectiveActiveCapacityM3: string | null;
 }
 
 export async function latestObservation(damId: bigint): Promise<LatestObservation | null> {
   const rows = await sql<LatestObservation[]>`
     SELECT
-      observed_at AS "observedAt",
-      storage_volume_m3::TEXT AS "storageVolumeM3",
-      storage_rate::TEXT AS "storageRate",
-      inflow_m3s::TEXT AS "inflowM3s",
-      outflow_m3s::TEXT AS "outflowM3s",
-      water_level_m::TEXT AS "waterLevelM",
-      rainfall_mm::TEXT AS "rainfallMm",
-      quality_flag AS "qualityFlag",
-      source_id AS "sourceId"
-    FROM observations
-    WHERE dam_id = ${damId}
-    ORDER BY observed_at DESC
+      o.observed_at AS "observedAt",
+      o.storage_volume_m3::TEXT AS "storageVolumeM3",
+      o.storage_rate::TEXT AS "storageRate",
+      o.inflow_m3s::TEXT AS "inflowM3s",
+      o.outflow_m3s::TEXT AS "outflowM3s",
+      o.water_level_m::TEXT AS "waterLevelM",
+      o.rainfall_mm::TEXT AS "rainfallMm",
+      o.quality_flag AS "qualityFlag",
+      o.source_id AS "sourceId",
+      effective_active_capacity_m3(
+        d.active_capacity_m3, o.storage_volume_m3, o.storage_rate,
+        COALESCE(sp.trusted_rate_basis, false)
+      )::TEXT AS "effectiveActiveCapacityM3"
+    FROM observations o
+    JOIN dams d ON d.id = o.dam_id
+    LEFT JOIN source_priorities sp ON sp.source_id = o.source_id
+    WHERE o.dam_id = ${damId}
+    ORDER BY o.observed_at DESC
     LIMIT 1
   `;
   return rows[0] ?? null;
@@ -654,6 +669,9 @@ export interface NearbyDam extends DamListItem {
   activeCapacityM3: string | null;
   /** Latest storage_volume_m3 across any source. NULL when no observations exist. */
   latestStorageM3: string | null;
+  /** Same denominator as LatestObservation.effectiveActiveCapacityM3 — prefers
+   *  a trusted, season-aware native rate over the static activeCapacityM3. */
+  effectiveActiveCapacityM3: string | null;
 }
 
 export async function nearbyDams(
@@ -670,17 +688,22 @@ export async function nearbyDams(
       ST_Y(d2.location::geometry) AS lat, ST_X(d2.location::geometry) AS lng,
       ST_Distance(d.location, d2.location)::FLOAT8                    AS "distanceM",
       ST_Azimuth(d.location::geometry, d2.location::geometry)::FLOAT8 AS "bearingRad",
-      latest.storage_volume_m3::TEXT AS "latestStorageM3"
+      latest.storage_volume_m3::TEXT AS "latestStorageM3",
+      effective_active_capacity_m3(
+        d2.active_capacity_m3, latest.storage_volume_m3, latest.storage_rate,
+        COALESCE(sp.trusted_rate_basis, false)
+      )::TEXT AS "effectiveActiveCapacityM3"
     FROM dams d
     JOIN dams d2 ON d2.id <> d.id AND ST_DWithin(d.location, d2.location, ${radiusM})
     LEFT JOIN watersheds w ON w.id = d2.watershed_id
     LEFT JOIN LATERAL (
-      SELECT o.storage_volume_m3
+      SELECT o.storage_volume_m3, o.storage_rate, o.source_id
       FROM observations o
       WHERE o.dam_id = d2.id AND o.storage_volume_m3 IS NOT NULL
       ORDER BY o.observed_at DESC
       LIMIT 1
     ) latest ON TRUE
+    LEFT JOIN source_priorities sp ON sp.source_id = latest.source_id
     WHERE d.id = ${damId}
     ORDER BY d.location <-> d2.location
     LIMIT ${limit}
@@ -710,19 +733,26 @@ export async function latestRateAndSourceByDam(
     SELECT
       d.id::TEXT AS "damId",
       CASE
-        WHEN d.active_capacity_m3 IS NULL OR d.active_capacity_m3 <= 0 THEN NULL
+        WHEN eff_cap.value IS NULL OR eff_cap.value <= 0 THEN NULL
         WHEN latest.storage_volume_m3 IS NULL THEN NULL
-        ELSE LEAST(1.0, latest.storage_volume_m3::FLOAT8 / d.active_capacity_m3::FLOAT8)
+        ELSE LEAST(1.0, latest.storage_volume_m3::FLOAT8 / eff_cap.value::FLOAT8)
       END               AS rate,
       real_src.source_id AS "realSourceId"
     FROM dams d
     LEFT JOIN LATERAL (
-      SELECT o.storage_volume_m3
+      SELECT o.storage_volume_m3, o.storage_rate, o.source_id
       FROM observations o
       WHERE o.dam_id = d.id AND o.storage_volume_m3 IS NOT NULL
       ORDER BY o.observed_at DESC
       LIMIT 1
     ) latest ON TRUE
+    LEFT JOIN source_priorities sp ON sp.source_id = latest.source_id
+    LEFT JOIN LATERAL (
+      SELECT effective_active_capacity_m3(
+        d.active_capacity_m3, latest.storage_volume_m3, latest.storage_rate,
+        COALESCE(sp.trusted_rate_basis, false)
+      ) AS value
+    ) eff_cap ON TRUE
     LEFT JOIN LATERAL (
       SELECT o.source_id
       FROM observations o
@@ -746,18 +776,25 @@ export async function latestRateByDam(damIds: bigint[]): Promise<Map<string, num
     SELECT
       d.id::TEXT AS "damId",
       CASE
-        WHEN d.active_capacity_m3 IS NULL OR d.active_capacity_m3 <= 0 THEN NULL
+        WHEN eff_cap.value IS NULL OR eff_cap.value <= 0 THEN NULL
         WHEN latest.storage_volume_m3 IS NULL THEN NULL
-        ELSE LEAST(1.0, latest.storage_volume_m3::FLOAT8 / d.active_capacity_m3::FLOAT8)
+        ELSE LEAST(1.0, latest.storage_volume_m3::FLOAT8 / eff_cap.value::FLOAT8)
       END AS rate
     FROM dams d
     LEFT JOIN LATERAL (
-      SELECT o.storage_volume_m3
+      SELECT o.storage_volume_m3, o.storage_rate, o.source_id
       FROM observations o
       WHERE o.dam_id = d.id AND o.storage_volume_m3 IS NOT NULL
       ORDER BY o.observed_at DESC
       LIMIT 1
     ) latest ON TRUE
+    LEFT JOIN source_priorities sp ON sp.source_id = latest.source_id
+    LEFT JOIN LATERAL (
+      SELECT effective_active_capacity_m3(
+        d.active_capacity_m3, latest.storage_volume_m3, latest.storage_rate,
+        COALESCE(sp.trusted_rate_basis, false)
+      ) AS value
+    ) eff_cap ON TRUE
     WHERE d.id::TEXT = ANY(${ids}::TEXT[])
   `;
   const m = new Map<string, number | null>();
