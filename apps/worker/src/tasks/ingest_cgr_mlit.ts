@@ -191,8 +191,13 @@ const task: Task = async (_payload, helpers) => {
     const inflowM3s = parseNum(data.ryunyu[id]);
     const outflowM3s = parseNum(data.houryu[id]);
     const waterLevelM = parseNum(data.chosuii[id]);
-    // chisui is 有効容量 (effective) — closest analogue to standard "貯水率".
-    const rate = parseNum(data.chisui[id]);
+    // risui is 貯水率(利水容量) — matches this site's own 貯水率 definition
+    // (storage_volume_m3 / active_capacity_m3, 利水容量). Falls back to chisui
+    // (貯水率(有効容量)) only for dams that don't report a 利水容量 figure.
+    // Previously this always read chisui, which understates dams whose
+    // 利水容量 is much smaller than their 有効貯水容量 during flood season
+    // (e.g. 八田原ダム: chisui≈39%, risui≈97% — see issue #17).
+    const rate = parseNum(data.risui[id]) ?? parseNum(data.chisui[id]);
     const storageRate = rate != null ? rate / 100 : null;
     const rainfallMm = parseNum(data.uryou[id]);
     if (inflowM3s == null && outflowM3s == null && waterLevelM == null && storageRate == null) {

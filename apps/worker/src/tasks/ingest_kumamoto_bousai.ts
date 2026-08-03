@@ -10,7 +10,14 @@
 //   Fields: name(HTML) / river / datetime(YYYY/MM/DD HH:MM JST) / 貯水位(m) /
 //           全流入量(m³/s) / 全放流量(m³/s) / 有効貯水量(10³m³) / 利水量(10³m³) /
 //           治水量(10³m³) / 貯水率(有効容量)(%) / 貯水率(利水容量)(%) / 貯水率(治水容量)(%)
-// We store: waterLevelM, inflowM3s, outflowM3s, 有効貯水量×1000→m³, 貯水率(有効容量).
+// We store: waterLevelM, inflowM3s, outflowM3s, 有効貯水量×1000→m³, 貯水率(利水容量).
+// storageRate prefers 貯水率(利水容量) over 貯水率(有効容量) so it matches this
+// site's own 貯水率 definition (storage_volume_m3/active_capacity_m3, 利水容量);
+// both rate columns share the same numerator (有効貯水量) so pairing either
+// with storageVolumeM3 stays dimensionally consistent. See issue #17 — some
+// of these dams' 有効容量-based and 利水容量-based rates diverge sharply
+// (e.g. 氷川ダム: 22% vs 94%), the same static-vs-seasonal-capacity mismatch
+// found for 八田原ダム.
 // Priority 308.
 
 import { sql } from '@dam/db/client';
@@ -96,7 +103,7 @@ export function parseDspDatEntry(raw: string): ParsedRow | null {
     outflowM3s: parseNum(fields[5] ?? ''),
     storageVolumeM3: effectiveKm3 !== null ? effectiveKm3 * 1_000 : null,
     storageRate: (() => {
-      const r = parseNum(fields[9] ?? '');
+      const r = parseNum(fields[10] ?? '') ?? parseNum(fields[9] ?? '');
       return r !== null ? r / 100 : null;
     })(),
   };
