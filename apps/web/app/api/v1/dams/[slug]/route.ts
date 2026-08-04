@@ -17,6 +17,7 @@ interface DamPublicViewInput {
   prefCode: string;
   manager: string | null;
   totalCapacityM3: string | null;
+  activeCapacityM3: string | null;
   lat: number;
   lng: number;
   watershedSlug: string | null;
@@ -31,6 +32,7 @@ function damPublicView(d: DamPublicViewInput) {
     prefCode: d.prefCode,
     manager: d.manager,
     totalCapacityM3: d.totalCapacityM3,
+    activeCapacityM3: d.activeCapacityM3,
     location: { lat: d.lat, lng: d.lng },
     watershed: d.watershedSlug ? { slug: d.watershedSlug, name: d.watershedName } : null,
   };

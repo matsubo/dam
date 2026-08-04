@@ -381,6 +381,9 @@ export default async function DamDetail({ params }: PageProps) {
               {watershedAgg?.totalCapacityM3
                 ? ` · 総貯水容量 ${fmtCapacityMcm(watershedAgg.totalCapacityM3)}`
                 : ''}
+              {watershedAgg?.activeCapacityM3
+                ? ` · 利水容量 ${fmtCapacityMcm(watershedAgg.activeCapacityM3)}`
+                : ''}
             </span>
           </header>
           {otherInWatershed.length > 0 ? (
@@ -456,6 +459,12 @@ export default async function DamDetail({ params }: PageProps) {
                     総貯水容量{' '}
                     <span className="text-on-surface tabular-nums">
                       {fmtCapacityMcm(n.totalCapacityM3)}
+                    </span>
+                  </div>
+                  <div className="text-xs text-on-surface-variant">
+                    利水容量{' '}
+                    <span className="text-on-surface tabular-nums">
+                      {fmtCapacityMcm(n.activeCapacityM3)}
                     </span>
                   </div>
                 </li>

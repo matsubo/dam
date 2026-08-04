@@ -39,11 +39,13 @@ interface SizeBucket {
   bucket: string;
   damCount: number;
   totalCapacityM3: string | null;
+  activeCapacityM3: string | null;
 }
 interface YearRow {
   decade: number;
   damCount: number;
   totalCapacityM3: string | null;
+  activeCapacityM3: string | null;
 }
 interface Headline {
   damCount: bigint;
@@ -148,7 +150,8 @@ async function loadStats() {
           ELSE '10万 m³ 未満'
         END                                AS bucket,
         COUNT(*)::INT                      AS "damCount",
-        SUM(total_capacity_m3)::TEXT       AS "totalCapacityM3"
+        SUM(total_capacity_m3)::TEXT       AS "totalCapacityM3",
+        SUM(active_capacity_m3)::TEXT      AS "activeCapacityM3"
       FROM dams
       GROUP BY bucket
       ORDER BY MAX(COALESCE(total_capacity_m3, 0)) DESC
@@ -157,7 +160,8 @@ async function loadStats() {
       SELECT
         (FLOOR(completed_year / 10) * 10)::INT AS decade,
         COUNT(*)::INT                          AS "damCount",
-        SUM(total_capacity_m3)::TEXT           AS "totalCapacityM3"
+        SUM(total_capacity_m3)::TEXT           AS "totalCapacityM3",
+        SUM(active_capacity_m3)::TEXT          AS "activeCapacityM3"
       FROM dams
       WHERE completed_year IS NOT NULL
       GROUP BY decade
@@ -200,6 +204,7 @@ export default async function StatsPage() {
         <Stat label="観測レコード総数" value={fmt(headline.obsTotal)} />
         <Stat label="直近24時間の観測" value={fmt(headline.obsLast24h)} />
         <Stat label="全国合計貯水容量" value={fmtCapacityMcm(headline.totalCapacityM3)} />
+        <Stat label="全国合計利水容量" value={fmtCapacityMcm(headline.activeCapacityM3)} />
         <Stat label="現在の合計貯水量" value={fmtCapacityMcm(headline.totalStorageM3)} />
         <Stat
           label="全国貯水率"
@@ -226,6 +231,7 @@ export default async function StatsPage() {
             <th>都道府県</th>
             <th>ダム数</th>
             <th>総貯水容量</th>
+            <th>利水容量</th>
             <th>現在貯水量</th>
             <th>貯水率</th>
           </tr>
@@ -241,6 +247,7 @@ export default async function StatsPage() {
               </td>
               <td className="tabular-nums">{fmt(p.damCount)}</td>
               <td className="tabular-nums">{fmtCapacityMcm(p.totalCapacityM3)}</td>
+              <td className="tabular-nums">{fmtCapacityMcm(p.activeCapacityM3)}</td>
               <td className="tabular-nums">{fmtCapacityMcm(p.storageM3)}</td>
               <td className="tabular-nums">
                 {pct(p.rateableStorageM3, p.activeCapacityM3)}
@@ -263,6 +270,7 @@ export default async function StatsPage() {
             <th>水系</th>
             <th>ダム数</th>
             <th>総貯水容量</th>
+            <th>利水容量</th>
             <th>現在貯水量</th>
             <th>貯水率</th>
           </tr>
@@ -276,6 +284,7 @@ export default async function StatsPage() {
               </td>
               <td className="tabular-nums">{fmt(w.damCount)}</td>
               <td className="tabular-nums">{fmtCapacityMcm(w.totalCapacityM3)}</td>
+              <td className="tabular-nums">{fmtCapacityMcm(w.activeCapacityM3)}</td>
               <td className="tabular-nums">{fmtCapacityMcm(w.storageM3)}</td>
               <td className="tabular-nums">
                 {pct(w.rateableStorageM3, w.activeCapacityM3)}
@@ -296,7 +305,8 @@ export default async function StatsPage() {
           <tr>
             <th>容量レンジ</th>
             <th>ダム数</th>
-            <th>合計容量</th>
+            <th>合計総貯水容量</th>
+            <th>合計利水容量</th>
           </tr>
         </thead>
         <tbody>
@@ -305,6 +315,7 @@ export default async function StatsPage() {
               <td>{b.bucket}</td>
               <td className="tabular-nums">{fmt(b.damCount)}</td>
               <td className="tabular-nums">{fmtCapacityMcm(b.totalCapacityM3)}</td>
+              <td className="tabular-nums">{fmtCapacityMcm(b.activeCapacityM3)}</td>
             </tr>
           ))}
         </tbody>
@@ -316,7 +327,8 @@ export default async function StatsPage() {
           <tr>
             <th>年代</th>
             <th>ダム数</th>
-            <th>合計容量</th>
+            <th>合計総貯水容量</th>
+            <th>合計利水容量</th>
           </tr>
         </thead>
         <tbody>
@@ -325,6 +337,7 @@ export default async function StatsPage() {
               <td>{y.decade}〜</td>
               <td className="tabular-nums">{fmt(y.damCount)}</td>
               <td className="tabular-nums">{fmtCapacityMcm(y.totalCapacityM3)}</td>
+              <td className="tabular-nums">{fmtCapacityMcm(y.activeCapacityM3)}</td>
             </tr>
           ))}
         </tbody>

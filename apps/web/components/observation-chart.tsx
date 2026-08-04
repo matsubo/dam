@@ -37,6 +37,7 @@ export function ObservationChart({
   kind = 'dam',
 }: {
   slug: string;
+  /** 利水容量 — used for both the 貯水率 line and the reference markLine. */
   capacityM3?: number | null;
   // Default 'dam' so existing dam-detail pages keep working unchanged.
   kind?: 'dam' | 'watershed';
@@ -177,7 +178,8 @@ export function ObservationChart({
               symbol: 'none',
               lineStyle: { type: 'dashed', color: '#dc2626', width: 1 },
               label: {
-                formatter: `総貯水容量 ${fmtVolume(capacityM3)}`,
+                // Both callers pass 利水容量 (active_capacity_m3), not 総貯水容量.
+                formatter: `利水容量 ${fmtVolume(capacityM3)}`,
                 position: 'insideEndTop' as const,
                 color: '#dc2626',
               },
