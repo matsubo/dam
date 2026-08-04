@@ -582,6 +582,11 @@ export default async function Home() {
               sub="登録ダム合計(総容量)"
             />
             <Stat
+              label="全国合計利水容量"
+              value={fmtCapacityMcm(s.activeCapacityM3)}
+              sub="貯水率の分母(利水容量データあり)"
+            />
+            <Stat
               label="現在の合計貯水量"
               value={fmtCapacityMcm(s.rateableStorageM3)}
               sub={`直近 7 日 · ${fmt(s.observedDamCount)} 基`}

@@ -126,6 +126,9 @@ export default async function SearchPage({
                       </div>
                       <div className="text-sm tabular-nums">
                         {fmtCapacityMcm(d.totalCapacityM3)}
+                        <span className="text-on-surface-variant text-xs ml-1">
+                          (利水 {fmtCapacityMcm(d.activeCapacityM3)})
+                        </span>
                       </div>
                     </Link>
                   </li>

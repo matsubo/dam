@@ -9,6 +9,8 @@ export interface MapPoint {
   lat: number;
   lng: number;
   capacityM3?: number | null;
+  /** 利水容量 — the 貯水率 denominator. */
+  activeCapacityM3?: number | null;
   storageRate?: number | null;
 }
 
@@ -22,6 +24,15 @@ function rateColor(rate: number | null | undefined): string {
   const t = Math.max(0, Math.min(1, rate));
   const hue = Math.round(t * 220); // 0 (red) → 220 (blue)
   return `hsl(${hue}, 78%, 48%)`;
+}
+
+// "1.23 億 m³" / "45 万 m³" / "—" — shared by the capacity + active-capacity
+// popup lines.
+function fmtManM3(m3: number | null | undefined): string {
+  if (!m3) return '—';
+  return m3 >= 1e8
+    ? `${(m3 / 1e8).toFixed(2)} 億 m³`
+    : `${Math.round(m3 / 1e4).toLocaleString('ja-JP')} 万 m³`;
 }
 
 // Marker radius in pixels mapped from capacity. Use sqrt so circle AREA is
@@ -66,11 +77,8 @@ export function JapanMap({ points }: { points: MapPoint[] }) {
           p.storageRate != null && Number.isFinite(p.storageRate)
             ? `${(p.storageRate * 100).toFixed(1)}%`
             : '—';
-        const capTxt = p.capacityM3
-          ? p.capacityM3 >= 1e8
-            ? `${(p.capacityM3 / 1e8).toFixed(2)} 億 m³`
-            : `${Math.round(p.capacityM3 / 1e4).toLocaleString('ja-JP')} 万 m³`
-          : '—';
+        const capTxt = fmtManM3(p.capacityM3);
+        const activeCapTxt = fmtManM3(p.activeCapacityM3);
         L.circleMarker([p.lat, p.lng], {
           radius: r,
           color,
@@ -80,7 +88,7 @@ export function JapanMap({ points }: { points: MapPoint[] }) {
         })
           .bindPopup(
             `<a href="/dams/${p.slug}"><b>${p.name}</b></a><br/>` +
-              `総貯水容量: ${capTxt}<br/>貯水率: ${ratePct}`,
+              `総貯水容量: ${capTxt}<br/>利水容量: ${activeCapTxt}<br/>貯水率: ${ratePct}`,
           )
           .addTo(layer);
       }

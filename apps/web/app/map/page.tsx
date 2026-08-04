@@ -34,6 +34,7 @@ async function fetchPoints(): Promise<MapPoint[]> {
       ST_X(d.location::geometry)            AS lng,
       -- size encoding: total capacity (every dam has it)
       d.total_capacity_m3::FLOAT8           AS "capacityM3",
+      d.active_capacity_m3::FLOAT8          AS "activeCapacityM3",
       -- colour encoding: rate computed against 利水容量. Dams without
       -- 利水容量 (~51%) get a NULL rate which renders as a neutral grey marker.
       CASE

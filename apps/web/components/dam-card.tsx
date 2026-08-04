@@ -43,6 +43,9 @@ export function DamCard({
           {fmtCapacityMcm(d.totalCapacityM3)}
         </div>
         <p className="text-xs text-on-surface-variant">総貯水容量</p>
+        <p className="text-xs text-on-surface-variant tabular-nums">
+          利水容量 {fmtCapacityMcm(d.activeCapacityM3)}
+        </p>
         {rate !== undefined ? (
           rate != null ? (
             <div className="mt-2" aria-label={`貯水率 ${(rate * 100).toFixed(1)}%`}>

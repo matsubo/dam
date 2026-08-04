@@ -67,6 +67,7 @@ export async function GET(req: Request): Promise<Response> {
           prefCode: d.prefCode,
           manager: d.manager,
           totalCapacityM3: d.totalCapacityM3,
+          activeCapacityM3: d.activeCapacityM3,
           location: { lat: d.lat, lng: d.lng },
           watershed: d.watershedSlug ? { slug: d.watershedSlug, name: d.watershedName } : null,
         })),

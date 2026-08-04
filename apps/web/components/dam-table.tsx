@@ -12,6 +12,8 @@ export interface DamRowItem {
   prefCode: string;
   manager: string | null;
   totalCapacityM3: string | null;
+  /** 利水容量 — the 貯水率 denominator. Null when Damnet doesn't list one. */
+  activeCapacityM3: string | null;
   watershedSlug: string | null;
   watershedName: string | null;
   imageUrl?: string | null;
@@ -114,6 +116,12 @@ export function DamTable({
                 <span>総貯水容量</span>
                 <span className="text-on-surface tabular-nums">
                   {fmtCapacityMcm(r.totalCapacityM3)}
+                </span>
+              </div>
+              <div className="mt-1 text-xs text-on-surface-variant flex justify-between">
+                <span>利水容量</span>
+                <span className="text-on-surface tabular-nums">
+                  {fmtCapacityMcm(r.activeCapacityM3)}
                 </span>
               </div>
             </li>

@@ -202,6 +202,8 @@ export interface DamListItem {
   prefCode: string;
   manager: string | null;
   totalCapacityM3: string | null;
+  /** 利水容量 — the 貯水率 denominator. Null when Damnet doesn't list one. */
+  activeCapacityM3: string | null;
   watershedSlug: string | null;
   watershedName: string | null;
   lat: number;
@@ -220,6 +222,7 @@ export async function listDams(
       SELECT
         d.id, d.slug, d.name, d.pref_code AS "prefCode", d.manager,
         d.total_capacity_m3::TEXT AS "totalCapacityM3",
+        d.active_capacity_m3::TEXT AS "activeCapacityM3",
         w.slug AS "watershedSlug", w.name AS "watershedName",
         ST_Y(d.location::geometry) AS lat, ST_X(d.location::geometry) AS lng,
         d.image_url AS "imageUrl"
@@ -241,6 +244,7 @@ export async function listDams(
     SELECT
       d.id, d.slug, d.name, d.pref_code AS "prefCode", d.manager,
       d.total_capacity_m3::TEXT AS "totalCapacityM3",
+      d.active_capacity_m3::TEXT AS "activeCapacityM3",
       w.slug AS "watershedSlug", w.name AS "watershedName",
       ST_Y(d.location::geometry) AS lat, ST_X(d.location::geometry) AS lng,
       d.image_url AS "imageUrl"
@@ -325,6 +329,7 @@ export async function listDamsPaged(f: DamPagedFilters): Promise<{
     SELECT
       d.id, d.slug, d.name, d.pref_code AS "prefCode", d.manager,
       d.total_capacity_m3::TEXT AS "totalCapacityM3",
+      d.active_capacity_m3::TEXT AS "activeCapacityM3",
       w.slug AS "watershedSlug", w.name AS "watershedName",
       ST_Y(d.location::geometry) AS lat, ST_X(d.location::geometry) AS lng,
       d.image_url AS "imageUrl"
@@ -352,8 +357,6 @@ export interface DamDetail extends DamListItem {
   heightM: string | null;
   effectiveCapacityM3: string | null;
   floodCapacityM3: string | null;
-  /** 利水容量 (active conservation storage). Backfilled from Damnet. */
-  activeCapacityM3: string | null;
   /** Additional master attributes from Damnet ダム便覧. All nullable. */
   constructionStartYear: number | null;
   purposes: string | null;
@@ -383,6 +386,7 @@ export async function searchDams(query: string, limit = 30): Promise<DamListItem
     SELECT
       d.id, d.slug, d.name, d.pref_code AS "prefCode", d.manager,
       d.total_capacity_m3::TEXT AS "totalCapacityM3",
+      d.active_capacity_m3::TEXT AS "activeCapacityM3",
       w.slug AS "watershedSlug", w.name AS "watershedName",
       ST_Y(d.location::geometry) AS lat, ST_X(d.location::geometry) AS lng,
       d.image_url AS "imageUrl"
@@ -665,8 +669,6 @@ export interface NearbyDam extends DamListItem {
   distanceM: number;
   /** Bearing from the source dam, radians clockwise from north (0=N, π/2=E). */
   bearingRad: number;
-  /** 利水容量 (denominator for storage rate). NULL when the dam has none. */
-  activeCapacityM3: string | null;
   /** Latest storage_volume_m3 across any source. NULL when no observations exist. */
   latestStorageM3: string | null;
   /** Same denominator as LatestObservation.effectiveActiveCapacityM3 — prefers
