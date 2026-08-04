@@ -34,6 +34,7 @@ const refreshDamImagesDamnet: Task = async (_payload, _helpers) => {
       const url =
         candidates.find((u) => /BU\d/i.test(u)) ??
         candidates.find((u) => /DO\d/i.test(u)) ??
+        // biome-ignore lint/style/noNonNullAssertion: candidates.length === 0 already returned above
         candidates[0]!;
       await sql`UPDATE dams SET image_url = ${url}, updated_at = NOW() WHERE id = ${r.id}::BIGINT`;
       found += 1;

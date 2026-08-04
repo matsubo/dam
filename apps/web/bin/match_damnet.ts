@@ -181,6 +181,7 @@ async function main(): Promise<void> {
     matched++;
     // The first row in the group is the canonical Damnet-ID holder. Subsequent
     // rows (`（再）`/`（元）` siblings) only inherit the attribute backfill.
+    // biome-ignore lint/style/noNonNullAssertion: targets.length === 0 already returned above
     const target = targets[0]!;
 
     // 1. Append damnet external_id (idempotent + cross-row safe).

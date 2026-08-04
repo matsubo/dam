@@ -19,10 +19,19 @@ export default function AppleIcon() {
         position: 'relative',
       }}
     >
+      {/* biome-ignore lint/a11y/noSvgWithoutTitle: Satori renders <title> as visible text, not hidden a11y metadata */}
       <svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
         <path d="M18,18 L82,18 L73,82 L27,82 Z" fill="white" stroke="white" strokeWidth="4" />
         <path d="M22,52 L78,52 L73,82 L27,82 Z" fill="#3aa6ff" />
-        <line x1="22" y1="52" x2="78" y2="52" stroke="#ffffff" strokeOpacity="0.7" strokeWidth="2" />
+        <line
+          x1="22"
+          y1="52"
+          x2="78"
+          y2="52"
+          stroke="#ffffff"
+          strokeOpacity="0.7"
+          strokeWidth="2"
+        />
       </svg>
       <div
         style={{

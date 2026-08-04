@@ -19,7 +19,7 @@ export default function Icon() {
       }}
     >
       {/* Bucket outline + water fill */}
-      {/* No <title> — Satori renders the title text as visible content. */}
+      {/* biome-ignore lint/a11y/noSvgWithoutTitle: Satori renders <title> as visible text, not hidden a11y metadata */}
       <svg width="22" height="22" viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg">
         <path d="M4,4 L18,4 L16,18 L6,18 Z" fill="white" stroke="white" strokeWidth="1.4" />
         <path d="M5,12 L17,12 L16,18 L6,18 Z" fill="#3aa6ff" />

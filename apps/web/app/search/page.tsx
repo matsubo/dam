@@ -45,6 +45,7 @@ export default async function SearchPage({
           defaultValue={q}
           placeholder="ダム名、水系名、読み仮名を入力（部分一致）"
           className="flex-1 border border-outline-variant rounded-lg px-4 py-2 text-base"
+          // biome-ignore lint/a11y/noAutofocus: dedicated search page — the input is the only thing to interact with
           autoFocus
         />
         <button type="submit" className="btn-primary !py-2 !px-5 text-sm">
@@ -63,7 +64,9 @@ export default async function SearchPage({
               <h2 className="text-lg font-semibold mb-3 inline-flex items-center gap-2">
                 <EntityIcon kind="watershed" size={18} className="shrink-0" />
                 <span>水系</span>
-                <span className="text-on-surface-variant text-sm font-normal">({watersheds.length})</span>
+                <span className="text-on-surface-variant text-sm font-normal">
+                  ({watersheds.length})
+                </span>
               </h2>
               <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                 {watersheds.map((w) => (
@@ -78,7 +81,11 @@ export default async function SearchPage({
                       </div>
                       <div className="text-xs text-on-surface-variant inline-flex items-center gap-1 flex-wrap">
                         <span>
-                          {w.kind === 'first' ? '一級水系' : w.kind === 'second' ? '二級水系' : 'その他'}
+                          {w.kind === 'first'
+                            ? '一級水系'
+                            : w.kind === 'second'
+                              ? '二級水系'
+                              : 'その他'}
                           {' · '}
                         </span>
                         <EntityIcon kind="dam" size={11} className="text-primary shrink-0" />

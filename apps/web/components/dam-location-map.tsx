@@ -26,8 +26,7 @@ const STYLES: MapStyle[] = [
     id: 'gsi-pale',
     label: '淡色 (国土地理院)',
     url: 'https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png',
-    attribution:
-      '&copy; <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a>',
+    attribution: '&copy; <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a>',
     maxZoom: 18,
     className: 'jp-map-grayscale',
   },
@@ -35,8 +34,7 @@ const STYLES: MapStyle[] = [
     id: 'gsi-std',
     label: 'カラー (国土地理院)',
     url: 'https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png',
-    attribution:
-      '&copy; <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a>',
+    attribution: '&copy; <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a>',
     maxZoom: 18,
   },
   {
@@ -66,6 +64,8 @@ const STYLES: MapStyle[] = [
 
 const DEFAULT_STYLE_ID = 'gsi-pale';
 const STORAGE_KEY = 'damLocationMapStyle';
+// biome-ignore lint/style/noNonNullAssertion: STYLES is a non-empty literal
+const FALLBACK_STYLE = STYLES[0]!;
 
 export function DamLocationMap({
   lat,
@@ -94,6 +94,9 @@ export function DamLocationMap({
     if (saved && STYLES.some((s) => s.id === saved)) setStyleId(saved);
   }, []);
 
+  // Intentionally omit `styleId` here — the dedicated style-swap effect
+  // below changes the tile layer in place without rebuilding the map.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: styleId is read via the style-swap effect below, not rebuilt here
   useEffect(() => {
     let cancelled = false;
 
@@ -107,7 +110,7 @@ export function DamLocationMap({
       );
       mapRef.current = instance as unknown as LeafletMap;
 
-      const initial = STYLES.find((s) => s.id === styleId) ?? STYLES[0]!;
+      const initial = STYLES.find((s) => s.id === styleId) ?? FALLBACK_STYLE;
       tileRef.current = L.tileLayer(initial.url, {
         attribution: initial.attribution,
         maxZoom: initial.maxZoom,
@@ -132,9 +135,6 @@ export function DamLocationMap({
       tileRef.current = null;
       leafletRef.current = null;
     };
-    // Intentionally omit `styleId` here — the dedicated style-swap effect
-    // below changes the tile layer in place without rebuilding the map.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lat, lng, name, zoom]);
 
   // Hot-swap the tile layer when the user picks a different style.
@@ -142,7 +142,7 @@ export function DamLocationMap({
     const L = leafletRef.current;
     const map = mapRef.current;
     if (!L || !map) return;
-    const next = STYLES.find((s) => s.id === styleId) ?? STYLES[0]!;
+    const next = STYLES.find((s) => s.id === styleId) ?? FALLBACK_STYLE;
     const newTile = L.tileLayer(next.url, {
       attribution: next.attribution,
       maxZoom: next.maxZoom,

@@ -10,8 +10,7 @@ export const revalidate = 900;
 
 export const metadata: Metadata = {
   title: 'マクロ統計',
-  description:
-    '日本全国のダムに関するマクロ指標。都道府県別・水系別・規模別の集計と最新貯水率。',
+  description: '日本全国のダムに関するマクロ指標。都道府県別・水系別・規模別の集計と最新貯水率。',
   alternates: { canonical: '/stats' },
 };
 
@@ -165,6 +164,7 @@ async function loadStats() {
       ORDER BY decade
     `,
   ]);
+  // biome-ignore lint/style/noNonNullAssertion: scalar-subselect SELECT with no FROM always returns exactly 1 row
   return { headline: headlineRows[0]!, prefs, ws, sizes, years };
 }
 

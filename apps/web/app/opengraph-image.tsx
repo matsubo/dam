@@ -127,6 +127,7 @@ export default function OG() {
             height: 320,
           }}
         >
+          {/* biome-ignore lint/a11y/noSvgWithoutTitle: Satori renders <title> as visible text, not hidden a11y metadata */}
           <svg width="290" height="320" viewBox="0 0 290 320" xmlns="http://www.w3.org/2000/svg">
             <path
               d="M30,30 L260,30 L240,290 L50,290 Z"
@@ -136,10 +137,42 @@ export default function OG() {
               strokeLinejoin="round"
             />
             <path d="M44,128 L246,128 L240,290 L50,290 Z" fill="#3aa6ff" />
-            <line x1="44" y1="128" x2="246" y2="128" stroke="white" strokeOpacity="0.6" strokeWidth="2" />
-            <line x1="252" y1="225" x2="240" y2="225" stroke="white" strokeOpacity="0.55" strokeWidth="3" />
-            <line x1="252" y1="160" x2="240" y2="160" stroke="white" strokeOpacity="0.55" strokeWidth="3" />
-            <line x1="252" y1="95" x2="240" y2="95" stroke="white" strokeOpacity="0.55" strokeWidth="3" />
+            <line
+              x1="44"
+              y1="128"
+              x2="246"
+              y2="128"
+              stroke="white"
+              strokeOpacity="0.6"
+              strokeWidth="2"
+            />
+            <line
+              x1="252"
+              y1="225"
+              x2="240"
+              y2="225"
+              stroke="white"
+              strokeOpacity="0.55"
+              strokeWidth="3"
+            />
+            <line
+              x1="252"
+              y1="160"
+              x2="240"
+              y2="160"
+              stroke="white"
+              strokeOpacity="0.55"
+              strokeWidth="3"
+            />
+            <line
+              x1="252"
+              y1="95"
+              x2="240"
+              y2="95"
+              stroke="white"
+              strokeOpacity="0.55"
+              strokeWidth="3"
+            />
           </svg>
           <div
             style={{

@@ -123,36 +123,35 @@ async function main(): Promise<void> {
   lines.push('-- source_priorities: tiny lookup, just diff with ON CONFLICT.');
   for (const s of sources) {
     lines.push(
-      `INSERT INTO source_priorities (source_id, description, priority, active) VALUES ` +
-        `(${quote(s.source_id)}, ${quote(s.description)}, ${quote(s.priority)}, ${quote(s.active)}) ` +
-        `ON CONFLICT (source_id) DO UPDATE SET description=EXCLUDED.description, priority=EXCLUDED.priority, active=EXCLUDED.active;`,
+      `INSERT INTO source_priorities (source_id, description, priority, active) VALUES (${quote(s.source_id)}, ${quote(s.description)}, ${quote(s.priority)}, ${quote(s.active)}) ON CONFLICT (source_id) DO UPDATE SET description=EXCLUDED.description, priority=EXCLUDED.priority, active=EXCLUDED.active;`,
     );
   }
   lines.push('');
 
   // ─── watersheds ──────────────────────────────────────────────────────
   // Stage in a temp table, then upsert by code.
-  lines.push('CREATE TEMP TABLE _seed_watersheds (LIKE public.watersheds INCLUDING DEFAULTS) ON COMMIT DROP;');
+  lines.push(
+    'CREATE TEMP TABLE _seed_watersheds (LIKE public.watersheds INCLUDING DEFAULTS) ON COMMIT DROP;',
+  );
   lines.push(
     'ALTER TABLE _seed_watersheds DROP COLUMN IF EXISTS id;', // we want fresh ids on insert; matches by code
   );
   for (const w of watersheds) {
     lines.push(
-      `INSERT INTO _seed_watersheds (code, slug, name, name_kana, kind, boundary, area_km2) VALUES ` +
-        `(${quote(w.code)}, ${quote(w.slug)}, ${quote(w.name)}, ${quote(w.name_kana)}, ${quote(w.kind)}, ${geoLit(w.boundary)}, ${quote(w.area_km2)});`,
+      `INSERT INTO _seed_watersheds (code, slug, name, name_kana, kind, boundary, area_km2) VALUES (${quote(w.code)}, ${quote(w.slug)}, ${quote(w.name)}, ${quote(w.name_kana)}, ${quote(w.kind)}, ${geoLit(w.boundary)}, ${quote(w.area_km2)});`,
     );
   }
   lines.push('');
-  lines.push(`-- UPSERT into live watersheds, matching by code (existing unique constraint).`);
-  lines.push(`UPDATE public.watersheds w SET`);
-  lines.push(`  slug      = s.slug,`);
-  lines.push(`  name      = s.name,`);
-  lines.push(`  name_kana = s.name_kana,`);
-  lines.push(`  kind      = s.kind,`);
-  lines.push(`  boundary  = s.boundary,`);
-  lines.push(`  area_km2  = s.area_km2`);
-  lines.push(`FROM _seed_watersheds s`);
-  lines.push(`WHERE w.code = s.code;`);
+  lines.push('-- UPSERT into live watersheds, matching by code (existing unique constraint).');
+  lines.push('UPDATE public.watersheds w SET');
+  lines.push('  slug      = s.slug,');
+  lines.push('  name      = s.name,');
+  lines.push('  name_kana = s.name_kana,');
+  lines.push('  kind      = s.kind,');
+  lines.push('  boundary  = s.boundary,');
+  lines.push('  area_km2  = s.area_km2');
+  lines.push('FROM _seed_watersheds s');
+  lines.push('WHERE w.code = s.code;');
   lines.push('');
   lines.push(
     `INSERT INTO public.watersheds (code, slug, name, name_kana, kind, boundary, area_km2)
@@ -174,8 +173,7 @@ async function main(): Promise<void> {
         height_m, total_capacity_m3, effective_capacity_m3, flood_capacity_m3, active_capacity_m3,
         completed_year, construction_start_year, purposes, crest_length_m, embankment_volume_m3,
         watershed_area_km2, reservoir_area_km2, left_bank_location, main_contractor, redevelopment_status,
-        elevation_m, image_url, location, external_ids) VALUES ` +
-        `(${quote(d.slug)}, ${quote(d.name)}, ${quote(d.name_kana)}, ${quote(d.pref_code)}, ${quote(d.manager)}, ${quote(d.type)},
+        elevation_m, image_url, location, external_ids) VALUES (${quote(d.slug)}, ${quote(d.name)}, ${quote(d.name_kana)}, ${quote(d.pref_code)}, ${quote(d.manager)}, ${quote(d.type)},
         ${quote(d.height_m)}, ${quote(d.total_capacity_m3)}, ${quote(d.effective_capacity_m3)}, ${quote(d.flood_capacity_m3)}, ${quote(d.active_capacity_m3)},
         ${quote(d.completed_year)}, ${quote(d.construction_start_year)}, ${quote(d.purposes)}, ${quote(d.crest_length_m)}, ${quote(d.embankment_volume_m3)},
         ${quote(d.watershed_area_km2)}, ${quote(d.reservoir_area_km2)}, ${quote(d.left_bank_location)}, ${quote(d.main_contractor)}, ${quote(d.redevelopment_status)},
@@ -186,38 +184,48 @@ async function main(): Promise<void> {
 
   // UPDATE matching by NDI external_id — that's the natural key for our
   // master, and the partial unique index `dams_ext_ndi_uniq` enforces it.
-  lines.push(`-- UPDATE dams matched by external_ids->>'ndi' (preserves prod's id and observations).`);
-  lines.push(`UPDATE public.dams d SET`);
-  lines.push(`  slug                    = s.slug,`);
-  lines.push(`  name                    = s.name,`);
-  lines.push(`  name_kana               = COALESCE(s.name_kana, d.name_kana),`);
-  lines.push(`  manager                 = COALESCE(s.manager, d.manager),`);
-  lines.push(`  type                    = COALESCE(s.type, d.type),`);
-  lines.push(`  height_m                = COALESCE(s.height_m, d.height_m),`);
-  lines.push(`  total_capacity_m3       = COALESCE(s.total_capacity_m3, d.total_capacity_m3),`);
-  lines.push(`  effective_capacity_m3   = COALESCE(s.effective_capacity_m3, d.effective_capacity_m3),`);
-  lines.push(`  flood_capacity_m3       = COALESCE(s.flood_capacity_m3, d.flood_capacity_m3),`);
-  lines.push(`  active_capacity_m3      = COALESCE(s.active_capacity_m3, d.active_capacity_m3),`);
-  lines.push(`  completed_year          = COALESCE(s.completed_year, d.completed_year),`);
-  lines.push(`  construction_start_year = COALESCE(s.construction_start_year, d.construction_start_year),`);
-  lines.push(`  purposes                = COALESCE(s.purposes, d.purposes),`);
-  lines.push(`  crest_length_m          = COALESCE(s.crest_length_m, d.crest_length_m),`);
-  lines.push(`  embankment_volume_m3    = COALESCE(s.embankment_volume_m3, d.embankment_volume_m3),`);
-  lines.push(`  watershed_area_km2      = COALESCE(s.watershed_area_km2, d.watershed_area_km2),`);
-  lines.push(`  reservoir_area_km2      = COALESCE(s.reservoir_area_km2, d.reservoir_area_km2),`);
-  lines.push(`  left_bank_location      = COALESCE(s.left_bank_location, d.left_bank_location),`);
-  lines.push(`  main_contractor         = COALESCE(s.main_contractor, d.main_contractor),`);
-  lines.push(`  redevelopment_status    = COALESCE(s.redevelopment_status, d.redevelopment_status),`);
-  lines.push(`  elevation_m             = COALESCE(s.elevation_m, d.elevation_m),`);
-  lines.push(`  image_url               = COALESCE(s.image_url, d.image_url),`);
-  lines.push(`  external_ids            = d.external_ids || s.external_ids,`);
-  lines.push(`  updated_at              = NOW()`);
-  lines.push(`FROM _seed_dams s`);
+  lines.push(
+    `-- UPDATE dams matched by external_ids->>'ndi' (preserves prod's id and observations).`,
+  );
+  lines.push('UPDATE public.dams d SET');
+  lines.push('  slug                    = s.slug,');
+  lines.push('  name                    = s.name,');
+  lines.push('  name_kana               = COALESCE(s.name_kana, d.name_kana),');
+  lines.push('  manager                 = COALESCE(s.manager, d.manager),');
+  lines.push('  type                    = COALESCE(s.type, d.type),');
+  lines.push('  height_m                = COALESCE(s.height_m, d.height_m),');
+  lines.push('  total_capacity_m3       = COALESCE(s.total_capacity_m3, d.total_capacity_m3),');
+  lines.push(
+    '  effective_capacity_m3   = COALESCE(s.effective_capacity_m3, d.effective_capacity_m3),',
+  );
+  lines.push('  flood_capacity_m3       = COALESCE(s.flood_capacity_m3, d.flood_capacity_m3),');
+  lines.push('  active_capacity_m3      = COALESCE(s.active_capacity_m3, d.active_capacity_m3),');
+  lines.push('  completed_year          = COALESCE(s.completed_year, d.completed_year),');
+  lines.push(
+    '  construction_start_year = COALESCE(s.construction_start_year, d.construction_start_year),',
+  );
+  lines.push('  purposes                = COALESCE(s.purposes, d.purposes),');
+  lines.push('  crest_length_m          = COALESCE(s.crest_length_m, d.crest_length_m),');
+  lines.push(
+    '  embankment_volume_m3    = COALESCE(s.embankment_volume_m3, d.embankment_volume_m3),',
+  );
+  lines.push('  watershed_area_km2      = COALESCE(s.watershed_area_km2, d.watershed_area_km2),');
+  lines.push('  reservoir_area_km2      = COALESCE(s.reservoir_area_km2, d.reservoir_area_km2),');
+  lines.push('  left_bank_location      = COALESCE(s.left_bank_location, d.left_bank_location),');
+  lines.push('  main_contractor         = COALESCE(s.main_contractor, d.main_contractor),');
+  lines.push(
+    '  redevelopment_status    = COALESCE(s.redevelopment_status, d.redevelopment_status),',
+  );
+  lines.push('  elevation_m             = COALESCE(s.elevation_m, d.elevation_m),');
+  lines.push('  image_url               = COALESCE(s.image_url, d.image_url),');
+  lines.push('  external_ids            = d.external_ids || s.external_ids,');
+  lines.push('  updated_at              = NOW()');
+  lines.push('FROM _seed_dams s');
   lines.push(`WHERE s.external_ids ? 'ndi' AND d.external_ids->>'ndi' = s.external_ids->>'ndi';`);
   lines.push('');
 
   // INSERT new dams (those not yet in prod).
-  lines.push(`-- INSERT brand-new dams (those in seed without a matching prod row by NDI).`);
+  lines.push('-- INSERT brand-new dams (those in seed without a matching prod row by NDI).');
   lines.push(
     `INSERT INTO public.dams (
       slug, name, name_kana, pref_code, manager, type,
@@ -251,14 +259,16 @@ async function main(): Promise<void> {
   const gz = gzipSync(Buffer.from(sqlText, 'utf8'));
   const out = `${process.cwd()}/deploy/seed/master_upsert.sql.gz`;
   writeFileSync(out, gz);
-  console.log(JSON.stringify({
-    out,
-    bytes_uncompressed: sqlText.length,
-    bytes_gzipped: gz.length,
-    watersheds: watersheds.length,
-    dams: dams.length,
-    sources: sources.length,
-  }));
+  console.log(
+    JSON.stringify({
+      out,
+      bytes_uncompressed: sqlText.length,
+      bytes_gzipped: gz.length,
+      watersheds: watersheds.length,
+      dams: dams.length,
+      sources: sources.length,
+    }),
+  );
 }
 
 main()
