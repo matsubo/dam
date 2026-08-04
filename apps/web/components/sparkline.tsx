@@ -27,8 +27,7 @@ export function Sparkline({
   const span = max - min || 1;
 
   const xStep = (width - 1) / (values.length - 1);
-  const y = (v: number) =>
-    padTop + (height - padTop - padBot) * (1 - (v - min) / span);
+  const y = (v: number) => padTop + (height - padTop - padBot) * (1 - (v - min) / span);
 
   let line = '';
   let area = '';

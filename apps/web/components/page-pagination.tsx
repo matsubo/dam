@@ -49,9 +49,7 @@ function pageWindow(page: number, totalPages: number): (number | 'ellipsis')[] {
 
 export function PagePagination({ basePath, query, page, totalPages, total }: Props) {
   if (totalPages <= 1) {
-    return (
-      <div className="flex justify-end mt-4 text-xs text-on-surface-variant">{total} 件</div>
-    );
+    return <div className="flex justify-end mt-4 text-xs text-on-surface-variant">{total} 件</div>;
   }
   const items = pageWindow(page, totalPages);
   const linkClass =

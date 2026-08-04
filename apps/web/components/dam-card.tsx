@@ -21,7 +21,10 @@ export function DamCard({
       <div className="min-w-0 flex-1 flex flex-col">
         <h3 className="font-display font-semibold leading-tight text-base mb-1 truncate inline-flex items-center gap-1.5">
           <EntityIcon kind="dam" size={16} className="text-primary shrink-0" />
-          <Link href={`/dams/${d.slug}`} className="text-on-surface no-underline hover:text-primary truncate">
+          <Link
+            href={`/dams/${d.slug}`}
+            className="text-on-surface no-underline hover:text-primary truncate"
+          >
             {d.name}
           </Link>
         </h3>

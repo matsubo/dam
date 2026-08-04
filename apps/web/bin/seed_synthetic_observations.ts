@@ -123,10 +123,9 @@ async function main(): Promise<void> {
     // total). Falling back to total_capacity is fine for dams where 利水
     // 容量 isn't recorded — the rate denominator doesn't apply there
     // either, so the chart just uses the raw volume.
-    const activeCap = dam.active_capacity_m3 ? Number(dam.active_capacity_m3) : NaN;
+    const activeCap = dam.active_capacity_m3 ? Number(dam.active_capacity_m3) : Number.NaN;
     const totalCap = Number(dam.total_capacity_m3);
-    const capacity =
-      Number.isFinite(activeCap) && activeCap > 0 ? activeCap : totalCap;
+    const capacity = Number.isFinite(activeCap) && activeCap > 0 ? activeCap : totalCap;
     if (!Number.isFinite(capacity) || capacity <= 0) continue;
     const baseRate = clamp(0.55 + 0.2 * randNormal(), 0.1, 0.95);
     const flowScale = Math.cbrt(capacity) / 100; // m³/s units, very rough

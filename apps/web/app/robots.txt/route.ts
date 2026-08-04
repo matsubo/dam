@@ -28,9 +28,7 @@ const AI_BOTS = [
 ];
 
 export function GET(): Response {
-  const aiBlocks = AI_BOTS.map(
-    (b) => `User-agent: ${b}\nAllow: /\nDisallow: /api/\n`,
-  ).join('\n');
+  const aiBlocks = AI_BOTS.map((b) => `User-agent: ${b}\nAllow: /\nDisallow: /api/\n`).join('\n');
 
   const body = `# Dam Data Japan — robots.txt
 # Public open data on Japanese reservoirs. Crawling is welcome including by
