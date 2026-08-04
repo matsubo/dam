@@ -26,7 +26,8 @@
       "**/migrations/**",
       "**/.claude/**",
       "**/playwright-report/**",
-      "**/test-results/**"
+      "**/test-results/**",
+      "**/.playwright-cli/**"
     ]
   }
 }

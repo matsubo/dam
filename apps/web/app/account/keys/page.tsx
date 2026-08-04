@@ -93,7 +93,8 @@ export default async function KeysPage({ searchParams }: SP) {
             ✅ 新しい API キーを発行しました
           </h2>
           <p className="text-sm text-on-surface-variant mb-3">
-            このキーは <strong>この画面でしか見られません</strong>。今すぐ安全な場所に保存してください。
+            このキーは <strong>この画面でしか見られません</strong>
+            。今すぐ安全な場所に保存してください。
           </p>
           <code className="block bg-[#0e141b] text-white font-code text-sm p-3 rounded-lg break-all select-all">
             {sp.issued}
@@ -101,8 +102,7 @@ export default async function KeysPage({ searchParams }: SP) {
           <p className="text-xs text-on-surface-variant mt-3">
             使用例:{' '}
             <code className="font-code">
-              curl -H "Authorization: Bearer {sp.issued}"
-              https://dam.teraren.com/api/v1/dams
+              curl -H "Authorization: Bearer {sp.issued}" https://dam.teraren.com/api/v1/dams
             </code>
           </p>
         </section>
@@ -123,8 +123,8 @@ export default async function KeysPage({ searchParams }: SP) {
           </button>
         </form>
         <p className="text-xs text-on-surface-variant mt-2">
-          無料枠: 600 req/min、100,000 req/day。`Authorization: Bearer …` で送信
-          (旧仕様の `X-API-Key` ヘッダも互換のため引き続き受け付けます)。
+          無料枠: 600 req/min、100,000 req/day。`Authorization: Bearer …` で送信 (旧仕様の
+          `X-API-Key` ヘッダも互換のため引き続き受け付けます)。
         </p>
       </section>
 
@@ -169,11 +169,7 @@ export default async function KeysPage({ searchParams }: SP) {
                   {!k.revokedAt && k.active ? (
                     <form action={revoke}>
                       <input type="hidden" name="id" value={k.id.toString()} />
-                      <button
-                        type="submit"
-                        className="text-xs text-red-700 hover:underline"
-                        // biome-ignore lint/a11y/useButtonType: form submit
-                      >
+                      <button type="submit" className="text-xs text-red-700 hover:underline">
                         取消
                       </button>
                     </form>
@@ -188,8 +184,8 @@ export default async function KeysPage({ searchParams }: SP) {
       <section className="mt-12 border border-red-300 rounded-xl p-5 bg-red-50/40">
         <h2 className="font-display font-semibold text-red-800 mb-2">退会</h2>
         <p className="text-sm text-on-surface-variant mb-1">
-          退会すると、このメールアドレス（<strong>{email}</strong>）に紐づく
-          すべての API キーと利用履歴が <strong>完全に削除</strong> されます。
+          退会すると、このメールアドレス（<strong>{email}</strong>）に紐づく すべての API
+          キーと利用履歴が <strong>完全に削除</strong> されます。
           公開ページの閲覧はサインアウト状態でも引き続き可能です。
         </p>
         <p className="text-xs text-on-surface-variant mb-3">

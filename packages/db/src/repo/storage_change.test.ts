@@ -3,6 +3,13 @@ import { sql } from '../client.ts';
 import { storageChange, upsertDamByExternalId } from './dams.ts';
 import { upsertObservations } from './observations.ts';
 
+// Safer than `!`: throws with a clear message if the assumption is ever
+// wrong, instead of silently trusting it at compile time only.
+function notNull<T>(v: T | null): T {
+  if (v === null) throw new Error('expected non-null value');
+  return v;
+}
+
 let damId: bigint;
 
 beforeAll(async () => {
@@ -63,8 +70,7 @@ describe('storageChange', () => {
     expect(c.h1).not.toBeNull();
     expect(Number(c.h1)).toBe(110);
     // Age is the gap between the latest observation and the picked point.
-    expect(c.h1AgeS).not.toBeNull();
-    expect(c.h1AgeS!).toBeGreaterThan(0);
+    expect(notNull(c.h1AgeS)).toBeGreaterThan(0);
   });
   test('d7 picks the 7-day-ago point', async () => {
     const c = await storageChange(damId);
@@ -78,10 +84,10 @@ describe('storageChange', () => {
   });
   test('age is monotonic: h1 < h6 < h12 < d1 < d7', async () => {
     const c = await storageChange(damId);
-    expect(c.h1AgeS! < c.h6AgeS!).toBe(true);
-    expect(c.h6AgeS! < c.h12AgeS!).toBe(true);
-    expect(c.h12AgeS! < c.d1AgeS!).toBe(true);
-    expect(c.d1AgeS! < c.d7AgeS!).toBe(true);
+    expect(notNull(c.h1AgeS) < notNull(c.h6AgeS)).toBe(true);
+    expect(notNull(c.h6AgeS) < notNull(c.h12AgeS)).toBe(true);
+    expect(notNull(c.h12AgeS) < notNull(c.d1AgeS)).toBe(true);
+    expect(notNull(c.d1AgeS) < notNull(c.d7AgeS)).toBe(true);
   });
   test('returns all-null shape when the dam has no observations', async () => {
     // New empty dam

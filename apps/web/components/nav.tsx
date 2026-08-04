@@ -4,7 +4,7 @@ import { Droplets, Menu, Search, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { type EntityKind, EntityIcon } from './entity-icon.tsx';
+import { EntityIcon, type EntityKind } from './entity-icon.tsx';
 
 const ITEMS: {
   href: string;
@@ -27,6 +27,7 @@ export function Nav() {
 
   // Close the menu when the route changes — covers both clicks on items inside
   // the drawer and any other navigation triggered while it's open.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pathname is a re-run trigger, not read in the body
   useEffect(() => {
     setOpen(false);
   }, [pathname]);
@@ -55,7 +56,11 @@ export function Nav() {
         </Link>
         <div className="hidden lg:flex items-center gap-8">
           {ITEMS.map((it) => (
-            <Link key={it.href} href={it.href} className="nav-link inline-flex items-center gap-1.5">
+            <Link
+              key={it.href}
+              href={it.href}
+              className="nav-link inline-flex items-center gap-1.5"
+            >
               {it.entity ? <EntityIcon kind={it.entity} size={14} className="shrink-0" /> : null}
               {it.label}
             </Link>
@@ -115,7 +120,9 @@ export function Nav() {
                       it.emphasised ? 'text-primary' : ''
                     }`}
                   >
-                    {it.entity ? <EntityIcon kind={it.entity} size={16} className="shrink-0" /> : null}
+                    {it.entity ? (
+                      <EntityIcon kind={it.entity} size={16} className="shrink-0" />
+                    ) : null}
                     {it.label}
                   </Link>
                 </li>

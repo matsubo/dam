@@ -39,12 +39,12 @@ function extractKey(req: Request): string | null {
   const auth = req.headers.get('authorization');
   if (auth) {
     const m = /^Bearer\s+(.+)$/i.exec(auth);
-    if (m) return m[1]!.trim();
+    if (m) return m[1]?.trim() ?? '';
     // 2. Basic auth with key as the username (Stripe-style `curl -u key:`)
     const basic = /^Basic\s+(.+)$/i.exec(auth);
     if (basic) {
       try {
-        const decoded = atob(basic[1]!);
+        const decoded = atob(basic[1] ?? '');
         const colon = decoded.indexOf(':');
         return colon >= 0 ? decoded.slice(0, colon) : decoded;
       } catch {
