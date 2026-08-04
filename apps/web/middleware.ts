@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
 // Two agent-affordances applied site-wide:
 //
@@ -18,10 +18,8 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dam.teraren.com';
 // while the CDN refreshes in the background. Pages are public open data
 // with no per-user content, so cookies aren't a concern; /account routes
 // get private/no-store explicitly.
-const CACHE_TIGHT =
-  'public, max-age=0, s-maxage=300, stale-while-revalidate=86400';
-const CACHE_LOOSE =
-  'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800';
+const CACHE_TIGHT = 'public, max-age=0, s-maxage=300, stale-while-revalidate=86400';
+const CACHE_LOOSE = 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800';
 const CACHE_PRIVATE = 'private, no-store';
 
 function pickCacheControl(pathname: string): string {

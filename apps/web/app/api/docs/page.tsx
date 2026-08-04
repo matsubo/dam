@@ -30,12 +30,10 @@ export default function ApiDocsPage() {
         theme: {
           colors: { primary: { main: '#0057c0' } },
           typography: {
-            fontFamily:
-              '-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif',
             headings: { fontFamily: 'inherit' },
             code: {
-              fontFamily:
-                'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
             },
           },
         },

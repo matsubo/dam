@@ -26,7 +26,9 @@ const refreshDamElevation: Task = async (_payload, _helpers) => {
       if (!res.ok) continue;
       const body = (await res.json()) as { elevation?: number | string };
       const elev =
-        typeof body.elevation === 'number' ? body.elevation : Number.parseFloat(String(body.elevation ?? ''));
+        typeof body.elevation === 'number'
+          ? body.elevation
+          : Number.parseFloat(String(body.elevation ?? ''));
       if (!Number.isFinite(elev)) continue;
       await sql`UPDATE dams SET elevation_m = ${elev}, updated_at = NOW() WHERE id = ${r.id}::BIGINT`;
       found += 1;

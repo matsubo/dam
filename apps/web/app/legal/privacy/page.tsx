@@ -13,12 +13,7 @@ const LAST_UPDATED = '2026-05-04';
 export default function PrivacyPage() {
   return (
     <article className="max-w-3xl mx-auto px-5 md:px-10 py-10 prose prose-sm">
-      <Breadcrumbs
-        items={[
-          { label: 'ホーム', href: '/' },
-          { label: 'プライバシーポリシー' },
-        ]}
-      />
+      <Breadcrumbs items={[{ label: 'ホーム', href: '/' }, { label: 'プライバシーポリシー' }]} />
       <h1 className="text-3xl font-semibold mb-1">プライバシーポリシー</h1>
       <p className="text-xs text-on-surface-variant mb-8">最終更新日: {LAST_UPDATED}</p>
 
@@ -26,8 +21,7 @@ export default function PrivacyPage() {
         <p>
           本サイト「Dam Data Japan」(以下「本サービス」) は、利用者の個人情報の重要性を認識し、
           個人情報の保護に関する法律、関係法令、ガイドラインを遵守し、適切に取扱います。
-          本サービスは公益目的の無償サービスとして個人が運営しています。
-          連絡窓口は{' '}
+          本サービスは公益目的の無償サービスとして個人が運営しています。 連絡窓口は{' '}
           <a
             className="text-primary hover:underline"
             href="https://discord.gg/UbWqspWbAk"
@@ -43,8 +37,8 @@ export default function PrivacyPage() {
       <Section n="2" title="収集する情報と利用目的">
         <h3 className="text-sm font-semibold mt-4 mb-1">2.1 アカウント情報 (任意)</h3>
         <p>
-          API キー発行のため Google アカウントで認証する利用者については、Google
-          OAuth から提供されるメールアドレスと表示名のみを取得し、API
+          API キー発行のため Google アカウントで認証する利用者については、Google OAuth
+          から提供されるメールアドレスと表示名のみを取得し、API
           キー紐付け・本人確認・利用量管理の目的でのみ利用します。パスワード等は
           受領・保管しません。
         </p>
@@ -56,15 +50,15 @@ export default function PrivacyPage() {
         </p>
         <h3 className="text-sm font-semibold mt-4 mb-1">2.3 アクセス解析</h3>
         <p>
-          Google Analytics 4 (GA4) および Google Tag Manager
-          を導入する場合があります。これらは Cookie によって匿名のセッション識別子を発行し、
+          Google Analytics 4 (GA4) および Google Tag Manager を導入する場合があります。これらは
+          Cookie によって匿名のセッション識別子を発行し、
           ページ閲覧や滞在時間などの統計情報を収集しますが、個人を特定する情報には用いません。
           オプトアウトは{' '}
           <a
             className="text-primary hover:underline"
             href="https://tools.google.com/dlpage/gaoptout"
             target="_blank"
-            rel="noopener"
+            rel="noreferrer noopener"
           >
             Google アナリティクス オプトアウト アドオン
           </a>{' '}
@@ -92,16 +86,15 @@ export default function PrivacyPage() {
           <a className="text-primary hover:underline" href="/account/keys">
             /account/keys
           </a>{' '}
-          ページから利用者ご自身でいつでも取消・退会 (完全削除) いただけます。
-          退会時には API キー、利用ログを物理削除します。
+          ページから利用者ご自身でいつでも取消・退会 (完全削除) いただけます。 退会時には API
+          キー、利用ログを物理削除します。
         </p>
       </Section>
 
       <Section n="5" title="Cookie">
         <p>
-          認証セッションの維持と前述のアクセス解析のため Cookie を利用します。
-          ブラウザ設定から Cookie
-          を無効化することは可能ですが、その場合一部機能 (サインイン状態の維持等)
+          認証セッションの維持と前述のアクセス解析のため Cookie を利用します。 ブラウザ設定から
+          Cookie を無効化することは可能ですが、その場合一部機能 (サインイン状態の維持等)
           が利用できなくなることがあります。
         </p>
       </Section>

@@ -16,10 +16,8 @@ const nextConfig: NextConfig = {
   // (max-age=0). stale-while-revalidate keeps the stale copy serving while
   // the CDN refreshes in the background.
   async headers() {
-    const TIGHT =
-      'public, max-age=0, s-maxage=300, stale-while-revalidate=86400';
-    const LOOSE =
-      'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800';
+    const TIGHT = 'public, max-age=0, s-maxage=300, stale-while-revalidate=86400';
+    const LOOSE = 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800';
     const PRIVATE = 'private, no-store';
     return [
       // Account routes — never cache.

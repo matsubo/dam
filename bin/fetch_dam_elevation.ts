@@ -69,7 +69,9 @@ async function main(): Promise<void> {
     } finally {
       done += 1;
       if (done % 100 === 0) {
-        console.log(`  progress: ${done}/${rows.length} (found=${found}, missing=${missing}, err=${errored})`);
+        console.log(
+          `  progress: ${done}/${rows.length} (found=${found}, missing=${missing}, err=${errored})`,
+        );
       }
     }
   }
