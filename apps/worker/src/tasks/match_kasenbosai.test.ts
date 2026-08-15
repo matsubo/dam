@@ -1,6 +1,6 @@
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { sql } from '@dam/db/client';
-import { writeMatchReview } from './match_kasenbosai.ts';
+import { matchOne, writeMatchReview } from './match_kasenbosai.ts';
 
 const OBS_FCD = 'TEST-MATCH-REVIEW-001';
 let damA: bigint;
@@ -11,6 +11,33 @@ async function insertDam(slug: string): Promise<bigint> {
     INSERT INTO dams (slug, name, pref_code, location, external_ids)
     VALUES (${slug}, ${slug}, '13',
             ST_SetSRID(ST_MakePoint(139.5, 35.7), 4326)::geography, '{}'::jsonb)
+    RETURNING id
+  `;
+  const id = rows[0]?.id;
+  if (!id) throw new Error('insert dam failed');
+  return id;
+}
+
+/**
+ * Open ocean south-east of Honshu — deliberately far from every real master row
+ * so the proximity query returns only what a test inserts.
+ */
+const EMPTY_LON = 145.0;
+const EMPTY_LAT = 30.0;
+/** ~62 m north of (EMPTY_LON, EMPTY_LAT): 1° of latitude is ~111 km. */
+const NEARBY_LAT = EMPTY_LAT + 0.00056;
+
+async function insertDamAt(
+  slug: string,
+  name: string,
+  prefCode: string,
+  lon: number,
+  lat: number,
+): Promise<bigint> {
+  const rows = await sql<{ id: bigint }[]>`
+    INSERT INTO dams (slug, name, pref_code, location, external_ids)
+    VALUES (${slug}, ${name}, ${prefCode},
+            ST_SetSRID(ST_MakePoint(${lon}, ${lat}), 4326)::geography, '{}'::jsonb)
     RETURNING id
   `;
   const id = rows[0]?.id;
@@ -88,5 +115,56 @@ describe('writeMatchReview', () => {
     `;
     // ON CONFLICT updated the same row (resolved_dam_id still NULL).
     expect(rows[0]?.candidate_dam_ids.map(String)).toEqual([String(damB)]);
+  });
+});
+
+describe('matchOne — candidate query', () => {
+  const SLUGS = ['xpref-test-master', 'xpref-test-decoy'];
+
+  beforeEach(async () => {
+    await sql`DELETE FROM dams WHERE slug = ANY(${SLUGS})`;
+  });
+  afterAll(async () => {
+    await sql`DELETE FROM dams WHERE slug = ANY(${SLUGS})`;
+  });
+
+  test('binds an exact name whose master sits in another prefecture', async () => {
+    // The 奥只見 case: MLIT files the station under 福島 (kbPrefCd 701 → JIS 07)
+    // while the master row is 新潟 (15). A prefecture predicate in the candidate
+    // query used to drop the row before it was ever scored, leaving Japan's
+    // largest reservoir with no observations at all.
+    const id = await insertDamAt(SLUGS[0] as string, '境界試験', '15', EMPTY_LON, NEARBY_LAT);
+    const m = await matchOne({
+      obsFcd: 'TEST-XPREF-001',
+      obsNm: '境界試験ダム',
+      ofcCd: 0,
+      lat: EMPTY_LAT,
+      lon: EMPTY_LON,
+      kbPrefCd: 701,
+    });
+    expect(String(m.damId)).toBe(String(id));
+    expect(m.reason).toBe('exact-name-cross-pref');
+    expect(m.distanceM ?? 0).toBeLessThan(100);
+  });
+
+  test('a same-prefecture exact name still outranks the cross-prefecture one', async () => {
+    await insertDamAt(SLUGS[1] as string, '境界試験', '15', EMPTY_LON, NEARBY_LAT);
+    const samePref = await insertDamAt(
+      SLUGS[0] as string,
+      '境界試験',
+      '07',
+      EMPTY_LON,
+      EMPTY_LAT + 0.002, // ~222 m — further away, but the right prefecture
+    );
+    const m = await matchOne({
+      obsFcd: 'TEST-XPREF-002',
+      obsNm: '境界試験ダム',
+      ofcCd: 0,
+      lat: EMPTY_LAT,
+      lon: EMPTY_LON,
+      kbPrefCd: 701,
+    });
+    expect(String(m.damId)).toBe(String(samePref));
+    expect(m.reason).toBe('exact-name');
   });
 });

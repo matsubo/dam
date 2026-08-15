@@ -11,26 +11,28 @@
 // [lon, lat]. The full sweep returns ~900 dams across 49 prefecture codes.
 //
 // Matching strategy (per kasenbosai dam):
-//   1. Find master candidates within 5 km of the kasenbosai coordinates.
-//   2. Score using normalizeJaName on both sides (handles ヶ↔ケ, ヵ↔カ,
-//      NFKC, strip ダム/貯水池 suffix, strip parenthetical readings):
-//        exact  (normalised names equal)       → 1.0
-//        contains (one normalised name ⊂ other) → 0.8
-//        trigram similarity ≥ 0.70 within 3 km  → 0.65
-//        distance < 500 m only                  → 0.60
-//        otherwise                              → 0.40 (below threshold)
+//   1. Find master candidates within 5 km of the kasenbosai coordinates,
+//      irrespective of prefecture.
+//   2. Score with match_kasenbosai_scoring.pickBest — see that module for the
+//      tiers, the cross-prefecture rule and the ordinal-sibling guard.
 //   3. Distance tie-break: nearer beats farther within same score tier.
-//   4. Write external_ids.kasenbosai for score ≥ 0.6; stage score < 0.8
-//      for human review in match_review.
+//   4. Write external_ids.kasenbosai for score ≥ MATCH_THRESHOLD; stage
+//      anything below REVIEW_THRESHOLD for human review in match_review.
 //
 // Triggered ad-hoc:
 //   add_job('match:kasenbosai', { date?: 'YYYYMMDD', time?: 'HHMM' })
 // With no payload, uses the most recent 5-minute snapshot in JST.
 
 import { PREFECTURES } from '@dam/core/prefectures';
-import { normalizeJaName, trigramSimilarity } from '@dam/core/similarity';
+import { normalizeJaName } from '@dam/core/similarity';
 import { sql } from '@dam/db/client';
 import type { Task } from 'graphile-worker';
+import {
+  MATCH_THRESHOLD,
+  REVIEW_THRESHOLD,
+  pickBest,
+  pickStationPerMaster,
+} from './match_kasenbosai_scoring.ts';
 
 const PREFAREA_URL =
   process.env.KASENBOSAI_PREFAREA_URL ??
@@ -50,7 +52,7 @@ interface PrefAreaResp {
   prefs: PrefArea[];
 }
 
-interface CatalogueDam {
+export interface CatalogueDam {
   obsFcd: string;
   obsNm: string;
   ofcCd: number;
@@ -166,7 +168,7 @@ export function kbPrefToJis(kbPrefCd: number): string | null {
   return null;
 }
 
-interface MatchResult {
+export interface MatchResult {
   obsFcd: string;
   obsNm: string;
   damId: bigint | null;
@@ -174,7 +176,7 @@ interface MatchResult {
   distanceM: number | null;
   score: number;
   reason: string;
-  /** All proximity candidates (top 10) for match_review fallback. */
+  /** All proximity candidates (top 20) for match_review fallback. */
   candidates: { id: bigint; name: string; distanceM: number }[];
 }
 
@@ -182,7 +184,7 @@ interface MatchResult {
  * For one catalogue dam, find the best master match.
  * Uses normaliseJaName on both sides for ヶ↔ケ, suffix stripping, etc.
  */
-async function matchOne(d: CatalogueDam): Promise<MatchResult> {
+export async function matchOne(d: CatalogueDam): Promise<MatchResult> {
   const jisPref = kbPrefToJis(d.kbPrefCd);
   // Normalised stem: handles ヶ↔ケ, ヵ↔カ, NFKC, strips ダム/貯水池 and parens.
   const normStem = normalizeJaName(d.obsNm);
@@ -199,6 +201,12 @@ async function matchOne(d: CatalogueDam): Promise<MatchResult> {
     };
   }
   const point = `SRID=4326;POINT(${d.lon} ${d.lat})`;
+  // No prefecture predicate: MLIT files some stations under the prefecture the
+  // reservoir drains into rather than the one it sits in, which used to drop
+  // 奥只見 (master 新潟 / station 福島) before it was ever scored. scoreCandidate
+  // applies the prefecture rule instead, where an exact name can override it.
+  // LIMIT is 20 rather than 10 because cross-prefecture rows now compete for
+  // slots in this distance-ordered list.
   const rows = await sql<
     { id: bigint; name: string; distance_m: number; pref_code: string | null }[]
   >`
@@ -210,9 +218,8 @@ async function matchOne(d: CatalogueDam): Promise<MatchResult> {
     FROM dams d
     WHERE d.location IS NOT NULL
       AND ST_DWithin(d.location::geography, ST_GeogFromText(${point}), 5000)
-      ${jisPref ? sql`AND (d.pref_code = ${jisPref} OR d.pref_code IS NULL)` : sql``}
     ORDER BY ST_Distance(d.location::geography, ST_GeogFromText(${point}))
-    LIMIT 10
+    LIMIT 20
   `;
   const candidates = rows.map((r) => ({
     id: r.id,
@@ -231,35 +238,19 @@ async function matchOne(d: CatalogueDam): Promise<MatchResult> {
       candidates,
     };
   }
-  // Score each candidate using normalised names so ヶ↔ケ and suffix variants
-  // (ダム vs 貯水池) do not cause false mismatches.
-  let best: { row: (typeof rows)[number]; score: number; reason: string } | null = null;
-  for (const r of rows) {
-    const normR = normalizeJaName(r.name);
-    let score = 0;
-    let reason = '';
-    if (normR === normStem) {
-      score = 1.0;
-      reason = 'exact-name';
-    } else if (normR.includes(normStem) || normStem.includes(normR)) {
-      score = 0.8;
-      reason = 'name-contains';
-    } else {
-      const sim = trigramSimilarity(normR, normStem);
-      if (sim >= 0.7 && r.distance_m < 3000) {
-        // Decent trigram overlap + nearby → cautious accept
-        score = 0.65;
-        reason = `trigram-${sim.toFixed(2)}`;
-      } else {
-        score = r.distance_m < 500 ? 0.6 : 0.4;
-        reason = `distance-only (${Math.round(r.distance_m)}m)`;
-      }
-    }
-    if (best == null || score > best.score) {
-      best = { row: r, score, reason };
-    }
-  }
-  if (!best || best.score < 0.6) {
+  // Score each candidate using normalised names so ヶ↔ケ, 第二↔第2 and suffix
+  // variants (ダム vs 貯水池) do not cause false mismatches.
+  const best = pickBest(
+    rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      distanceM: r.distance_m,
+      prefCode: r.pref_code,
+    })),
+    normStem,
+    jisPref,
+  );
+  if (!best || best.score < MATCH_THRESHOLD) {
     return {
       obsFcd: d.obsFcd,
       obsNm: d.obsNm,
@@ -274,9 +265,9 @@ async function matchOne(d: CatalogueDam): Promise<MatchResult> {
   return {
     obsFcd: d.obsFcd,
     obsNm: d.obsNm,
-    damId: best.row.id,
-    damName: best.row.name,
-    distanceM: best.row.distance_m,
+    damId: best.candidate.id,
+    damName: best.candidate.name,
+    distanceM: best.candidate.distanceM,
     score: best.score,
     reason: best.reason,
     candidates,
@@ -336,14 +327,28 @@ const task: Task = async (rawPayload, helpers) => {
   const cat = await fetchAllKasenbosaiDams(date, time, log);
   log(`match:kasenbosai: fetched ${cat.length} dams across ${PREFECTURES.length} JIS prefs`);
 
+  // Score everything first. Two stations can legitimately resolve to the same
+  // master row, and `external_ids.kasenbosai` only holds one id, so the winner
+  // has to be chosen across the whole catalogue rather than as we go.
+  const scored: { dam: CatalogueDam; match: MatchResult }[] = [];
+  for (const d of cat) {
+    scored.push({ dam: d, match: await matchOne(d) });
+  }
+  const winners = pickStationPerMaster(scored.map((s) => s.match));
+
   let matched = 0;
   let alreadySet = 0;
   let unmatched = 0;
+  let contested = 0;
   let needsReview = 0;
-  for (const d of cat) {
-    const m = await matchOne(d);
-    if (m.damId == null) {
-      unmatched += 1;
+  for (const { dam: d, match: m } of scored) {
+    if (m.damId == null || !winners.has(m)) {
+      if (m.damId == null) {
+        unmatched += 1;
+      } else {
+        contested += 1;
+        log(`  -- ${m.obsNm} → ${m.damName} skipped: another station scores higher on that dam`);
+      }
       // Surface candidates for human review when there were any nearby dams.
       if (m.candidates.length > 0) {
         await writeMatchReview(d, m);
@@ -364,14 +369,14 @@ const task: Task = async (rawPayload, helpers) => {
         `  ok ${m.obsNm.padEnd(14)} → ${m.damName} (${Math.round(m.distanceM ?? 0)} m, ${m.reason})`,
       );
     }
-    // Also stage uncertain auto-matches (score < 0.8) for review.
-    if (m.score < 0.8) {
+    // Also stage uncertain auto-matches for review.
+    if (m.score < REVIEW_THRESHOLD) {
       await writeMatchReview(d, m);
       needsReview += 1;
     }
   }
   log(
-    `match:kasenbosai done — fetched=${cat.length} newly-matched=${matched} already-set=${alreadySet} unmatched=${unmatched} needs-review=${needsReview}`,
+    `match:kasenbosai done — fetched=${cat.length} newly-matched=${matched} already-set=${alreadySet} unmatched=${unmatched} contested=${contested} needs-review=${needsReview}`,
   );
 };
 
