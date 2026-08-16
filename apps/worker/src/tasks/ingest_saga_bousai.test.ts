@@ -1,5 +1,29 @@
 import { describe, expect, test } from 'bun:test';
-import { parseSagaPage, parseSagaTimestamp } from './ingest_saga_bousai.ts';
+import { extractYear, parseSagaPage, parseSagaTimestamp } from './ingest_saga_bousai.ts';
+
+describe('extractYear', () => {
+  test('reads the year from the page header', () => {
+    expect(extractYear('<div>2026年06月05日21時00分 現在</div>')).toBe(2026);
+  });
+
+  test('falls back to a whole-number year', () => {
+    // Regression: the fallback was `getUTCFullYear() + 9 / 24`, which added
+    // 0.375 to the year instead of shifting a timestamp by 9 hours.
+    const y = extractYear('<html></html>');
+    expect(Number.isInteger(y)).toBe(true);
+  });
+
+  test('the fallback year is the JST year, not the UTC one', () => {
+    // 2026-12-31T15:30:00Z is already 2027-01-01 00:30 in JST, and the page
+    // reports JST dates — so the year to stamp rows with is 2027.
+    expect(extractYear('<html></html>', new Date('2026-12-31T15:30:00Z'))).toBe(2027);
+    expect(extractYear('<html></html>', new Date('2026-12-31T14:30:00Z'))).toBe(2026);
+  });
+
+  test('an explicit header year wins over the clock', () => {
+    expect(extractYear('2025年06月05日', new Date('2026-12-31T15:30:00Z'))).toBe(2025);
+  });
+});
 
 describe('parseSagaTimestamp', () => {
   test('parses "MM/DD HH:MM" (JST) with year → UTC', () => {
@@ -78,5 +102,18 @@ describe('parseSagaPage', () => {
 
   test('returns empty array for empty table', () => {
     expect(parseSagaPage(EMPTY_HTML)).toHaveLength(0);
+  });
+
+  test('stamps the JST year when the header carries none', () => {
+    // The table only has MM/DD. With no "YYYY年" in the header the year comes
+    // from the clock, and at 2026-12-31T15:30Z it is already 2027 in JST — the
+    // timezone the 01/02 in this table is expressed in.
+    const noYearHtml = SAMPLE_HTML.replace('2026年06月05日21時00分 現在', '現在').replace(
+      /06\/05 21:00/g,
+      '01/02 09:00',
+    );
+    const rows = parseSagaPage(noYearHtml, new Date('2026-12-31T15:30:00Z'));
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.observedAt?.toISOString()).toBe('2027-01-02T00:00:00.000Z');
   });
 });

@@ -79,18 +79,26 @@ export function parseSagaTimestamp(s: string, year: number): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/** Extract the 4-digit year from "YYYY年..." in the page header. */
-export function extractYear(html: string): number {
+/**
+ * Extract the 4-digit year from "YYYY年..." in the page header.
+ *
+ * The table itself only carries MM/DD, so the year has to come from the header
+ * or, failing that, the clock. The fallback uses the JST year because the page
+ * reports JST: between 15:00 UTC on 31 Dec and midnight the UTC year is already
+ * one behind what the page means.
+ */
+export function extractYear(html: string, now: Date = new Date()): number {
   const m = html.match(/(\d{4})年/);
-  return m ? Number(m[1]) : new Date().getUTCFullYear() + 9 / 24; // fallback: current JST year
+  if (m) return Number(m[1]);
+  return new Date(now.getTime() + 9 * 3_600_000).getUTCFullYear();
 }
 
 /**
  * Parse a single page's transposed dam table.
  * Returns one ParsedRow per dam column.
  */
-export function parseSagaPage(html: string): ParsedRow[] {
-  const year = Number(html.match(/(\d{4})年/)?.[1] ?? new Date().getUTCFullYear());
+export function parseSagaPage(html: string, now: Date = new Date()): ParsedRow[] {
+  const year = extractYear(html, now);
 
   // Build label → [col values] from every <tr>
   const rowMap = new Map<string, string[]>();
