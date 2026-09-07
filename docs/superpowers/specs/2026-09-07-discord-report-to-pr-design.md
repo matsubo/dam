@@ -177,9 +177,15 @@ decides what happens.
    is a fire-and-forget promise inside the long-running Bun process, with
    rejections logged; in tests it collects promises so they can be awaited.
 8. Deferred work (`process-report.ts`): download attachments (§4.3), compose
-   the issue (§4.4), `createIssue`, `addLabels`, `addComment` for overflow
-   chunks, then `PATCH /webhooks/{app_id}/{token}/messages/@original` with
-   `Issue created: <url>`. On failure, PATCH a one-line error instead.
+   the issue (§4.4), then write to GitHub in this exact order —
+   `createIssue`, `addComment` for every overflow chunk, and **`addLabels`
+   last** — and finally `PATCH /webhooks/{app_id}/{token}/messages/@original`
+   with `Issue created: <url>`. Labels go last because adding `auto-fix` is
+   what starts stage 2; Claude must never read an issue whose attachment
+   comments have not landed yet. On failure, PATCH a one-line error instead.
+9. On `SIGTERM` (Coolify redeploy / restart) the server stops accepting
+   requests and waits up to 10 s for in-flight background work before
+   exiting, so a report is not lost mid-transcription.
 
 `GET /healthz` returns `200 {"ok":true}` for Coolify's health check. Any other
 path → `404`.
@@ -237,8 +243,10 @@ Pure function `composeIssue(report, attachments, route) → { title, body, comme
   `Attachment k of n (part i/j)` when one file is split.
 - **Labels** come from the route (default `["from-discord", "auto-fix"]`) and
   are applied by a **separate** call (`POST /repos/{owner}/{repo}/issues/{n}/labels`)
-  after creation. This guarantees an `issues.labeled` event, which is the
-  stage-2 trigger (§5.2). Labels set inside the create call are not relied on.
+  after the issue and all overflow comments exist. This guarantees an
+  `issues.labeled` event, which is the stage-2 trigger (§5.2), and guarantees
+  the issue is complete when that event fires. Labels set inside the create
+  call are not relied on.
 
 ### 4.5 Routing
 
@@ -329,7 +337,7 @@ jobs:
     # services: …            ← repository-specific
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
+        with: { fetch-depth: 0, persist-credentials: false }
       # runtime setup / migrations …   ← repository-specific
       - uses: matsubo/discord-issue-bridge/auto-fix@v1
         with:
@@ -376,8 +384,19 @@ Steps:
    with the repository as its working directory and the action's files live
    outside it.
 3. `anthropics/claude-code-action@v1` with `claude_code_oauth_token`,
-   `github_token` from step 1, `prompt` from step 2, and
-   `claude_args: --model <model> --max-turns <n> --allowedTools "<base>,<extra>"`.
+   `github_token` from step 1, `prompt` from step 2,
+   `claude_args: --model <model> --max-turns <n> --allowedTools "<base>,<extra>"`,
+   and `env: GH_TOKEN: <App token>` so Claude's `gh` calls use the App token
+   explicitly rather than whatever the runner happens to export.
+
+Which token pushes: the action's git setup (`src/github/operations/git-config.ts`)
+removes the `http.extraheader` left by `actions/checkout` and rewrites the
+remote as `https://x-access-token:<github_token>@github.com/...`, so
+`git push` from Claude's Bash uses the App token, not the workflow's
+`GITHUB_TOKEN`. The template still sets `persist-credentials: false` on
+checkout so no `GITHUB_TOKEN` credential is present to fall back to. Both the
+PR `opened` event and later `synchronize` pushes therefore trigger the
+service's CI.
 
 The job's environment holds only the service's throwaway CI resources and the
 two tokens; no production secrets.
@@ -427,6 +446,14 @@ Language-agnostic; the full text is the deliverable, its rules are:
   repositories owned by the user matsubo"* (equivalently
   `gh api -X PUT repos/matsubo/discord-issue-bridge/actions/permissions/access -f access_level=user`).
 - Callers pin `@v1`, a tag the maintainer moves on compatible releases.
+- **Actor check (load-bearing).** `claude-code-action` refuses to run unless
+  the event actor has write access, and treats bot actors separately
+  (`allowed_bots`). For `issues.labeled` the actor is whoever added the
+  label. The bridge adds labels with a PAT, so the actor is the maintainer's
+  own user and the check passes. If the bridge is ever switched to a GitHub
+  App token, the actor becomes a bot and stage 2 silently never starts unless
+  `allowed_bots` names that app. Keep the bridge on a PAT, or set
+  `allowed_bots` in the composite action at the same time.
 
 ### 5.7 Per-service onboarding script (`bin/setup-repo.sh <owner/repo>`)
 
@@ -466,7 +493,9 @@ designed, not a failure.
   visibility) plus the server-side user-ID allow-list, plus explicit routing —
   an unmapped channel cannot create anything.
 - **Blast radius of the bridge token**: Issues-only PAT scoped to the routed
-  repositories. It cannot push code or read secrets.
+  repositories. It cannot push code or read secrets. It must remain a user
+  PAT (not an App token) so the label actor passes the action's write-access
+  check (§5.6).
 - **Bot token** is used only by the local registration script and never
   deployed.
 - **Prompt injection**: the report is untrusted input that Claude reads. The
@@ -496,7 +525,8 @@ Bridge (`bun test`, 80 %+ coverage on `src/`):
   signature; PING → PONG; ephemeral replies for restricted user and unmapped
   channel; happy path returns the deferred response and, after awaiting the
   collected background promises, the mocked GitHub and Discord endpoints were
-  called with the expected payloads (create → labels → comments → PATCH).
+  called with the expected payloads in order (create → comments → labels →
+  PATCH); a test asserts that labels are added after the last comment.
 
 Action and scripts:
 
@@ -522,7 +552,10 @@ Action and scripts:
 5. Create the GitHub App and the bridge PAT; run `bin/setup-repo.sh matsubo/dam`;
    grant action access from owned repositories; tag `v1`.
 6. In dam: add `.github/workflows/auto-fix.yml` (this branch), merge.
-7. Dry-run stage 2 on a synthetic dam issue.
+7. Dry-run stage 2 on a synthetic dam issue. After the PR opens, confirm CI
+   ran on it, then push one more commit to the `auto-fix/*` branch from the
+   job (re-label to re-run) and confirm CI runs again on `synchronize` — the
+   only test that proves the App token, not `GITHUB_TOKEN`, is pushing.
 8. Transcribe the HTokui report with the real command; let stage 2 run.
 9. Onboard the next service: route line, `setup-repo.sh`, caller workflow.
 
