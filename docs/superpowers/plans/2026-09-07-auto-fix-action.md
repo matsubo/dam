@@ -67,6 +67,7 @@ async function run(env: Record<string, string>): Promise<{ code: number; output:
   await writeFile(policyPath, '# Policy\n\nRule one.\n');
   const proc = Bun.spawnSync(['bash', SCRIPT], {
     env: { PATH: process.env.PATH ?? '', GITHUB_OUTPUT: outputPath, POLICY_PATH: policyPath, ...env },
+    stdin: 'ignore',
     stderr: 'pipe',
   });
   const output = await readFile(outputPath, 'utf8').catch(() => '');
@@ -470,6 +471,7 @@ async function run(args: string[], env: Record<string, string>) {
   await writeFile(pem, '-----BEGIN RSA PRIVATE KEY-----\nabc\n-----END RSA PRIVATE KEY-----\n');
   const proc = Bun.spawnSync(['bash', SCRIPT, ...args], {
     env: { PATH: process.env.PATH ?? '', GH_BIN: fakeGh, AUTO_FIX_APP_PRIVATE_KEY_FILE: pem, ...env },
+    stdin: 'ignore',
     stdout: 'pipe',
     stderr: 'pipe',
   });
@@ -764,6 +766,8 @@ Adds the caller workflow for matsubo/discord-issue-bridge/auto-fix@v1 and the
 design spec + plans for the Discord → issue → AI fix pipeline.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+https://claude.ai/code/session_013URRD7od4dhrFgCW1DxAuP
 EOF
 ```
 

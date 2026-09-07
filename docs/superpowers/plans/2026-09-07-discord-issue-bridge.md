@@ -121,7 +121,7 @@ mkdir -p src/discord src/github bin test/helpers test/fixtures docs/superpowers/
     "types": ["bun-types"],
     "lib": ["ES2022", "DOM"]
   },
-  "include": ["src", "bin", "test"]
+  "include": ["src", "bin", "test", "auto-fix"]
 }
 ```
 
@@ -2091,7 +2091,7 @@ describe('handle', () => {
     expect(writes).toEqual([
       'POST /repos/matsubo/dam/issues',
       'POST /repos/matsubo/dam/issues/7/labels',
-      'PATCH /webhooks/999/interaction-token/messages/@original',
+      'PATCH /api/v10/webhooks/999/interaction-token/messages/@original',
     ]);
     const create = fake.calls.find((c) => c.url.endsWith('/repos/matsubo/dam/issues'));
     expect(create?.body).toMatchObject({ title: '[Discord] 初めまして。HTといいます。貯水率について検証したところ、不一致がありました。' });
