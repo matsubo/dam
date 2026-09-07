@@ -74,8 +74,10 @@ transcription, and reviewing / merging the PR.
   `PING` (type 1) with `PONG` (type 1) when the URL is saved, and must respond
   to every interaction within 3 seconds (a deferred response is allowed, and
   the interaction token stays valid for 15 minutes for follow-ups).
-- `crypto.subtle` supports Ed25519 on Bun 1.4 (local) and on `oven/bun:1.3`
-  (1.3.14, verified in Docker), so signature verification needs no dependency.
+- `crypto.subtle` supports Ed25519 on Bun 1.4 (local) and on `oven/bun:1.4`
+  (verified in Docker), so signature verification needs no dependency. The
+  image must be Bun 1.4+: the committed `bun.lock` (lockfile version 2) does
+  not parse under Bun 1.3.
 - `anthropics/claude-code-action@v1` supports an automation mode driven by an
   explicit `prompt` on `issues` events, accepts a Claude Max/Pro OAuth token
   (`claude_code_oauth_token`, from `claude setup-token`), and lets Claude run
@@ -168,10 +170,14 @@ decides what happens.
 4. `type: 2` with `data.type: 3` and `data.name` equal to the registered
    command name → continue. Anything else → `400`.
 5. Authorise: `member.user.id` must be in `DISCORD_ALLOWED_USER_IDS`. Otherwise
-   reply ephemeral (`type: 4`, `flags: 64`) "This command is restricted." The
+   reply ephemeral (`type: 4`, `flags: 64`) "This command is restricted to the
+   maintainer." The
    signature proves the request came from Discord, not who clicked.
-6. Route: `resolveRoute(channel_id)`. No route → ephemeral "This channel is not
-   mapped to a repository." Nothing else happens.
+6. Route: `resolveRoute(channel_id)`, falling back to `resolveRoute(channel.parent_id)`
+   when the message was posted inside a thread (Discord sends the thread id as
+   `channel_id` and the parent channel in `channel.parent_id`). No route for
+   either → ephemeral "This channel is not mapped to a repository." Nothing
+   else happens.
 7. Reply immediately with a deferred response (`type: 5`, not ephemeral), then
    hand the remaining work to `deps.background(promise)`. In production that
    is a fire-and-forget promise inside the long-running Bun process, with
@@ -188,7 +194,10 @@ decides what happens.
    exiting, so a report is not lost mid-transcription.
 
 `GET /healthz` returns `200 {"ok":true}` for Coolify's health check. Any other
-path → `404`.
+path → `404`. The server caps request bodies at 1 MiB (a Discord interaction
+payload is a few KB) so an unauthenticated client cannot exhaust memory before
+the signature check, and every rejection (401, 400, restricted, unmapped) is
+logged with path, status, and the offending id — never the body.
 
 ### 4.3 Attachment handling
 
@@ -206,7 +215,8 @@ For each entry in `data.resolved.messages[target_id].attachments`:
 
 ### 4.4 Issue composition
 
-Pure function `composeIssue(report, attachments, route) → { title, body, comments[] }`.
+Pure function `composeIssue(report, attachments) → { title, body, comments[] }`
+(labels are applied by the orchestration step, not composed into the text).
 
 - **Title**: `[Discord] ` + first non-empty line of the message content,
   truncated to 80 characters; fallback
@@ -240,7 +250,8 @@ Pure function `composeIssue(report, attachments, route) → { title, body, comme
 - **Chunking**: body and comments are limited to 60,000 characters (headroom
   under 65,536). Attachments fill the body until the limit would be exceeded;
   the rest go into follow-up comments in order, each headed
-  `Attachment k of n (part i/j)` when one file is split.
+  `Attachment k of n (part i/j)` when one file is split. When anything
+  overflowed, the body ends with `_Continued in n comment(s) below._`.
 - **Labels** come from the route (default `["from-discord", "auto-fix"]`) and
   are applied by a **separate** call (`POST /repos/{owner}/{repo}/issues/{n}/labels`)
   after the issue and all overflow comments exist. This guarantees an
@@ -259,9 +270,13 @@ Pure function `composeIssue(report, attachments, route) → { title, body, comme
 }
 ```
 
-- Keys are Discord channel IDs (stable; channel names can be renamed).
+- Keys are Discord channel IDs (stable; channel names can be renamed). A
+  message posted in a thread is routed by the thread's parent channel, so one
+  entry per `#service-*` channel covers its threads too.
 - `labels` defaults to `["from-discord", "auto-fix"]`. A repository that has
-  not adopted stage 2 lists only `from-discord` so nothing tries to run.
+  not adopted stage 2 lists only `from-discord` so nothing tries to run. An
+  empty list and any unknown key are rejected at boot (strict schema), so a
+  typo such as `lables` cannot silently re-enable `auto-fix`.
 - Committed to git rather than read from an environment variable so changes
   are reviewed and versioned; a redeploy of the small bridge image is fast.
 
@@ -280,10 +295,11 @@ Registration script only (local shell, never deployed): `DISCORD_BOT_TOKEN`,
 
 ### 4.7 Deployment
 
-- `Dockerfile`: `FROM oven/bun:1.3`; copy `package.json` + `bun.lock`;
+- `Dockerfile`: `FROM oven/bun:1.4`; copy `package.json` + `bun.lock`;
   `bun install --frozen-lockfile --production`; copy `src/` and `routes.json`;
-  `CMD ["bun", "run", "src/server.ts"]`; `HEALTHCHECK` via `fetch` on
-  `/healthz` (the image has no curl).
+  run as the image's non-root `bun` user; `CMD ["bun", "run", "src/server.ts"]`;
+  `HEALTHCHECK` via `fetch` on `/healthz` honouring `PORT` (the image has no
+  curl).
 - Coolify: Dockerfile build pack from the repository's `main`, one domain
   (e.g. `discord-bridge.teraren.com`), health-check path `/healthz`, the
   variables above. Auto-deploy on push to `main`.
@@ -437,7 +453,8 @@ Language-agnostic; the full text is the deliverable, its rules are:
 
 ### 5.6 Shared GitHub resources (one-time, manual)
 
-- GitHub App "auto-fix": permissions Contents RW, Issues RW, Pull requests RW,
+- GitHub App "matsubo-auto-fix" (App names are globally unique on GitHub):
+  permissions Contents RW, Issues RW, Pull requests RW,
   Metadata R; installed on every onboarded repository. Its ID and private key
   become the per-repository secrets `AUTO_FIX_APP_ID` / `AUTO_FIX_APP_PRIVATE_KEY`.
 - `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token`.
@@ -446,6 +463,11 @@ Language-agnostic; the full text is the deliverable, its rules are:
   repositories owned by the user matsubo"* (equivalently
   `gh api -X PUT repos/matsubo/discord-issue-bridge/actions/permissions/access -f access_level=user`).
 - Callers pin `@v1`, a tag the maintainer moves on compatible releases.
+- **Branch protection on every onboarded repository.** The App has Contents
+  RW and Claude may run `git push`, so the policy's "never push to the base
+  branch" is only a rule, not a guarantee. Protect the default branch
+  (require a pull request; no direct pushes) so a prompt-injected or confused
+  run cannot land on `main` without the maintainer's review.
 - **Actor check (load-bearing).** `claude-code-action` refuses to run unless
   the event actor has write access, and treats bot actors separately
   (`allowed_bots`). For `issues.labeled` the actor is whoever added the
@@ -500,7 +522,8 @@ designed, not a failure.
   deployed.
 - **Prompt injection**: the report is untrusted input that Claude reads. The
   policy says so, tools are allow-listed (no `curl`, no arbitrary shell), and
-  the job has no production credentials. Human PR review is the final control.
+  the job has no production credentials. Branch protection on the default
+  branch (§5.6) and human PR review are the final controls.
 - **Size**: attachment caps bound memory and API usage per invocation.
 - **Action supply chain**: callers pin the bridge action by tag; the bridge
   pins `claude-code-action@v1` and `create-github-app-token@v2`.
