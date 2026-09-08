@@ -8,6 +8,7 @@
  * can tell (8x prefix → 一級). Splitting 二級 from その他 needs W05 — see
  * classify_watersheds.ts.
  */
+import type { MultiPolygon, Polygon } from 'geojson';
 import type { ParsedWatershed } from './types.ts';
 import { kindFromWatershedCode } from './watershed_kind.ts';
 
@@ -22,7 +23,7 @@ interface W07Properties {
 interface W07Feature {
   type: 'Feature';
   properties: W07Properties;
-  geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
+  geometry: Polygon | MultiPolygon;
 }
 
 interface W07FeatureCollection {
