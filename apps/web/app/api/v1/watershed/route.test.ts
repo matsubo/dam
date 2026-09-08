@@ -27,6 +27,7 @@ beforeAll(async () => {
     slug: 'api-test-tokyo',
     name: 'API Test Tokyo',
     kind: 'first',
+    ndiCode: '999901',
     boundaryGeoJSON: SQUARE,
   });
 });
@@ -45,6 +46,7 @@ describe('GET /api/v1/watershed', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.watershed.code).toBe('API-TEST-01');
+    expect(body.watershed.ndiCode).toBe('999901');
     expect(body._links.self.href).toContain('lat=35.5');
     expect(body._links.watershed.href).toBe('/api/v1/watersheds/api-test-tokyo');
   });
