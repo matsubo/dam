@@ -74,7 +74,7 @@ function parseNum(s: string): number | null {
 export function parseSagaTimestamp(s: string, year: number): Date | null {
   const m = s.match(/^(\d{1,2})\/(\d{2})\s+(\d{2}):(\d{2})$/);
   if (!m) return null;
-  const [, mo, dy, hh, mi] = m.map(Number);
+  const [, mo, dy, hh, mi] = m.map(Number) as [string, number, number, number, number];
   const d = new Date(Date.UTC(year, mo - 1, dy, hh - 9, mi, 0, 0));
   return Number.isNaN(d.getTime()) ? null : d;
 }

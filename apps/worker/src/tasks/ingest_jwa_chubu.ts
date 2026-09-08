@@ -94,7 +94,7 @@ function extractLabeled(section: string, label: string): number | null {
   const context = textOf(section.slice(labelIdx, labelIdx + 500));
   const m = context.match(/([\d,]+(?:\.\d+)?)/);
   if (!m) return null;
-  return parseNum(m[1]);
+  return parseNum(m[1] ?? '');
 }
 
 export function parseChubuHtml(html: string): { reportDate: Date | null; rows: ParsedRow[] } {
@@ -118,7 +118,7 @@ export function parseChubuHtml(html: string): { reportDate: Date | null; rows: P
     if (volume == null) {
       const sectionText = textOf(section);
       const vm = sectionText.match(/([\d,]+)\s*千m/);
-      if (vm) volume = parseNum(vm[1]);
+      if (vm) volume = parseNum(vm[1] ?? '');
     }
 
     if (volume == null || rate == null) continue;

@@ -81,8 +81,8 @@ describe('parseMiyazakiTable', () => {
     expect(r?.inflowM3s).toBeCloseTo(8.78);
     expect(r?.outflowM3s).toBeCloseTo(7.67);
     // No storage columns
-    expect(r?.storageVolumeM3).toBeUndefined();
-    expect(r?.storageRate).toBeUndefined();
+    expect(r).not.toHaveProperty('storageVolumeM3');
+    expect(r).not.toHaveProperty('storageRate');
   });
 
   test('skips header/unit rows', () => {

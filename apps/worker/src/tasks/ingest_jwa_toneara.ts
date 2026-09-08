@@ -99,11 +99,11 @@ export function parseToneAraHtml(html: string): { reportDate: Date | null; rows:
       textOf(c[1] ?? ''),
     );
     if (cells.length < 5) continue;
-    const name = cells[0];
+    const name = cells[0] ?? '';
     if (!knownNames.has(name) || seen.has(name)) continue;
     // Column 3 = current storage (万m³), column 4 = storage rate (%).
-    const volume = parseNum(cells[3]);
-    const rate = parseNum(cells[4]);
+    const volume = parseNum(cells[3] ?? '');
+    const rate = parseNum(cells[4] ?? '');
     if (volume == null || rate == null) continue;
     seen.add(name);
     rows.push({ tonaraName: name, storageVolumeManM3: volume, storageRatePct: rate });
