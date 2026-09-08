@@ -21,14 +21,18 @@ test('/watersheds lists 一級 systems first with a plausible 一級/二級 spli
   // several hundred 二級水系; the exact numbers move with master refreshes.
   const summary = page.getByText(/マスタ全体は \d+ 水系/);
   await expect(summary).toBeVisible();
-  const m = /マスタ全体は (\d+) 水系（一級 (\d+) · 二級 (\d+)/.exec(
+  const m = /マスタ全体は (\d+) 水系（一級 (\d+) · 二級 (\d+) · その他 (\d+)）/.exec(
     (await summary.textContent()) ?? '',
   );
   expect(m).not.toBeNull();
-  const [, total, first, second] = (m ?? []).map(Number);
+  const [, total, first, second, other] = (m ?? []).map(Number);
+  // CI runs on a fresh database holding only tests/e2e/fixtures/seed.ts, so
+  // assert what holds there and on the full master alike: Japan has exactly
+  // 109 一級水系, the pre-#21 bug produced 二級 0, and the bands must add up.
+  // The "> 600 水系" census check belongs to a smoke run against production.
   expect(first).toBeLessThanOrEqual(109);
-  expect(second).toBeGreaterThan(100);
-  expect(total).toBeGreaterThan(600);
+  expect(second).toBeGreaterThanOrEqual(1);
+  expect(total).toBe(first + second + other);
   const kindCells = page.locator('table tbody tr td:nth-child(2)');
   await expect(kindCells.first()).toHaveText('一級');
   const tsutsumi = page.locator('table tbody tr', { hasText: '堤川' }).first();
