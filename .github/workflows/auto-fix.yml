@@ -49,6 +49,10 @@ jobs:
         with: { bun-version: latest }
       - run: bun install --frozen-lockfile
       - run: bun run --filter @dam/db migrate
+      # graphile-worker installs its own schema on first worker start (migration
+      # 0010 is only a placeholder); the admin jobs route tests need it present.
+      - run: bunx graphile-worker --schema-only
+        working-directory: apps/worker
       - name: Start MinIO
         run: |
           docker run -d --name minio \
