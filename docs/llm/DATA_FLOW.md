@@ -39,6 +39,27 @@ nlftp.mlit.go.jp catalog page
 Result: 463/644 watersheds get a real polygon boundary. `findWatershedContaining(lat, lng)`
 uses GiST index on `boundary` for sub-100ms lookups.
 
+## Watershed kind (NLNI codelist + W05 → watersheds.kind / ndi_code)
+
+`kind` is NOT derivable from W07 (it carries no 一級/二級 flag; #21). It comes
+from the 水系域コード (河川コード上位 6 桁) plus W05 区間種別:
+
+```
+nlftp.mlit.go.jp codelist WaterSystemCodeCd.html   (code → 水系名, 5,476 rows)
+nlftp.mlit.go.jp W05 × 47 prefectures              (*_Stream.dbf: W05_001 code, W05_003 区間種別)
+  └─ bin/fetch_w05.sh → data/nlni/w05/
+       └─ apps/web/bin/classify_watershed_kind.ts
+            ├─ name-match watersheds (NFKC + 曾/曽 etc.) → candidate codes
+            ├─ code prefix 81–89 → first (the 109 一級水系, by 地方整備局)
+            ├─ any 区間種別 3/7 (二級河川区間) → second, else other
+            ├─ same-named systems: prefer 8x, else the dams' prefecture, else best kind
+            └─ packages/db/migrations/0041_watersheds_kind_from_ndi.sql (UPDATE by code)
+                 └─ deploy/seed/master_upsert.sql.gz re-generated (it rewrites kind on every deploy)
+```
+
+Result: 102 first (108 unique 8x names minus 6 with no W01 dams), 458 second,
+84 other (49 names never matched the codelist, `ndi_code` NULL).
+
 ## Damnet attribute backfill (kana, manager, completion year)
 
 ```
