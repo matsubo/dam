@@ -199,7 +199,7 @@ const components = {
         code: {
           type: 'string',
           description:
-            '内部の一意キー。現状は国土数値情報 W01（ダム）の水系名から生成した `W01-<水系名>` 形式で、国土数値情報の水系域コード（6 桁数値）ではありません。',
+            '内部の一意キー。国土数値情報 W01（ダム）の水系名から生成した `W01-<水系名>` 形式で、国土数値情報の水系域コードではありません（水系域コードは `ndiCode`）。',
           example: 'W01-相模川',
         },
         name: { type: 'string', example: '相模川' },
@@ -213,8 +213,15 @@ const components = {
           type: 'string',
           enum: ['first', 'second', 'other'],
           description:
-            '一級 / 二級 / その他。現状は W07 流域界の有無で暫定分類しており、一級・二級の正確な区分ではありません（issue #19 参照）。',
+            '河川法上の区分。first = 一級水系（水系域コードが地方整備局番号 81–89 で始まる 109 水系）、second = 二級水系（国土数値情報 W05 の区間種別に二級河川区間を含む）、other = 準用・普通河川のみの水系、または水系名がコードリストと一致しなかったもの。',
           example: 'first',
+        },
+        ndiCode: {
+          type: 'string',
+          nullable: true,
+          description:
+            '国土数値情報の水系域コード（河川コード上位 6 桁。W07_002 / W05_001 と同じ体系）。水系名がコードリストと一致しなかった場合は null。',
+          example: '830307',
         },
         areaKm2: {
           type: 'number',
@@ -804,6 +811,7 @@ const paths = {
                     code: 'W01-相模川',
                     name: '相模川',
                     kind: 'first',
+                    ndiCode: '830307',
                     damCount: 8,
                   },
                 ],
@@ -963,6 +971,7 @@ const paths = {
                 code: 'W01-相模川',
                 name: '相模川',
                 kind: 'first',
+                ndiCode: '830307',
                 contains: true,
                 _links: { self: { href: '/api/v1/watershed?lat=35.55056&lng=139.13361' } },
               },
