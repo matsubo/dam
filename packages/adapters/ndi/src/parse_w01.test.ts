@@ -28,7 +28,7 @@ describe('parseW01', () => {
       effectiveCapacityM3: 90000000,
       floodCapacityM3: 65000000,
       completedYear: 2020,
-      watershedCode: '01',
+      watershedCode: '830303',
       lat: 36.55,
       lng: 138.69,
     });

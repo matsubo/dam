@@ -18,6 +18,8 @@ export const watersheds = pgTable('watersheds', {
   name: text('name').notNull(),
   nameKana: text('name_kana'),
   kind: text('kind', { enum: ['first', 'second', 'other'] }).notNull(),
+  /** 国土数値情報 水系域コード (河川コード上位 6 桁); NULL when the name never matched the codelist. */
+  ndiCode: text('ndi_code'),
   boundary: geographyMultiPolygon('boundary').notNull(),
   areaKm2: doublePrecision('area_km2'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),

@@ -6,16 +6,18 @@ export interface UpsertWatershedInput {
   name: string;
   nameKana?: string | null;
   kind: 'first' | 'second' | 'other';
+  /** 国土数値情報 水系域コード (6 桁), when the source carries one. */
+  ndiCode?: string | null;
   boundaryGeoJSON: object; // FeatureGeometry
   areaKm2?: number | null;
 }
 
 export async function upsertWatershed(input: UpsertWatershedInput): Promise<bigint> {
   const rows = await sql<{ id: bigint }[]>`
-    INSERT INTO watersheds (code, slug, name, name_kana, kind, boundary, area_km2)
+    INSERT INTO watersheds (code, slug, name, name_kana, kind, ndi_code, boundary, area_km2)
     VALUES (
       ${input.code}, ${input.slug}, ${input.name}, ${input.nameKana ?? null},
-      ${input.kind},
+      ${input.kind}, ${input.ndiCode ?? null},
       ST_Multi(ST_GeomFromGeoJSON(${JSON.stringify(input.boundaryGeoJSON)}))::geography,
       ${input.areaKm2 ?? null}
     )
@@ -24,6 +26,7 @@ export async function upsertWatershed(input: UpsertWatershedInput): Promise<bigi
       name      = EXCLUDED.name,
       name_kana = EXCLUDED.name_kana,
       kind      = EXCLUDED.kind,
+      ndi_code  = EXCLUDED.ndi_code,
       boundary  = EXCLUDED.boundary,
       area_km2  = EXCLUDED.area_km2
     RETURNING id
@@ -39,6 +42,7 @@ export interface WatershedAtPoint {
   slug: string;
   name: string;
   kind: 'first' | 'second' | 'other';
+  ndiCode: string | null;
 }
 
 export async function findWatershedContaining(
@@ -46,7 +50,7 @@ export async function findWatershedContaining(
   lng: number,
 ): Promise<WatershedAtPoint | null> {
   const rows = await sql<WatershedAtPoint[]>`
-    SELECT id, code, slug, name, kind
+    SELECT id, code, slug, name, kind, ndi_code AS "ndiCode"
     FROM watersheds
     WHERE ST_Contains(boundary::geometry,
                       ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326))
@@ -65,7 +69,7 @@ export async function findNearestWatershed(
   lng: number,
 ): Promise<NearestWatershed | null> {
   const rows = await sql<NearestWatershed[]>`
-    SELECT id, code, slug, name, kind,
+    SELECT id, code, slug, name, kind, ndi_code AS "ndiCode",
            ST_Distance(boundary,
                        ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography) AS "distanceM"
     FROM watersheds
@@ -81,16 +85,18 @@ export interface WatershedListItem {
   code: string;
   name: string;
   kind: 'first' | 'second' | 'other';
+  ndiCode: string | null;
   damCount: number;
 }
 
 export async function listWatersheds(
   opts: { kind?: 'first' | 'second' | null; cursor?: bigint | null; pageSize?: number } = {},
 ): Promise<{ items: WatershedListItem[]; nextCursor: bigint | null }> {
-  const limit = Math.max(1, Math.min(500, opts.pageSize ?? 200));
+  // 1000 > the 644-row master, so the web pages can fetch it in one call.
+  const limit = Math.max(1, Math.min(1000, opts.pageSize ?? 200));
   const rows = await sql<WatershedListItem[]>`
     SELECT
-      w.id, w.slug, w.code, w.name, w.kind,
+      w.id, w.slug, w.code, w.name, w.kind, w.ndi_code AS "ndiCode",
       COUNT(d.id)::INT AS "damCount"
     FROM watersheds w
     LEFT JOIN dams d ON d.watershed_id = w.id
@@ -115,7 +121,7 @@ export async function searchWatersheds(query: string, limit = 30): Promise<Water
   const like = `%${q}%`;
   return sql<WatershedListItem[]>`
     SELECT
-      w.id, w.slug, w.code, w.name, w.kind,
+      w.id, w.slug, w.code, w.name, w.kind, w.ndi_code AS "ndiCode",
       COUNT(d.id)::INT AS "damCount"
     FROM watersheds w
     LEFT JOIN dams d ON d.watershed_id = w.id
@@ -139,12 +145,14 @@ export interface WatershedDetail {
   name: string;
   nameKana: string | null;
   kind: 'first' | 'second' | 'other';
+  ndiCode: string | null;
   areaKm2: number | null;
 }
 
 export async function findWatershedBySlug(slug: string): Promise<WatershedDetail | null> {
   const rows = await sql<WatershedDetail[]>`
-    SELECT id, slug, code, name, name_kana AS "nameKana", kind, area_km2 AS "areaKm2"
+    SELECT id, slug, code, name, name_kana AS "nameKana", kind,
+           ndi_code AS "ndiCode", area_km2 AS "areaKm2"
     FROM watersheds WHERE slug = ${slug} LIMIT 1
   `;
   return rows[0] ?? null;

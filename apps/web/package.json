@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@dam/adapters-ndi": "workspace:*",
     "@dam/core": "workspace:*",
     "@dam/db": "workspace:*",
     "echarts": "^6.0.0",
