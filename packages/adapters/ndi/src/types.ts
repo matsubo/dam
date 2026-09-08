@@ -1,3 +1,5 @@
+import type { MultiPolygon, Polygon } from 'geojson';
+
 export interface ParsedWatershed {
   code: string;
   /** 国土数値情報 水系域コード (6 桁) when the source carries one. */
@@ -5,7 +7,7 @@ export interface ParsedWatershed {
   name: string;
   nameKana?: string | null;
   kind: 'first' | 'second' | 'other';
-  geometry: GeoJSON.MultiPolygon | GeoJSON.Polygon;
+  geometry: MultiPolygon | Polygon;
   areaKm2?: number | null;
 }
 
