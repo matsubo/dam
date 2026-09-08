@@ -20,7 +20,7 @@ afterAll(async () => {
   // `DELETE FROM dams WHERE external_ids ? 'ndi'` would wipe the master
   // when the test runs against a populated DB.
   await sql`DELETE FROM dams WHERE external_ids ->> 'ndi' IN ('1234567890','9999999999')`;
-  await sql`DELETE FROM watersheds WHERE code IN ('01','02')`;
+  await sql`DELETE FROM watersheds WHERE code IN ('830303','020036')`;
 });
 
 describe('importDams', () => {

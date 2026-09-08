@@ -44,6 +44,7 @@ export async function GET(req: Request): Promise<Response> {
           code: w.code,
           name: w.name,
           kind: w.kind,
+          ndiCode: w.ndiCode,
           damCount: w.damCount,
         })),
         count: r.items.length,

@@ -1,6 +1,7 @@
 import { suffixedSlug, toSlug } from '@dam/core/slug';
 import { sql } from '@dam/db/client';
 import { upsertWatershed } from '@dam/db/repo/watersheds';
+import type { MultiPolygon } from 'geojson';
 import type { ParsedWatershed } from './types.ts';
 
 interface ImportResult {
@@ -29,7 +30,7 @@ export async function importWatersheds(parsed: ParsedWatershed[]): Promise<Impor
         return candidate;
       })();
 
-    const geometry: GeoJSON.MultiPolygon =
+    const geometry: MultiPolygon =
       w.geometry.type === 'MultiPolygon'
         ? w.geometry
         : { type: 'MultiPolygon', coordinates: [w.geometry.coordinates] };
@@ -40,6 +41,7 @@ export async function importWatersheds(parsed: ParsedWatershed[]): Promise<Impor
       name: w.name,
       nameKana: w.nameKana ?? null,
       kind: w.kind,
+      ndiCode: w.ndiCode ?? null,
       boundaryGeoJSON: geometry,
       areaKm2: w.areaKm2 ?? null,
     });
