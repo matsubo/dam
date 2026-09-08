@@ -196,18 +196,39 @@ const components = {
       properties: {
         id: { type: 'string', description: 'BIGINT を 10 進文字列化', example: '123' },
         slug: { type: 'string', example: '相模川' },
-        code: { type: 'string', description: 'NDI A21 の水系コード', example: 'A21-83' },
-        name: { type: 'string', example: '相模川水系' },
-        nameKana: { type: 'string', nullable: true, example: 'さがみがわすいけい' },
-        kind: { type: 'string', enum: ['first', 'second', 'other'], example: 'first' },
-        areaKm2: { type: 'number', nullable: true, example: 1680.5 },
+        code: {
+          type: 'string',
+          description:
+            '内部の一意キー。現状は国土数値情報 W01（ダム）の水系名から生成した `W01-<水系名>` 形式で、国土数値情報の水系域コード（6 桁数値）ではありません。',
+          example: 'W01-相模川',
+        },
+        name: { type: 'string', example: '相模川' },
+        nameKana: {
+          type: 'string',
+          nullable: true,
+          description: '現状は未投入（常に null）。',
+          example: null,
+        },
+        kind: {
+          type: 'string',
+          enum: ['first', 'second', 'other'],
+          description:
+            '一級 / 二級 / その他。現状は W07 流域界の有無で暫定分類しており、一級・二級の正確な区分ではありません（issue #19 参照）。',
+          example: 'first',
+        },
+        areaKm2: {
+          type: 'number',
+          nullable: true,
+          description: '現状は未投入（常に null）。',
+          example: null,
+        },
         damCount: { type: 'integer', nullable: true, example: 8 },
       },
     },
 
     DamListItem: {
       type: 'object',
-      required: ['id', 'slug', 'name', 'prefCode', 'lat', 'lng'],
+      required: ['id', 'slug', 'name', 'prefCode', 'location'],
       properties: {
         id: { type: 'string', example: '7163' },
         slug: { type: 'string', example: 'doushi-14' },
@@ -220,15 +241,30 @@ const components = {
           description: '総貯水容量 (m³, NUMERIC を文字列化)',
           example: '1525000.00',
         },
-        watershedSlug: { type: 'string', nullable: true, example: '相模川' },
-        watershedName: { type: 'string', nullable: true, example: '相模川水系' },
-        lat: { type: 'number', example: 35.55056 },
-        lng: { type: 'number', example: 139.13361 },
-        imageUrl: {
+        activeCapacityM3: {
           type: 'string',
           nullable: true,
-          format: 'uri',
-          example: 'https://dambinran.damnet.or.jp/wp-content/uploads/2026/02/0699DC0100AO1L.jpg',
+          description: '利水容量 (m³, NUMERIC を文字列化)。諸元の静的値。',
+          example: '616000.00',
+        },
+        location: {
+          type: 'object',
+          required: ['lat', 'lng'],
+          properties: {
+            lat: { type: 'number', example: 35.55056 },
+            lng: { type: 'number', example: 139.13361 },
+          },
+        },
+        watershed: {
+          type: 'object',
+          nullable: true,
+          description:
+            '所属水系。`slug` で `/api/v1/watersheds/{slug}` を辿れます。未割当なら null。',
+          required: ['slug', 'name'],
+          properties: {
+            slug: { type: 'string', example: '相模川' },
+            name: { type: 'string', example: '相模川' },
+          },
         },
       },
     },
@@ -288,6 +324,35 @@ const components = {
               additionalProperties: { type: 'string' },
               description: 'ソース別の外部 ID。',
               example: { ndi: '716', damnet: '0699' },
+            },
+            latest: {
+              type: 'object',
+              nullable: true,
+              description: '最新観測値。観測値が 1 件もなければ null。',
+              properties: {
+                observedAt: { type: 'string', format: 'date-time' },
+                sourceId: { type: 'string', example: 'kasenbosai' },
+                storageVolumeM3: { type: 'string', nullable: true, example: '1992000.00' },
+                storageRate: {
+                  type: 'string',
+                  nullable: true,
+                  description:
+                    '貯水率 (0..1、100% 超もあり得る)。`trusted_rate_basis` なソースでは出典が公表する利水容量貯水率をそのまま格納し、それ以外は貯水量 ÷ 諸元の利水容量。',
+                  example: '0.9230',
+                },
+                inflowM3s: { type: 'string', nullable: true },
+                outflowM3s: { type: 'string', nullable: true },
+                waterLevelM: { type: 'string', nullable: true },
+                rainfallMm: { type: 'string', nullable: true },
+                qualityFlag: { type: 'integer', example: 0 },
+                effectiveActiveCapacityM3: {
+                  type: 'string',
+                  nullable: true,
+                  description:
+                    '表示している貯水率の分母 (m³)。信頼ソースの利水容量貯水率から逆算 (貯水量 ÷ 貯水率) した季節反映値で、洪水期は諸元の `activeCapacityM3` より大幅に小さくなり得ます (issue #19)。信頼ソースでなければ `activeCapacityM3` と同じ。注意: 出典側で貯水率が 100% に頭打ちされている場合は貯水量そのものになり、実際の利水容量を上回り得ます。',
+                  example: '2158000.00',
+                },
+              },
             },
             dataRealness: {
               type: 'object',
@@ -382,18 +447,25 @@ const components = {
 
     WatershedDetailResponse: {
       type: 'object',
-      required: ['_links'],
+      required: ['aggregate', '_links'],
       allOf: [
         { $ref: '#/components/schemas/Watershed' },
         {
           type: 'object',
           properties: {
-            damCount: { type: 'integer' },
-            totalCapacityM3: { type: 'string', nullable: true },
-            activeCapacityM3: { type: 'string', nullable: true },
-            rateableDamCount: { type: 'integer' },
-            latestStorageVolumeM3: { type: 'string', nullable: true },
-            observedAt: { type: 'string', format: 'date-time', nullable: true },
+            aggregate: {
+              type: 'object',
+              description:
+                '水系全体の集計。`GET /api/v1/watersheds/{slug}/aggregate` と同じ内容をネストして返します。',
+              properties: {
+                damCount: { type: 'integer' },
+                totalCapacityM3: { type: 'string', nullable: true },
+                activeCapacityM3: { type: 'string', nullable: true },
+                rateableDamCount: { type: 'integer' },
+                latestStorageVolumeM3: { type: 'string', nullable: true },
+                observedAt: { type: 'string', format: 'date-time', nullable: true },
+              },
+            },
             _links: { $ref: '#/components/schemas/HalLinks' },
           },
         },
@@ -573,12 +645,9 @@ const paths = {
                     prefCode: '14',
                     manager: '神奈川県企業庁',
                     totalCapacityM3: '1525000.00',
-                    watershedSlug: '相模川',
-                    watershedName: '相模川水系',
-                    lat: 35.55056,
-                    lng: 139.13361,
-                    imageUrl:
-                      'https://dambinran.damnet.or.jp/wp-content/uploads/2026/02/0699DC0100AO1L.jpg',
+                    activeCapacityM3: '616000.00',
+                    location: { lat: 35.55056, lng: 139.13361 },
+                    watershed: { slug: '相模川', name: '相模川' },
                   },
                 ],
                 nextCursor: '7164',
@@ -732,8 +801,8 @@ const paths = {
                   {
                     id: '83',
                     slug: '相模川',
-                    code: 'A21-83',
-                    name: '相模川水系',
+                    code: 'W01-相模川',
+                    name: '相模川',
                     kind: 'first',
                     damCount: 8,
                   },
@@ -891,8 +960,8 @@ const paths = {
             'application/hal+json': {
               example: {
                 slug: '相模川',
-                code: 'A21-83',
-                name: '相模川水系',
+                code: 'W01-相模川',
+                name: '相模川',
                 kind: 'first',
                 contains: true,
                 _links: { self: { href: '/api/v1/watershed?lat=35.55056&lng=139.13361' } },

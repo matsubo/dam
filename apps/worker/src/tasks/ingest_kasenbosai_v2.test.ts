@@ -62,14 +62,38 @@ describe('parseKasenbosaiObsValue quality codes', () => {
     expect(parsed?.storageRate).toBeCloseTo(0.5, 6);
   });
 
-  test('storPcntEff invalid → falls back to storPcntIrr', () => {
+  test('both rate fields valid → 利水容量貯水率 (storPcntIrr) wins, not 有効容量 (#19)', () => {
+    // Real 美利河ダム payload, 2026/09/08 15:00 JST. The feed's storPcntIrr
+    // is the manager-published 貯水率 (denominator = current-season 利水容量,
+    // 2,159 千m³ in 洪水期); storPcntEff divides by the full 有効貯水容量
+    // (14,500 千m³). Official 水文水質DB shows 92.3% here, not 13.5%.
+    const parsed = parseKasenbosaiObsValue({
+      storLvl: 113.66,
+      storLvlCcd: 0,
+      storCap: 1992,
+      storCapCcd: 0,
+      storPcntIrr: 92.3,
+      storPcntIrrCcd: 0,
+      storPcntEff: 13.5,
+      storPcntEffCcd: 0,
+      allSink: 9.19,
+      allSinkCcd: 0,
+      allDisch: 12.2,
+      allDischCcd: 0,
+      obsTime: '2026/09/08 15:00',
+    });
+    expect(parsed?.storageVolumeM3).toBe(1_992_000);
+    expect(parsed?.storageRate).toBeCloseTo(0.923, 6);
+  });
+
+  test('storPcntIrr invalid → falls back to storPcntEff', () => {
     const parsed = parseKasenbosaiObsValue({
       storCap: 100,
       storCapCcd: 0,
-      storPcntEff: 0,
-      storPcntEffCcd: 160,
-      storPcntIrr: 42,
-      storPcntIrrCcd: 0,
+      storPcntIrr: 0,
+      storPcntIrrCcd: 160,
+      storPcntEff: 42,
+      storPcntEffCcd: 0,
       obsTime: '2026/07/03 12:00',
     });
     expect(parsed?.storageRate).toBeCloseTo(0.42, 6);

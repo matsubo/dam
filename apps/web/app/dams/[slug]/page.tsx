@@ -27,6 +27,7 @@ import { damDisplayName } from '../../../lib/dam-name.ts';
 import { flowStatus } from '../../../lib/flow-status.ts';
 import { fmtCapacityMcm, fmtDate, fmtN, fmtPct } from '../../../lib/format.ts';
 import { imageCredit } from '../../../lib/image-credit.ts';
+import { rateDenominator } from '../../../lib/rate-basis.ts';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 900;
@@ -216,6 +217,11 @@ export default async function DamDetail({ params }: PageProps) {
               : null;
             const vol = latest.storageVolumeM3 ? Number(latest.storageVolumeM3) : null;
             const rate = cap && cap > 0 && vol != null ? Math.min(1, vol / cap) : null;
+            const denominator = rateDenominator(
+              cap,
+              d.activeCapacityM3 ? Number(d.activeCapacityM3) : null,
+              vol,
+            );
             return (
               <>
                 <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
@@ -226,6 +232,17 @@ export default async function DamDetail({ params }: PageProps) {
                   <dl className="grid grid-cols-2 md:grid-cols-2 gap-4 text-sm flex-1">
                     <Pair label="貯水量" value={fmtCapacityMcm(latest.storageVolumeM3)} />
                     <Pair label="貯水率" value={fmtPct(rate)} />
+                    {denominator?.differsFromStatic && rate != null ? (
+                      <div className="col-span-2">
+                        <div className="text-xs text-muted">貯水率の分母（現在の利水容量）</div>
+                        <div className="text-base tabular-nums">
+                          {fmtCapacityMcm(denominator.capacityM3)}
+                          <span className="text-xs text-muted ml-2">
+                            {`出典（${latest.sourceId}）の利水容量貯水率から逆算。洪水期の制限水位など運用上の容量を反映するため、諸元の利水容量${d.activeCapacityM3 ? `（${fmtCapacityMcm(d.activeCapacityM3)}）` : ''}とは異なります`}
+                          </span>
+                        </div>
+                      </div>
+                    ) : null}
                     <Pair
                       label="流入量"
                       value={latest.inflowM3s ? `${fmtN(latest.inflowM3s)} m³/s` : '—'}
