@@ -87,7 +87,7 @@ function extractLabeledValue(section: string, label: string): number | null {
   const after = section.slice(pos);
   const m = after.match(/<td[^>]*class="data"[^>]*>([^<]+)/);
   if (!m) return null;
-  return parseNum(m[1].trim());
+  return parseNum((m[1] ?? '').trim());
 }
 
 export function parseKisoRtHtml(html: string): { observedAt: Date | null; rows: ParsedRow[] } {
