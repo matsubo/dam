@@ -55,6 +55,8 @@ jobs:
       - name: Unit + integration tests
         # Skip tests/e2e/*.spec.ts — those run via bunx playwright test below.
         run: bun test --path-ignore-patterns 'tests/e2e/**'
+      - name: Seed E2E fixtures
+        run: bun run tests/e2e/fixtures/seed.ts
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
       - name: E2E (Playwright)
