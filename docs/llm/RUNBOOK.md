@@ -17,6 +17,12 @@ bun run apps/web/bin/import_real_ndi_w01.ts data/nlni/w01.geojson
 bun run apps/web/bin/import_watersheds_from_w01.ts data/nlni/w01.geojson
 bun run apps/web/bin/import_real_ndi_w01.ts data/nlni/w01.geojson  # re-link
 
+# (optional) 一級/二級 classification: W05 + 水系域コード → migration, then apply
+bin/fetch_w05.sh                                    # 47 zips (~340 MB) → data/nlni/w05/
+bun run apps/web/bin/classify_watershed_kind.ts     # writes packages/db/migrations/0041_….sql
+bun run packages/db/src/migrate.ts
+bun run apps/web/bin/generate_master_upsert.ts      # the seed rewrites kind on deploy — keep in sync
+
 # (optional) synthetic observations so charts render
 bun run apps/web/bin/seed_synthetic_observations.ts --hourly-days 30 --years 5
 
