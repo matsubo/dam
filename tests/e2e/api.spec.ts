@@ -54,6 +54,6 @@ test('/robots.txt allows everything except /api/', async ({ request }) => {
   const r = await request.get('/robots.txt');
   expect(r.status()).toBe(200);
   const text = await r.text();
-  expect(text).toContain('User-Agent: *');
+  expect(text).toContain('User-agent: *');
   expect(text).toContain('Disallow: /api/');
 });

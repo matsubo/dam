@@ -5,7 +5,14 @@
  */
 import { type ConsoleMessage, expect, test } from '@playwright/test';
 
-const PAGES = [
+interface QaPage {
+  name: string;
+  path: string;
+  /** Redoc keeps a blob: download URL pending forever, so networkidle never fires there. */
+  waitUntil?: 'load' | 'networkidle';
+}
+
+const PAGES: QaPage[] = [
   { name: 'home', path: '/' },
   { name: 'dams-list', path: '/dams' },
   { name: 'dams-list-pref10', path: '/dams?pref=10' },
@@ -17,8 +24,8 @@ const PAGES = [
   { name: 'prefecture-toyama', path: '/prefectures/16' },
   { name: 'map', path: '/map' },
   { name: 'sources', path: '/sources' },
-  { name: 'api-docs', path: '/api/docs' },
-] as const;
+  { name: 'api-docs', path: '/api/docs', waitUntil: 'load' },
+];
 
 for (const p of PAGES) {
   test(`QA: ${p.name} (${p.path})`, async ({ page }) => {
@@ -37,7 +44,7 @@ for (const p of PAGES) {
       }
     });
 
-    const response = await page.goto(p.path, { waitUntil: 'networkidle' });
+    const response = await page.goto(p.path, { waitUntil: p.waitUntil ?? 'networkidle' });
     await page.waitForTimeout(800); // settle any client-side fetches
     const status = response?.status() ?? 0;
 
