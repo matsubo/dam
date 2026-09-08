@@ -82,26 +82,27 @@ export function parseNaraPage(html: string, refDt: Date = new Date()): ParsedRow
 
   for (const tableM of html.matchAll(tableRe)) {
     const tableHtml = tableM[1];
+    if (!tableHtml) continue;
 
     // Dam name
     const nameM = tableHtml.match(/class="sitename">(.*?)</);
     if (!nameM) continue;
-    const naraName = nameM[1].trim();
+    const naraName = (nameM[1] ?? '').trim();
     if (!naraName) continue;
 
     // The single data row: 4 consecutive <td class="ui-bar-g">…</td> cells.
     // First cell is timestamp; the other three are level, inflow, outflow.
     const cellRe = /<td class="ui-bar-g[^"]*">([\s\S]*?)<\/td>/g;
-    const cells = [...tableHtml.matchAll(cellRe)].map((cm) => cm[1]);
+    const cells = [...tableHtml.matchAll(cellRe)].map((cm) => cm[1] ?? '');
     if (cells.length < 4) continue;
 
-    const tsRaw = cells[0].replace(/&nbsp;/g, ' ').trim();
+    const tsRaw = (cells[0] ?? '').replace(/&nbsp;/g, ' ').trim();
     const observedAt = parseNaraTimestamp(tsRaw, refDt);
     if (!observedAt) continue;
 
-    const waterLevelM = parseCell(cells[1]);
-    const inflowM3s = parseCell(cells[2]);
-    const outflowM3s = parseCell(cells[3]);
+    const waterLevelM = parseCell(cells[1] ?? '');
+    const inflowM3s = parseCell(cells[2] ?? '');
+    const outflowM3s = parseCell(cells[3] ?? '');
 
     if (waterLevelM === null && inflowM3s === null && outflowM3s === null) continue;
 
