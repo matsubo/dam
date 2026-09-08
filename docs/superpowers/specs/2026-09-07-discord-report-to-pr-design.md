@@ -1,7 +1,7 @@
 # Discord Report → GitHub Issue → AI Fix PR — Design Spec (v2, multi-service)
 
 - Date: 2026-09-07 (v2 supersedes the same-day v1, which was dam-only)
-- Status: Draft (approved through brainstorming)
+- Status: Approved. Stage 2 (auto-fix) is not adopted as of 2026-09-09: routes list `from-discord` only, dam has no caller workflow, and the default labels never start a run.
 - Owner: matsubokkuri@gmail.com
 - Home: this document is the founding spec of `matsubo/discord-issue-bridge`
   and moves there when that repository is created. dam keeps only the
@@ -252,7 +252,7 @@ Pure function `composeIssue(report, attachments) → { title, body, comments[] }
   the rest go into follow-up comments in order, each headed
   `Attachment k of n (part i/j)` when one file is split. When anything
   overflowed, the body ends with `_Continued in n comment(s) below._`.
-- **Labels** come from the route (default `["from-discord", "auto-fix"]`) and
+- **Labels** come from the route (default `["from-discord"]`) and
   are applied by a **separate** call (`POST /repos/{owner}/{repo}/issues/{n}/labels`)
   after the issue and all overflow comments exist. This guarantees an
   `issues.labeled` event, which is the stage-2 trigger (§5.2), and guarantees
@@ -273,8 +273,8 @@ Pure function `composeIssue(report, attachments) → { title, body, comments[] }
 - Keys are Discord channel IDs (stable; channel names can be renamed). A
   message posted in a thread is routed by the thread's parent channel, so one
   entry per `#service-*` channel covers its threads too.
-- `labels` defaults to `["from-discord", "auto-fix"]`. A repository that has
-  not adopted stage 2 lists only `from-discord` so nothing tries to run. An
+- `labels` defaults to `["from-discord"]`. A repository that adopts stage 2 adds
+  `auto-fix` explicitly; the default never starts a run. An
   empty list and any unknown key are rejected at boot (strict schema), so a
   typo such as `lables` cannot silently re-enable `auto-fix`.
 - Committed to git rather than read from an environment variable so changes
