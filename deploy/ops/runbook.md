@@ -156,9 +156,12 @@ testing the restore path on a staging host.
 
 ### 5.3 Bun
 
-The image base `oven/bun:1.3` is pinned to a major+minor. Bun 1.x is generally
-compatible across patch releases; bumping to a new minor (1.4, 1.5, …) needs
-a CI run of `bun test` against the new image first.
+The image base `oven/bun:1.4` is pinned to a major+minor and must match the
+bun that maintains `bun.lock` (`bun --version` locally). A mismatch fails the
+build at `bun install --frozen-lockfile` — that is what broke every deploy
+between 2026-08-16 and 2026-09-08 while the image was still `1.3`. When
+bumping bun locally, bump both Dockerfiles in the same commit and run
+`bun test` against the new image first.
 
 ---
 
