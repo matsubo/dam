@@ -49,7 +49,7 @@ export default async function DamsPage({ searchParams }: SP) {
     }),
     // Pull only the watersheds that actually have dams attached so the dropdown
     // doesn't list 644 systems where 144 are empty placeholders.
-    listWatersheds({ pageSize: 500 }),
+    listWatersheds({ pageSize: 1000 }),
   ]);
   const watersheds = allWatersheds.items
     .filter((w) => w.damCount > 0)

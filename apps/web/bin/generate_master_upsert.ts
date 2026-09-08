@@ -26,6 +26,7 @@ interface WatershedRow {
   name: string;
   name_kana: string | null;
   kind: string;
+  ndi_code: string | null;
   boundary: string | null; // hex EWKB
   area_km2: string | null;
 }
@@ -85,7 +86,7 @@ function geoLit(hex: string | null): string {
 
 async function main(): Promise<void> {
   const watersheds = await sql<WatershedRow[]>`
-    SELECT id::TEXT, code, slug, name, name_kana, kind,
+    SELECT id::TEXT, code, slug, name, name_kana, kind, ndi_code,
            CASE WHEN boundary IS NULL THEN NULL ELSE encode(boundary::bytea, 'hex') END AS boundary,
            area_km2::TEXT AS area_km2
     FROM watersheds
@@ -138,7 +139,7 @@ async function main(): Promise<void> {
   );
   for (const w of watersheds) {
     lines.push(
-      `INSERT INTO _seed_watersheds (code, slug, name, name_kana, kind, boundary, area_km2) VALUES (${quote(w.code)}, ${quote(w.slug)}, ${quote(w.name)}, ${quote(w.name_kana)}, ${quote(w.kind)}, ${geoLit(w.boundary)}, ${quote(w.area_km2)});`,
+      `INSERT INTO _seed_watersheds (code, slug, name, name_kana, kind, ndi_code, boundary, area_km2) VALUES (${quote(w.code)}, ${quote(w.slug)}, ${quote(w.name)}, ${quote(w.name_kana)}, ${quote(w.kind)}, ${quote(w.ndi_code)}, ${geoLit(w.boundary)}, ${quote(w.area_km2)});`,
     );
   }
   lines.push('');
@@ -148,14 +149,15 @@ async function main(): Promise<void> {
   lines.push('  name      = s.name,');
   lines.push('  name_kana = s.name_kana,');
   lines.push('  kind      = s.kind,');
+  lines.push('  ndi_code  = s.ndi_code,');
   lines.push('  boundary  = s.boundary,');
   lines.push('  area_km2  = s.area_km2');
   lines.push('FROM _seed_watersheds s');
   lines.push('WHERE w.code = s.code;');
   lines.push('');
   lines.push(
-    `INSERT INTO public.watersheds (code, slug, name, name_kana, kind, boundary, area_km2)
-     SELECT s.code, s.slug, s.name, s.name_kana, s.kind, s.boundary, s.area_km2
+    `INSERT INTO public.watersheds (code, slug, name, name_kana, kind, ndi_code, boundary, area_km2)
+     SELECT s.code, s.slug, s.name, s.name_kana, s.kind, s.ndi_code, s.boundary, s.area_km2
      FROM _seed_watersheds s
      WHERE NOT EXISTS (SELECT 1 FROM public.watersheds w WHERE w.code = s.code);`,
   );

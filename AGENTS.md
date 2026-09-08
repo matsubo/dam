@@ -82,6 +82,7 @@ just api-key-revoke id=42
 bun run apps/web/bin/import_real_ndi_w01.ts             data/nlni/w01.geojson
 bun run apps/web/bin/import_watersheds_from_w01.ts      data/nlni/w01.geojson
 bun run apps/web/bin/import_real_ndi_w07.ts             data/nlni/w07/dissolved
+bin/fetch_w05.sh && bun run apps/web/bin/classify_watershed_kind.ts --out packages/db/migrations/00NN_….sql   # re-classify kind / ndi_code (#21); 0041 is the committed result
 bun run apps/web/bin/capture_damnet.ts                  --from 123500 --to 128000
 bun run apps/web/bin/match_damnet.ts                    data/damnet/dams.jsonl
 bun run apps/web/bin/repair_dam_slugs.ts

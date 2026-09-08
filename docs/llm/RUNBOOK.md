@@ -17,6 +17,17 @@ bun run apps/web/bin/import_real_ndi_w01.ts data/nlni/w01.geojson
 bun run apps/web/bin/import_watersheds_from_w01.ts data/nlni/w01.geojson
 bun run apps/web/bin/import_real_ndi_w01.ts data/nlni/w01.geojson  # re-link
 
+# (optional) 一級/二級 classification: W05 + 水系域コード → watersheds.kind / ndi_code
+# Migration 0041 is the committed result and is already recorded in _migrations on
+# any DB that ran `just migrate`, so `migrate` will NOT re-apply it after a W01
+# (re)import. Apply the (idempotent) file directly instead:
+bin/fetch_w05.sh                                    # once: 47 zips (~340 MB) → data/nlni/w05/
+psql "$DATABASE_URL" -f packages/db/migrations/0041_watersheds_kind_from_ndi.sql
+# To RE-classify (new W05/W01 data), generate a NEW migration and apply it:
+bun run apps/web/bin/classify_watershed_kind.ts --out packages/db/migrations/00NN_watersheds_kind_refresh.sql
+bun run packages/db/src/migrate.ts
+bun run apps/web/bin/generate_master_upsert.ts      # the seed rewrites kind on deploy — keep in sync
+
 # (optional) synthetic observations so charts render
 bun run apps/web/bin/seed_synthetic_observations.ts --hourly-days 30 --years 5
 

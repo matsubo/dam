@@ -86,6 +86,7 @@ the file for detail.
 | `import_real_ndi_w01.ts` | NLNI W01 (real schema) → `dams` master |
 | `import_watersheds_from_w01.ts` | unique W01_003 names → `watersheds` master (boundary NULL) |
 | `import_real_ndi_w07.ts` | per-mesh dissolved GeoJSONs → cross-mesh `boundary` backfill |
+| `classify_watershed_kind.ts` | 水系域コード codelist + W05 区間種別 → `kind` / `ndi_code` migration (`bin/fetch_w05.sh` first) |
 | `capture_damnet.ts` | probe `dambinran` post-id range → `dams.jsonl` |
 | `match_damnet.ts` | match dams.jsonl → master, fill kana/manager/year, repair slugs |
 | `repair_dam_slugs.ts` | recompute kana-romaji slugs after kana lands |

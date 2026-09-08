@@ -46,7 +46,7 @@ export async function GET(req: Request): Promise<Response> {
     if (w) {
       return hal(
         {
-          watershed: { code: w.code, slug: w.slug, name: w.name, kind: w.kind },
+          watershed: { code: w.code, slug: w.slug, name: w.name, kind: w.kind, ndiCode: w.ndiCode },
         },
         {
           self: { href: selfHref },
