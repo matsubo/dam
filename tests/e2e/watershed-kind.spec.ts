@@ -15,11 +15,20 @@ test('/dams watershed filter groups 一級 and 二級 correctly', async ({ page 
   expect(await firstClass.count()).toBeLessThanOrEqual(109);
 });
 
-test('/watersheds lists 一級 systems first and shows the 102/458/84 split', async ({ page }) => {
+test('/watersheds lists 一級 systems first with a plausible 一級/二級 split', async ({ page }) => {
   await page.goto('/watersheds');
-  await expect(
-    page.getByText(/マスタ全体は 644 水系（一級 102 · 二級 458 · その他 84）/),
-  ).toBeVisible();
+  // Before #21 the summary read 一級 463 · 二級 0. Japan has 109 一級水系 and
+  // several hundred 二級水系; the exact numbers move with master refreshes.
+  const summary = page.getByText(/マスタ全体は \d+ 水系/);
+  await expect(summary).toBeVisible();
+  const m = /マスタ全体は (\d+) 水系（一級 (\d+) · 二級 (\d+)/.exec(
+    (await summary.textContent()) ?? '',
+  );
+  expect(m).not.toBeNull();
+  const [, total, first, second] = (m ?? []).map(Number);
+  expect(first).toBeLessThanOrEqual(109);
+  expect(second).toBeGreaterThan(100);
+  expect(total).toBeGreaterThan(600);
   const kindCells = page.locator('table tbody tr td:nth-child(2)');
   await expect(kindCells.first()).toHaveText('一級');
   const tsutsumi = page.locator('table tbody tr', { hasText: '堤川' }).first();
