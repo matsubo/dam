@@ -19,17 +19,20 @@ export function EntityIcon({
   kind,
   size = 16,
   className,
+  decorative = false,
 }: {
   kind: EntityKind;
   size?: number;
   className?: string;
+  /** Hide from assistive tech when a visible text label sits next to the icon. */
+  decorative?: boolean;
 }) {
   const Icon = ENTITY_ICONS[kind];
   return (
     <Icon
       size={size}
       className={className ?? 'text-on-surface-variant'}
-      aria-label={ENTITY_LABELS[kind]}
+      {...(decorative ? { 'aria-hidden': true } : { 'aria-label': ENTITY_LABELS[kind] })}
     />
   );
 }
