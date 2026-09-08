@@ -21,7 +21,7 @@ describe('parseToneAraTimestamp', () => {
 });
 
 describe('parseToneAraHtml', () => {
-  const makeTableHtml = (rows: string[]): string => {
+  const makeTableHtml = (rows: string[][]): string => {
     const rowHtml = rows
       .map(
         ([name, cap, prev, curr, rate]: string[]) =>

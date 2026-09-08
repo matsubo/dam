@@ -82,9 +82,9 @@ export function parseOkinawaEbCsv(csv: string, now: Date = new Date()): ParsedRo
   if (lines.length < 3) return [];
 
   // Row 0: date,national_vol,kurasiki_vol,yamashiro_vol,total_vol
-  const volCols = lines[0].split(',');
+  const volCols = lines[0]?.split(',') ?? [];
   // Row 2: date,national_rate,kurasiki_rate,yamashiro_rate,total_rate
-  const rateCols = lines[2].split(',');
+  const rateCols = lines[2]?.split(',') ?? [];
 
   const observedAt = parseOkinawaDate(volCols[0]?.trim() ?? '', now);
   if (!observedAt) return [];

@@ -96,7 +96,7 @@ function extractLabeled(section: string, label: string): number | null {
   const afterLabel = context.slice(label.length);
   const m = afterLabel.match(/([\d,]+(?:\.\d+)?)/);
   if (!m) return null;
-  return parseNum(m[1]);
+  return parseNum(m[1] ?? '');
 }
 
 export function parseToyokawaHtml(html: string): {

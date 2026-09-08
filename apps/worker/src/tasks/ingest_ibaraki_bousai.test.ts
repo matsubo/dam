@@ -101,7 +101,7 @@ describe('parseIbarakiTable', () => {
     expect(r?.inflowM3s).toBeCloseTo(1.36);
     expect(r?.outflowM3s).toBeCloseTo(1.36);
     // No storage rate column → null
-    expect(r?.storageRate).toBeUndefined();
+    expect(r).not.toHaveProperty('storageRate');
   });
 
   test('skips header and unit rows (no ダム in col 2)', () => {

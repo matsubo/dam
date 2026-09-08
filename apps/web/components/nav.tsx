@@ -61,7 +61,9 @@ export function Nav() {
               href={it.href}
               className="nav-link inline-flex items-center gap-1.5"
             >
-              {it.entity ? <EntityIcon kind={it.entity} size={14} className="shrink-0" /> : null}
+              {it.entity ? (
+                <EntityIcon kind={it.entity} size={14} className="shrink-0" decorative />
+              ) : null}
               {it.label}
             </Link>
           ))}
@@ -121,7 +123,7 @@ export function Nav() {
                     }`}
                   >
                     {it.entity ? (
-                      <EntityIcon kind={it.entity} size={16} className="shrink-0" />
+                      <EntityIcon kind={it.entity} size={16} className="shrink-0" decorative />
                     ) : null}
                     {it.label}
                   </Link>

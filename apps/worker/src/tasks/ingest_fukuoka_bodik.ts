@@ -66,7 +66,9 @@ export function parseFukuokaRows(csvText: string): ParsedRow[] {
     .filter((l) => l.length > 0);
   if (lines.length < 2) return [];
 
-  const headers = lines[0].split(',').map((h) => h.trim());
+  const headerLine = lines[0];
+  if (!headerLine) return [];
+  const headers = headerLine.split(',').map((h) => h.trim());
   const tsIdx = 0;
   const totalIdx = headers.indexOf('合計');
 
