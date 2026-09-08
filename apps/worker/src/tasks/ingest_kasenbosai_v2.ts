@@ -11,8 +11,8 @@
 //   { dspFlg, obsValue: {
 //       storLvl: number (m),       — 貯水位
 //       storCap: number (千m³),     — 貯水量
-//       storPcntIrr: number (%),    — 利水容量貯水率
-//       storPcntEff: number (%),    — 有効容量貯水率
+//       storPcntIrr: number (%),    — 利水容量貯水率 (preferred, see #19)
+//       storPcntEff: number (%),    — 有効容量貯水率 (fallback only)
 //       allSink: number (m³/s),     — 全流入量
 //       allDisch: number (m³/s),    — 全放流量
 //       obsTime: "YYYY/MM/DD HH:MM" (JST),
@@ -122,10 +122,16 @@ export function parseKasenbosaiObsValue(ov: ApiObsValue): ParsedKasenbosaiObs | 
   if (!observedAt) return null;
   // Convert vol from 千m³ → m³.
   const storCap = validOrNull(ov.storCap, ov.storCapCcd);
-  // Prefer effective-capacity 貯水率; fall back to 利水. Convert % → fraction.
+  // Prefer 利水容量貯水率 (storPcntIrr): it is the rate the dam manager
+  // publishes, with the current-season 利水容量 as denominator (much smaller
+  // in 洪水期 for flood-control dams). storPcntEff divides by the full
+  // 有効貯水容量 and does not match this site's 貯水率 definition — see #19
+  // (美利河ダム: Irr 92.3% vs Eff 13.5% on the same reading). Fall back to
+  // storPcntEff only when 利水 is missing. Convert % → fraction. No clamp:
+  // 利水 rates legitimately exceed 100% while the flood pool fills.
   const ratePct =
-    validOrNull(ov.storPcntEff, ov.storPcntEffCcd) ??
-    validOrNull(ov.storPcntIrr, ov.storPcntIrrCcd);
+    validOrNull(ov.storPcntIrr, ov.storPcntIrrCcd) ??
+    validOrNull(ov.storPcntEff, ov.storPcntEffCcd);
   const storageRate = ratePct != null ? ratePct / 100 : null;
   // A storCap of exactly 0 with no corroborating rate is kasenbosai's
   // "this dam doesn't publish volume" placeholder (e.g. 大峠ダム — reports
