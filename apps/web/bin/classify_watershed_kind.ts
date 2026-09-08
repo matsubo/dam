@@ -4,9 +4,13 @@
  * emit the result as a migration (kind + ndi_code, keyed by watersheds.code).
  *
  *   bin/fetch_w05.sh                                        # once: W05 + codelist → data/nlni/w05/
- *   bun run apps/web/bin/classify_watershed_kind.ts         # → packages/db/migrations/0041_….sql
+ *   bun run apps/web/bin/classify_watershed_kind.ts --out packages/db/migrations/00NN_….sql
  *   bun run packages/db/src/migrate.ts                      # apply locally
  *   bun run apps/web/bin/generate_master_upsert.ts          # refresh the prod seed
+ *
+ * The default --out is migration 0041 (the committed result). A DB that has
+ * already recorded 0041 will not re-run it, so a re-classification must go
+ * into a new migration number.
  *
  * Inputs
  *   - 水系域コード codelist (code → 水系名): decides 一級 (prefix 81–89)
