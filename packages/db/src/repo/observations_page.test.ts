@@ -59,10 +59,7 @@ afterAll(async () => {
 });
 
 /** Walk every page and return the flattened rows plus the page count. */
-async function drain(
-  pageSize: number,
-  includeSynthetic = false,
-): Promise<{ keys: string[]; pages: number }> {
+async function drain(pageSize: number): Promise<{ keys: string[]; pages: number }> {
   const keys: string[] = [];
   let after: ObservationCursor | null = null;
   let pages = 0;
@@ -72,7 +69,6 @@ async function drain(
       to: TO,
       pageSize,
       after,
-      includeSynthetic,
     });
     pages += 1;
     for (const r of page.items) {
@@ -102,18 +98,12 @@ describe('findObservationsPage', () => {
     expect(observed).toEqual([...observed].sort());
   });
 
-  test('excludes synthetic rows by default and includes them on request', async () => {
+  test('always excludes synthetic rows', async () => {
+    // The fixture plants a synthetic row inside the window; the feed is a
+    // measured-value feed, so there is no way to ask for it back.
     const measured = await findObservationsPage({ from: FROM, to: TO, pageSize: 100 });
     expect(measured.items.some((r) => r.sourceId === 'synthetic')).toBe(false);
-
-    const all = await findObservationsPage({
-      from: FROM,
-      to: TO,
-      pageSize: 100,
-      includeSynthetic: true,
-    });
-    expect(all.items.length).toBe(7);
-    expect(all.items.some((r) => r.sourceId === 'synthetic')).toBe(true);
+    expect(measured.items.length).toBe(6);
   });
 
   test('keyset pagination yields every row exactly once, in order', async () => {
