@@ -13,8 +13,39 @@ echo "[pre-push] bun test"
 # Probe the local DB. Integration tests (repo/, pipeline, reconciler, storage,
 # adapter importers, API routes) require a live PostgreSQL + MinIO instance.
 # When the local DB is not up, skip those paths so unit tests still gate the push.
-DB_HOST="localhost"
-DB_PORT="${DATABASE_PORT:-5433}"
+#
+# Where the connection details come from, highest precedence first:
+#
+#   1. DATABASE_HOST / DATABASE_PORT in the environment — explicit override.
+#   2. DATABASE_URL, from the environment or, failing that, the repo-root .env.
+#   3. localhost:5433 — the historical default.
+#
+# Step 2 matters because this hook runs under /bin/sh, which does NOT read
+# .env — only `bun` does. Without it, a worktree that shifts its port (the
+# per-worktree convention, e.g. DB_PORT=5435 to keep Docker projects from
+# colliding) probes 5433, finds nothing, and silently drops ~140 integration
+# tests from the push gate even though its database is up.
+DB_URL="${DATABASE_URL:-}"
+if [ -z "${DB_URL}" ]; then
+  ENV_FILE="$(git rev-parse --show-toplevel 2>/dev/null)/.env"
+  if [ -f "${ENV_FILE}" ]; then
+    # First DATABASE_URL assignment wins; tolerate `export `, surrounding
+    # quotes and trailing whitespace. Nothing is eval'd — the value is only
+    # ever parsed for a host and a port below.
+    DB_URL=$(sed -n 's/^[[:space:]]*\(export[[:space:]]\{1,\}\)\{0,1\}DATABASE_URL[[:space:]]*=[[:space:]]*//p' \
+      "${ENV_FILE}" | head -n 1 | sed -e 's/^"//' -e "s/^'//" -e 's/"[[:space:]]*$//' -e "s/'[[:space:]]*\$//" -e 's/[[:space:]]*$//')
+  fi
+fi
+
+# postgres://[user[:pass]@]host[:port][/db] → host, port. An absent port means
+# the Postgres default; an unparseable URL leaves both empty and we fall back.
+URL_AUTHORITY=$(printf '%s' "${DB_URL}" | sed -n 's|^[a-zA-Z][a-zA-Z0-9+.-]*://||p' | sed -e 's|[/?].*$||' -e 's|^.*@||')
+URL_HOST=$(printf '%s' "${URL_AUTHORITY}" | sed -e 's|:[0-9]*$||')
+URL_PORT=$(printf '%s' "${URL_AUTHORITY}" | sed -n 's|^.*:\([0-9]\{1,\}\)$|\1|p')
+[ -n "${URL_HOST}" ] && [ -z "${URL_PORT}" ] && URL_PORT=5432
+
+DB_HOST="${DATABASE_HOST:-${URL_HOST:-localhost}}"
+DB_PORT="${DATABASE_PORT:-${URL_PORT:-5433}}"
 
 if nc -z "$DB_HOST" "$DB_PORT" 2>/dev/null; then
   exec bun test apps packages
