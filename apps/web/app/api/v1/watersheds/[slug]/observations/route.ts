@@ -1,6 +1,5 @@
 import { sql } from '@dam/db/client';
 import { type SeriesPoint, findWatershedSeries } from '@dam/db/repo/observations';
-import { preferredSource } from '@dam/db/repo/source_priorities';
 import { z } from 'zod';
 import { HttpError, asProblem } from '../../../../../../lib/api/error.ts';
 import { hal } from '../../../../../../lib/api/response.ts';
@@ -80,16 +79,13 @@ export async function GET(
 
     const excludeSynthetic =
       parsed.data.exclude_synthetic === '1' || parsed.data.exclude_synthetic === 'true';
-    // Bypass preferredSource when the caller wants every real source — see
-    // the dam-level route for the same pattern.
-    const preferred =
-      parsed.data.interval === 'hourly' && !excludeSynthetic ? await preferredSource() : null;
+    // Source selection happens per dam inside findWatershedSeries — a single
+    // global pick can't describe a watershed whose dams sit on different feeds.
     const series = await findWatershedSeries({
       watershedId: ws.id,
       from,
       to,
       bucket: parsed.data.interval,
-      preferredSource: preferred,
       excludeSynthetic,
     });
 
@@ -111,7 +107,8 @@ export async function GET(
       {
         series,
         count: series.length,
-        source: preferred ?? null,
+        // No single source: each dam contributes via its own preferred feed.
+        source: null,
         totalCapacityM3: ws.total_capacity_m3,
         // The chart uses this for its rate-axis denominator.
         activeCapacityM3: ws.active_capacity_m3,
