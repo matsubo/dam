@@ -150,6 +150,21 @@ export default async function CoveragePage() {
         で管理。
       </p>
 
+      {/* Coverage is the one number a would-be contributor can move, so the
+          recruitment CTA belongs here rather than only in the footer. */}
+      <div className="border border-primary bg-primary/5 rounded-xl p-4 mb-8 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <p className="text-sm flex-1 min-w-[16rem] leading-relaxed">
+          この数字を上げるのを手伝ってくれる開発者を探しています。個人が一人で運営しているため、
+          未取得のダムがまだ多く残っています。
+        </p>
+        <Link
+          href="/contribute"
+          className="text-sm font-semibold text-primary hover:underline whitespace-nowrap"
+        >
+          開発者募集を見る →
+        </Link>
+      </div>
+
       <section className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
         <div className="bg-white border border-outline-variant rounded-xl p-5">
           <div className="text-xs uppercase tracking-wider text-on-surface-variant mb-1">

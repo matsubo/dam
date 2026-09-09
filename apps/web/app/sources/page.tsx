@@ -158,6 +158,14 @@ export default async function SourcesPage() {
           このサイトのデータ起源、ダム名寄せの方法、テーブル構造、欠損の分布、観測の粒度をまとめています。
           外部公開データのみを利用し、独自の改変は最小限 (単位換算・名寄せ・正規化) です。
         </p>
+        <p className="text-sm text-on-surface-variant max-w-3xl mt-3">
+          「このソースが抜けている」「この県はここに公開されている」という情報や、
+          アダプタの実装そのものを歓迎しています —{' '}
+          <Link href="/contribute" className="text-primary font-semibold hover:underline">
+            開発者募集
+          </Link>
+          。
+        </p>
       </div>
 
       {/* ===== 1. Sources ===== */}

@@ -46,3 +46,11 @@ docker compose exec db psql -U dam -d dam \
 
 The hourly cron triggers `ingest:kasenbosai` at minute :05 of every hour.
 Backfill batches run every 5 minutes with `SUIMON_BATCH` targets each.
+
+
+## Contributing
+
+The platform is built and operated by one person, and observation coverage is
+the bottleneck — see https://dam.teraren.com/contribute for what needs doing,
+the stack, and the terms. Reports of public data sources we have missed are as
+welcome as code. Donations: https://github.com/sponsors/matsubo
