@@ -33,6 +33,7 @@ the file for detail.
 | `app/prefectures/[code]/page.tsx` | prefecture-scoped dam list |
 | `app/map/page.tsx` | server fetches all coords, JapanMap renders client-side |
 | `app/sources/page.tsx` | data-source transparency table |
+| `app/contribute/page.tsx` | contributor recruitment: history, live scale figures, stack, terms, credits |
 | `app/api/docs/page.tsx` | Swagger UI on `/api/v1/openapi.json` |
 | `app/sitemap.ts` | dynamic sitemap (dams + watersheds + prefectures) |
 | `app/robots.ts` | allows everything except `/api/` |
@@ -78,6 +79,8 @@ the file for detail.
 | `lib/api/response.ts` | `hal(body, links, init)` wraps JSON with HAL |
 | `lib/api/pagination.ts` | `pageLinks` + RFC 5988 Link header |
 | `lib/format.ts` | `fmtN`, `fmtPct`, `fmtDate`, `fmtCapacityMcm` |
+| `lib/project-stats.ts` | hand-maintained codebase figures + stack table for `/contribute` (regen commands in the header) |
+| `lib/contributors.ts` | permanent contributor credits list rendered at `/contribute#contributors` |
 
 ### One-off scripts (`apps/web/bin/`, run from repo root)
 
