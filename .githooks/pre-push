@@ -20,6 +20,19 @@ if nc -z "$DB_HOST" "$DB_PORT" 2>/dev/null; then
   exec bun test apps packages
 else
   echo "[pre-push] No DB at ${DB_HOST}:${DB_PORT} — skipping integration tests"
+  # Every path below needs a live PostgreSQL. The list is deliberately
+  # file-precise rather than directory-wide: apps/worker/src/tasks holds 63
+  # test files and only 3 of them touch the DB, so ignoring the whole
+  # directory would drop ~60 pure parser tests out of the push gate.
+  #
+  # To regenerate after adding a DB-backed test (run from the repo root with
+  # the DB *down*, or pointed at a dead port as below) — any file listed in
+  # the output that is not already ignored here must be added:
+  #
+  #   DATABASE_URL='postgres://dam:dam@127.0.0.1:59999/dam' \
+  #     bun test apps packages > /tmp/nodb.log 2>&1
+  #   awk '/^(apps|packages)\/.*\.test\.ts:/ {f=$0} /^\(fail\)/ {print f}' \
+  #     /tmp/nodb.log | sort -u
   exec bun test apps packages \
     --path-ignore-patterns "packages/db/src/repo/**" \
     --path-ignore-patterns "packages/ingest/**" \
@@ -28,5 +41,9 @@ else
     --path-ignore-patterns "packages/adapters/damnet/**" \
     --path-ignore-patterns "packages/adapters/ndi/**" \
     --path-ignore-patterns "apps/web/app/api/**" \
-    --path-ignore-patterns "apps/web/lib/api/**"
+    --path-ignore-patterns "apps/web/lib/api/**" \
+    --path-ignore-patterns "apps/web/app/watersheds/locate/route.test.ts" \
+    --path-ignore-patterns "apps/worker/src/tasks/aggregates_refresh.test.ts" \
+    --path-ignore-patterns "apps/worker/src/tasks/match_kasenbosai.test.ts" \
+    --path-ignore-patterns "apps/worker/src/tasks/quality_recompute.test.ts"
 fi
