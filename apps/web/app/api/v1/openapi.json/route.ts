@@ -481,7 +481,19 @@ const components = {
         { $ref: '#/components/schemas/Observation' },
         {
           type: 'object',
-          properties: { _links: { $ref: '#/components/schemas/HalLinks' } },
+          properties: {
+            // Item-level links, so HalLinks (which requires `self`) doesn't fit:
+            // the item is not itself an addressable resource, it points at its dam.
+            _links: {
+              type: 'object',
+              required: ['dam'],
+              additionalProperties: { $ref: '#/components/schemas/HalLink' },
+              properties: {
+                dam: { $ref: '#/components/schemas/HalLink' },
+                observations: { $ref: '#/components/schemas/HalLink' },
+              },
+            },
+          },
         },
       ],
     },
@@ -788,7 +800,7 @@ const paths = {
       summary: 'ダム横断の計測値フィード',
       tags: ['observations'],
       description:
-        '全ダムの生の観測値 (1 時間粒度) を `from`〜`to` のウィンドウで返します。ダムを指定せずに取り込みたい同期クライアント向け。`(observed_at, dam_id, source_id)` 昇順で、keyset カーソルによりページングします。シード値 (`source_id = "synthetic"`) は既定で除外されます。単一ダムの時系列やグラフ用途、集計バケット (`daily` / `monthly`)、CSV が必要な場合は `/api/v1/dams/{slug}/observations` を使ってください。',
+        '全ダムの生の観測値 (1 時間粒度) を `from`〜`to` のウィンドウで返します。ダムを指定せずに取り込みたい同期クライアント向け。`(observed_at, dam_id, source_id)` 昇順で、keyset カーソルによりページングします。シード値 (`source_id = "synthetic"`) は既定で除外されます。単一ダムの時系列やグラフ用途、集計バケット (`daily` / `monthly`)、CSV が必要な場合は `/api/v1/dams/{slug}/observations` を使ってください。\n\n30 日より古いデータは TimescaleDB の圧縮チャンクに載るため、1 ページの取得コストは `pageSize` ではなく「カーソル位置から現在の 14 日チャンク末尾まで」の行数に比例します (それより後のチャンクは走査されません)。過去データを大量に取り込む場合は `pageSize` を大きく (1000) 取るほど総コストが下がります。',
       parameters: [
         { $ref: '#/components/parameters/From' },
         { $ref: '#/components/parameters/To' },
