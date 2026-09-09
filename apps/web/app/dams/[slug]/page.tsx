@@ -8,6 +8,7 @@ import {
   storageChange,
 } from '@dam/db/repo/dams';
 import { damSeasonalNorm } from '@dam/db/repo/seasonal';
+import { classifyOneDam } from '@dam/db/repo/source_universe';
 import { aggregateWatershed, findWatershedBySlug } from '@dam/db/repo/watersheds';
 import { ExternalLink } from 'lucide-react';
 import type { Metadata } from 'next';
@@ -65,7 +66,7 @@ export default async function DamDetail({ params }: PageProps) {
   const d = await findDamBySlug(slug);
   if (!d) notFound();
   const dn = damDisplayName(d.name);
-  const [latest, change, nearby, watershed, watershedDams, norm] = await Promise.all([
+  const [latest, change, nearby, watershed, watershedDams, norm, triage] = await Promise.all([
     latestObservation(d.id),
     storageChange(d.id),
     nearbyDams(d.id, 20_000, 6),
@@ -74,6 +75,9 @@ export default async function DamDetail({ params }: PageProps) {
       ? listDams({ watershedSlug: d.watershedSlug, pageSize: 12 })
       : Promise.resolve({ items: [], nextCursor: null }),
     damSeasonalNorm(d.id),
+    // Only consulted when there is nothing to show — answers "why is this
+    // dam empty?" instead of leaving the reader to guess.
+    classifyOneDam(d.id),
   ]);
   const watershedAgg = watershed ? await aggregateWatershed(watershed.id) : null;
   const otherInWatershed = watershedDams.items.filter((w) => w.id !== d.id).slice(0, 6);
@@ -312,7 +316,10 @@ export default async function DamDetail({ params }: PageProps) {
             );
           })()
         ) : (
-          <p className="text-muted">まだ観測値がありません。</p>
+          <NoDataReason
+            status={triage?.status ?? 'unknown'}
+            publishedBy={triage?.publishedBy ?? []}
+          />
         )}
       </section>
 
@@ -588,5 +595,59 @@ function DamSpecs({ d }: { d: DamSpecData }) {
         {d.redevelopmentStatus ? <Pair label="再開発" value={d.redevelopmentStatus} /> : null}
       </dl>
     </section>
+  );
+}
+
+/**
+ * Why this dam has no reading. The distinction that matters to a reader is
+ * "nobody publishes this" versus "somebody does and we haven't got it yet" —
+ * and, crucially, "we haven't checked yet", which must never be dressed up
+ * as the first.
+ */
+function NoDataReason({ status, publishedBy }: { status: string; publishedBy: string[] }) {
+  if (status === 'published_not_ingested') {
+    return (
+      <div className="text-sm">
+        <p className="text-muted mb-1">まだ観測値がありません。</p>
+        <p className="text-on-surface-variant">
+          このダムは{' '}
+          {publishedBy.map((s, i) => (
+            <span key={s}>
+              {i > 0 ? '、' : ''}
+              <Link className="text-primary hover:underline" href={`/sources/${s}`}>
+                {s}
+              </Link>
+            </span>
+          ))}{' '}
+          が公開しています。取り込み側の問題なので、こちらで対応します。
+        </p>
+      </div>
+    );
+  }
+  if (status === 'no_upstream') {
+    return (
+      <div className="text-sm">
+        <p className="text-muted mb-1">まだ観測値がありません。</p>
+        <p className="text-on-surface-variant">
+          現時点で、貯水量をリアルタイム公開している上流ソースが見つかっていません。
+          <Link className="text-primary hover:underline mx-1" href="/coverage">
+            カバレッジ
+          </Link>
+          に全体の内訳があります。
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="text-sm">
+      <p className="text-muted mb-1">まだ観測値がありません。</p>
+      <p className="text-on-surface-variant">
+        公開している上流ソースがあるかどうかは調査中です (
+        <Link className="text-primary hover:underline" href="/coverage">
+          カバレッジ
+        </Link>
+        )。
+      </p>
+    </div>
   );
 }
