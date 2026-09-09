@@ -4,6 +4,7 @@
 
 import { PREFECTURES } from '@dam/core/prefectures';
 import { sql } from '@dam/db/client';
+import { coverageSummary } from '@dam/db/repo/source_universe';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
@@ -123,8 +124,43 @@ function CoverageBar({ value }: { value: number }) {
   );
 }
 
+function TriageCard({
+  label,
+  value,
+  total,
+  tone,
+  note,
+}: {
+  label: string;
+  value: number;
+  total: number;
+  tone: 'ok' | 'action' | 'pending' | 'none';
+  note: string;
+}) {
+  const accent = {
+    ok: 'text-emerald-700',
+    action: 'text-orange-700',
+    pending: 'text-slate-500',
+    none: 'text-red-700',
+  }[tone];
+  const share = total > 0 ? (100 * value) / total : 0;
+  return (
+    <div className="bg-white border border-outline-variant rounded-xl p-4">
+      <div className="text-xs text-on-surface-variant mb-1">{label}</div>
+      <div className={`text-2xl font-display font-semibold tabular-nums ${accent}`}>
+        {value.toLocaleString()}
+      </div>
+      <div className="text-xs text-on-surface-variant tabular-nums">{share.toFixed(1)}%</div>
+      <div className="text-xs text-on-surface-variant mt-2 leading-snug">{note}</div>
+    </div>
+  );
+}
+
 export default async function CoveragePage() {
-  const { headline, sources, prefs } = await loadCoverage();
+  const [{ headline, sources, prefs }, triage] = await Promise.all([
+    loadCoverage(),
+    coverageSummary(),
+  ]);
   const total = headline.damTotal;
   const rtPct = pct(headline.damsRealtime30d, total);
   const histPct = pct(headline.damsHistorical, total);
@@ -149,6 +185,53 @@ export default async function CoveragePage() {
         </a>{' '}
         で管理。
       </p>
+
+      <section className="mb-10">
+        <h2 className="text-lg font-semibold mb-1">未取得ダムの内訳</h2>
+        <p className="text-sm text-on-surface-variant mb-4">
+          「取れていない」を、こちらの不具合で直せるものと、そもそも公開ソースが無いものに分けます。
+          各上流ソースが公開しているダム一覧を記録し、マスタと突き合わせて判定しています。
+        </p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <TriageCard
+            label="取得済み"
+            value={triage.covered}
+            total={Number(total)}
+            tone="ok"
+            note="直近 30 日に観測値あり"
+          />
+          <TriageCard
+            label="公開されているが未取得"
+            value={triage.publishedNotIngested}
+            total={Number(total)}
+            tone="action"
+            note="上流にあり紐付けも済み。取り込み側の不具合"
+          />
+          <TriageCard
+            label="未調査"
+            value={triage.unknown}
+            total={Number(total)}
+            tone="pending"
+            note={`公開一覧が未記録のソースが ${triage.sourcesPendingScan} 件残っている`}
+          />
+          <TriageCard
+            label="公開ソースなし"
+            value={triage.noUpstream}
+            total={Number(total)}
+            tone="none"
+            note="全ソースの一覧に現れなかった"
+          />
+        </div>
+        {triage.sourcesPendingScan > 0 ? (
+          <p className="text-xs text-on-surface-variant mt-3 leading-relaxed">
+            <strong>判定は途中です。</strong> 公開一覧を記録済みの上流ソースはまだ一部で、残り{' '}
+            {triage.sourcesPendingScan} ソースが未記録です。そのため大半のダムは「未調査」に入り、
+            「公開ソースなし」は全ソースを記録し終えるまで確定しません。 上流には存在するのに
+            マスタと紐付いていない観測所は現在 {triage.unresolvedUpstreamRows.toLocaleString()}{' '}
+            件で、これが手を付けられる作業対象です。
+          </p>
+        ) : null}
+      </section>
 
       <section className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
         <div className="bg-white border border-outline-variant rounded-xl p-5">
