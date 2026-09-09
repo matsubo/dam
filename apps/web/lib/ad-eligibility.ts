@@ -28,6 +28,13 @@
  *   /legal/*                 → our own terms; ads there serve nobody
  *   /account/*, /admin/*     → private / operator surfaces
  *   /api/docs                → machine-facing reference
+ *
+ * A route audit raised /coverage and /sources as borderline: they only GROUP BY
+ * pref_code and bucket total_capacity_m3 / height_m / completed_year, never
+ * printing a raw per-dam NLNI value. They stay excluded anyway. 非商用 restricts
+ * 利用 of the data, not the display of raw values — an aggregate is a derived
+ * work, and aggregating does not launder the licence. /sources is also the page
+ * that publishes the 非商用 terms themselves, so advertising on it would be odd.
  */
 export const AD_ELIGIBLE_ROUTES = ['/glossary', '/roadmap'] as const;
 

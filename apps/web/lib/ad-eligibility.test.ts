@@ -31,6 +31,9 @@ describe('isAdEligible — 国土数値情報由来のページは不可', () =>
     ['coverage', '/coverage'],
     ['prefecture', '/prefectures/13'],
     ['source detail', '/sources/ndi'],
+    // /sources and /coverage only aggregate NLNI columns rather than printing
+    // raw values. Aggregating does not launder the licence — they stay denied.
+    ['source list', '/sources'],
   ])('%s (%s) earns no ad', (_label, path) => {
     expect(isAdEligible(path)).toBe(false);
   });
