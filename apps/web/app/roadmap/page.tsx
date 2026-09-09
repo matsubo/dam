@@ -1,5 +1,6 @@
 import { CircleCheck, CircleDashed, CircleDot } from 'lucide-react';
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
 import { APP_STAGE, APP_VERSION } from '../../lib/version.ts';
 
@@ -29,7 +30,7 @@ const STAGES: Stage[] = [
       '初期セットアップ — マスタ (ダム/水系/河川) が production に正しく投入され、起動シーケンスが冪等に動作する ✓',
       '定期クロールの正常化 — graphile-worker の cron が NDI / ダム便覧 / 観測値ソースを安定して取り込み、失敗時のリトライ・キュー詰まり対応が確認できている',
       '画面の主要動線 — 一覧 / 詳細 / 地図 / 統計 / API ドキュメントが本番で 200 を返し、貯水率を含む基本的な可視化がレンダリングされる ✓',
-      '実測データソース — kasenbosai / 水文水質 が政策レベルでブロックされたため、府県・公社の開放データに方向転換: 東京都水道局 (15 ダム / 日次) と 水資源機構 旬報 (26 ダム / 10 日次) を本番稼働。実測ダム 35 基をホームページ・ダム一覧・水系一覧で識別可能',
+      '実測データソース — 川の防災情報を主軸に、各都道府県の河川防災 Web、東京都水道局・水資源機構などの開放データを日次以上の頻度で取り込み。実測値のあるダムはホームページ・ダム一覧・水系一覧で識別可能。現在の取得済みダム数と割合はカバレッジページで公開（数字は日々変わるためここには載せません）',
       '渇水アラート UI — 実測値が 40% を下回るダムをホームページに掲示し、ダム詳細にも警告コールアウトを表示',
     ],
   },
@@ -125,6 +126,13 @@ export default function RoadmapPage() {
         })}
       </ol>
       <p className="mt-8 text-xs text-on-surface-variant">
+        実測データの取得状況（ソース別・都道府県別）は{' '}
+        <Link className="text-primary hover:underline" href="/coverage">
+          カバレッジ
+        </Link>{' '}
+        で常時更新しています。
+      </p>
+      <p className="mt-2 text-xs text-on-surface-variant">
         日付や具体的なリリース時期は確約しません。コミュニティへの議論は{' '}
         <a
           href="https://discord.gg/UbWqspWbAk"
