@@ -30,7 +30,8 @@ const PREF_CODE = '03';
 const SOURCE_ID = 'iwate-kasen';
 
 // Station index → (stationNo, dam name).  Index matches the server's dropdown
-// order; stationNo is used for external_ids only.
+// order; stationNo is the source_universe key (dams.external_ids is stamped
+// with the name instead).
 interface StationCfg {
   readonly idx: number;
   readonly stationNo: string;
@@ -155,55 +156,67 @@ interface DamMatch {
   damId: bigint;
 }
 
+/**
+ * Pick the best master dam for a station name: an exact stem hit beats
+ * 「<stem>ダム」 beats a prefix hit beats a substring hit, ties going to the
+ * lower id.
+ */
+function chooseMaster(stem: string, masters: { id: bigint; name: string }[]): bigint | null {
+  let best: { id: bigint; rank: number } | null = null;
+  for (const m of masters) {
+    const mStem = normalizeName(m.name);
+    let rank: number;
+    if (mStem === stem) rank = 0;
+    else if (m.name === `${stem}ダム`) rank = 1;
+    else if (mStem.startsWith(stem)) rank = 2;
+    else if (mStem.includes(stem)) rank = 3;
+    else continue;
+    if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
+      best = { id: m.id, rank };
+    }
+  }
+  return best?.id ?? null;
+}
+
 async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
   const masters = await sql<{ id: bigint; name: string }[]>`
     SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
 
   for (const r of rows) {
     const stem = normalizeName(r.iwateName);
     if (!stem) continue;
 
-    let best: { id: bigint; rank: number } | null = null;
-    for (const m of masters) {
-      const mStem = normalizeName(m.name);
-      let rank: number;
-      if (mStem === stem) rank = 0;
-      else if (m.name === `${stem}ダム`) rank = 1;
-      else if (mStem.startsWith(stem)) rank = 2;
-      else if (mStem.includes(stem)) rank = 3;
-      else continue;
-      if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-        best = { id: m.id, rank };
-      }
-    }
-
-    universe.push({
-      externalId: STATIONS.find((s) => s.name === r.iwateName)?.stationNo ?? r.iwateName,
-      name: r.iwateName,
-      prefCode: PREF_CODE,
-      resolvedDamId: best?.id ?? null,
-    });
-    if (!best) {
+    const damId = chooseMaster(stem, masters);
+    if (!damId) {
       log(`${SOURCE_ID}: no master match for "${r.iwateName}"`);
       continue;
     }
 
-    out.push({ iwateName: r.iwateName, damId: best.id });
+    out.push({ iwateName: r.iwateName, damId });
     await sql`
       UPDATE dams
       SET external_ids = COALESCE(external_ids, '{}'::jsonb)
                        || jsonb_build_object(${SOURCE_ID}::text, ${r.iwateName}::text)
-      WHERE id = ${best.id}
+      WHERE id = ${damId}
         AND COALESCE(external_ids->>${SOURCE_ID}, '') <> ${r.iwateName}
     `;
   }
 
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing. Built
+  // from STATIONS, not from `rows`: one station's servlet timing out would
+  // otherwise drop that dam from the universe, and once every provider has
+  // scanned, /coverage would claim nobody publishes it.
+  const universe: UniverseRow[] = STATIONS.map((stn) => ({
+    externalId: stn.stationNo,
+    name: stn.name,
+    prefCode: PREF_CODE,
+    resolvedDamId: chooseMaster(normalizeName(stn.name), masters),
+  }));
   await recordUniverse(SOURCE_ID, universe);
+
   return out;
 }
 

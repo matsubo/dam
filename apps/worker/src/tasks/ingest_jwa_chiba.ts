@@ -115,6 +115,32 @@ async function ensureSourcePriority(): Promise<void> {
   `;
 }
 
+/**
+ * Pick the best master dam for a published name: an exact page-name hit beats
+ * 「<stem>ダム」 beats the bare stem beats a prefix hit beats a substring hit,
+ * ties going to the lower id.
+ */
+function chooseMaster(
+  htmlName: string,
+  stem: string,
+  masters: { id: bigint; name: string }[],
+): bigint | null {
+  let best: { id: bigint; rank: number } | null = null;
+  for (const m of masters) {
+    let rank: number;
+    if (m.name === htmlName) rank = 0;
+    else if (m.name === `${stem}ダム`) rank = 1;
+    else if (m.name === stem) rank = 2;
+    else if (m.name.startsWith(stem)) rank = 3;
+    else if (m.name.includes(stem)) rank = 4;
+    else continue;
+    if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
+      best = { id: m.id, rank };
+    }
+  }
+  return best?.id ?? null;
+}
+
 async function matchMaster(
   rows: ParsedRow[],
   log: (s: string) => void,
@@ -123,43 +149,32 @@ async function matchMaster(
     SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out = new Map<string, bigint>();
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
 
   for (const r of rows) {
     const dam = DAMS.find((d) => d.htmlName === r.htmlName);
     if (!dam) continue;
-    const stem = dam.masterName;
 
-    let best: { id: bigint; rank: number } | null = null;
-    for (const m of masters) {
-      let rank: number;
-      if (m.name === r.htmlName) rank = 0;
-      else if (m.name === `${stem}ダム`) rank = 1;
-      else if (m.name === stem) rank = 2;
-      else if (m.name.startsWith(stem)) rank = 3;
-      else if (m.name.includes(stem)) rank = 4;
-      else continue;
-      if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-        best = { id: m.id, rank };
-      }
-    }
-
-    universe.push({
-      externalId: r.htmlName,
-      name: r.htmlName,
-      prefCode: PREF_CODE,
-      resolvedDamId: best?.id ?? null,
-    });
-    if (!best) {
+    const damId = chooseMaster(r.htmlName, dam.masterName, masters);
+    if (!damId) {
       log(`${SOURCE_ID}: no master match for "${r.htmlName}"`);
       continue;
     }
-    out.set(r.htmlName, best.id);
+    out.set(r.htmlName, damId);
   }
 
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing. Built
+  // from DAMS, not from `rows`: the page lists both dams even on a day when
+  // one carries no 水位/貯水率 to parse, and recording only the parsed subset
+  // would eventually have /coverage claim nobody publishes it.
+  const universe: UniverseRow[] = DAMS.map((d) => ({
+    externalId: d.htmlName,
+    name: d.htmlName,
+    prefCode: PREF_CODE,
+    resolvedDamId: chooseMaster(d.htmlName, d.masterName, masters),
+  }));
   await recordUniverse(SOURCE_ID, universe);
+
   return out;
 }
 
