@@ -1,5 +1,6 @@
 import { CircleCheck, CircleDashed, CircleDot } from 'lucide-react';
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
 import { APP_STAGE, APP_VERSION } from '../../lib/version.ts';
 
@@ -124,7 +125,17 @@ export default function RoadmapPage() {
           );
         })}
       </ol>
-      <p className="mt-8 text-xs text-on-surface-variant">
+      <div className="mt-8 border border-primary bg-primary/5 rounded-xl p-4">
+        <p className="text-sm leading-relaxed">
+          このロードマップは一人で進めています。歩みを速めるのを手伝ってくれる開発者を{' '}
+          <Link href="/contribute" className="text-primary font-semibold hover:underline">
+            開発者募集ページ
+          </Link>{' '}
+          で探しています。寄付でも支えられます。
+        </p>
+      </div>
+
+      <p className="mt-6 text-xs text-on-surface-variant">
         日付や具体的なリリース時期は確約しません。コミュニティへの議論は{' '}
         <a
           href="https://discord.gg/UbWqspWbAk"

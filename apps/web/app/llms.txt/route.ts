@@ -69,6 +69,21 @@ Documented at: ${SITE_URL}/sources
   not 総貯水容量. Dams without 利水容量 in source data are excluded from
   rate aggregations rather than mis-labelled.
 
+## Contributing
+
+The platform is built and operated by one person. Realtime coverage is the
+current bottleneck: only part of the inventory has live observations, because
+public sources are scattered across prefectures, regional bureaus, utilities
+and water agencies rather than exposed by a single national API. Developers
+(and reports of public data sources we have missed) are wanted; donations go
+through GitHub Sponsors.
+
+- Recruitment page: ${SITE_URL}/contribute
+- Applications and questions both go through Discord (below) — there is no
+  form and no email address
+- Live coverage figures: ${SITE_URL}/coverage
+- Sponsor: https://github.com/sponsors/matsubo
+
 ## Contact
 
 - Contact: https://discord.gg/UbWqspWbAk (operator runs a Discord; no
