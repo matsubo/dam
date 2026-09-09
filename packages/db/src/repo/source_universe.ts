@@ -67,10 +67,10 @@ export type DamCoverageStatus =
   | 'covered'
   /** An upstream publishes this dam and we matched it, but nothing arrives. */
   | 'published_not_ingested'
-  /** No upstream we have scanned publishes it — but some source is unscanned. */
+  /** No scanned provider publishes it — but some provider is still unscanned. */
   | 'unknown'
-  /** Every observation-producing source has been scanned; none publishes it. */
-  | 'no_upstream';
+  /** Every observation-producing provider has been scanned; none publishes it. */
+  | 'not_published';
 
 export interface DamCoverageRow {
   damId: bigint;
@@ -124,7 +124,7 @@ export async function classifyDamCoverage(): Promise<DamCoverageRow[]> {
              WHEN f.dam_id IS NOT NULL          THEN 'covered'
              WHEN p.dam_id IS NOT NULL          THEN 'published_not_ingested'
              WHEN (SELECT n FROM pending) > 0   THEN 'unknown'
-             ELSE 'no_upstream'
+             ELSE 'not_published'
            END                         AS "status",
            COALESCE(p.sources, ARRAY[]::TEXT[]) AS "publishedBy"
     FROM dams d
@@ -138,10 +138,10 @@ export interface CoverageSummary {
   covered: number;
   publishedNotIngested: number;
   unknown: number;
-  noUpstream: number;
-  /** Upstream stations we cannot tie to any master dam — the backlog. */
-  unresolvedUpstreamRows: number;
-  /** Observation sources still to be instrumented. While > 0, `unknown` is not `no_upstream`. */
+  notPublished: number;
+  /** Published stations we cannot tie to any master dam — the backlog. */
+  unmatchedStations: number;
+  /** Observation providers still to be instrumented. While > 0, `unknown` is not `not_published`. */
   sourcesPendingScan: number;
 }
 
@@ -160,8 +160,8 @@ export async function coverageSummary(): Promise<CoverageSummary> {
     covered: count('covered'),
     publishedNotIngested: count('published_not_ingested'),
     unknown: count('unknown'),
-    noUpstream: count('no_upstream'),
-    unresolvedUpstreamRows: Number(extra?.unresolved ?? 0),
+    notPublished: count('not_published'),
+    unmatchedStations: Number(extra?.unresolved ?? 0),
     sourcesPendingScan: Number(extra?.pending ?? 0),
   };
 }
@@ -194,7 +194,7 @@ export async function classifyOneDam(damId: bigint): Promise<DamCoverageRow | nu
              )                                            THEN 'covered'
              WHEN (SELECT sources FROM published) IS NOT NULL THEN 'published_not_ingested'
              WHEN (SELECT n FROM pending) > 0             THEN 'unknown'
-             ELSE 'no_upstream'
+             ELSE 'not_published'
            END        AS "status",
            COALESCE((SELECT sources FROM published), ARRAY[]::TEXT[]) AS "publishedBy"
     FROM dams d
