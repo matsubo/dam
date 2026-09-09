@@ -15,6 +15,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const BASE_URL = process.env.HKD_MLIT_DAM_BASE ?? 'https://info-dam.hdb.hkd.mlit.go.jp/dam';
@@ -160,6 +161,9 @@ interface DamMatch {
 
 async function matchMaster(log: (s: string) => void): Promise<DamMatch[]> {
   const matches: DamMatch[] = [];
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing.
+  const universe: UniverseRow[] = [];
   for (const c of DAMS) {
     const rows = await sql<{ id: bigint }[]>`
       SELECT id FROM dams
@@ -176,6 +180,12 @@ async function matchMaster(log: (s: string) => void): Promise<DamMatch[]> {
       LIMIT 1
     `;
     const r = rows[0];
+    universe.push({
+      externalId: c.slug,
+      name: c.pageName,
+      prefCode: PREF_CODE,
+      resolvedDamId: r?.id ?? null,
+    });
     if (!r) {
       log(`${SOURCE_ID}: no master match for ${c.pageName}`);
       continue;
@@ -189,6 +199,7 @@ async function matchMaster(log: (s: string) => void): Promise<DamMatch[]> {
         AND COALESCE(external_ids->>${SOURCE_ID}, '') <> ${c.slug}
     `;
   }
+  await recordUniverse(SOURCE_ID, universe);
   return matches;
 }
 

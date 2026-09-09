@@ -27,6 +27,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const DATA_URL =
@@ -51,6 +52,8 @@ const STATION_MAP: Readonly<Record<string, string>> = {
 // --- types ------------------------------------------------------------------
 
 export interface ParsedRow {
+  /** 地点番号 — the portal's own station code, stable across runs. */
+  code: string;
   saitamaName: string;
   observedAt: Date;
   outflowM3s: number | null;
@@ -134,6 +137,7 @@ export function parseSaitamaCsv(text: string): ParsedRow[] {
     if (waterLevelM === null && inflowM3s === null && outflowM3s === null) continue;
 
     rows.push({
+      code,
       saitamaName,
       observedAt,
       outflowM3s,
@@ -183,25 +187,44 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     ORDER BY id
   `;
   const out: DamMatch[] = [];
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing. Seeded
+  // from the station map rather than from this run's rows, so a dam whose CSV
+  // row is empty today still counts as published; the resolved rows pushed
+  // below supersede these (recordUniverse keeps the last entry per id).
+  const universe: UniverseRow[] = Object.entries(STATION_MAP).map(([code, name]) => ({
+    externalId: code,
+    name,
+    prefCode: PREF_CODE,
+    resolvedDamId: null,
+  }));
 
   for (const r of rows) {
     const stem = normalizeName(r.saitamaName);
-    if (!stem) continue;
 
     let best: { id: bigint; rank: number } | null = null;
-    for (const m of masters) {
-      const mStem = normalizeName(m.name);
-      let rank: number;
-      if (m.name === r.saitamaName) rank = 0;
-      else if (mStem === stem) rank = 1;
-      else if (m.name === `${stem}ダム`) rank = 2;
-      else if (mStem.startsWith(stem)) rank = 3;
-      else if (mStem.includes(stem)) rank = 4;
-      else continue;
-      if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-        best = { id: m.id, rank };
+    if (stem) {
+      for (const m of masters) {
+        const mStem = normalizeName(m.name);
+        let rank: number;
+        if (m.name === r.saitamaName) rank = 0;
+        else if (mStem === stem) rank = 1;
+        else if (m.name === `${stem}ダム`) rank = 2;
+        else if (mStem.startsWith(stem)) rank = 3;
+        else if (mStem.includes(stem)) rank = 4;
+        else continue;
+        if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
+          best = { id: m.id, rank };
+        }
       }
     }
+
+    universe.push({
+      externalId: r.code,
+      name: r.saitamaName,
+      prefCode: PREF_CODE,
+      resolvedDamId: best?.id ?? null,
+    });
 
     if (!best) {
       log(`${SOURCE_ID}: no master match for "${r.saitamaName}"`);
@@ -210,6 +233,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     out.push({ saitamaName: r.saitamaName, damId: best.id });
   }
 
+  await recordUniverse(SOURCE_ID, universe);
   return out;
 }
 

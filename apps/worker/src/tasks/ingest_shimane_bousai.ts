@@ -29,6 +29,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const BASE_URL = process.env.SHIMANE_BOUSAI_URL ?? 'https://www.suibou-shimane.jp';
@@ -181,25 +182,44 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out: DamMatch[] = [];
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing. Seeded
+  // from the station list rather than from this run's rows, so a station the
+  // snapshot omits today still counts as published; the resolved rows pushed
+  // below supersede these (recordUniverse keeps the last entry per id).
+  const universe: UniverseRow[] = STATIONS.map(({ stationId, name }) => ({
+    externalId: stationId,
+    name,
+    prefCode: PREF_CODE,
+    resolvedDamId: null,
+  }));
 
   for (const r of rows) {
     const stem = normalizeName(r.shimaneName);
-    if (!stem) continue;
 
     let best: { id: bigint; rank: number } | null = null;
-    for (const m of masters) {
-      const mStem = normalizeName(m.name);
-      let rank: number;
-      if (m.name === r.shimaneName) rank = 0;
-      else if (mStem === stem) rank = 1;
-      else if (m.name === `${stem}ダム`) rank = 2;
-      else if (mStem.startsWith(stem)) rank = 3;
-      else if (mStem.includes(stem)) rank = 4;
-      else continue;
-      if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-        best = { id: m.id, rank };
+    if (stem) {
+      for (const m of masters) {
+        const mStem = normalizeName(m.name);
+        let rank: number;
+        if (m.name === r.shimaneName) rank = 0;
+        else if (mStem === stem) rank = 1;
+        else if (m.name === `${stem}ダム`) rank = 2;
+        else if (mStem.startsWith(stem)) rank = 3;
+        else if (mStem.includes(stem)) rank = 4;
+        else continue;
+        if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
+          best = { id: m.id, rank };
+        }
       }
     }
+
+    universe.push({
+      externalId: r.stationId,
+      name: r.shimaneName,
+      prefCode: PREF_CODE,
+      resolvedDamId: best?.id ?? null,
+    });
 
     if (!best) {
       log(`${SOURCE_ID}: no master match for "${r.shimaneName}" (${r.stationId})`);
@@ -216,6 +236,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     `;
   }
 
+  await recordUniverse(SOURCE_ID, universe);
   return out;
 }
 

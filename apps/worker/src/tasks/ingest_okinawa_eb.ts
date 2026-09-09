@@ -23,6 +23,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const CSV_URL =
@@ -138,16 +139,21 @@ async function matchMaster(
     SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out = new Map<string, bigint>();
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing. The
+  // published list is both CSV dam columns, not just the ones carrying a
+  // value today; the CSV has no station ids, so the published name keyed by
+  // prefecture is the stable identity.
+  const universe: UniverseRow[] = [];
+  const reported = new Set(rows.map((r) => r.csvName));
 
-  for (const r of rows) {
-    const dam = DAMS.find((d) => d.csvName === r.csvName);
-    if (!dam) continue;
+  for (const dam of DAMS) {
     const stem = dam.masterName;
 
     let best: { id: bigint; rank: number } | null = null;
     for (const m of masters) {
       let rank: number;
-      if (m.name === r.csvName) rank = 0;
+      if (m.name === dam.csvName) rank = 0;
       else if (m.name === `${stem}ダム`) rank = 1;
       else if (m.name === stem) rank = 2;
       else if (m.name.startsWith(stem)) rank = 3;
@@ -158,13 +164,21 @@ async function matchMaster(
       }
     }
 
+    universe.push({
+      externalId: dam.csvName,
+      name: dam.csvName,
+      prefCode: PREF_CODE,
+      resolvedDamId: best?.id ?? null,
+    });
+
     if (!best) {
-      log(`${SOURCE_ID}: no master match for "${r.csvName}"`);
+      log(`${SOURCE_ID}: no master match for "${dam.csvName}"`);
       continue;
     }
-    out.set(r.csvName, best.id);
+    if (reported.has(dam.csvName)) out.set(dam.csvName, best.id);
   }
 
+  await recordUniverse(SOURCE_ID, universe);
   return out;
 }
 

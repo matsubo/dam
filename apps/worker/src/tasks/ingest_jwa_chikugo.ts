@@ -21,6 +21,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const PAGE_URL =
@@ -131,6 +132,9 @@ async function ensureSourcePriority(): Promise<void> {
 
 async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
   const matches: DamMatch[] = [];
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing.
+  const universe: UniverseRow[] = [];
   for (const m of NAME_MAP) {
     const rows = await sql<{ id: bigint; name: string }[]>`
       SELECT id, name FROM dams
@@ -147,6 +151,12 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
       LIMIT 1
     `;
     const r = rows[0];
+    universe.push({
+      externalId: m.chikugoName,
+      name: m.chikugoName,
+      prefCode: m.prefCodes[0] ?? null,
+      resolvedDamId: r?.id ?? null,
+    });
     if (!r) {
       log(`jwa-chikugo: no master match for "${m.chikugoName}" (${m.masterName})`);
       continue;
@@ -160,6 +170,7 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
         AND COALESCE(external_ids->>'jwa-chikugo', '') <> ${m.chikugoName}
     `;
   }
+  await recordUniverse('jwa-chikugo', universe);
   return matches;
 }
 

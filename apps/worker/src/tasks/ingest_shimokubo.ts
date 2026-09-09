@@ -14,11 +14,16 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const DATA_URL = process.env.SHIMOKUBO_DATA_URL ?? 'http://shimokubo.kannet.ne.jp/data/table.json';
 
 const SOURCE_ID = 'shimokubo';
+/** The only dam this feed publishes; it carries no station id. */
+const DAM_NAME = '下久保ダム';
+/** 下久保 straddles 群馬/埼玉; ダム便覧 files it under 群馬. */
+const PREF_CODE = '10';
 
 // --- types ------------------------------------------------------------------
 
@@ -147,6 +152,11 @@ const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
   await ensureSourcePriority();
   const damId = await resolveDamId(log);
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing.
+  await recordUniverse(SOURCE_ID, [
+    { externalId: DAM_NAME, name: DAM_NAME, prefCode: PREF_CODE, resolvedDamId: damId },
+  ]);
   if (!damId) return;
 
   const r = await fetch(DATA_URL, {

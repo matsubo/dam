@@ -25,12 +25,29 @@ export interface UniverseRow {
  * scan. Stamping the run is what later lets `classifyDamCoverage` say
  * "nobody publishes this dam" instead of "we haven't looked yet".
  *
- * Call it with the WHOLE list the source returned, matched and unmatched
- * alike — a partial call would silently shrink the known universe.
+ * Call it with the WHOLE list the provider publishes, matched and unmatched
+ * alike — a partial call would silently shrink the known universe. Where the
+ * provider's catalogue is a constant in the task, build the list from that
+ * constant rather than from the rows that happened to parse this run, so a
+ * single failing page doesn't drop a station from the universe.
  */
 export async function recordUniverse(sourceId: string, rows: UniverseRow[]): Promise<number> {
-  if (rows.length > 0) {
-    const values = rows.map((r) => ({
+  // De-duplicate on the primary key before building the multi-row INSERT.
+  // postgres.js emits one statement, and Postgres rejects a duplicate target
+  // with `21000: ON CONFLICT DO UPDATE command cannot affect row a second
+  // time`. Several providers legitimately repeat a station — the same dam
+  // under both 水道用 and 工業用水 tables, or the same names in every monthly
+  // ZIP — and callers run this BEFORE upsertObservations, so an exception
+  // here would take the observation write down with it.
+  //
+  // LAST ENTRY WINS, and that is load-bearing: shimane, saitama and shizuoka
+  // seed the full station list with `resolvedDamId: null` and then push the
+  // resolved rows after it, so a station missing from today's snapshot still
+  // counts as published while a matched one keeps its id. Changing this to
+  // first-wins would silently null out those three sources' matches.
+  const deduped = [...new Map(rows.map((r) => [r.externalId, r])).values()];
+  if (deduped.length > 0) {
+    const values = deduped.map((r) => ({
       source_id: sourceId,
       source_external_id: r.externalId,
       source_name: r.name,
@@ -46,20 +63,28 @@ export async function recordUniverse(sourceId: string, rows: UniverseRow[]): Pro
         pref_code       = COALESCE(EXCLUDED.pref_code, source_universe.pref_code),
         lat             = COALESCE(EXCLUDED.lat, source_universe.lat),
         lng             = COALESCE(EXCLUDED.lng, source_universe.lng),
-        resolved_dam_id = EXCLUDED.resolved_dam_id,
+        -- Never downgrade a good match back to NULL. Some tasks resolve from
+        -- rows that survived this run's fetch, so a partial outage would
+        -- otherwise wipe resolved_dam_id for every station that happened to
+        -- be missing — turning a matched dam into unmatched backlog. A real
+        -- re-match still overwrites, because it supplies a non-NULL id.
+        resolved_dam_id = COALESCE(EXCLUDED.resolved_dam_id, source_universe.resolved_dam_id),
         last_seen_at    = NOW()
     `;
   }
-  // Stamped even for an empty list: a source that genuinely publishes nothing
-  // has still been looked at, and that is what the gate below cares about.
+  // An empty list does NOT count as a scan. Every provider here publishes at
+  // least one dam, so `rows.length === 0` means the fetch or parse failed —
+  // and stamping a run for it would let a transient upstream outage close the
+  // honesty gate and flip that provider's dams to 提供元なし.
+  if (deduped.length === 0) return 0;
   await sql`
     INSERT INTO source_universe_runs (source_id, last_full_scan_at, row_count)
-    VALUES (${sourceId}, NOW(), ${rows.length})
+    VALUES (${sourceId}, NOW(), ${deduped.length})
     ON CONFLICT (source_id) DO UPDATE SET
       last_full_scan_at = EXCLUDED.last_full_scan_at,
       row_count         = EXCLUDED.row_count
   `;
-  return rows.length;
+  return deduped.length;
 }
 
 export type DamCoverageStatus =
@@ -92,6 +117,16 @@ export interface DamCoverageRow {
  * still uninstrumented, absence proves nothing and the dam reports
  * `unknown`. Collapsing those two would quietly declare hundreds of dams
  * hopeless just because we never looked.
+ *
+ * Two residual caveats, both surfaced in `coverageSummary()` rather than
+ * hidden:
+ *  - `sourcesNotEnumerable` — providers that publish no station list at all
+ *    (a portal that lists dams only during a flood event). They are excluded
+ *    from the gate, so `not_published` stays provisional for their areas.
+ *  - A handful of HTML-scraped providers (nara / niigata / miyagi) have no
+ *    catalogue constant to iterate, so their universe is whatever parsed on
+ *    the last good run. A station that reports even once ever is recorded and
+ *    persists; one that has NEVER parsed stays invisible.
  */
 export async function classifyDamCoverage(): Promise<DamCoverageRow[]> {
   return sql<DamCoverageRow[]>`
@@ -100,6 +135,7 @@ export async function classifyDamCoverage(): Promise<DamCoverageRow[]> {
       FROM source_priorities sp
       WHERE sp.active
         AND sp.provides_observations
+        AND sp.universe_enumerable
         AND NOT EXISTS (
           SELECT 1 FROM source_universe_runs r WHERE r.source_id = sp.source_id
         )
@@ -143,18 +179,27 @@ export interface CoverageSummary {
   unmatchedStations: number;
   /** Observation providers still to be instrumented. While > 0, `unknown` is not `not_published`. */
   sourcesPendingScan: number;
+  /**
+   * Providers that publish no enumerable station list (e.g. a portal that
+   * only lists dams during a flood event). They are excluded from the gate,
+   * so `not_published` carries a residual caveat for the areas they cover.
+   */
+  sourcesNotEnumerable: number;
 }
 
 export async function coverageSummary(): Promise<CoverageSummary> {
   const rows = await classifyDamCoverage();
   const count = (s: DamCoverageStatus): number => rows.filter((r) => r.status === s).length;
-  const [extra] = await sql<{ unresolved: bigint; pending: bigint }[]>`
+  const [extra] = await sql<{ unresolved: bigint; pending: bigint; not_enumerable: bigint }[]>`
     SELECT
       (SELECT COUNT(*) FROM source_universe WHERE resolved_dam_id IS NULL)::BIGINT AS unresolved,
       (SELECT COUNT(*) FROM source_priorities sp
-        WHERE sp.active AND sp.provides_observations
+        WHERE sp.active AND sp.provides_observations AND sp.universe_enumerable
           AND NOT EXISTS (SELECT 1 FROM source_universe_runs r WHERE r.source_id = sp.source_id)
-      )::BIGINT AS pending
+      )::BIGINT AS pending,
+      (SELECT COUNT(*) FROM source_priorities sp
+        WHERE sp.active AND sp.provides_observations AND NOT sp.universe_enumerable
+      )::BIGINT AS not_enumerable
   `;
   return {
     covered: count('covered'),
@@ -163,6 +208,7 @@ export async function coverageSummary(): Promise<CoverageSummary> {
     notPublished: count('not_published'),
     unmatchedStations: Number(extra?.unresolved ?? 0),
     sourcesPendingScan: Number(extra?.pending ?? 0),
+    sourcesNotEnumerable: Number(extra?.not_enumerable ?? 0),
   };
 }
 
@@ -174,6 +220,7 @@ export async function classifyOneDam(damId: bigint): Promise<DamCoverageRow | nu
       FROM source_priorities sp
       WHERE sp.active
         AND sp.provides_observations
+        AND sp.universe_enumerable
         AND NOT EXISTS (
           SELECT 1 FROM source_universe_runs r WHERE r.source_id = sp.source_id
         )

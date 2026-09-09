@@ -94,7 +94,10 @@ describe('source universe coverage triage', () => {
       WHERE sp.active AND sp.provides_observations
         AND NOT EXISTS (SELECT 1 FROM source_universe_runs r WHERE r.source_id = sp.source_id)
     `;
-    for (const r of remaining) await recordUniverse(r.source_id, []);
+    for (const r of remaining)
+      await recordUniverse(r.source_id, [
+        { externalId: `stub-${r.source_id}`, name: 'stub', resolvedDamId: null },
+      ]);
     try {
       expect(only(await classifyDamCoverage(), absent)).toBe('not_published');
     } finally {
@@ -107,7 +110,7 @@ describe('source universe coverage triage', () => {
       { externalId: 'a-1', name: 'univ-covered', resolvedDamId: covered },
       { externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale },
     ]);
-    await recordUniverse(SRC_B, []);
+    await recordUniverse(SRC_B, [{ externalId: 'b-stub', name: 'stub', resolvedDamId: null }]);
     const rows = await classifyDamCoverage();
     expect(only(rows, covered)).toBe('covered');
     // Published and matched, but no observation has landed — the actionable bug.
@@ -144,5 +147,35 @@ describe('source universe coverage triage', () => {
       WHERE source_id = ${SRC_A} AND resolved_dam_id IS NULL
     `;
     expect(Number(rows[0]?.n)).toBe(1);
+  });
+
+  test('an empty list is a failed scan, not a scanned provider', async () => {
+    // A transient upstream outage must not be able to close the honesty gate.
+    await recordUniverse(SRC_A, []);
+    const runs = await sql<{ n: bigint }[]>`
+      SELECT COUNT(*)::BIGINT AS n FROM source_universe_runs WHERE source_id = ${SRC_A}
+    `;
+    expect(Number(runs[0]?.n)).toBe(0);
+  });
+
+  test('tolerates a provider listing the same station twice', async () => {
+    // Real providers repeat: the same dam under both 水道用 and 工業用水
+    // tables, or the same names in every monthly ZIP. Postgres rejects a
+    // duplicate ON CONFLICT target in one statement, and callers run this
+    // before upsertObservations — so a throw here would also lose the
+    // observations.
+    const n = await recordUniverse(SRC_A, [
+      { externalId: 'dup', name: 'first', resolvedDamId: null },
+      { externalId: 'dup', name: 'second', resolvedDamId: covered },
+      { externalId: 'other', name: 'other', resolvedDamId: null },
+    ]);
+    expect(n).toBe(2);
+    const rows = await sql<{ name: string; resolved: bigint | null }[]>`
+      SELECT source_name AS name, resolved_dam_id AS resolved
+      FROM source_universe WHERE source_id = ${SRC_A} AND source_external_id = 'dup'
+    `;
+    expect(rows.length).toBe(1);
+    expect(rows[0]?.name).toBe('second'); // last entry wins
+    expect(rows[0]?.resolved).toBe(covered);
   });
 });

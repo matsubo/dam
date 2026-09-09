@@ -27,6 +27,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const BASE_URL =
@@ -187,26 +188,38 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out: DamMatch[] = [];
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing. The 現況表
+  // carries no station ids, so the published name is the key.
+  const universe: UniverseRow[] = [];
 
   for (const r of rows) {
     const stem = normalizeName(r.sagaName);
-    if (!stem) continue;
 
     let best: { id: bigint; rank: number } | null = null;
-    for (const m of masters) {
-      const mStem = normalizeName(m.name);
-      let rank: number;
-      if (m.name === r.sagaName) rank = 0;
-      else if (mStem === stem) rank = 1;
-      else if (m.name === `${stem}ダム`) rank = 2;
-      else if (mStem.startsWith(stem)) rank = 3;
-      else if (stem.startsWith(mStem) && mStem.length >= 2) rank = 4;
-      else if (mStem.includes(stem)) rank = 5;
-      else continue;
-      if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-        best = { id: m.id, rank };
+    if (stem) {
+      for (const m of masters) {
+        const mStem = normalizeName(m.name);
+        let rank: number;
+        if (m.name === r.sagaName) rank = 0;
+        else if (mStem === stem) rank = 1;
+        else if (m.name === `${stem}ダム`) rank = 2;
+        else if (mStem.startsWith(stem)) rank = 3;
+        else if (stem.startsWith(mStem) && mStem.length >= 2) rank = 4;
+        else if (mStem.includes(stem)) rank = 5;
+        else continue;
+        if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
+          best = { id: m.id, rank };
+        }
       }
     }
+
+    universe.push({
+      externalId: r.sagaName,
+      name: r.sagaName,
+      prefCode: PREF_CODE,
+      resolvedDamId: best?.id ?? null,
+    });
 
     if (!best) {
       log(`${SOURCE_ID}: no master match for "${r.sagaName}"`);
@@ -215,6 +228,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     out.push({ sagaName: r.sagaName, damId: best.id });
   }
 
+  await recordUniverse(SOURCE_ID, universe);
   return out;
 }
 

@@ -24,6 +24,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const PAGE_URL =
@@ -191,6 +192,9 @@ export async function ensureSourcePriority(): Promise<void> {
  */
 export async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
   const matches: DamMatch[] = [];
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing.
+  const universe: UniverseRow[] = [];
   for (const m of NAME_MAP) {
     const rows = await sql<{ id: bigint; name: string }[]>`
       SELECT id, name FROM dams
@@ -210,6 +214,12 @@ export async function ensureExternalIds(log: (s: string) => void): Promise<DamMa
       LIMIT 1
     `;
     const r = rows[0];
+    universe.push({
+      externalId: m.jwaName,
+      name: m.jwaName,
+      prefCode: m.prefCodes[0] ?? null,
+      resolvedDamId: r?.id ?? null,
+    });
     if (!r) {
       log(`jwa-junpo: no master match for "${m.jwaName}" (${m.masterName})`);
       continue;
@@ -223,6 +233,7 @@ export async function ensureExternalIds(log: (s: string) => void): Promise<DamMa
         AND COALESCE(external_ids->>'jwa-junpo', '') <> ${m.jwaName}
     `;
   }
+  await recordUniverse('jwa-junpo', universe);
   return matches;
 }
 

@@ -5,7 +5,8 @@
 //   大野ダム / 畑川ダム (大野ダム管理) /
 //   天ヶ瀬ダム (淀川ダム統管) /
 //   日吉ダム / 高山ダム / 布目ダム (水資源機構)
-//   (+ 瀬田洗堰1・瀬田洗堰2 appear as sluice gates — no master match)
+//   (+ 瀬田洗堰1・瀬田洗堰2 appear as sluice gates; they resolve to no master
+//    dam, and are recorded in source_universe with a null resolvedDamId)
 //
 // Source:
 //   https://chisuibousai2.pref.kyoto.jp/bousai/servlet/bousaiweb.servletBousaiTableStatus?dk=4
@@ -24,6 +25,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const DATA_URL =
@@ -143,6 +145,10 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     SELECT id, name FROM dams WHERE pref_code = ANY(ARRAY['26', '29']) ORDER BY id
   `;
   const out: DamMatch[] = [];
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing. The
+  // 瀬田洗堰 sluice-gate rows belong here too, with a null resolvedDamId.
+  const universe: UniverseRow[] = [];
 
   for (const r of rows) {
     const stem = normalizeName(r.kyotoName);
@@ -163,6 +169,15 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
       }
     }
 
+    // The 局名 cell is the only id the table publishes; pair it with the
+    // feed's own prefecture (26) so the key stays unique.
+    universe.push({
+      externalId: r.kyotoName,
+      name: r.kyotoName,
+      prefCode: PREF_CODE,
+      resolvedDamId: best?.id ?? null,
+    });
+
     if (!best) {
       log(`${SOURCE_ID}: no master match for "${r.kyotoName}"`);
       continue;
@@ -170,6 +185,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     out.push({ kyotoName: r.kyotoName, damId: best.id });
   }
 
+  await recordUniverse(SOURCE_ID, universe);
   return out;
 }
 
