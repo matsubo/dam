@@ -1,5 +1,7 @@
 import { sql } from '@dam/db/client';
+import { coverageHeadline } from '@dam/db/repo/coverage';
 import { type DamListItem, listDams, lowStorageDams } from '@dam/db/repo/dams';
+import { nationalStorageTotals, storageRate } from '@dam/db/repo/storage_totals';
 import { driestWatersheds, nationalStorageChange } from '@dam/db/repo/watersheds';
 import {
   ArrowRight,
@@ -36,7 +38,10 @@ export const metadata: Metadata = {
   alternates: { canonical: '/' },
 };
 
-interface HomeStats {
+/** Master-side counters this page owns. Everything observation-derived is
+ *  imported from repo/storage_totals + repo/coverage, which /stats and
+ *  /coverage read too — one definition, no drift. */
+interface MasterStats {
   damCount: bigint;
   watershedCount: bigint;
   obsTotal: bigint;
@@ -44,25 +49,26 @@ interface HomeStats {
   totalCapacityM3: string | null;
   /** Sum of 利水容量 across the rate-able subset (informational; NOT the rate denominator). */
   activeCapacityM3: string | null;
+  rateableDamCount: bigint;
+  oldestObs: Date | null;
+}
+
+interface HomeStats extends MasterStats {
   /** Latest storage summed across the observed cohort — pairs with observedActiveCapacityM3 for rate. */
   rateableStorageM3: string | null;
-  rateableDamCount: bigint;
   /** Rate-able dams with a fresh (7 d) observation. Rate numerator and denominator both come from this cohort. */
-  observedDamCount: bigint;
+  observedDamCount: number;
   /** Sum of 利水容量 over the observed cohort only — the 全国貯水率 denominator. */
   observedActiveCapacityM3: string | null;
   /** Distinct dams that have at least one non-synthetic observation in the last 30 days. */
-  realDamCount: bigint;
-  /** Distinct dams with storage_rate IS NOT NULL in the last 30 days (direct from source or backfilled). */
-  storageRateDamCount: bigint;
+  realDamCount: number;
   /** Dams with height_m >= 15 (ダム法の定義: 提高15m以上). Used as the denominator for 貯水率取得ダムカバレッジ. */
-  riverDamCount: bigint;
+  riverDamCount: number;
   /** Distinct dams (height_m >= 15) with storage_rate in the last 30 days. Numerator for coverage. */
-  storageRateRiverDamCount: bigint;
+  storageRateRiverDamCount: number;
   /** Distinct dams that have at least one non-synthetic observation EVER
    *  (mudam-style historical data counts; vastly larger than the 30 d figure). */
-  historicalDamCount: bigint;
-  oldestObs: Date | null;
+  historicalDamCount: number;
 }
 
 async function homeStats(): Promise<HomeStats> {
@@ -70,59 +76,39 @@ async function homeStats(): Promise<HomeStats> {
   // takes seconds. Use TimescaleDB's purpose-built approximate_row_count()
   // — it sums chunk-level pg_class.reltuples (the parent table's reltuples
   // is always 0 because rows live in children), instant after ANALYZE.
-  // `fresh` is the observed cohort: rate-able dams whose latest observation
-  // is at most 7 days old. 全国貯水率 numerator (storage) and denominator
-  // (active capacity) both sum over this cohort — a dam without fresh data
-  // must not deflate the rate by contributing capacity only.
-  const rows = await sql<HomeStats[]>`
-    WITH fresh AS (
-      SELECT DISTINCT ON (o.dam_id) o.dam_id, o.storage_volume_m3, d.active_capacity_m3
-      FROM observations o
-      JOIN dams d ON d.id = o.dam_id
-      WHERE o.observed_at > NOW() - INTERVAL '7 days'
-        AND o.storage_volume_m3 IS NOT NULL
-        AND d.active_capacity_m3 IS NOT NULL
-      ORDER BY o.dam_id, o.observed_at DESC
-    )
-    SELECT
-      (SELECT COUNT(*)::BIGINT      FROM dams)                                           AS "damCount",
-      (SELECT COUNT(*)::BIGINT      FROM watersheds)                                     AS "watershedCount",
-      GREATEST(0, approximate_row_count('observations'))::BIGINT                         AS "obsTotal",
-      (SELECT COUNT(*)::BIGINT      FROM observations WHERE observed_at > NOW() - INTERVAL '24 hours') AS "obsLast24h",
-      (SELECT SUM(total_capacity_m3)::TEXT FROM dams)                                    AS "totalCapacityM3",
-      (SELECT SUM(active_capacity_m3)::TEXT FROM dams WHERE active_capacity_m3 IS NOT NULL) AS "activeCapacityM3",
-      (SELECT COUNT(*)::BIGINT      FROM dams WHERE active_capacity_m3 IS NOT NULL)      AS "rateableDamCount",
-      (SELECT SUM(storage_volume_m3)::TEXT FROM fresh)                                   AS "rateableStorageM3",
-      (SELECT COUNT(*)::BIGINT      FROM fresh)                                          AS "observedDamCount",
-      (SELECT SUM(active_capacity_m3)::TEXT FROM fresh)                                  AS "observedActiveCapacityM3",
-      (SELECT COUNT(DISTINCT dam_id)::BIGINT
-         FROM observations
-         WHERE observed_at > NOW() - INTERVAL '30 days'
-           AND source_id <> 'synthetic')                                                  AS "realDamCount",
-      (SELECT COUNT(DISTINCT dam_id)::BIGINT
-         FROM observations
-         WHERE observed_at > NOW() - INTERVAL '30 days'
-           AND source_id <> 'synthetic'
-           AND storage_rate IS NOT NULL)                                                  AS "storageRateDamCount",
-      (SELECT COUNT(*)::BIGINT FROM dams WHERE height_m >= 15)                           AS "riverDamCount",
-      (SELECT COUNT(DISTINCT o.dam_id)::BIGINT
-         FROM observations o
-         JOIN dams d ON d.id = o.dam_id
-         WHERE d.height_m >= 15
-           AND o.observed_at > NOW() - INTERVAL '30 days'
-           AND o.source_id <> 'synthetic'
-           AND o.storage_rate IS NOT NULL)                                                AS "storageRateRiverDamCount",
-      -- All-time distinct real-source dams. Mudam contributes here even
-      -- though its observations are 1-2 years old; the 30 d filter above
-      -- otherwise hides ~500 dams of historical coverage.
-      (SELECT COUNT(DISTINCT dam_id)::BIGINT
-         FROM observations
-         WHERE source_id <> 'synthetic')                                                  AS "historicalDamCount",
-      (SELECT MIN(observed_at)      FROM observations)                                   AS "oldestObs"
-  `;
+  //
+  // The storage cohort and the coverage counters live in the db repo so the
+  // home page, /stats and /coverage cannot quote different definitions of
+  // the same word: 全国貯水率 sums numerator AND denominator over dams with a
+  // fresh reading (repo/storage_totals), and coverage keeps 実測 and 貯水率取得
+  // separate (repo/coverage).
+  const [rows, totals, coverage] = await Promise.all([
+    sql<MasterStats[]>`
+      SELECT
+        (SELECT COUNT(*)::BIGINT      FROM dams)                                           AS "damCount",
+        (SELECT COUNT(*)::BIGINT      FROM watersheds)                                     AS "watershedCount",
+        GREATEST(0, approximate_row_count('observations'))::BIGINT                         AS "obsTotal",
+        (SELECT COUNT(*)::BIGINT      FROM observations WHERE observed_at > NOW() - INTERVAL '24 hours') AS "obsLast24h",
+        (SELECT SUM(total_capacity_m3)::TEXT FROM dams)                                    AS "totalCapacityM3",
+        (SELECT SUM(active_capacity_m3)::TEXT FROM dams WHERE active_capacity_m3 IS NOT NULL) AS "activeCapacityM3",
+        (SELECT COUNT(*)::BIGINT      FROM dams WHERE active_capacity_m3 IS NOT NULL)      AS "rateableDamCount",
+        (SELECT MIN(observed_at)      FROM observations)                                   AS "oldestObs"
+    `,
+    nationalStorageTotals(),
+    coverageHeadline(),
+  ]);
   const row = rows[0];
   if (!row) throw new Error('homeStats query returned no row');
-  return row;
+  return {
+    ...row,
+    rateableStorageM3: totals.storageM3,
+    observedDamCount: totals.observedDamCount,
+    observedActiveCapacityM3: totals.activeCapacityM3,
+    realDamCount: coverage.realtimeDamCount,
+    riverDamCount: coverage.riverDamCount,
+    storageRateRiverDamCount: coverage.storageRateRiverDamCount,
+    historicalDamCount: coverage.historicalDamCount,
+  };
 }
 
 const fmt = (n: bigint | number) => Number(n).toLocaleString('ja-JP');
@@ -185,7 +171,6 @@ const cachedHomeStats = unstable_cache(
       observedDamCount: Number(s.observedDamCount),
       observedActiveCapacityM3: s.observedActiveCapacityM3,
       realDamCount: Number(s.realDamCount),
-      storageRateDamCount: Number(s.storageRateDamCount),
       riverDamCount: Number(s.riverDamCount),
       storageRateRiverDamCount: Number(s.storageRateRiverDamCount),
       historicalDamCount: Number(s.historicalDamCount),
@@ -260,10 +245,11 @@ export default async function Home() {
   );
   // 全国貯水率: 直近7日に実測のあるダムだけで、貯水量合計 ÷ 利水容量合計。
   // 実測のないダムは分子にも分母にも入れない（容量だけ混ぜると率が下振れする）。
-  const overallRate =
-    s.observedActiveCapacityM3 && s.rateableStorageM3 && Number(s.observedActiveCapacityM3) > 0
-      ? Math.min(1, Number(s.rateableStorageM3) / Number(s.observedActiveCapacityM3))
-      : null;
+  const overallRate = storageRate({
+    observedDamCount: s.observedDamCount,
+    storageM3: s.rateableStorageM3,
+    activeCapacityM3: s.observedActiveCapacityM3,
+  });
   const yearsCovered = s.oldestObs
     ? Math.max(1, Math.round((Date.now() - s.oldestObs.getTime()) / (365 * 24 * 3600 * 1000)))
     : null;
@@ -584,7 +570,7 @@ export default async function Home() {
             <Stat
               label="全国合計利水容量"
               value={fmtCapacityMcm(s.activeCapacityM3)}
-              sub="貯水率の分母(利水容量データあり)"
+              sub="利水容量データのある全ダム合計"
             />
             <Stat
               label="現在の合計貯水量"
