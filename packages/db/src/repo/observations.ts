@@ -144,11 +144,11 @@ export interface FindWatershedSeriesOptions {
   from: Date;
   to: Date;
   bucket: 'hourly' | 'daily' | 'monthly';
-  preferredSource?: string | null;
   /**
    * Hourly bucket only — drops `source_id = 'synthetic'` rows from the
-   * per-dam input before bucketing. The watershed aggregate then reflects
-   * only dams whose values are actually measured.
+   * per-dam input before bucketing, and skips per-dam source preference so
+   * every remaining real source surfaces. The watershed aggregate then
+   * reflects only dams whose values are actually measured.
    */
   excludeSynthetic?: boolean;
 }
@@ -158,10 +158,32 @@ export interface FindWatershedSeriesOptions {
 // gaps so we use last() at the bucket level rather than avg() to avoid
 // double-counting partial observations.
 async function findWatershedSeriesHourly(opts: FindWatershedSeriesOptions): Promise<SeriesPoint[]> {
-  const preferred = opts.preferredSource ?? null;
   const excludeSynthetic = opts.excludeSynthetic === true;
   return sql<SeriesPoint[]>`
     WITH ds AS (SELECT id FROM dams WHERE watershed_id = ${opts.watershedId}),
+    -- One source per dam. A watershed's dams routinely report under different
+    -- feeds (MLIT, prefecture 防災, JWA), so the single global pick this used
+    -- to apply filtered out every dam not on the top-priority source — which
+    -- emptied the 1-week chart for most watersheds. Same fix as
+    -- preferredSourceForDam() at the dam level, just resolved per dam in SQL.
+    --
+    -- Best first: real data over synthetic seed rows, then sources that carry
+    -- a volume in this window (high-priority feeds can have their volumes
+    -- NULLed as phantoms), then source_priorities rank. Unranked sources are
+    -- kept as a last resort so a dam on an unlisted feed still counts.
+    pref AS (
+      SELECT DISTINCT ON (o.dam_id) o.dam_id, o.source_id
+      FROM observations o
+      JOIN ds ON ds.id = o.dam_id
+      LEFT JOIN source_priorities sp ON sp.source_id = o.source_id AND sp.active
+      WHERE o.observed_at >= ${opts.from}
+        AND o.observed_at <  ${opts.to}
+      ORDER BY o.dam_id,
+               (o.source_id = 'synthetic'),
+               (o.storage_volume_m3 IS NULL),
+               (sp.priority IS NULL),
+               sp.priority DESC NULLS LAST
+    ),
     bucketed AS (
       SELECT
         time_bucket('1 hour', o.observed_at) AS bucket,
@@ -170,9 +192,10 @@ async function findWatershedSeriesHourly(opts: FindWatershedSeriesOptions): Prom
         last(o.storage_rate, o.observed_at)      AS rate
       FROM observations o
       JOIN ds ON ds.id = o.dam_id
+      LEFT JOIN pref ON pref.dam_id = o.dam_id
       WHERE o.observed_at >= ${opts.from}
         AND o.observed_at <  ${opts.to}
-        AND (${preferred}::text IS NULL OR o.source_id = ${preferred})
+        AND (${excludeSynthetic}::boolean OR o.source_id = pref.source_id)
         AND (NOT ${excludeSynthetic}::boolean OR o.source_id <> 'synthetic')
       GROUP BY bucket, o.dam_id
     )
