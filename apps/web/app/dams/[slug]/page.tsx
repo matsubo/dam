@@ -610,7 +610,7 @@ function NoDataReason({ status, publishedBy }: { status: string; publishedBy: st
       <div className="text-sm">
         <p className="text-muted mb-1">まだ観測値がありません。</p>
         <p className="text-on-surface-variant">
-          このダムは{' '}
+          このダムのデータは{' '}
           {publishedBy.map((s, i) => (
             <span key={s}>
               {i > 0 ? '、' : ''}
@@ -624,12 +624,12 @@ function NoDataReason({ status, publishedBy }: { status: string; publishedBy: st
       </div>
     );
   }
-  if (status === 'no_upstream') {
+  if (status === 'not_published') {
     return (
       <div className="text-sm">
         <p className="text-muted mb-1">まだ観測値がありません。</p>
         <p className="text-on-surface-variant">
-          現時点で、貯水量をリアルタイム公開している上流ソースが見つかっていません。
+          現時点で、このダムの貯水量を公開しているデータ提供元が見つかっていません。
           <Link className="text-primary hover:underline mx-1" href="/coverage">
             カバレッジ
           </Link>
@@ -642,7 +642,7 @@ function NoDataReason({ status, publishedBy }: { status: string; publishedBy: st
     <div className="text-sm">
       <p className="text-muted mb-1">まだ観測値がありません。</p>
       <p className="text-on-surface-variant">
-        公開している上流ソースがあるかどうかは調査中です (
+        データを公開している提供元があるかどうかは調査中です (
         <Link className="text-primary hover:underline" href="/coverage">
           カバレッジ
         </Link>

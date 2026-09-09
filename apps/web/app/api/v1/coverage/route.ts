@@ -10,7 +10,7 @@ import { hal } from '../../../../lib/api/response.ts';
 
 export const dynamic = 'force-dynamic';
 
-const STATUSES = ['covered', 'published_not_ingested', 'unknown', 'no_upstream'] as const;
+const STATUSES = ['covered', 'published_not_ingested', 'unknown', 'not_published'] as const;
 
 const Query = z.object({
   status: z.enum(STATUSES).optional(),
@@ -24,11 +24,11 @@ const Query = z.object({
 const MEANING: Record<DamCoverageStatus, string> = {
   covered: '直近 30 日に観測値あり。',
   published_not_ingested:
-    '上流ソースが公開しており、マスタとの紐付けも済んでいるのに観測値が入っていない。取り込み側の不具合で、こちらで直せる。',
+    'データ提供元が公開しており、マスタとの紐付けも済んでいるのに観測値が入っていない。取り込み側の不具合で、こちらで直せる。',
   unknown:
-    '未調査。まだ公開一覧を記録していない上流ソースが残っているため、提供の有無を判定できない。',
-  no_upstream:
-    '観測値を出す全ソースの公開一覧を記録した上で、どこにも現れなかった。現時点で公開している上流が無い。',
+    '未調査。まだ公開一覧を記録していないデータ提供元が残っているため、提供の有無を判定できない。',
+  not_published:
+    '観測値を出す全提供元の公開一覧を記録した上で、どこにも現れなかった。現時点でこのダムのデータを公開している提供元が無い。',
 };
 
 export async function GET(req: Request): Promise<Response> {
@@ -49,7 +49,7 @@ export async function GET(req: Request): Promise<Response> {
       {
         summary,
         // Restated in the payload so a client never has to guess whether
-        // `noUpstream` means "nobody publishes it" or "we haven't looked".
+        // `notPublished` means "nobody publishes it" or "we haven't looked".
         statusMeanings: MEANING,
         items: items.map((r) => ({
           damId: r.damId.toString(),

@@ -76,7 +76,7 @@ describe('source universe coverage triage', () => {
     expect(only(rows, absent)).toBe('unknown');
   });
 
-  test('once every observation source has a run, absence means 提供なし', async () => {
+  test('once every observation source has a run, absence means 提供元なし', async () => {
     await recordUniverse(SRC_A, [
       { externalId: 'a-1', name: 'univ-covered', resolvedDamId: covered },
       { externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale },
@@ -96,7 +96,7 @@ describe('source universe coverage triage', () => {
     `;
     for (const r of remaining) await recordUniverse(r.source_id, []);
     try {
-      expect(only(await classifyDamCoverage(), absent)).toBe('no_upstream');
+      expect(only(await classifyDamCoverage(), absent)).toBe('not_published');
     } finally {
       await sql`DELETE FROM source_universe_runs WHERE source_id IN ${sql(remaining.map((r) => r.source_id))}`;
     }
@@ -135,9 +135,9 @@ describe('source universe coverage triage', () => {
     expect(rows[0]?.resolved).toBe(covered);
   });
 
-  test('unresolved upstream rows are reported as the actionable backlog', async () => {
+  test('unmatched published stations are reported as the actionable backlog', async () => {
     await recordUniverse(SRC_A, [
-      { externalId: 'a-9', name: '上流にあるがマスタ未登録', resolvedDamId: null },
+      { externalId: 'a-9', name: '提供元にあるがマスタ未登録', resolvedDamId: null },
     ]);
     const rows = await sql<{ n: bigint }[]>`
       SELECT COUNT(*)::BIGINT AS n FROM source_universe

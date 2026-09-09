@@ -189,8 +189,8 @@ export default async function CoveragePage() {
       <section className="mb-10">
         <h2 className="text-lg font-semibold mb-1">未取得ダムの内訳</h2>
         <p className="text-sm text-on-surface-variant mb-4">
-          「取れていない」を、こちらの不具合で直せるものと、そもそも公開ソースが無いものに分けます。
-          各上流ソースが公開しているダム一覧を記録し、マスタと突き合わせて判定しています。
+          「取れていない」を、こちらの不具合で直せるものと、そもそもデータ提供元が無いものに分けます。
+          各データ提供元が公開しているダム一覧を記録し、マスタと突き合わせて判定しています。
         </p>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <TriageCard
@@ -205,29 +205,29 @@ export default async function CoveragePage() {
             value={triage.publishedNotIngested}
             total={Number(total)}
             tone="action"
-            note="上流にあり紐付けも済み。取り込み側の不具合"
+            note="提供元が公開済み・紐付けも済み。取り込み側の不具合"
           />
           <TriageCard
             label="未調査"
             value={triage.unknown}
             total={Number(total)}
             tone="pending"
-            note={`公開一覧が未記録のソースが ${triage.sourcesPendingScan} 件残っている`}
+            note={`公開一覧が未記録の提供元が ${triage.sourcesPendingScan} 件残っている`}
           />
           <TriageCard
-            label="公開ソースなし"
-            value={triage.noUpstream}
+            label="提供元なし"
+            value={triage.notPublished}
             total={Number(total)}
             tone="none"
-            note="全ソースの一覧に現れなかった"
+            note="全提供元の公開一覧に現れなかった"
           />
         </div>
         {triage.sourcesPendingScan > 0 ? (
           <p className="text-xs text-on-surface-variant mt-3 leading-relaxed">
-            <strong>判定は途中です。</strong> 公開一覧を記録済みの上流ソースはまだ一部で、残り{' '}
-            {triage.sourcesPendingScan} ソースが未記録です。そのため大半のダムは「未調査」に入り、
-            「公開ソースなし」は全ソースを記録し終えるまで確定しません。 上流には存在するのに
-            マスタと紐付いていない観測所は現在 {triage.unresolvedUpstreamRows.toLocaleString()}{' '}
+            <strong>判定は途中です。</strong> 公開一覧を記録済みのデータ提供元はまだ一部で、残り{' '}
+            {triage.sourcesPendingScan} 件が未記録です。そのため大半のダムは「未調査」に入り、
+            「提供元なし」は全提供元を記録し終えるまで確定しません。 提供元は公開しているのに
+            マスタと紐付いていない観測所は現在 {triage.unmatchedStations.toLocaleString()}{' '}
             件で、これが手を付けられる作業対象です。
           </p>
         ) : null}

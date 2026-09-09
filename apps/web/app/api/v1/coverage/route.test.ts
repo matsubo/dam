@@ -46,10 +46,10 @@ describe('GET /api/v1/coverage', () => {
     expect(res.headers.get('content-type')).toContain('application/hal+json');
     const body = await res.json();
 
-    for (const k of ['covered', 'publishedNotIngested', 'unknown', 'noUpstream']) {
+    for (const k of ['covered', 'publishedNotIngested', 'unknown', 'notPublished']) {
       expect(typeof body.summary[k]).toBe('number');
     }
-    // The gate must be visible to clients: while > 0, `noUpstream` is not a
+    // The gate must be visible to clients: while > 0, `notPublished` is not a
     // claim that nobody publishes those dams — it is "not looked at yet".
     expect(typeof body.summary.sourcesPendingScan).toBe('number');
     expect(body.summary.sourcesPendingScan).toBeGreaterThan(0);
