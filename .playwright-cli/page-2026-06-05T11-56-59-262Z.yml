@@ -1,0 +1,292 @@
+- generic [ref=e2]:
+  - table [ref=e4]:
+    - rowgroup [ref=e5]:
+      - row "かがわ防災Webポータル 文字サイズ 小 中 大 Language 更新" [ref=e6]:
+        - cell
+        - cell "かがわ防災Webポータル" [ref=e7]
+        - cell "文字サイズ 小 中 大" [ref=e8]:
+          - generic [ref=e9]:
+            - text: 文字サイズ
+            - generic [ref=e10]:
+              - generic [ref=e11] [cursor=pointer]: 小
+              - generic [ref=e12] [cursor=pointer]: 中
+              - generic [ref=e13] [cursor=pointer]: 大
+        - cell "Language" [ref=e14]:
+          - combobox [ref=e15]:
+            - option "Language" [selected]
+            - option "日本語"
+            - option "English"
+            - option "简体中文"
+            - option "繁体中文"
+            - option "한국"
+            - option "Tiếng Việt"
+            - option "español"
+            - option "bahasa Indonesia"
+            - option "Tagalog"
+            - option "português"
+        - cell "更新" [ref=e16]:
+          - generic [ref=e17] [cursor=pointer]: 更新
+  - generic [ref=e18]:
+    - generic [ref=e20]:
+      - generic [ref=e21] [cursor=pointer]: 緊急情報
+      - generic [ref=e23] [cursor=pointer]: お知らせ情報
+    - generic [ref=e24]:
+      - table [ref=e25]:
+        - rowgroup [ref=e26]:
+          - row "防災情報" [ref=e27]:
+            - cell "防災情報" [ref=e28]:
+              - generic [ref=e29]: 防災情報
+            - cell [ref=e30]
+      - generic [ref=e31]: ※防災情報の項目を選択すると、その情報の表示・非表示を切り替えることができます。
+      - table [ref=e32]:
+        - rowgroup [ref=e33]:
+          - row "避難情報 発令状況 避難情報 発令状況 避難所等 開設状況 避難所等 開設状況 気象警報 ・注意報 地震・津波 直近最大震度 (3日以内) 雨量情報 時間雨量 水位情報 ダム情報 潮位情報 ハザードマップ 土砂災害警戒区域(指定) その他 Map + − 現在地 凡例 選択" [ref=e34]:
+            - cell "避難情報 発令状況 避難情報 発令状況 避難所等 開設状況 避難所等 開設状況 気象警報 ・注意報 地震・津波 直近最大震度 (3日以内) 雨量情報 時間雨量 水位情報 ダム情報 潮位情報 ハザードマップ 土砂災害警戒区域(指定) その他" [ref=e35]:
+              - generic [ref=e36]:
+                - generic [ref=e38] [cursor=pointer]:
+                  - text: 避難情報
+                  - text: 発令状況
+                - generic [ref=e40] [cursor=pointer]:
+                  - text: 避難情報
+                  - text: 発令状況
+                - generic [ref=e42] [cursor=pointer]:
+                  - text: 避難所等
+                  - text: 開設状況
+                - generic [ref=e44] [cursor=pointer]:
+                  - text: 避難所等
+                  - text: 開設状況
+                - generic [ref=e46] [cursor=pointer]:
+                  - text: 気象警報
+                  - text: ・注意報
+                - generic [ref=e48] [cursor=pointer]: 地震・津波
+                - generic [ref=e50] [cursor=pointer]:
+                  - text: 直近最大震度
+                  - text: (3日以内)
+                - generic [ref=e52] [cursor=pointer]:
+                  - text: 雨量情報
+                  - combobox [ref=e53]:
+                    - option "時間雨量" [selected]
+                    - option "累計雨量"
+                    - option "10分雨量"
+                - generic [ref=e55] [cursor=pointer]: 水位情報
+                - generic [ref=e57] [cursor=pointer]: ダム情報
+                - generic [ref=e59] [cursor=pointer]: 潮位情報
+                - generic [ref=e61] [cursor=pointer]:
+                  - text: ハザードマップ
+                  - combobox [ref=e62]:
+                    - option "土砂災害警戒区域(指定)" [selected]
+                    - option "土砂災害警戒区域(公表)"
+                    - option "土砂災害の発生するおそれのある箇所"
+                    - option "山地災害危険地区"
+                    - option "津波浸水想定(最大クラスの津波)"
+                    - option "津波浸水想定(発生頻度の高い津波)"
+                    - option "浸水深30cm到達時間予測図(最大クラスの津波)"
+                    - option "高潮浸水想定区域"
+                    - option "高潮浸水継続時間"
+                    - option "震度分布図(最大クラスの地震)"
+                    - option "震度分布図(発生頻度の高い地震)"
+                    - option "震度分布図(中央構造線)"
+                    - option "震度分布図(長尾断層)"
+                    - option "液状化危険度予測図(最大クラスの地震)"
+                    - option "液状化危険度予測図(発生頻度の高い地震)"
+                    - option "液状化危険度予測図(中央構造線)"
+                    - option "液状化危険度予測図(長尾断層)"
+                    - option "東讃ブロック" [disabled]
+                    - option "古川水系"
+                    - option "小海川水系"
+                    - option "足谷川水系"
+                    - option "古川水系"
+                    - option "与田川水系"
+                    - option "番屋川水系"
+                    - option "弁天川水系"
+                    - option "大橋川水系"
+                    - option "玉浦川水系"
+                    - option "滝川水系"
+                    - option "鴨部川水系"
+                    - option "田尻川水系"
+                    - option "大山川水系"
+                    - option "東代川水系"
+                    - option "西代川水系"
+                    - option "梶川水系"
+                    - option "梅川水系"
+                    - option "津田川水系"
+                    - option "吉野川水系"
+                    - option "大谷川水系"
+                    - option "坂本川水系"
+                    - option "菜切川水系"
+                    - option "馬宿川水系"
+                    - option "中川水系"
+                    - option "湊川水系"
+                    - option "高松ブロック" [disabled]
+                    - option "本津川水系"
+                    - option "住吉川水系"
+                    - option "亀水川水系"
+                    - option "新川水系"
+                    - option "詰田川水系"
+                    - option "摺鉢谷川水系"
+                    - option "下井手川水系"
+                    - option "長者川水系"
+                    - option "牟礼川水系"
+                    - option "相引川水系"
+                    - option "香東川水系"
+                    - option "中讃ブロック" [disabled]
+                    - option "弘田川水系"
+                    - option "桜川水系"
+                    - option "土器川水系(一級河川)"
+                    - option "玉川水系"
+                    - option "野田川水系"
+                    - option "青海川水系"
+                    - option "西汐入川水系"
+                    - option "大束川水系"
+                    - option "綾川水系"
+                    - option "金倉川水系"
+                    - option "西讃ブロック" [disabled]
+                    - option "瀬入川水系"
+                    - option "一の谷川水系"
+                    - option "柞田川水系"
+                    - option "苧扱川水系"
+                    - option "唐井手川水系"
+                    - option "白坂川水系"
+                    - option "吉田川水系"
+                    - option "四方堂川水系"
+                    - option "高瀬川水系"
+                    - option "田井川水系"
+                    - option "江尻川水系"
+                    - option "天王川水系"
+                    - option "財田川水系"
+                    - option "小豆ブロック" [disabled]
+                    - option "別当川水系"
+                    - option "伝法川水系"
+                    - option "角田川水系"
+                    - option "池田大川水系"
+                    - option "競川水系"
+                    - option "春田川水系"
+                    - option "明神川水系"
+                    - option "片城川水系"
+                    - option "木庄川水系"
+                    - option "安田大川水系"
+                    - option "向条川水系"
+                    - option "城石川水系"
+                    - option "伊豆川水系"
+                    - option "東川水系"
+                    - option "桂川水系"
+                    - option "橘川水系"
+                    - option "皇踏川水系"
+                    - option "小瀬桂川水系"
+                    - option "春日川水系"
+                    - option "新川・春日川・吉田川"
+                    - option "本津川"
+                    - option "大束川"
+                    - option "金倉川"
+                    - option "高瀬川"
+                    - option "財田川"
+                    - option "弘田川"
+                    - option "柞田川・前田川・粟井川"
+                    - option "綾川・田万川"
+                    - option "津田川・栴檀川"
+                    - option "鴨部川"
+                    - option "湊川・馬宿川・千足川"
+                    - option "与田川・様松川"
+                    - option "新川・春日川・吉田川"
+                    - option "本津川"
+                    - option "大束川"
+                    - option "金倉川"
+                    - option "高瀬川"
+                    - option "財田川"
+                    - option "弘田川"
+                    - option "柞田川・前田川・粟井川"
+                    - option "香東川・内場・椛川"
+                    - option "綾川・田万川"
+                    - option "津田川・栴檀川"
+                    - option "鴨部川"
+                    - option "湊川・馬宿川・千足川"
+                    - option "与田川・様松川"
+                    - option "伝法川・殿川・吉田川"
+                    - option "新川・春日川・吉田川"
+                    - option "本津川"
+                    - option "大束川"
+                    - option "金倉川"
+                    - option "高瀬川"
+                    - option "財田川"
+                    - option "弘田川"
+                    - option "柞田川・前田川・粟井川"
+                    - option "香東川・内場・椛川"
+                    - option "綾川・田万川"
+                    - option "津田川・栴檀川"
+                    - option "鴨部川"
+                    - option "湊川・馬宿川・千足川"
+                    - option "与田川・様松川"
+                    - option "伝法川・殿川・吉田川"
+                    - option "別当川・安田大川"
+                    - option "新川・春日川・吉田川"
+                    - option "本津川"
+                    - option "大束川"
+                    - option "金倉川"
+                    - option "高瀬川"
+                    - option "財田川"
+                    - option "柞田川・前田川・粟井川"
+                    - option "香東川・内場・椛川"
+                    - option "綾川・田万川"
+                    - option "津田川・栴檀川"
+                    - option "鴨部川"
+                    - option "湊川・馬宿川・千足川"
+                    - option "与田川・様松川"
+                    - option "伝法川・殿川・吉田川"
+                    - option "全ての市町"
+                    - option "高松市"
+                    - option "直島町"
+                    - option "土庄町"
+                    - option "小豆島町"
+                    - option "さぬき市"
+                    - option "東かがわ市"
+                    - option "三木町"
+                    - option "丸亀市"
+                    - option "坂出市"
+                    - option "善通寺市"
+                    - option "宇多津町"
+                    - option "綾川町"
+                    - option "琴平町"
+                    - option "多度津町"
+                    - option "まんのう町"
+                    - option "観音寺市"
+                    - option "三豊市"
+                - generic [ref=e64] [cursor=pointer]: その他
+            - cell "Map + − 現在地 凡例 選択" [ref=e65]:
+              - generic [ref=e66]:
+                - generic [ref=e68]:
+                  - region "Map" [ref=e69]
+                  - iframe [ref=e74]:
+                    
+                - generic [ref=e76]:
+                  - generic:
+                    - generic [ref=e78]:
+                      - button "+" [ref=e79]
+                      - button "−" [ref=e80]
+                    - generic [ref=e81]:
+                      - list
+                    - button [ref=e83]:
+                      - img
+                - generic [ref=e84]: 現在地
+                - generic [ref=e85] [cursor=pointer]:
+                  - table [ref=e86]:
+                    - rowgroup [ref=e87]:
+                      - row "凡例" [ref=e88]:
+                        - generic [ref=e89]: 凡例
+                  - table
+                - combobox [ref=e90]:
+                  - option "選択" [selected]
+    - generic [ref=e91]:
+      - generic [ref=e92]: 情報一覧
+      - generic [ref=e93]:
+        - generic [ref=e94] [cursor=pointer]: 気象情報等
+        - table [ref=e96]:
+          - rowgroup [ref=e97]:
+            - row "市町 気象注意警報 地震情報" [ref=e98]:
+              - columnheader "市町" [ref=e99]
+              - columnheader "気象注意警報" [ref=e100]
+              - columnheader "地震情報" [ref=e101]
+          - rowgroup
+        - generic [ref=e102] [cursor=pointer]: 避難情報
+        - generic [ref=e103] [cursor=pointer]: 避難所
+        - generic [ref=e104] [cursor=pointer]: ダム情報
+  - generic [ref=e105]: Copyright © KAGAWA PREFECTURE. All Rights Reserved. このサイトについて

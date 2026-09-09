@@ -1,0 +1,22 @@
+- generic [active] [ref=e1]:
+  - img [ref=e2]
+  - generic [ref=e4]:
+    - list:
+      - listitem [ref=e5]
+      - listitem [ref=e7]
+      - listitem [ref=e9]
+      - listitem [ref=e11]
+      - listitem [ref=e13]
+      - listitem [ref=e15]
+      - listitem [ref=e17]
+      - listitem [ref=e19]
+      - listitem [ref=e21]
+      - listitem [ref=e23]
+  - table [ref=e25]:
+    - rowgroup [ref=e26]:
+      - row "画面名：" [ref=e27]:
+        - cell "画面名：" [ref=e28]:
+          - generic [ref=e29]: 画面名：
+        - cell [ref=e30]
+  - iframe [ref=e31]:
+    

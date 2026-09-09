@@ -1,0 +1,113 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - link "エンターキーを押すと、ナビゲーション部分をスキップし本文へ移動します。" [ref=e5] [cursor=pointer]:
+      - /url: "#HONBUN"
+    - generic [ref=e6]:
+      - paragraph [ref=e8]:
+        - link "静岡県公式ホームページ" [ref=e9] [cursor=pointer]:
+          - /url: https://www.pref.shizuoka.jp/
+          - img "静岡県公式ホームページ" [ref=e10]
+      - generic [ref=e11]:
+        - generic [ref=e12]:
+          - search [ref=e14]:
+            - textbox "サイト内検索" [ref=e15]:
+              - /placeholder: 文章で検索できます
+            - button "検索" [ref=e16] [cursor=pointer]
+          - paragraph [ref=e17]:
+            - link "検索の方法" [ref=e18] [cursor=pointer]:
+              - /url: ../about/site/search.html
+        - paragraph [ref=e19]:
+          - link "防災・緊急情報" [ref=e20] [cursor=pointer]:
+            - /url: ../bosaikinkyu/index.html
+        - generic [ref=e21]:
+          - paragraph [ref=e22]:
+            - link "閲覧補助" [ref=e23] [cursor=pointer]:
+              - /url: ../about/site/hojyo.html
+          - button "Foreign language" [ref=e25] [cursor=pointer]
+  - navigation "メインメニュー" [ref=e26]:
+    - list [ref=e28]:
+      - listitem [ref=e29]:
+        - link "ホーム" [ref=e30] [cursor=pointer]:
+          - /url: ../index.html
+      - listitem [ref=e31]:
+        - button "目的から探す" [ref=e32] [cursor=pointer]
+      - listitem [ref=e33]:
+        - button "テーマから探す" [ref=e34] [cursor=pointer]
+      - listitem [ref=e35]:
+        - button "組織から探す" [ref=e36] [cursor=pointer]
+      - listitem [ref=e37]:
+        - button "県政情報" [ref=e38] [cursor=pointer]
+  - navigation "現在の位置" [ref=e39]:
+    - paragraph [ref=e40]:
+      - text: 現在の位置：
+      - link "ホーム" [ref=e41] [cursor=pointer]:
+        - /url: https://www.pref.shizuoka.jp/
+      - text: "> 検索結果"
+  - generic [ref=e42]:
+    - paragraph [ref=e43]: ここから本文です。
+    - main [ref=e44]:
+      - article [ref=e45]:
+        - generic [ref=e46]:
+          - heading "検索結果" [level=1] [ref=e47]
+          - generic [ref=e48]:
+            - generic [ref=e49]:
+              - link "ツイッターでツイート" [ref=e51] [cursor=pointer]:
+                - /url: https://twitter.com/intent/tweet?text=%E6%A4%9C%E7%B4%A2%E7%B5%90%E6%9E%9C%ef%bd%9c%E9%9D%99%E5%B2%A1%E7%9C%8C%E5%85%AC%E5%BC%8F%E3%83%9B%E3%83%BC%E3%83%A0%E3%83%9A%E3%83%BC%E3%82%B8&url=https%3A%2F%2Fwww.pref.shizuoka.jp%2Fsearch%2Findex.html
+                - img "ツイッターでツイート" [ref=e52]
+              - link "フェイスブックでシェア" [ref=e54] [cursor=pointer]:
+                - /url: https://www.facebook.com/sharer.php?u=https%3A%2F%2Fwww.pref.shizuoka.jp%2Fsearch%2Findex.html&t=%E6%A4%9C%E7%B4%A2%E7%B5%90%E6%9E%9C%ef%bd%9c%E9%9D%99%E5%B2%A1%E7%9C%8C%E5%85%AC%E5%BC%8F%E3%83%9B%E3%83%BC%E3%83%A0%E3%83%9A%E3%83%BC%E3%82%B8
+                - img "フェイスブックでシェア" [ref=e55]
+              - link "ラインでシェア" [ref=e57] [cursor=pointer]:
+                - /url: https://line.me/R/msg/text/?%E6%A4%9C%E7%B4%A2%E7%B5%90%E6%9E%9C%ef%bd%9c%E9%9D%99%E5%B2%A1%E7%9C%8C%E5%85%AC%E5%BC%8F%E3%83%9B%E3%83%BC%E3%83%A0%E3%83%9A%E3%83%BC%E3%82%B8%0d%0ahttps%3A%2F%2Fwww.pref.shizuoka.jp%2Fsearch%2Findex.html
+                - img "ラインでシェア" [ref=e58]
+              - button "いいね！" [ref=e60] [cursor=pointer]
+            - paragraph [ref=e61]: ページID1000123
+            - paragraph [ref=e62]:
+              - link "印刷" [ref=e64] [cursor=pointer]:
+                - /url: javascript:void(0);
+              - link "大きな文字で印刷" [ref=e66] [cursor=pointer]:
+                - /url: javascript:void(0);
+          - list [ref=e67]:
+            - listitem [ref=e68]:
+              - link "サイト内検索" [ref=e69] [cursor=pointer]:
+                - /url: ../search/result.html
+  - complementary [ref=e70]:
+    - list [ref=e72]:
+      - listitem [ref=e73]:
+        - link "前のページへ戻る" [ref=e74] [cursor=pointer]:
+          - /url: javascript:history.back();
+      - listitem [ref=e75]:
+        - link "ホームへ戻る" [ref=e76] [cursor=pointer]:
+          - /url: https://www.pref.shizuoka.jp/
+  - contentinfo [ref=e77]:
+    - generic [ref=e79]:
+      - generic [ref=e80]:
+        - heading "静岡県" [level=2] [ref=e81]:
+          - img "静岡県" [ref=e82]
+        - generic [ref=e83]:
+          - text: 静岡県 法人番号 7000020220001
+          - text: 〒420-8601 静岡県静岡市葵区追手町9番6号
+        - list [ref=e85]:
+          - listitem [ref=e86]:
+            - link "各種お問い合わせ" [ref=e87] [cursor=pointer]:
+              - /url: ../kensei/pr/hiroba/1007313.html
+          - listitem [ref=e88]:
+            - link "県庁へのアクセス" [ref=e89] [cursor=pointer]:
+              - /url: ../kensei/introduction/kenchosha/1002011/1009017.html
+      - list [ref=e91]:
+        - listitem [ref=e92]:
+          - link "著作権・リンクについて" [ref=e93] [cursor=pointer]:
+            - /url: ../about/link.html
+        - listitem [ref=e94]:
+          - link "個人情報保護について" [ref=e95] [cursor=pointer]:
+            - /url: ../kensei/gyoseikaikaku/kojinjohohogo/1001987/1007786.html
+        - listitem [ref=e96]:
+          - link "静岡県公式ホームページウェブアクセシビリティ方針について" [ref=e97] [cursor=pointer]:
+            - /url: ../about/accesibility/1007779.html
+        - listitem [ref=e98]:
+          - link "リンク集" [ref=e99] [cursor=pointer]:
+            - /url: ../kensei/link/index.html
+        - listitem [ref=e100]:
+          - link "サイトマップ" [ref=e101] [cursor=pointer]:
+            - /url: ../sitemap.html
+    - paragraph [ref=e103]: Copyright © Shizuoka Prefecture. All Rights Reserved.
