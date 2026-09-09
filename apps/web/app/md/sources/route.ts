@@ -10,7 +10,7 @@ const BODY = `# Data Sources & Methodology
 | Source | Provides | Cadence | License |
 |---|---|---|---|
 | 国土交通省 国土数値情報 (NDI W01/W05/W07) | Master locations, capacity, watersheds (一級/二級 from W05 区間種別 + 水系域コード, boundaries from W07) | Annual | 非商用 (旧国土情報利用約款; W01/W05/W07 all carry the 非商用 licence, W01 because its source is a paid publication) — 出典・加工明示, derived attributes / 区分 / 流域界 only |
-| ダム便覧 (dambinran.damnet.or.jp) | 利水/有効貯水容量, purpose, type, photos | Monthly | Cite source |
+| ダム便覧 (dambinran.damnet.or.jp) | 利水/有効貯水容量, purpose, type | Monthly | 無断転載禁止 — permission being sought |
 | 国土地理院 (GSI) | Elevation (DEM10B/5A), basemap tiles | Monthly | Cite source |
 | ja.wikipedia.org | Photo fallback (CC-BY-SA) | Monthly | CC-BY-SA |
 | 東京都水道局 水源情報 | 15 ダム vol/rate/delta (利根川/荒川/多摩川) | Daily | 東京都オープンデータ |
