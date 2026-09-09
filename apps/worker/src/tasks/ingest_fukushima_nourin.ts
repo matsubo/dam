@@ -45,9 +45,12 @@ export interface ParsedRow {
 /**
  * Parse 「令和N年M月D日現在」 → JST midnight of that day.
  * 令和 (Reiwa) year N → Gregorian 2018 + N.
+ *
+ * Anchored on 現在 so the CMS's own 掲載日 line — a day or two after the
+ * survey — can never stand in for the survey date.
  */
 export function parseNourinReportDate(html: string): Date | null {
-  const m = html.match(/令和(\d+)年(\d+)月(\d+)日/);
+  const m = html.match(/令和(\d+)年(\d+)月(\d+)日現在/);
   if (!m) return null;
   const yr = 2018 + Number(m[1]);
   const mo = Number(m[2]);

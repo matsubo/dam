@@ -34,6 +34,11 @@ describe('parseNourinReportDate', () => {
   test('returns null when no 和暦 date is present', () => {
     expect(parseNourinReportDate('<h3>貯水状況</h3>')).toBeNull();
   });
+
+  test('takes the 「…現在」 survey date, not an earlier 掲載日 on the page', () => {
+    const html = '<div>掲載日：令和8年9月2日更新</div><h3>令和8年9月1日現在</h3>';
+    expect(parseNourinReportDate(html)?.toISOString()).toBe('2026-08-31T15:00:00.000Z');
+  });
 });
 
 describe('normalizeName', () => {
