@@ -1,9 +1,19 @@
 // Coverage dashboard — tracks progress toward 100% real-observation
-// coverage across all 2,749 master dams. See GitHub issue #1 for the
-// roadmap; sub-issues #2-#16 break it down by phase.
+// coverage across every master dam. See GitHub issue #1 for the roadmap;
+// sub-issues #2-#16 break it down by phase.
+//
+// Two metrics live here and they are NOT interchangeable: 実測 counts any
+// non-synthetic observation (a level-only feed counts), 貯水率取得 counts the
+// dams we can actually render a 貯水率 for. Both come from repo/coverage.ts,
+// which the home page shares.
 
 import { PREFECTURES } from '@dam/core/prefectures';
 import { sql } from '@dam/db/client';
+import {
+  coverageHeadline,
+  realtimeCoveragePct,
+  storageRateCoveragePct,
+} from '@dam/db/repo/coverage';
 import { coverageSummary } from '@dam/db/repo/source_universe';
 import type { Metadata } from 'next';
 import Link from 'next/link';
@@ -15,18 +25,11 @@ export const revalidate = 900;
 
 export const metadata: Metadata = {
   title: 'カバレッジ',
-  description: '全国 2,749 ダムに対する実測データ取得カバレッジ。ソース別・都道府県別の進捗。',
+  description: '全国のダムに対する実測データ取得カバレッジ。ソース別・都道府県別の進捗。',
   alternates: { canonical: '/coverage' },
 };
 
 const PREF_NAME = new Map(PREFECTURES.map((p) => [p.code, p.name]));
-
-interface Headline {
-  damTotal: bigint;
-  damsRealtime30d: bigint;
-  damsHistorical: bigint;
-  damsAnyEver: bigint;
-}
 
 interface SourceRow {
   sourceId: string;
@@ -43,17 +46,7 @@ interface PrefRow {
 
 async function loadCoverage() {
   const [headline, sources, prefs] = await Promise.all([
-    sql<Headline[]>`
-      SELECT
-        (SELECT COUNT(*) FROM dams)::BIGINT AS "damTotal",
-        (SELECT COUNT(DISTINCT dam_id) FROM observations
-         WHERE observed_at > NOW() - INTERVAL '30 days'
-           AND source_id <> 'synthetic')::BIGINT AS "damsRealtime30d",
-        (SELECT COUNT(DISTINCT dam_id) FROM observations
-         WHERE source_id <> 'synthetic')::BIGINT AS "damsHistorical",
-        (SELECT COUNT(DISTINCT dam_id) FROM observations
-         WHERE source_id <> 'synthetic')::BIGINT AS "damsAnyEver"
-    `,
+    coverageHeadline(),
     sql<SourceRow[]>`
       SELECT
         source_id AS "sourceId",
@@ -90,9 +83,7 @@ async function loadCoverage() {
       ORDER BY p.pref_code
     `,
   ]);
-  const h = headline[0];
-  if (!h) throw new Error('headline query returned no rows');
-  return { headline: h, sources, prefs };
+  return { headline, sources, prefs };
 }
 
 function pct(n: bigint, d: bigint): number {
@@ -120,6 +111,34 @@ function CoverageBar({ value }: { value: number }) {
       className="h-2 rounded-full bg-surface-container-low overflow-hidden"
     >
       <div className={`h-full ${color}`} style={{ width: `${w}%` }} />
+    </div>
+  );
+}
+
+function HeadlineCard({
+  label,
+  pct,
+  value,
+  total,
+  note,
+}: {
+  label: string;
+  pct: number;
+  value: number;
+  total: number;
+  note: string;
+}) {
+  return (
+    <div className="bg-white border border-outline-variant rounded-xl p-5">
+      <div className="text-xs uppercase tracking-wider text-on-surface-variant mb-1">{label}</div>
+      <div className="text-3xl font-display font-semibold tabular-nums">{pct.toFixed(2)}%</div>
+      <div className="text-xs text-on-surface-variant mt-1">
+        {value.toLocaleString()} / {total.toLocaleString()} 基
+      </div>
+      <div className="mt-3">
+        <CoverageBar value={pct} />
+      </div>
+      <div className="text-xs text-on-surface-variant mt-3 leading-snug">{note}</div>
     </div>
   );
 }
@@ -162,8 +181,9 @@ export default async function CoveragePage() {
     coverageSummary(),
   ]);
   const total = headline.damTotal;
-  const rtPct = pct(headline.damsRealtime30d, total);
-  const histPct = pct(headline.damsHistorical, total);
+  const rtPct = realtimeCoveragePct(headline) ?? 0;
+  const ratePct = storageRateCoveragePct(headline) ?? 0;
+  const histPct = total > 0 ? (100 * headline.historicalDamCount) / total : 0;
   const sortedPrefs = [...prefs].sort(
     (a, b) => pct(a.damsCovered, a.damTotal) - pct(b.damsCovered, b.damTotal),
   );
@@ -174,6 +194,8 @@ export default async function CoveragePage() {
       <h1 className="text-2xl font-semibold mb-2">カバレッジ</h1>
       <p className="text-sm text-on-surface-variant mb-6">
         全国 <strong>{Number(total).toLocaleString()}</strong> ダムに対する実測データ取得状況。
+        「実測」は水位・雨量だけでも 1 基と数え、「貯水率取得」は貯水率を表示できるダムに限った、
+        より厳しい指標です（分母も河川管理ダムに限定）。数字が食い違って見えるのはこの定義差によるものです。
         ロードマップは{' '}
         <a
           className="text-primary hover:underline"
@@ -240,36 +262,28 @@ export default async function CoveragePage() {
         ) : null}
       </section>
 
-      <section className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
-        <div className="bg-white border border-outline-variant rounded-xl p-5">
-          <div className="text-xs uppercase tracking-wider text-on-surface-variant mb-1">
-            実測 (直近 30 日)
-          </div>
-          <div className="text-3xl font-display font-semibold tabular-nums">
-            {rtPct.toFixed(2)}%
-          </div>
-          <div className="text-xs text-on-surface-variant mt-1">
-            {Number(headline.damsRealtime30d).toLocaleString()} / {Number(total).toLocaleString()}{' '}
-            基
-          </div>
-          <div className="mt-3">
-            <CoverageBar value={rtPct} />
-          </div>
-        </div>
-        <div className="bg-white border border-outline-variant rounded-xl p-5">
-          <div className="text-xs uppercase tracking-wider text-on-surface-variant mb-1">
-            歴史データ含む (mudam 等)
-          </div>
-          <div className="text-3xl font-display font-semibold tabular-nums">
-            {histPct.toFixed(2)}%
-          </div>
-          <div className="text-xs text-on-surface-variant mt-1">
-            {Number(headline.damsHistorical).toLocaleString()} / {Number(total).toLocaleString()} 基
-          </div>
-          <div className="mt-3">
-            <CoverageBar value={histPct} />
-          </div>
-        </div>
+      <section className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
+        <HeadlineCard
+          label="実測 (直近 30 日)"
+          pct={rtPct}
+          value={headline.realtimeDamCount}
+          total={total}
+          note="何らかの観測値が届いているダム。水位・雨量だけの提供元も含みます。"
+        />
+        <HeadlineCard
+          label="貯水率取得 (直近 30 日)"
+          pct={ratePct}
+          value={headline.storageRateRiverDamCount}
+          total={headline.riverDamCount}
+          note="貯水率を表示できるダム。分母は河川管理ダム (堤高 15 m 以上)。トップページと同じ指標です。"
+        />
+        <HeadlineCard
+          label="歴史データ含む (mudam 等)"
+          pct={histPct}
+          value={headline.historicalDamCount}
+          total={total}
+          note="過去に一度でも実測が届いたダム。現在も更新中とは限りません。"
+        />
       </section>
 
       <section className="mb-10">
