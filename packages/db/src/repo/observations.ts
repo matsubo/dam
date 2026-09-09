@@ -228,3 +228,107 @@ export async function findWatershedSeries(
   if (opts.bucket === 'daily') return findWatershedSeriesDaily(opts);
   return findWatershedSeriesMonthly(opts);
 }
+
+/**
+ * Keyset position in the cross-dam feed. The observations PK is
+ * `(dam_id, observed_at, source_id)`, so a single scalar cursor cannot
+ * address a row — the feed pages on the full tuple instead.
+ */
+export interface ObservationCursor {
+  observedAt: Date;
+  damId: bigint;
+  sourceId: string;
+}
+
+/**
+ * One raw observation with its dam attached. NUMERIC columns are cast to
+ * TEXT in the query, so the values are decimal strings — never rounded
+ * through a JS float on the way out.
+ */
+export interface ObservationRow {
+  observedAt: Date;
+  damId: bigint;
+  damSlug: string;
+  damName: string;
+  sourceId: string;
+  storageVolumeM3: string | null;
+  storageRate: string | null;
+  inflowM3s: string | null;
+  outflowM3s: string | null;
+  waterLevelM: string | null;
+  rainfallMm: string | null;
+  qualityFlag: number;
+}
+
+export interface FindObservationsPageOptions {
+  from: Date;
+  /** Exclusive, matching findSeries(). */
+  to: Date;
+  pageSize: number;
+  /** Position from the previous page; null starts at `from`. */
+  after?: ObservationCursor | null;
+  /**
+   * Synthetic seed rows are excluded by default — the feed is a measured-value
+   * feed, and `source_priorities` pins `synthetic` to the top for dams that
+   * have no upstream yet, so including it silently would hand callers
+   * placeholder numbers as if they were measurements.
+   */
+  includeSynthetic?: boolean;
+}
+
+export interface ObservationsPage {
+  items: ObservationRow[];
+  nextCursor: ObservationCursor | null;
+}
+
+/**
+ * Cross-dam raw observation feed, ordered by `(observed_at, dam_id, source_id)`
+ * and paged on that same tuple.
+ */
+export async function findObservationsPage(
+  opts: FindObservationsPageOptions,
+): Promise<ObservationsPage> {
+  const limit = Math.max(1, Math.min(1000, opts.pageSize));
+  const after = opts.after ?? null;
+  const includeSynthetic = opts.includeSynthetic === true;
+  // Advancing the lower bound to the cursor's timestamp keeps TimescaleDB's
+  // chunk exclusion in play: a row-constructor comparison alone doesn't prune
+  // the 14-day chunks already behind us.
+  const from = after !== null && after.observedAt > opts.from ? after.observedAt : opts.from;
+  const afterAt = after?.observedAt ?? null;
+  const afterDamId = after?.damId ?? null;
+  const afterSourceId = after?.sourceId ?? null;
+
+  const rows = await sql<ObservationRow[]>`
+    SELECT o.observed_at            AS "observedAt",
+           o.dam_id                 AS "damId",
+           d.slug                   AS "damSlug",
+           d.name                   AS "damName",
+           o.source_id              AS "sourceId",
+           o.storage_volume_m3::TEXT AS "storageVolumeM3",
+           o.storage_rate::TEXT      AS "storageRate",
+           o.inflow_m3s::TEXT        AS "inflowM3s",
+           o.outflow_m3s::TEXT       AS "outflowM3s",
+           o.water_level_m::TEXT     AS "waterLevelM",
+           o.rainfall_mm::TEXT       AS "rainfallMm",
+           o.quality_flag           AS "qualityFlag"
+    FROM observations o
+    JOIN dams d ON d.id = o.dam_id
+    WHERE o.observed_at >= ${from}
+      AND o.observed_at <  ${opts.to}
+      AND (${includeSynthetic}::boolean OR o.source_id <> 'synthetic')
+      AND (${afterAt}::timestamptz IS NULL
+           OR (o.observed_at, o.dam_id, o.source_id)
+              > (${afterAt}::timestamptz, ${afterDamId}::bigint, ${afterSourceId}::text))
+    ORDER BY o.observed_at, o.dam_id, o.source_id
+    LIMIT ${limit + 1}
+  `;
+
+  const items = rows.slice(0, limit);
+  const last = items[items.length - 1];
+  const nextCursor =
+    rows.length > limit && last
+      ? { observedAt: last.observedAt, damId: last.damId, sourceId: last.sourceId }
+      : null;
+  return { items, nextCursor };
+}
