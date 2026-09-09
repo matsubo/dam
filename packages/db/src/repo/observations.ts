@@ -284,6 +284,13 @@ export interface ObservationsPage {
 /**
  * Cross-dam raw observation feed, ordered by `(observed_at, dam_id, source_id)`
  * and paged on that same tuple.
+ *
+ * Paging cost, measured against compressed chunks (0014 compresses anything
+ * older than 30 days, `segmentby = dam_id`): ChunkAppend stops at the first
+ * chunk that satisfies the LIMIT, and segment min/max metadata prunes batches
+ * inside it — so a page costs O(rows from the cursor to the end of the current
+ * 14-day chunk), NOT O(window width). Decompression dominates that cost, which
+ * makes a large `pageSize` strictly cheaper per row when draining history.
  */
 export async function findObservationsPage(
   opts: FindObservationsPageOptions,
