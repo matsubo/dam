@@ -32,6 +32,22 @@ export interface UniverseRow {
  * single failing page doesn't drop a station from the universe.
  */
 export async function recordUniverse(sourceId: string, rows: UniverseRow[]): Promise<number> {
+  // Fail-safe by design. Every one of the ~70 ingest tasks awaits this BEFORE
+  // upsertObservations, so anything thrown here costs that run its
+  // observations — the actual product — to protect coverage metadata, which
+  // is only ever an explanation of the observations. That trade is never
+  // worth making, so a failure is logged and swallowed. The known crash
+  // (duplicate ON CONFLICT target) is fixed below; this guards the unknown
+  // ones, and the next successful run re-records the same list anyway.
+  try {
+    return await recordUniverseOrThrow(sourceId, rows);
+  } catch (err) {
+    console.error(`recordUniverse(${sourceId}) failed; observations continue:`, err);
+    return 0;
+  }
+}
+
+async function recordUniverseOrThrow(sourceId: string, rows: UniverseRow[]): Promise<number> {
   // De-duplicate on the primary key before building the multi-row INSERT.
   // postgres.js emits one statement, and Postgres rejects a duplicate target
   // with `21000: ON CONFLICT DO UPDATE command cannot affect row a second

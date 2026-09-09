@@ -178,4 +178,17 @@ describe('source universe coverage triage', () => {
     expect(rows[0]?.name).toBe('second'); // last entry wins
     expect(rows[0]?.resolved).toBe(covered);
   });
+
+  test('a failure never propagates to the caller', async () => {
+    // Callers await this before upsertObservations, so a throw here would
+    // cost the run its observations to protect metadata about them.
+    // `source_name` is NOT NULL, so this row is rejected by Postgres.
+    const bad = [{ externalId: 'boom', name: null as unknown as string, resolvedDamId: null }];
+    expect(await recordUniverse(SRC_A, bad)).toBe(0);
+    // …and the failed scan is not stamped either.
+    const runs = await sql<{ n: bigint }[]>`
+      SELECT COUNT(*)::BIGINT AS n FROM source_universe_runs WHERE source_id = ${SRC_A}
+    `;
+    expect(Number(runs[0]?.n)).toBe(0);
+  });
 });
