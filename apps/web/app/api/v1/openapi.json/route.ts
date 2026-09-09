@@ -111,6 +111,29 @@ const components = {
         '`1` / `true` を指定すると、シード値 (`source_id = "synthetic"`) を除外し、複数の実測ソース (例: `tokyo-waterworks` + `jwa-junpo`) を同時に返します。`hourly` バケット時のみ有効。',
       schema: { type: 'string', enum: ['0', '1', 'true', 'false'] },
     },
+    IncludeSynthetic: {
+      in: 'query',
+      name: 'include_synthetic',
+      required: false,
+      description:
+        '`1` / `true` を指定すると、シード値 (`source_id = "synthetic"`) も含めて返します。既定は実測値のみ。',
+      schema: { type: 'string', enum: ['0', '1', 'true', 'false'] },
+    },
+    ObservationCursor: {
+      in: 'query',
+      name: 'cursor',
+      description:
+        'ページング用カーソル。前のレスポンスの `_links.next` (または `Link: rel="next"` ヘッダ) から取得します。`(observed_at, dam_id, source_id)` を base64url で符号化した不透明値で、クライアントが組み立てるものではありません。',
+      required: false,
+      schema: { type: 'string', example: 'MjA5OS0wMi0wMVQwMDowMDowMC4wMDBafDg4NTJ8a2FzZW5ib3NhaQ' },
+    },
+    ObservationPageSize: {
+      in: 'query',
+      name: 'pageSize',
+      description: '1 ページあたりの件数 (1〜1000, 既定 100)',
+      required: false,
+      schema: { type: 'integer', minimum: 1, maximum: 1000, default: 100 },
+    },
     RealDataOnly: {
       in: 'query',
       name: 'real',
@@ -437,6 +460,42 @@ const components = {
       ],
     },
 
+    FeedObservation: {
+      type: 'object',
+      description:
+        'ダム横断フィードの 1 行。`observations` ハイパーテーブルの生の行に、ダムの識別子とリンクを添えたもの。集計バケットは通りません。',
+      required: ['damId', 'damSlug', 'observedAt', 'sourceId', 'qualityFlag'],
+      allOf: [
+        {
+          type: 'object',
+          properties: {
+            damId: {
+              type: 'string',
+              description: 'ダムの内部 ID (bigint を文字列化)',
+              example: '7163',
+            },
+            damSlug: { type: 'string', example: 'doushi-14' },
+            damName: { type: 'string', example: '道志' },
+          },
+        },
+        { $ref: '#/components/schemas/Observation' },
+        {
+          type: 'object',
+          properties: { _links: { $ref: '#/components/schemas/HalLinks' } },
+        },
+      ],
+    },
+
+    ObservationFeedResponse: {
+      type: 'object',
+      required: ['items', 'count', '_links'],
+      properties: {
+        items: { type: 'array', items: { $ref: '#/components/schemas/FeedObservation' } },
+        count: { type: 'integer', description: 'このページの件数', example: 100 },
+        _links: { $ref: '#/components/schemas/HalLinks' },
+      },
+    },
+
     ObservationsResponse: {
       type: 'object',
       required: ['series', 'count', '_links'],
@@ -714,6 +773,73 @@ const paths = {
                   },
                   watershed: { href: '/api/v1/watersheds/相模川' },
                   prefecture: { href: '/api/v1/prefectures/14/dams' },
+                },
+              },
+            },
+          },
+        },
+        ...ERR_RESPONSES,
+      },
+    },
+  },
+
+  '/api/v1/observations': {
+    get: {
+      summary: 'ダム横断の計測値フィード',
+      tags: ['observations'],
+      description:
+        '全ダムの生の観測値 (1 時間粒度) を `from`〜`to` のウィンドウで返します。ダムを指定せずに取り込みたい同期クライアント向け。`(observed_at, dam_id, source_id)` 昇順で、keyset カーソルによりページングします。シード値 (`source_id = "synthetic"`) は既定で除外されます。単一ダムの時系列やグラフ用途、集計バケット (`daily` / `monthly`)、CSV が必要な場合は `/api/v1/dams/{slug}/observations` を使ってください。',
+      parameters: [
+        { $ref: '#/components/parameters/From' },
+        { $ref: '#/components/parameters/To' },
+        { $ref: '#/components/parameters/ObservationCursor' },
+        { $ref: '#/components/parameters/ObservationPageSize' },
+        { $ref: '#/components/parameters/IncludeSynthetic' },
+      ],
+      responses: {
+        '200': {
+          description: 'OK',
+          headers: {
+            Link: {
+              description: 'RFC 5988 ページネーション (`rel="next"`)。最終ページでは付きません。',
+              schema: { type: 'string' },
+            },
+          },
+          content: {
+            'application/hal+json': {
+              schema: { $ref: '#/components/schemas/ObservationFeedResponse' },
+              example: {
+                items: [
+                  {
+                    damId: '7163',
+                    damSlug: 'doushi-14',
+                    damName: '道志',
+                    observedAt: '2026-05-01T00:00:00.000Z',
+                    sourceId: 'kasenbosai',
+                    storageVolumeM3: '590432.10',
+                    storageRate: '0.9580',
+                    inflowM3s: '0.755',
+                    outflowM3s: '0.652',
+                    waterLevelM: null,
+                    rainfallMm: null,
+                    qualityFlag: 0,
+                    _links: {
+                      dam: { href: '/api/v1/dams/doushi-14' },
+                      observations: {
+                        href: '/api/v1/dams/doushi-14/observations{?from,to,interval}',
+                        templated: true,
+                      },
+                    },
+                  },
+                ],
+                count: 100,
+                _links: {
+                  self: {
+                    href: '/api/v1/observations?from=2026-05-01T00:00:00Z&to=2026-05-02T00:00:00Z',
+                  },
+                  next: {
+                    href: '/api/v1/observations?from=2026-05-01T00:00:00Z&to=2026-05-02T00:00:00Z&cursor=MjAyNi0wNS0wMVQwMDowMDowMC4wMDBafDcxNjN8a2FzZW5ib3NhaQ',
+                  },
                 },
               },
             },
