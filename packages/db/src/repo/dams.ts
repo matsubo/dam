@@ -481,6 +481,7 @@ export async function latestObservation(damId: bigint): Promise<LatestObservatio
     JOIN dams d ON d.id = o.dam_id
     LEFT JOIN source_priorities sp ON sp.source_id = o.source_id
     WHERE o.dam_id = ${damId}
+      AND o.source_id <> 'synthetic'
     ORDER BY o.observed_at DESC
     LIMIT 1
   `;

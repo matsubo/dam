@@ -164,12 +164,7 @@ const SECTIONS: { title: string; terms: Term[] }[] = [
       {
         id: 'source-id',
         term: 'source_id',
-        body: '観測値の出所（ダム便覧・川の防災情報・水文水質データベース・synthetic など）。同じダムで同じ時刻に複数ソースが存在する場合、source_priorities テーブルで優先順を決める。',
-      },
-      {
-        id: 'synthetic',
-        term: 'synthetic（合成データ）',
-        body: '実観測ソースが整うまでの暫定として生成された人工的な観測値。source_id が "synthetic" のレコードはこれ。アルファ段階のみ。ベータでは段階的に実観測値に置換える。',
+        body: '観測値の出所（川の防災情報・各県の防災情報システム・水文水質データベース など）。同じダムで同じ時刻に複数ソースが存在する場合、source_priorities テーブルで優先順を決める。',
       },
     ],
   },

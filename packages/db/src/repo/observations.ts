@@ -61,20 +61,15 @@ export interface FindSeriesOptions {
   from: Date;
   to: Date;
   bucket: 'hourly' | 'daily' | 'monthly';
-  preferredSource?: string | null;
   /**
-   * Exclude rows with `source_id = 'synthetic'` (the placeholder seed used
-   * for dams without an upstream feed). Useful for API consumers who only
-   * want measured data. Hourly bucket only — the daily/monthly continuous
-   * aggregates collapse all sources and can't be filtered after the fact
-   * without re-aggregating raw observations.
+   * Restrict to one source. Null returns every source that has rows in the
+   * window, which is what the API's `all_sources=1` asks for.
    */
-  excludeSynthetic?: boolean;
+  preferredSource?: string | null;
 }
 
 async function findSeriesHourly(opts: FindSeriesOptions): Promise<SeriesPoint[]> {
   const preferred = opts.preferredSource ?? null;
-  const excludeSynthetic = opts.excludeSynthetic === true;
   return sql<SeriesPoint[]>`
     SELECT observed_at AS "observedAt",
            storage_volume_m3 AS "storageVolumeM3",
@@ -88,7 +83,7 @@ async function findSeriesHourly(opts: FindSeriesOptions): Promise<SeriesPoint[]>
       AND observed_at >= ${opts.from}
       AND observed_at <  ${opts.to}
       AND (${preferred}::text IS NULL OR source_id = ${preferred})
-      AND (NOT ${excludeSynthetic}::boolean OR source_id <> 'synthetic')
+      AND source_id <> 'synthetic'
     ORDER BY observed_at
   `;
 }
@@ -144,13 +139,8 @@ export interface FindWatershedSeriesOptions {
   from: Date;
   to: Date;
   bucket: 'hourly' | 'daily' | 'monthly';
+  /** Restrict to one source; null aggregates every source in the window. */
   preferredSource?: string | null;
-  /**
-   * Hourly bucket only — drops `source_id = 'synthetic'` rows from the
-   * per-dam input before bucketing. The watershed aggregate then reflects
-   * only dams whose values are actually measured.
-   */
-  excludeSynthetic?: boolean;
 }
 
 // Aggregate the watershed's storage by summing latest-bucket volumes across
@@ -159,7 +149,6 @@ export interface FindWatershedSeriesOptions {
 // double-counting partial observations.
 async function findWatershedSeriesHourly(opts: FindWatershedSeriesOptions): Promise<SeriesPoint[]> {
   const preferred = opts.preferredSource ?? null;
-  const excludeSynthetic = opts.excludeSynthetic === true;
   return sql<SeriesPoint[]>`
     WITH ds AS (SELECT id FROM dams WHERE watershed_id = ${opts.watershedId}),
     bucketed AS (
@@ -173,7 +162,7 @@ async function findWatershedSeriesHourly(opts: FindWatershedSeriesOptions): Prom
       WHERE o.observed_at >= ${opts.from}
         AND o.observed_at <  ${opts.to}
         AND (${preferred}::text IS NULL OR o.source_id = ${preferred})
-        AND (NOT ${excludeSynthetic}::boolean OR o.source_id <> 'synthetic')
+        AND o.source_id <> 'synthetic'
       GROUP BY bucket, o.dam_id
     )
     SELECT bucket AS "observedAt",
@@ -278,11 +267,10 @@ export interface ObservationsPage {
  * Cross-dam raw observation feed, ordered by `(observed_at, dam_id, source_id)`
  * and paged on that same tuple.
  *
- * Synthetic seed rows are dropped unconditionally and there is no opt-in:
- * production holds none (verified 2026-09-09), and `seed_synthetic_observations.ts`
- * only ever runs behind an explicit BOOTSTRAP_SEED_SYNTHETIC=1 on an empty
- * table. The predicate stays so a fresh bring-up that does seed can't leak
- * placeholder numbers into a feed whose whole contract is "measured values".
+ * Like every other read path here it drops `source_id = 'synthetic'`: prod
+ * holds no such rows (verified 2026-09-09) and the seeder only runs behind an
+ * explicit BOOTSTRAP_SEED_SYNTHETIC=1, but the predicate keeps a deliberate
+ * local seed from leaking into a feed whose contract is "measured values".
  *
  * Paging cost, measured against compressed chunks (0014 compresses anything
  * older than 30 days, `segmentby = dam_id`): ChunkAppend stops at the first

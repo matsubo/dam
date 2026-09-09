@@ -1,0 +1,22 @@
+-- Retire the `synthetic` placeholder source from the public API surface.
+--
+-- The seed was a bring-up placeholder for dams with no upstream feed. It was
+-- purged from production once several real sources landed (bootstrap.sh's
+-- BOOTSTRAP_PURGE_SYNTHETIC path), and verification on 2026-09-09 found no
+-- synthetic rows left: source_priorities reported 0 rows / 0 dams over 30
+-- days, and 60 randomly sampled dams over 2026-04-20..05-10 — the window
+-- where the seed's tail would still show — returned nothing at all.
+--
+-- The row itself lingered, so `/api/v1/sources` kept advertising a source
+-- that serves no data. Drop it.
+--
+-- Deliberately NOT deleting from `observations` here: it is a compressed
+-- hypertable and a bulk DELETE needs
+-- `SET LOCAL timescaledb.max_tuples_decompressed_per_dml_transaction = 0`,
+-- which is not something a migration should do to a deploy. If a local or
+-- fresh environment ever seeds again, BOOTSTRAP_PURGE_SYNTHETIC=1 cleans it.
+--
+-- `seed_synthetic_observations.ts` still re-inserts this row if someone
+-- deliberately runs it (BOOTSTRAP_SEED_SYNTHETIC=1 on an empty table), which
+-- is the intended behaviour: seed the data, get the source back.
+DELETE FROM source_priorities WHERE source_id = 'synthetic';

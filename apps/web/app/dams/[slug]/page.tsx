@@ -180,7 +180,7 @@ export default async function DamDetail({ params }: PageProps) {
       <section className="border border-gray-200 rounded p-4 mb-8">
         <header className="flex items-baseline justify-between mb-3">
           <h2 className="text-lg font-semibold">最新観測値</h2>
-          {latest && latest.sourceId !== 'synthetic' && (
+          {latest && (
             <span className="text-sm text-muted inline-flex items-baseline gap-1.5">
               <span>{fmtDate(latest.observedAt)}</span>
               <SourceBadge sourceId={latest.sourceId} />
@@ -188,21 +188,7 @@ export default async function DamDetail({ params }: PageProps) {
             </span>
           )}
         </header>
-        {/* When the only available observation is synthetic, we suppress
-            the "latest value" block entirely. A synthetic observed_at
-            looks deceptively like a stale crawl ("最新観測値: 5/5") even
-            though it's just the seed timestamp. The chart below still
-            renders synthetic for shape. */}
-        {latest && latest.sourceId === 'synthetic' ? (
-          <p className="text-sm text-on-surface-variant">
-            このダムには実観測値の上流フィードが未接続です。下のグラフは推定値 (synthetic seed) を
-            表示しています。実測ソースとの紐付けは
-            <Link href="/sources" className="text-primary hover:underline mx-1">
-              データソース
-            </Link>
-            を参照。
-          </p>
-        ) : latest ? (
+        {latest ? (
           (() => {
             // Denominator policy: 利水容量 only — never mislabel a
             // total-capacity ratio as 貯水率. Prefer
@@ -293,11 +279,9 @@ export default async function DamDetail({ params }: PageProps) {
                     ) : null}
                   </dl>
                 </div>
-                {/* Drought callout — only when (a) the rate is below the
-                    same threshold the homepage drought banner uses, and
-                    (b) the source isn't 'synthetic' (we don't want to
-                    raise a drought alarm based on placeholder data). */}
-                {rate != null && rate < 0.4 && latest.sourceId !== 'synthetic' ? (
+                {/* Drought callout — only when the rate is below the same
+                    threshold the homepage drought banner uses. */}
+                {rate != null && rate < 0.4 ? (
                   <div
                     className={`mt-4 rounded-lg p-3 border ${
                       rate < 0.2
