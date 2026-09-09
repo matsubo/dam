@@ -282,7 +282,7 @@ export default async function ContributePage() {
             },
             {
               title: '公開されている実測データソースを探す',
-              body: 'コードを書かなくてもいい仕事です。「この県のこのページに貯水率が載っている」という報告そのものが価値になります。実装は私がやります。',
+              body: 'コードを書かなくてもいい仕事です。「この県のこのページに貯水率が載っている」という報告そのものが価値になります。Discord に投げてもらえれば、実装は私がやります。',
             },
             {
               title: 'ダムの名寄せ精度を上げる',
@@ -433,22 +433,31 @@ export default async function ContributePage() {
         </div>
       </Section>
 
-      <Section id="apply" eyebrow="Apply" title="参加のしかた">
+      <Section id="apply" eyebrow="Apply" title="応募・相談は Discord へ">
         <div className="bg-white border border-outline-variant rounded-xl p-5">
+          <p className="text-sm leading-relaxed mb-4">
+            <strong>
+              応募も、その前の相談も、窓口は{' '}
+              <a
+                href={DISCORD_INVITE}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
+                Discord
+              </a>{' '}
+              の一本です。
+            </strong>
+            <span className="text-on-surface-variant">
+              {' '}
+              応募フォームもメール窓口もありません。来て、ひとこと声をかけてください。
+            </span>
+          </p>
           <p className="text-sm text-on-surface-variant leading-relaxed mb-4">
-            応募フォームはありません。
-            <a
-              href={DISCORD_INVITE}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary hover:underline font-semibold"
-            >
-              Discord
-            </a>
-            に来て、ひとこと声をかけてください。 経歴書は不要です。GitHub
+            経歴書は不要です。GitHub
             アカウントと、興味のある領域（上の「お願いしたいこと」のどれか）だけ
-            教えてもらえれば十分です。「この県のデータ、ここに落ちてますよ」という
-            情報提供だけでも歓迎します。
+            教えてもらえれば十分です。「やれるか分からないので先に話を聞きたい」「この県のデータ、
+            ここに落ちてますよ」という段階の連絡も歓迎します。
           </p>
           <a
             className="btn-primary text-sm"

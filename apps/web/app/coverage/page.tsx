@@ -1,6 +1,7 @@
 // Coverage dashboard — tracks progress toward 100% real-observation
-// coverage across all 2,749 master dams. See GitHub issue #1 for the
-// roadmap; sub-issues #2-#16 break it down by phase.
+// coverage across every master dam. The public-facing roadmap is /roadmap;
+// phase breakdown lives in the private issue tracker. Do not link the issue
+// tracker from rendered output — the repo is private, so visitors get a 404.
 
 import { PREFECTURES } from '@dam/core/prefectures';
 import { sql } from '@dam/db/client';
@@ -138,16 +139,11 @@ export default async function CoveragePage() {
       <h1 className="text-2xl font-semibold mb-2">カバレッジ</h1>
       <p className="text-sm text-on-surface-variant mb-6">
         全国 <strong>{Number(total).toLocaleString()}</strong> ダムに対する実測データ取得状況。
-        ロードマップは{' '}
-        <a
-          className="text-primary hover:underline"
-          href="https://github.com/matsubo/dam/issues/1"
-          rel="noopener noreferrer"
-          target="_blank"
-        >
-          GitHub issue #1
-        </a>{' '}
-        で管理。
+        今後の方針は{' '}
+        <Link className="text-primary hover:underline" href="/roadmap">
+          ロードマップ
+        </Link>{' '}
+        に。
       </p>
 
       {/* Coverage is the one number a would-be contributor can move, so the

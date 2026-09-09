@@ -24,9 +24,23 @@ test('/contribute links to GitHub Sponsors for donations', async ({ page }) => {
   await expect(sponsor).toBeVisible();
 });
 
-test('/contribute links to Discord as the application route', async ({ page }) => {
+test('/contribute routes both applications and questions to Discord', async ({ page }) => {
   await page.goto('/contribute');
-  await expect(page.locator('a[href^="https://discord.gg/"]').first()).toBeVisible();
+  const apply = page.locator('#apply');
+  await expect(apply).toBeVisible();
+  await expect(apply).toContainText('応募');
+  await expect(apply).toContainText('相談');
+  await expect(apply.locator('a[href^="https://discord.gg/"]').first()).toBeVisible();
+});
+
+test('no page links visitors into the private issue tracker', async ({ page }) => {
+  for (const path of ['/contribute', '/coverage', '/roadmap', '/sources', '/']) {
+    await page.goto(path);
+    await expect(
+      page.locator('a[href*="github.com/matsubo/dam"]'),
+      `${path} must not link the private repo`,
+    ).toHaveCount(0);
+  }
 });
 
 test('/contribute carries the permanent contributor credits section', async ({ page }) => {
