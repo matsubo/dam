@@ -19,6 +19,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const PAGE_URL =
@@ -122,6 +123,9 @@ async function matchMaster(
     SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out = new Map<string, bigint>();
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing.
+  const universe: UniverseRow[] = [];
 
   for (const r of rows) {
     const dam = DAMS.find((d) => d.htmlName === r.htmlName);
@@ -142,6 +146,12 @@ async function matchMaster(
       }
     }
 
+    universe.push({
+      externalId: r.htmlName,
+      name: r.htmlName,
+      prefCode: PREF_CODE,
+      resolvedDamId: best?.id ?? null,
+    });
     if (!best) {
       log(`${SOURCE_ID}: no master match for "${r.htmlName}"`);
       continue;
@@ -149,6 +159,7 @@ async function matchMaster(
     out.set(r.htmlName, best.id);
   }
 
+  await recordUniverse(SOURCE_ID, universe);
   return out;
 }
 

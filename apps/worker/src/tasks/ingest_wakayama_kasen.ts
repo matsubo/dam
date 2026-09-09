@@ -25,6 +25,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const DATA_URL =
@@ -154,6 +155,34 @@ interface DamMatch {
   damId: bigint;
 }
 
+/**
+ * Best master dam for a station name: an exact name beats an equal stem beats
+ * a `<stem>ダム` master beats a prefix beats a substring, ties going to the
+ * lowest master id. Pure, so the universe can resolve every STATION_MAP entry
+ * without re-running the fetch.
+ */
+export function chooseMaster(
+  rawName: string,
+  stem: string,
+  masters: { id: bigint; name: string }[],
+): bigint | null {
+  let best: { id: bigint; rank: number } | null = null;
+  for (const m of masters) {
+    const mStem = normalizeName(m.name);
+    let rank: number;
+    if (m.name === rawName) rank = 0;
+    else if (mStem === stem) rank = 1;
+    else if (m.name === `${stem}ダム`) rank = 2;
+    else if (mStem.startsWith(stem)) rank = 3;
+    else if (mStem.includes(stem)) rank = 4;
+    else continue;
+    if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
+      best = { id: m.id, rank };
+    }
+  }
+  return best?.id ?? null;
+}
+
 async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
   // Include Nara (29) and Mie (24) alongside Wakayama (30): the 22077xxx/22088xxx
   // KKR dams in this source (猿谷/川迫/九尾/大滝/大迫/津風呂/坂本/池原/七色/二津野/小森/風屋)
@@ -167,28 +196,31 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     const stem = normalizeName(r.wakayamaName);
     if (!stem) continue;
 
-    let best: { id: bigint; rank: number } | null = null;
-    for (const m of masters) {
-      const mStem = normalizeName(m.name);
-      let rank: number;
-      if (m.name === r.wakayamaName) rank = 0;
-      else if (mStem === stem) rank = 1;
-      else if (m.name === `${stem}ダム`) rank = 2;
-      else if (mStem.startsWith(stem)) rank = 3;
-      else if (mStem.includes(stem)) rank = 4;
-      else continue;
-      if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-        best = { id: m.id, rank };
-      }
-    }
-
-    if (!best) {
+    const damId = chooseMaster(r.wakayamaName, stem, masters);
+    if (!damId) {
       log(`${SOURCE_ID}: no master match for "${r.wakayamaName}"`);
       continue;
     }
-    out.push({ wakayamaName: r.wakayamaName, damId: best.id });
+    out.push({ wakayamaName: r.wakayamaName, damId });
   }
 
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing. Built
+  // from STATION_MAP rather than from the rows that parsed: a station blank
+  // this hour (小匠 is flood-control-only and often reports nothing) is still
+  // published, and resolving it from the constant keeps it out of 提供元なし.
+  //
+  // No prefCode: the station code is a real provider id, and 12 of the 19
+  // stations are 熊野川/北山川 dams sitting in 奈良/三重, not 和歌山.
+  const universe: UniverseRow[] = Object.entries(STATION_MAP).map(([code, name]) => {
+    const stem = normalizeName(name);
+    return {
+      externalId: code,
+      name,
+      resolvedDamId: stem ? chooseMaster(name, stem, masters) : null,
+    };
+  });
+  await recordUniverse(SOURCE_ID, universe);
   return out;
 }
 

@@ -50,6 +50,7 @@ canonical product/architecture spec. It precedes any LLM-written doc.
 | `observations` PK is `(dam_id, observed_at, source_id)` | Multiple sources for same time are intentional |
 | Test cleanups must be **scoped to fixture IDs**, never use a blanket source/external_id filter | Past test wiped prod twice |
 | `source_priorities.priority DESC` decides which source the chart shows | Multiple sources can cover one dam; the top-priority one wins |
+| Every observation-ingesting task calls `recordUniverse()` | `/coverage` can only say "no provider publishes this dam" once every provider has recorded its published list; a task that skips it leaves its dams stuck in 未調査. Enforced by `apps/worker/src/tasks/universe_instrumentation.test.ts` |
 | `External API responses use HAL+JSON with `_links`` | HATEOAS Level 3 is required by `~/.claude/rules/api-design.md` |
 | `Page components decode params with `decodeURIComponent(rawSlug)`` | Next 15 leaves URL-encoded kanji in dynamic params (route handlers decode automatically; pages do not) |
 
@@ -123,7 +124,16 @@ bun run apps/web/bin/seed_synthetic_observations.ts     --hourly-days 30 --years
    for any direct API access. ~70 other upstreams now feed the realtime
    pipeline instead (see `/coverage`).
 
-7. **Test cleanup scoping**: see `packages/adapters/ndi/src/import_dams.test.ts`
+7. **Adding a new ingest task**: it must call `recordUniverse(SOURCE_ID, rows)`
+   once per run with the provider's WHOLE published list — the unmatched rows
+   are the point, since they are what separates "they publish it, we failed to
+   link it" from "nobody publishes it". Push into the array BEFORE the
+   `continue` that skips unmatched rows. `ingest_okayama.ts` (fetched list) and
+   `ingest_cgr_mlit.ts` (hardcoded array) are the reference implementations.
+   A task that genuinely cannot enumerate a list goes in the EXEMPT map in
+   `universe_instrumentation.test.ts` with a reason.
+
+8. **Test cleanup scoping**: see `packages/adapters/ndi/src/import_dams.test.ts`
    for the correct pattern (`WHERE external_ids ->> 'ndi' IN ('1234567890','9999999999')`).
    Never use `WHERE external_ids ? 'ndi'`.
 

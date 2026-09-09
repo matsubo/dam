@@ -43,6 +43,8 @@ const BODY = `# Dam Data Japan
   window, keyset-paginated (measured values only)
 - \`/api/v1/watersheds/{slug}\` — watershed aggregate
 - \`/api/v1/watersheds/{slug}/observations\` — watershed-summed series
+- \`/api/v1/coverage\` — per-dam triage: is a dam's data published by some
+  provider and we're failing to ingest it, or does nobody publish it
 
 ## Data sources
 

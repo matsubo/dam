@@ -231,6 +231,13 @@ export default async function CoveragePage() {
             件で、これが手を付けられる作業対象です。
           </p>
         ) : null}
+        {triage.sourcesNotEnumerable > 0 ? (
+          <p className="text-xs text-on-surface-variant mt-2 leading-relaxed">
+            また、公開一覧を列挙できない提供元が {triage.sourcesNotEnumerable}{' '}
+            件あります（洪水時のみダムを掲載する県のポータルなど）。判定ゲートからは除外しているため、
+            その担当地域の「提供元なし」には保留が残ります。
+          </p>
+        ) : null}
       </section>
 
       <section className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">

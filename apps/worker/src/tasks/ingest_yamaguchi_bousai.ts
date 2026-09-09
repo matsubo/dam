@@ -25,6 +25,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const BASE_URL =
@@ -147,6 +148,28 @@ interface DamMatch {
   damId: bigint;
 }
 
+/** Best master dam for a station name, or null when nothing ranks. */
+function chooseMaster(name: string, masters: { id: bigint; name: string }[]): bigint | null {
+  const stem = normalizeName(name);
+  if (!stem) return null;
+
+  let best: { id: bigint; rank: number } | null = null;
+  for (const m of masters) {
+    const mStem = normalizeName(m.name);
+    let rank: number;
+    if (m.name === name) rank = 0;
+    else if (mStem === stem) rank = 1;
+    else if (m.name === `${stem}ダム`) rank = 2;
+    else if (mStem.startsWith(stem)) rank = 3;
+    else if (mStem.includes(stem)) rank = 4;
+    else continue;
+    if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
+      best = { id: m.id, rank };
+    }
+  }
+  return best?.id ?? null;
+}
+
 async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
   // Include Hiroshima (34) alongside Yamaguchi (35): 小瀬川ダム sits on the
   // prefectural boundary and is registered under pref_code='34' in the master.
@@ -156,30 +179,28 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
   const out: DamMatch[] = [];
 
   for (const r of rows) {
-    const stem = normalizeName(r.yamaguchiName);
-    if (!stem) continue;
-
-    let best: { id: bigint; rank: number } | null = null;
-    for (const m of masters) {
-      const mStem = normalizeName(m.name);
-      let rank: number;
-      if (m.name === r.yamaguchiName) rank = 0;
-      else if (mStem === stem) rank = 1;
-      else if (m.name === `${stem}ダム`) rank = 2;
-      else if (mStem.startsWith(stem)) rank = 3;
-      else if (mStem.includes(stem)) rank = 4;
-      else continue;
-      if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-        best = { id: m.id, rank };
-      }
-    }
-
-    if (!best) {
+    const damId = chooseMaster(r.yamaguchiName, masters);
+    if (!damId) {
       log(`${SOURCE_ID}: no master match for "${r.yamaguchiName}"`);
       continue;
     }
-    out.push({ yamaguchiName: r.yamaguchiName, damId: best.id });
+    out.push({ yamaguchiName: r.yamaguchiName, damId });
   }
+
+  // What this source publishes, matched or not — taken from the station
+  // catalogue rather than this run's parsed rows, so a station whose page
+  // failed to load still counts as published instead of reading as 提供元なし.
+  const universe: UniverseRow[] = [];
+  for (const s of STATIONS) {
+    const damId = chooseMaster(s.name, masters);
+    universe.push({
+      externalId: s.code,
+      name: s.name,
+      prefCode: PREF_CODE,
+      resolvedDamId: damId,
+    });
+  }
+  await recordUniverse(SOURCE_ID, universe);
 
   return out;
 }

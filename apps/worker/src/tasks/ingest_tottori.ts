@@ -26,6 +26,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const PAGE_URL = process.env.TOTTORI_DAM_URL ?? 'http://tottoridam.jp/';
@@ -134,6 +135,9 @@ interface DamMatch {
 
 async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
   const matches: DamMatch[] = [];
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing.
+  const universe: UniverseRow[] = [];
   for (const c of DAMS) {
     const rows = await sql<{ id: bigint; name: string }[]>`
       SELECT id, name FROM dams
@@ -149,6 +153,12 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
       LIMIT 1
     `;
     const r = rows[0];
+    universe.push({
+      externalId: c.tottoriName,
+      name: c.tottoriName,
+      prefCode: PREF_CODE,
+      resolvedDamId: r?.id ?? null,
+    });
     if (!r) {
       log(`tottori-dam: no master match for ${c.tottoriName}`);
       continue;
@@ -162,6 +172,7 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
         AND COALESCE(external_ids->>'tottori-dam', '') <> ${c.tottoriName}
     `;
   }
+  await recordUniverse('tottori-dam', universe);
   return matches;
 }
 

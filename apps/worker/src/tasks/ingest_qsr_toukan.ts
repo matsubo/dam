@@ -25,6 +25,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const DATA_URL = process.env.QSR_TOUKAN_URL ?? 'https://www.qsr.mlit.go.jp/toukan/bousaijouhou.php';
@@ -171,11 +172,34 @@ async function findDamId(cfg: DamCfg, log: (s: string) => void): Promise<bigint 
   return best.id;
 }
 
+/** Resolve every dam the page publishes, keyed by its page name. */
+async function matchMaster(log: (s: string) => void): Promise<Map<string, bigint>> {
+  const matches = new Map<string, bigint>();
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing.
+  const universe: UniverseRow[] = [];
+  for (const cfg of DAMS) {
+    const damId = await findDamId(cfg, log);
+    universe.push({
+      externalId: cfg.pageName,
+      name: cfg.pageName,
+      prefCode: cfg.prefCode,
+      resolvedDamId: damId,
+    });
+    if (damId) matches.set(cfg.pageName, damId);
+  }
+  await recordUniverse(SOURCE_ID, universe);
+  return matches;
+}
+
 // --- task -------------------------------------------------------------------
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
   await ensureSourcePriority();
+
+  // Resolved before the fetch so a bad page still leaves a scan on record.
+  const damByPage = await matchMaster(log);
 
   const ua =
     process.env.HTTP_USER_AGENT ??
@@ -204,7 +228,7 @@ const task: Task = async (_payload, helpers) => {
     }
     log(`${SOURCE_ID}: ${cfg.pageName} at ${row.observedAt.toISOString()}`);
 
-    const damId = await findDamId(cfg, log);
+    const damId = damByPage.get(cfg.pageName);
     if (!damId) continue;
 
     inputs.push({

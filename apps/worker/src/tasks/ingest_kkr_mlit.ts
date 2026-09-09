@@ -27,6 +27,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const DATA_URL = process.env.KKR_MLIT_URL ?? 'https://www.kkr.mlit.go.jp/river/json/dam.json';
@@ -128,22 +129,32 @@ interface DamMatch {
   damId: bigint;
 }
 
-async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
+/**
+ * Match every dam in KEY_TO_NAME, not just the ones the current fetch
+ * returned. KEY_TO_NAME *is* the feed's published catalogue, so walking it
+ * keeps `source_universe` complete on a day when one dam's entry is missing
+ * from the JSON; the match itself depends only on the name, never on the
+ * fetched values.
+ */
+async function matchMaster(log: (s: string) => void): Promise<DamMatch[]> {
   // Search all dams (no pref_code filter — these span Fukui/Kyoto/Nara/Mie/Hyogo)
   const masters = await sql<{ id: bigint; name: string }[]>`
     SELECT id, name FROM dams ORDER BY id
   `;
   const out: DamMatch[] = [];
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing.
+  const universe: UniverseRow[] = [];
 
-  for (const r of rows) {
-    const stem = normalizeName(r.damName);
+  for (const [key, damName] of Object.entries(KEY_TO_NAME)) {
+    const stem = normalizeName(damName);
     if (!stem) continue;
 
     let best: { id: bigint; rank: number } | null = null;
     for (const m of masters) {
       const mStem = normalizeName(m.name);
       let rank: number;
-      if (m.name === r.damName) rank = 0;
+      if (m.name === damName) rank = 0;
       else if (mStem === stem) rank = 1;
       else if (m.name === `${stem}ダム`) rank = 2;
       else if (mStem.startsWith(stem)) rank = 3;
@@ -154,21 +165,30 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
       }
     }
 
+    // The feed's own JSON key is the stable id; these 12 dams span five
+    // prefectures and the feed publishes no pref code, so leave it null.
+    universe.push({
+      externalId: key,
+      name: damName,
+      resolvedDamId: best?.id ?? null,
+    });
+
     if (!best) {
-      log(`${SOURCE_ID}: no master match for "${r.damName}"`);
+      log(`${SOURCE_ID}: no master match for "${damName}"`);
       continue;
     }
 
-    out.push({ damName: r.damName, damId: best.id });
+    out.push({ damName, damId: best.id });
     await sql`
       UPDATE dams
       SET external_ids = COALESCE(external_ids, '{}'::jsonb)
-                       || jsonb_build_object(${SOURCE_ID}::text, ${r.key}::text)
+                       || jsonb_build_object(${SOURCE_ID}::text, ${key}::text)
       WHERE id = ${best.id}
-        AND COALESCE(external_ids->>${SOURCE_ID}, '') <> ${r.key}
+        AND COALESCE(external_ids->>${SOURCE_ID}, '') <> ${key}
     `;
   }
 
+  await recordUniverse(SOURCE_ID, universe);
   return out;
 }
 
@@ -196,7 +216,7 @@ const task: Task = async (_payload, helpers) => {
   const rows = parseKkrJson(json);
   log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
 
-  const matches = await matchMaster(rows, log);
+  const matches = await matchMaster(log);
   const damByName = new Map(matches.map((m) => [m.damName, m.damId]));
 
   const inputs = [] as Parameters<typeof upsertObservations>[0];

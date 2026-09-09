@@ -17,6 +17,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const DATA_URL =
@@ -59,14 +60,16 @@ function parseVal(s: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-export function parseFukuiPage(html: string): ParsedRow[] {
-  // Each dam row is on one line; columns: name | location | timestamp |
-  // storageRate | waterLevel | storage | inflow | outflow | manager.
-  const rowRe =
-    /<td[^>]+class="normal[01]">[^<]*<a[^>]+>([^<]+)<\/a>[^<]*<\/td><td[^>]+class="normal[01]">[^<]*<\/td><td[^>]+class="normal[01]">([^<]*)<\/td><td[^>]+class="normal[01]">([^<]*)<\/td><td[^>]+class="normal[01]">([^<]*)<\/td><td[^>]+class="normal[01]">([^<]*)<\/td><td[^>]+class="normal[01]">([^<]*)<\/td><td[^>]+class="normal[01]">([^<]*)<\/td><td[^>]+class="normal[01]">[^<]*<\/td>/g;
+// Each dam row is on one line; columns: name | location | timestamp |
+// storageRate | waterLevel | storage | inflow | outflow | manager.
+// Module-level so parseFukuiNames can share it: String.matchAll clones the
+// regex, so the two callers cannot leak lastIndex into each other.
+const ROW_RE =
+  /<td[^>]+class="normal[01]">[^<]*<a[^>]+>([^<]+)<\/a>[^<]*<\/td><td[^>]+class="normal[01]">[^<]*<\/td><td[^>]+class="normal[01]">([^<]*)<\/td><td[^>]+class="normal[01]">([^<]*)<\/td><td[^>]+class="normal[01]">([^<]*)<\/td><td[^>]+class="normal[01]">([^<]*)<\/td><td[^>]+class="normal[01]">([^<]*)<\/td><td[^>]+class="normal[01]">([^<]*)<\/td><td[^>]+class="normal[01]">[^<]*<\/td>/g;
 
+export function parseFukuiPage(html: string): ParsedRow[] {
   const rows: ParsedRow[] = [];
-  for (const m of html.matchAll(rowRe)) {
+  for (const m of html.matchAll(ROW_RE)) {
     const fukuiName = m[1]?.trim() ?? '';
     if (!fukuiName) continue;
 
@@ -103,6 +106,25 @@ export function parseFukuiPage(html: string): ParsedRow[] {
   return rows;
 }
 
+/**
+ * Every dam the 現況表 lists, whatever it currently reports.
+ *
+ * parseFukuiPage drops a row whose timestamp won't parse or whose values are
+ * all "---", which is right for observations and wrong for the universe: an
+ * offline dam is still a dam this source publishes. Recording only the rows
+ * that survived those guards would let a permanently-quiet station stay out
+ * of source_universe forever, and /coverage would then report its dam as
+ * 提供元なし — the exact false negative the table exists to prevent.
+ */
+export function parseFukuiNames(html: string): string[] {
+  const names: string[] = [];
+  for (const m of html.matchAll(ROW_RE)) {
+    const fukuiName = m[1]?.trim() ?? '';
+    if (fukuiName) names.push(fukuiName);
+  }
+  return names;
+}
+
 // --- DB helpers -------------------------------------------------------------
 
 async function ensureSourcePriority(): Promise<void> {
@@ -131,7 +153,37 @@ interface DamMatch {
   damId: bigint;
 }
 
-async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
+/**
+ * Pick the best master dam for a published name: an exact raw-name hit beats a
+ * stem hit beats a prefix/substring hit, ties going to the lower id.
+ */
+function chooseMaster(
+  rawName: string,
+  stem: string,
+  masters: { id: bigint; name: string }[],
+): bigint | null {
+  let best: { id: bigint; rank: number } | null = null;
+  for (const m of masters) {
+    const mStem = normalizeName(m.name);
+    let rank: number;
+    if (m.name === rawName) rank = 0;
+    else if (mStem === stem) rank = 1;
+    else if (m.name === `${stem}ダム`) rank = 2;
+    else if (mStem.startsWith(stem)) rank = 3;
+    else if (mStem.includes(stem)) rank = 4;
+    else continue;
+    if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
+      best = { id: m.id, rank };
+    }
+  }
+  return best?.id ?? null;
+}
+
+async function matchMaster(
+  rows: ParsedRow[],
+  publishedNames: string[],
+  log: (s: string) => void,
+): Promise<DamMatch[]> {
   const masters = await sql<{ id: bigint; name: string }[]>`
     SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
@@ -141,27 +193,26 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     const stem = normalizeName(r.fukuiName);
     if (!stem) continue;
 
-    let best: { id: bigint; rank: number } | null = null;
-    for (const m of masters) {
-      const mStem = normalizeName(m.name);
-      let rank: number;
-      if (m.name === r.fukuiName) rank = 0;
-      else if (mStem === stem) rank = 1;
-      else if (m.name === `${stem}ダム`) rank = 2;
-      else if (mStem.startsWith(stem)) rank = 3;
-      else if (mStem.includes(stem)) rank = 4;
-      else continue;
-      if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-        best = { id: m.id, rank };
-      }
-    }
-
-    if (!best) {
+    const damId = chooseMaster(r.fukuiName, stem, masters);
+    if (!damId) {
       log(`${SOURCE_ID}: no master match for "${r.fukuiName}"`);
       continue;
     }
-    out.push({ fukuiName: r.fukuiName, damId: best.id });
+    out.push({ fukuiName: r.fukuiName, damId });
   }
+
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing. Built
+  // from every name the 現況表 lists, not from `rows`: a dam reporting "---"
+  // across the board never survives parseFukuiPage, and recording only the
+  // parsed subset would eventually have /coverage claim nobody publishes it.
+  const universe: UniverseRow[] = publishedNames.map((fukuiName) => ({
+    externalId: fukuiName,
+    name: fukuiName,
+    prefCode: PREF_CODE,
+    resolvedDamId: chooseMaster(fukuiName, normalizeName(fukuiName), masters),
+  }));
+  await recordUniverse(SOURCE_ID, universe);
 
   return out;
 }
@@ -191,7 +242,7 @@ const task: Task = async (_payload, helpers) => {
   const rows = parseFukuiPage(html);
   log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
 
-  const matches = await matchMaster(rows, log);
+  const matches = await matchMaster(rows, parseFukuiNames(html), log);
   const damByName = new Map(matches.map((m) => [m.fukuiName, m.damId]));
 
   const inputs = [] as Parameters<typeof upsertObservations>[0];

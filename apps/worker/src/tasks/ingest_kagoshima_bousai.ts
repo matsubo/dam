@@ -31,6 +31,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const DATA_URL =
@@ -62,6 +63,10 @@ export interface BousaiResponse {
 
 export interface ParsedRow {
   stationName: string;
+  /** The portal's own station id — the stable key for `source_universe`. */
+  stationNo: string;
+  lat: number | null;
+  lng: number | null;
   observedAt: Date | null;
   waterLevelM: number | null;
   storageVolumeM3: number | null;
@@ -89,6 +94,9 @@ function toNum(v: number | null | undefined): number | null {
 export function parseItems(items: BousaiItem[]): ParsedRow[] {
   return items.map((item) => ({
     stationName: item.station_name,
+    stationNo: item.station_no,
+    lat: toNum(item.point?.lat),
+    lng: toNum(item.point?.lon),
     observedAt: parseKagoshimaTimestamp(item.obs_datetime),
     waterLevelM: toNum(item.store),
     // stored is in 千m³; convert to m³
@@ -131,6 +139,9 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out: DamMatch[] = [];
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing.
+  const universe: UniverseRow[] = [];
 
   for (const r of rows) {
     const stem = normalizeName(r.stationName);
@@ -151,6 +162,15 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
       }
     }
 
+    universe.push({
+      externalId: r.stationNo,
+      name: r.stationName,
+      prefCode: PREF_CODE,
+      lat: r.lat,
+      lng: r.lng,
+      resolvedDamId: best?.id ?? null,
+    });
+
     if (!best) {
       log(`${SOURCE_ID}: no master match for "${r.stationName}"`);
       continue;
@@ -158,6 +178,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     out.push({ stationName: r.stationName, damId: best.id });
   }
 
+  await recordUniverse(SOURCE_ID, universe);
   return out;
 }
 
@@ -185,6 +206,10 @@ const task: Task = async (_payload, helpers) => {
   const items = data.items ?? [];
 
   if (items.length === 0) {
+    // Deliberately records nothing: an empty portal is not a scan. This
+    // source is marked universe_enumerable = FALSE (migration 0044) precisely
+    // because it lists dams only during a flood event, so it is excluded from
+    // the coverage gate rather than faking an empty scan here.
     log(`${SOURCE_ID}: no items (portal inactive — normal outside flood events)`);
     return;
   }

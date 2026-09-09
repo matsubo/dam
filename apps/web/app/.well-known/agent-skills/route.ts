@@ -98,6 +98,24 @@ const SKILLS: Skill[] = [
     example_url: `${SITE_URL}/api/v1/observations?from=2026-05-01T00:00:00Z&to=2026-05-02T00:00:00Z`,
   },
   {
+    id: 'get_coverage_triage',
+    name: 'Explain why a dam has no data',
+    description:
+      "Per-dam triage of observation coverage. Separates 'a data provider publishes this dam and we are failing to ingest it' (actionable) from 'no provider publishes it'. IMPORTANT: while summary.sourcesPendingScan > 0 the triage is incomplete — dams report 'unknown' and 'not_published' is not yet a claim that nobody publishes them.",
+    endpoint: `${SITE_URL}/api/v1/coverage`,
+    method: 'GET',
+    inputs: [
+      {
+        name: 'status',
+        in: 'query',
+        description: "'covered' | 'published_not_ingested' | 'unknown' | 'not_published'",
+      },
+      { name: 'pref', in: 'query', description: 'JIS prefecture code (01-47)' },
+    ],
+    output_format: 'application/hal+json',
+    example_url: `${SITE_URL}/api/v1/coverage?status=published_not_ingested`,
+  },
+  {
     id: 'list_watersheds',
     name: 'List watersheds',
     description:

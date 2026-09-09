@@ -16,6 +16,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const BASE_URL =
@@ -146,38 +147,68 @@ interface DamMatch {
   damId: bigint;
 }
 
+/**
+ * Best master dam for a name as this source publishes it: an exact raw-name
+ * hit beats stem equality, which beats the `〜ダム` spelling, a prefix, then a
+ * substring; ties go to the lowest master id. Extracted verbatim from the
+ * match loop so the catalogue can be resolved without re-implementing it.
+ */
+function chooseMaster(
+  publishedName: string,
+  masters: { id: bigint; name: string }[],
+): bigint | null {
+  const stem = normalizeName(publishedName);
+  if (!stem) return null;
+
+  let best: { id: bigint; rank: number } | null = null;
+  for (const m of masters) {
+    const mStem = normalizeName(m.name);
+    let rank: number;
+    if (m.name === publishedName) rank = 0;
+    else if (mStem === stem) rank = 1;
+    else if (m.name === `${stem}ダム`) rank = 2;
+    else if (mStem.startsWith(stem)) rank = 3;
+    else if (mStem.includes(stem)) rank = 4;
+    else continue;
+    if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
+      best = { id: m.id, rank };
+    }
+  }
+  return best?.id ?? null;
+}
+
 async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
   const masters = await sql<{ id: bigint; name: string }[]>`
     SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out: DamMatch[] = [];
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing. Built
+  // from STATIONS, the provider's whole catalogue, rather than from the rows
+  // that parsed this run: these are 7 separate pages, so one page timing out
+  // would otherwise drop that dam from the universe. Keyed by the published
+  // name, not the page index: `idx` is a positional URL slot (_0_{idx}_0.html)
+  // that would silently re-point if the site reordered its pages.
+  const universe: UniverseRow[] = STATIONS.map(({ name }) => ({
+    externalId: name,
+    name,
+    prefCode: PREF_CODE,
+    resolvedDamId: chooseMaster(name, masters),
+  }));
 
   for (const r of rows) {
     const stem = normalizeName(r.gunmaName);
     if (!stem) continue;
 
-    let best: { id: bigint; rank: number } | null = null;
-    for (const m of masters) {
-      const mStem = normalizeName(m.name);
-      let rank: number;
-      if (m.name === r.gunmaName) rank = 0;
-      else if (mStem === stem) rank = 1;
-      else if (m.name === `${stem}ダム`) rank = 2;
-      else if (mStem.startsWith(stem)) rank = 3;
-      else if (mStem.includes(stem)) rank = 4;
-      else continue;
-      if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-        best = { id: m.id, rank };
-      }
-    }
-
-    if (!best) {
+    const damId = chooseMaster(r.gunmaName, masters);
+    if (!damId) {
       log(`${SOURCE_ID}: no master match for "${r.gunmaName}"`);
       continue;
     }
-    out.push({ gunmaName: r.gunmaName, damId: best.id });
+    out.push({ gunmaName: r.gunmaName, damId });
   }
 
+  await recordUniverse(SOURCE_ID, universe);
   return out;
 }
 

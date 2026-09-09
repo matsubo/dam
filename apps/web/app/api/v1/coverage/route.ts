@@ -28,7 +28,7 @@ const MEANING: Record<DamCoverageStatus, string> = {
   unknown:
     '未調査。まだ公開一覧を記録していないデータ提供元が残っているため、提供の有無を判定できない。',
   not_published:
-    '観測値を出す全提供元の公開一覧を記録した上で、どこにも現れなかった。現時点でこのダムのデータを公開している提供元が無い。',
+    '観測値を出す全提供元の公開一覧を記録した上で、どこにも現れなかった。現時点でこのダムのデータを公開している提供元が無い。ただし公開一覧を列挙できない提供元 (summary.sourcesNotEnumerable) がある場合、その担当地域については保留付き。',
 };
 
 export async function GET(req: Request): Promise<Response> {

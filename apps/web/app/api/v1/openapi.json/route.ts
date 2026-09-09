@@ -489,6 +489,70 @@ const components = {
       ],
     },
 
+    CoverageItem: {
+      type: 'object',
+      description: 'ダム 1 基のカバレッジ判定。',
+      required: ['damId', 'slug', 'name', 'status'],
+      properties: {
+        damId: { type: 'string', example: '7163' },
+        slug: { type: 'string', example: 'doushi-14' },
+        name: { type: 'string', example: '道志' },
+        prefCode: { type: 'string', nullable: true, example: '14' },
+        status: {
+          type: 'string',
+          enum: ['covered', 'published_not_ingested', 'unknown', 'not_published'],
+          description:
+            '`covered` 取得済み / `published_not_ingested` 提供元は公開・紐付けも済みだが観測値が入っていない (取り込み側の不具合) / `unknown` 未調査 / `not_published` 全提供元の公開一覧に現れなかった',
+          example: 'published_not_ingested',
+        },
+        publishedBy: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'このダムを公開一覧に載せているデータ提供元の source_id。',
+          example: ['okayama-bousai'],
+        },
+        _links: { $ref: '#/components/schemas/HalLinks' },
+      },
+    },
+
+    CoverageResponse: {
+      type: 'object',
+      required: ['summary', 'items', 'count', '_links'],
+      properties: {
+        summary: {
+          type: 'object',
+          properties: {
+            covered: { type: 'integer' },
+            publishedNotIngested: { type: 'integer' },
+            unknown: { type: 'integer' },
+            notPublished: { type: 'integer' },
+            unmatchedStations: {
+              type: 'integer',
+              description: '提供元は公開しているのにマスタと紐付いていない観測所の数。',
+            },
+            sourcesPendingScan: {
+              type: 'integer',
+              description:
+                'まだ公開一覧を記録していないデータ提供元の数。**これが 0 より大きい間、`notPublished` は「どこも公開していない」ことの証明にならない** — 単にまだ調べていないだけ。',
+            },
+            sourcesNotEnumerable: {
+              type: 'integer',
+              description:
+                '公開一覧を列挙できない提供元の数 (例: 洪水時のみダムを掲載する県のポータル)。判定ゲートからは除外しているため、その担当地域の `notPublished` には保留が残る。',
+            },
+          },
+        },
+        statusMeanings: {
+          type: 'object',
+          additionalProperties: { type: 'string' },
+          description: '各 status の意味 (日本語)。',
+        },
+        items: { type: 'array', items: { $ref: '#/components/schemas/CoverageItem' } },
+        count: { type: 'integer' },
+        _links: { $ref: '#/components/schemas/HalLinks' },
+      },
+    },
+
     ObservationFeedResponse: {
       type: 'object',
       required: ['items', 'count', '_links'],
@@ -778,6 +842,39 @@ const paths = {
                   prefecture: { href: '/api/v1/prefectures/14/dams' },
                 },
               },
+            },
+          },
+        },
+        ...ERR_RESPONSES,
+      },
+    },
+  },
+
+  '/api/v1/coverage': {
+    get: {
+      summary: 'ダム別カバレッジ判定',
+      tags: ['dams'],
+      description:
+        '「観測値が無い」理由をダム単位で切り分けます。データ提供元が公開しているダム一覧を記録し、マスタと突き合わせた結果を返します。\n\n**重要:** `summary.sourcesPendingScan` が 0 より大きい間は判定が未完了です。公開一覧をまだ記録していない提供元が残っているため、`not_published` (提供元なし) は確定しません。その状態のダムは `unknown` (未調査) になります。「未調査」を「提供なし」と読み替えないでください。',
+      parameters: [
+        {
+          in: 'query',
+          name: 'status',
+          required: false,
+          description: '判定でフィルタ。',
+          schema: {
+            type: 'string',
+            enum: ['covered', 'published_not_ingested', 'unknown', 'not_published'],
+          },
+        },
+        { $ref: '#/components/parameters/PrefCode' },
+      ],
+      responses: {
+        '200': {
+          description: 'OK',
+          content: {
+            'application/hal+json': {
+              schema: { $ref: '#/components/schemas/CoverageResponse' },
             },
           },
         },

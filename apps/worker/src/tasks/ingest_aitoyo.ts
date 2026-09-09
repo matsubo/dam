@@ -20,6 +20,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const PAGE_URL = process.env.AITOYO_URL ?? 'https://www.aitoyo.or.jp/fountainhead/dam/';
@@ -139,6 +140,9 @@ async function ensureSourcePriority(): Promise<void> {
 
 async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
   const matches: DamMatch[] = [];
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing.
+  const universe: UniverseRow[] = [];
   for (const m of NAME_MAP) {
     const rows = await sql<{ id: bigint; name: string }[]>`
       SELECT id, name FROM dams
@@ -157,6 +161,14 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
       LIMIT 1
     `;
     const r = rows[0];
+    // 矢作 straddles two prefectures; the first is its primary one. prefCode is
+    // metadata here, not part of the (source_id, external_id) key.
+    universe.push({
+      externalId: m.aitoyoName,
+      name: m.aitoyoName,
+      prefCode: m.prefCodes[0] ?? null,
+      resolvedDamId: r?.id ?? null,
+    });
     if (!r) {
       log(`aitoyo: no master match for "${m.aitoyoName}" (${m.masterName})`);
       continue;
@@ -170,6 +182,7 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
         AND COALESCE(external_ids->>'aitoyo', '') <> ${m.aitoyoName}
     `;
   }
+  await recordUniverse('aitoyo', universe);
   return matches;
 }
 

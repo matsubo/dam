@@ -22,6 +22,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const BASE_URL = process.env.SHIGA_DAM_BASE ?? 'http://shiga-bousai.jp/dam';
@@ -43,6 +44,15 @@ const DAMS: DamCfg[] = [
 ];
 
 const PREF_CODE = '25';
+
+/**
+ * Listed by the portal but never ingested: 余呉湖 (id2=1) and 天川 (id2=7) have
+ * no master dam, and 野洲川 / 蔵王 / 犬上川 link out to river.go.jp, which our
+ * terms bar us from scraping. They are still part of what 滋賀県 publishes, so
+ * /coverage has to see them — as stations we failed to link, not as absence.
+ * Names are as spelled in this file's header, not verified against the portal.
+ */
+const UNINGESTED_STATIONS: readonly string[] = ['余呉湖', '天川', '野洲川', '蔵王', '犬上川'];
 
 interface ParsedRow {
   observedAt: Date;
@@ -167,6 +177,11 @@ interface DamMatch {
 
 async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
   const matches: DamMatch[] = [];
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing. The
+  // portal's per-dam id2 doesn't cover the stations we never fetch, so the
+  // published name is the key for every row.
+  const universe: UniverseRow[] = [];
   for (const c of DAMS) {
     const rows = await sql<{ id: bigint; name: string }[]>`
       SELECT id, name FROM dams
@@ -182,6 +197,12 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
       LIMIT 1
     `;
     const r = rows[0];
+    universe.push({
+      externalId: c.shigaName,
+      name: c.shigaName,
+      prefCode: PREF_CODE,
+      resolvedDamId: r?.id ?? null,
+    });
     if (!r) {
       log(`shiga-bousai: no master match for ${c.shigaName} (${c.masterName})`);
       continue;
@@ -195,6 +216,10 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
         AND COALESCE(external_ids->>'shiga-bousai', '') <> ${c.shigaName}
     `;
   }
+  for (const name of UNINGESTED_STATIONS) {
+    universe.push({ externalId: name, name, prefCode: PREF_CODE, resolvedDamId: null });
+  }
+  await recordUniverse('shiga-bousai', universe);
   return matches;
 }
 

@@ -28,6 +28,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const ANNOUNCED_URL =
@@ -40,7 +41,18 @@ const PREF_CODE = '22';
 const SOURCE_ID = 'shizuoka-bousai';
 const SIPOS_NO_DATA = -1111111111;
 const SIPOS_NOT_AVAIL = -999999999;
-const POINT_CODES = ['2201200', '2201201', '2201202', '2201203', '2201204', '8567001'] as const;
+// The 6 dams SIPOS publishes, with the names its etc/dam_master.json gives
+// them. Kept as one map so the universe records a readable name for a point
+// whose reading is missing from today's snapshot.
+const POINT_NAMES: Readonly<Record<string, string>> = {
+  '2201200': '奥野ダム',
+  '2201201': '太田川ダム',
+  '2201202': '都田川ダム（農）',
+  '2201203': '大倉川ダム（農）',
+  '2201204': '青野大師ダム',
+  '8567001': '長島ダム（国）',
+};
+const POINT_CODES = Object.keys(POINT_NAMES);
 
 const USER_AGENT =
   process.env.HTTP_USER_AGENT ??
@@ -283,32 +295,57 @@ async function matchMaster(
     SELECT id, name, external_ids FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out: DamMatch[] = [];
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing. Seeded
+  // from the point-code map rather than from this run's readings, so a dam
+  // missing from today's JSON still counts as published; every path out of
+  // the loop below then records its own row, which supersedes the seed
+  // (recordUniverse keeps the last entry per id).
+  const universe: UniverseRow[] = Object.entries(POINT_NAMES).map(([code, name]) => ({
+    externalId: code,
+    name,
+    prefCode: PREF_CODE,
+    resolvedDamId: null,
+  }));
 
   for (const r of readings) {
     // Prefer external_id lookup first (stable once set)
     const byExtId = masters.find((m) => m.external_ids?.[SOURCE_ID] === r.pointCode);
     if (byExtId) {
+      universe.push({
+        externalId: r.pointCode,
+        name: r.pointName,
+        prefCode: PREF_CODE,
+        resolvedDamId: byExtId.id,
+      });
       out.push({ pointCode: r.pointCode, damId: byExtId.id });
       continue;
     }
 
     // Fall back to name matching
     const stem = normalizeName(r.pointName);
-    if (!stem) continue;
     let best: { id: bigint; rank: number } | null = null;
-    for (const m of masters) {
-      const mStem = normalizeName(m.name);
-      let rank: number;
-      if (m.name === r.pointName) rank = 0;
-      else if (mStem === stem) rank = 1;
-      else if (m.name === `${stem}ダム`) rank = 2;
-      else if (mStem.startsWith(stem)) rank = 3;
-      else if (mStem.includes(stem)) rank = 4;
-      else continue;
-      if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-        best = { id: m.id, rank };
+    if (stem) {
+      for (const m of masters) {
+        const mStem = normalizeName(m.name);
+        let rank: number;
+        if (m.name === r.pointName) rank = 0;
+        else if (mStem === stem) rank = 1;
+        else if (m.name === `${stem}ダム`) rank = 2;
+        else if (mStem.startsWith(stem)) rank = 3;
+        else if (mStem.includes(stem)) rank = 4;
+        else continue;
+        if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
+          best = { id: m.id, rank };
+        }
       }
     }
+    universe.push({
+      externalId: r.pointCode,
+      name: r.pointName,
+      prefCode: PREF_CODE,
+      resolvedDamId: best?.id ?? null,
+    });
     if (!best) {
       log(`${SOURCE_ID}: no master match for "${r.pointName}" (${r.pointCode})`);
       continue;
@@ -325,6 +362,7 @@ async function matchMaster(
     out.push({ pointCode: r.pointCode, damId: best.id });
   }
 
+  await recordUniverse(SOURCE_ID, universe);
   return out;
 }
 

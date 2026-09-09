@@ -15,6 +15,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const DATA_URL =
@@ -145,6 +146,11 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out: DamMatch[] = [];
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing. The
+  // mobile page carries no station id, so the published name keyed by
+  // prefecture is the stable identity.
+  const universe: UniverseRow[] = [];
 
   for (const r of rows) {
     const stem = normalizeName(r.naraName);
@@ -165,6 +171,12 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
       }
     }
 
+    universe.push({
+      externalId: r.naraName,
+      name: r.naraName,
+      prefCode: PREF_CODE,
+      resolvedDamId: best?.id ?? null,
+    });
     if (!best) {
       log(`${SOURCE_ID}: no master match for "${r.naraName}"`);
       continue;
@@ -172,6 +184,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     out.push({ naraName: r.naraName, damId: best.id });
   }
 
+  await recordUniverse(SOURCE_ID, universe);
   return out;
 }
 
