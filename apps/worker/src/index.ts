@@ -18,6 +18,7 @@ import ingestEhimeBousai from './tasks/ingest_ehime_bousai.ts';
 import ingestFukuiBousai from './tasks/ingest_fukui_bousai.ts';
 import ingestFukuokaBodik from './tasks/ingest_fukuoka_bodik.ts';
 import ingestFukushimaKasen from './tasks/ingest_fukushima_kasen.ts';
+import ingestFukushimaNourin from './tasks/ingest_fukushima_nourin.ts';
 import ingestGifuKasen from './tasks/ingest_gifu_kasen.ts';
 import ingestGunmaKasen from './tasks/ingest_gunma_kasen.ts';
 import ingestHiroshima from './tasks/ingest_hiroshima.ts';
@@ -166,6 +167,7 @@ async function main(): Promise<void> {
       'ingest:fukuoka-bodik': ingestFukuokaBodik,
       'ingest:gunma-kasen': ingestGunmaKasen,
       'ingest:fukushima-kasen': ingestFukushimaKasen,
+      'ingest:fukushima-nourin': ingestFukushimaNourin,
       'ingest:gifu-kasen': ingestGifuKasen,
       'ingest:aichi-kasen': ingestAichiKasen,
       'ingest:fukui-bousai': ingestFukuiBousai,

@@ -62,6 +62,14 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '水資源機構が管理する全国 26 ダムの利水容量・貯水量 (千m³)・貯水率 (現在 / 平年 / 平年比)。',
     label: '水資源機構 旬報',
   },
+  'fukushima-nourin': {
+    upstream:
+      '福島県 農林水産部 農地管理課「県内の主要農業関係ダムの貯水状況」 (pref.fukushima.lg.jp/sec/36045d/noutikannri010.html)',
+    license: '公開情報 — 出典明示で再配布可',
+    cadence: '隔週程度 (調査日 (令和N年M月D日現在) ベース; 取得は日次でポーリング)',
+    what: '福島県内の農業関係ダム 29 基の貯水率 (かんがい用水分) と平年比。県土木部の河川ダムには載らない土地改良区・市町村管理の農業用ダム / 調整池 / 溜池が対象。貯水量・水位は非公開。',
+    label: '福島県 農業関係ダム',
+  },
   aitoyo: {
     upstream: 'あいとよネット 公益財団法人 愛知・豊川用水振興協会 (aitoyo.or.jp)',
     license: '公益財団法人発行 — 出典明示で再配布可',
