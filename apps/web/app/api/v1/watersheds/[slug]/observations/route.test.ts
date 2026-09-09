@@ -20,6 +20,7 @@ const TEST_SOURCES = [SRC_TOP, SRC_HI, SRC_LO, SRC_UNRANKED] as const;
 const SLUG = 'ws-obs-test';
 const GAP_SLUG = 'ws-obs-gap';
 const LEAD_SLUG = 'ws-obs-lead';
+const NULLV_SLUG = 'ws-obs-nullvol';
 
 const FROM = '2026-05-15T00:00:00Z';
 const TO = '2026-05-16T00:00:00Z';
@@ -78,7 +79,7 @@ async function seedDam(watershedId: bigint, externalId: string, lngWest: number)
 beforeAll(async () => {
   await sql`DELETE FROM observations WHERE source_id IN ${sql(TEST_SOURCES)}`;
   await sql`DELETE FROM dams WHERE external_ids ->> 'ndi' LIKE 'WS-OBS-%'`;
-  await sql`DELETE FROM watersheds WHERE slug IN (${SLUG}, ${GAP_SLUG}, ${LEAD_SLUG})`;
+  await sql`DELETE FROM watersheds WHERE slug IN (${SLUG}, ${GAP_SLUG}, ${LEAD_SLUG}, ${NULLV_SLUG})`;
 
   const topRow = await sql<{ priority: number }[]>`
     SELECT priority FROM source_priorities WHERE active ORDER BY priority DESC LIMIT 1
@@ -126,6 +127,23 @@ beforeAll(async () => {
     if (h % 3 === 0) {
       obs.push({ observedAt: at, damId: damQ, sourceId: SRC_LO, storageVolumeM3: 5_000_000 });
     }
+  }
+
+  // --- NULL-volume fixture: T posts a row every hour but only carries a volume
+  // every third hour. A row that exists with no volume is still "no measurement",
+  // so it has to be filled like a missing row rather than dropping the dam. ---
+  const wsNull = await seedWatershed('WSOBSNULL', NULLV_SLUG, 160.0);
+  const damS = await seedDam(wsNull, 'WS-OBS-S', 160.0);
+  const damT = await seedDam(wsNull, 'WS-OBS-T', 160.0);
+  for (let h = 0; h < WINDOW_HOURS; h++) {
+    const at = new Date(Date.UTC(2026, 4, 15, h));
+    obs.push({ observedAt: at, damId: damS, sourceId: SRC_LO, storageVolumeM3: 1_000_000 });
+    obs.push({
+      observedAt: at,
+      damId: damT,
+      sourceId: SRC_LO,
+      storageVolumeM3: h % 3 === 0 ? 5_000_000 : null,
+    });
   }
 
   // --- Leading-edge fixture: R's only report predates the window ---
@@ -213,4 +231,20 @@ test('hourly aggregate seeds the first bucket from before the window', async () 
   // Dam R reported 3,000,000 two hours before `from` and not since.
   expect(body.series[0]?.observedAt).toBe(new Date(FROM).toISOString());
   expect(Number(body.series[0]?.storageVolumeM3)).toBe(3_000_000);
+});
+
+// A feed can post a row on schedule but leave storage_volume_m3 NULL (the
+// kasenbosai phantom-zero migrations null out bogus values, for one). locf()
+// treats such a NULL as a real value and stops carrying forward unless told
+// otherwise, which reproduced the same sawtooth as a missing row.
+test('hourly aggregate fills rows that exist with no volume', async () => {
+  const { status, body } = await fetchSeries(NULLV_SLUG);
+  expect(status).toBe(200);
+
+  // Dam S posts 1,000,000 hourly; dam T posts a row hourly but only carries
+  // 5,000,000 every third hour. Every bucket must still total 6,000,000.
+  expect(body.series).toHaveLength(WINDOW_HOURS);
+  expect(body.series.map((p) => Number(p.storageVolumeM3))).toEqual(
+    Array.from({ length: WINDOW_HOURS }, () => 6_000_000),
+  );
 });

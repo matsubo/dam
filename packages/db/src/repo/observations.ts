@@ -202,8 +202,10 @@ async function findWatershedSeriesHourly(opts: FindWatershedSeriesOptions): Prom
         time_bucket_gapfill('1 hour', o.observed_at,
                             start => ${scanFrom}, finish => ${opts.to}) AS bucket,
         o.dam_id,
-        locf(last(o.storage_volume_m3, o.observed_at)) AS volume,
-        locf(last(o.storage_rate, o.observed_at))      AS rate
+        locf(last(o.storage_volume_m3, o.observed_at),
+             treat_null_as_missing => true) AS volume,
+        locf(last(o.storage_rate, o.observed_at),
+             treat_null_as_missing => true)      AS rate
       FROM observations o
       JOIN ds ON ds.id = o.dam_id
       LEFT JOIN pref ON pref.dam_id = o.dam_id
