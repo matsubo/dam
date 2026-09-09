@@ -28,6 +28,9 @@ describe('isAdEligible — 国土数値情報由来のページは不可', () =>
     ['map', '/map'],
     ['stats', '/stats'],
     ['search', '/search'],
+    ['coverage', '/coverage'],
+    ['prefecture', '/prefectures/13'],
+    ['source detail', '/sources/ndi'],
   ])('%s (%s) earns no ad', (_label, path) => {
     expect(isAdEligible(path)).toBe(false);
   });
