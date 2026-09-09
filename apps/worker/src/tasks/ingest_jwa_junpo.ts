@@ -217,7 +217,10 @@ export async function ensureExternalIds(log: (s: string) => void): Promise<DamMa
     universe.push({
       externalId: m.jwaName,
       name: m.jwaName,
-      prefCode: m.prefCodes[0] ?? null,
+      // A multi-code entry (下久保 straddles 群馬/埼玉) is a LIKE-narrowing
+      // hint, not an attribution, and pref_code is COALESCE-sticky once
+      // written.
+      prefCode: m.prefCodes.length === 1 ? (m.prefCodes[0] ?? null) : null,
       resolvedDamId: r?.id ?? null,
     });
     if (!r) {

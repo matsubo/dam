@@ -174,7 +174,10 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
     universe.push({
       externalId: m.yoshinoName,
       name: m.yoshinoName,
-      prefCode: m.prefCodes[0] ?? null,
+      // A multi-code entry is a LIKE-narrowing hint, not an attribution — its
+      // first code is sometimes the wrong prefecture (新宮 is 愛媛, not 徳島),
+      // and pref_code is COALESCE-sticky once written.
+      prefCode: m.prefCodes.length === 1 ? (m.prefCodes[0] ?? null) : null,
       resolvedDamId: r?.id ?? null,
     });
     if (!r) {
