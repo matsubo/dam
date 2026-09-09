@@ -103,12 +103,12 @@ const components = {
         '`json` (HAL+JSON, 既定) または `csv`。CSV は `Content-Disposition: attachment` で返却。',
       schema: { type: 'string', enum: ['json', 'csv'], default: 'json' },
     },
-    ExcludeSynthetic: {
+    AllSources: {
       in: 'query',
-      name: 'exclude_synthetic',
+      name: 'all_sources',
       required: false,
       description:
-        '`1` / `true` を指定すると、シード値 (`source_id = "synthetic"`) を除外し、複数の実測ソース (例: `tokyo-waterworks` + `jwa-junpo`) を同時に返します。`hourly` バケット時のみ有効。',
+        '`1` / `true` を指定すると、優先度最上位の 1 ソースだけでなく、そのウィンドウに値を持つ全ソース (例: `tokyo-waterworks` + `jwa-junpo`) を返します。`hourly` バケット時のみ有効。',
       schema: { type: 'string', enum: ['0', '1', 'true', 'false'] },
     },
     ObservationCursor: {
@@ -130,8 +130,7 @@ const components = {
       in: 'query',
       name: 'real',
       required: false,
-      description:
-        '`1` / `true` を指定すると、直近 30 日に非 synthetic 観測値があるダムのみを返します。',
+      description: '`1` / `true` を指定すると、直近 30 日に実測値があるダムのみを返します。',
       schema: { type: 'string', enum: ['0', '1', 'true', 'false'] },
     },
     SourceFilter: {
@@ -379,7 +378,7 @@ const components = {
             dataRealness: {
               type: 'object',
               description:
-                '実測データの有無。`hasRealDataLast30d` が true の場合、直近 30 日に `synthetic` 以外のソースからの観測値あり。',
+                '実測データの有無。`hasRealDataLast30d` が true の場合、直近 30 日に上流ソースからの観測値あり。',
               required: ['hasRealDataLast30d', 'realSourceId'],
               properties: {
                 hasRealDataLast30d: { type: 'boolean', example: true },
@@ -387,7 +386,7 @@ const components = {
                   type: 'string',
                   nullable: true,
                   description:
-                    '直近 30 日で最新の非 synthetic 観測値の source_id (`tokyo-waterworks`, `jwa-junpo`, 等)。',
+                    '直近 30 日で最新の観測値の source_id (`tokyo-waterworks`, `jwa-junpo`, 等)。',
                   example: 'tokyo-waterworks',
                 },
               },
@@ -792,7 +791,7 @@ const paths = {
       summary: 'ダム横断の計測値フィード',
       tags: ['observations'],
       description:
-        '全ダムの生の観測値 (1 時間粒度) を `from`〜`to` のウィンドウで返します。ダムを指定せずに取り込みたい同期クライアント向け。`(observed_at, dam_id, source_id)` 昇順で、keyset カーソルによりページングします。返すのは実測値のみです (シード値 `source_id = "synthetic"` は常に除外)。単一ダムの時系列やグラフ用途、集計バケット (`daily` / `monthly`)、CSV が必要な場合は `/api/v1/dams/{slug}/observations` を使ってください。\n\n30 日より古いデータは TimescaleDB の圧縮チャンクに載るため、1 ページの取得コストは `pageSize` ではなく「カーソル位置から現在の 14 日チャンク末尾まで」の行数に比例します (それより後のチャンクは走査されません)。過去データを大量に取り込む場合は `pageSize` を大きく (1000) 取るほど総コストが下がります。',
+        '全ダムの生の観測値 (1 時間粒度) を `from`〜`to` のウィンドウで返します。ダムを指定せずに取り込みたい同期クライアント向け。`(observed_at, dam_id, source_id)` 昇順で、keyset カーソルによりページングします。返すのは実測値のみです。単一ダムの時系列やグラフ用途、集計バケット (`daily` / `monthly`)、CSV が必要な場合は `/api/v1/dams/{slug}/observations` を使ってください。\n\n30 日より古いデータは TimescaleDB の圧縮チャンクに載るため、1 ページの取得コストは `pageSize` ではなく「カーソル位置から現在の 14 日チャンク末尾まで」の行数に比例します (それより後のチャンクは走査されません)。過去データを大量に取り込む場合は `pageSize` を大きく (1000) 取るほど総コストが下がります。',
       parameters: [
         { $ref: '#/components/parameters/From' },
         { $ref: '#/components/parameters/To' },
@@ -865,7 +864,7 @@ const paths = {
         { $ref: '#/components/parameters/To' },
         { $ref: '#/components/parameters/Interval' },
         { $ref: '#/components/parameters/Format' },
-        { $ref: '#/components/parameters/ExcludeSynthetic' },
+        { $ref: '#/components/parameters/AllSources' },
       ],
       responses: {
         '200': {
@@ -1009,7 +1008,7 @@ const paths = {
         { $ref: '#/components/parameters/To' },
         { $ref: '#/components/parameters/Interval' },
         { $ref: '#/components/parameters/Format' },
-        { $ref: '#/components/parameters/ExcludeSynthetic' },
+        { $ref: '#/components/parameters/AllSources' },
       ],
       responses: {
         '200': {

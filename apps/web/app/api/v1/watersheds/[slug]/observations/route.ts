@@ -12,8 +12,8 @@ const Query = z.object({
   to: z.string().min(1),
   interval: z.enum(['hourly', 'daily', 'monthly']),
   format: z.enum(['json', 'csv']).optional(),
-  /** '1' / 'true' excludes synthetic-seed rows (hourly bucket only). */
-  exclude_synthetic: z.enum(['0', '1', 'true', 'false']).optional(),
+  /** '1' / 'true' aggregates every source in the window, not just the top one. */
+  all_sources: z.enum(['0', '1', 'true', 'false']).optional(),
 });
 
 function toCsv(slug: string, series: SeriesPoint[]): string {
@@ -53,7 +53,7 @@ export async function GET(
       to: url.searchParams.get('to'),
       interval: url.searchParams.get('interval'),
       format: url.searchParams.get('format') ?? undefined,
-      exclude_synthetic: url.searchParams.get('exclude_synthetic') ?? undefined,
+      all_sources: url.searchParams.get('all_sources') ?? undefined,
     });
     if (!parsed.success) throw new HttpError(400, 'Invalid query');
     const from = new Date(parsed.data.from);
@@ -78,19 +78,17 @@ export async function GET(
     const ws = wsRows[0];
     if (!ws) throw new HttpError(404, 'Watershed not found');
 
-    const excludeSynthetic =
-      parsed.data.exclude_synthetic === '1' || parsed.data.exclude_synthetic === 'true';
-    // Bypass preferredSource when the caller wants every real source — see
-    // the dam-level route for the same pattern.
+    const allSources = parsed.data.all_sources === '1' || parsed.data.all_sources === 'true';
+    // Bypass preferredSource when the caller wants every source — see the
+    // dam-level route for the same pattern.
     const preferred =
-      parsed.data.interval === 'hourly' && !excludeSynthetic ? await preferredSource() : null;
+      parsed.data.interval === 'hourly' && !allSources ? await preferredSource() : null;
     const series = await findWatershedSeries({
       watershedId: ws.id,
       from,
       to,
       bucket: parsed.data.interval,
       preferredSource: preferred,
-      excludeSynthetic,
     });
 
     if (parsed.data.format === 'csv') {

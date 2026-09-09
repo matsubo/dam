@@ -76,7 +76,7 @@ const SKILLS: Skill[] = [
     id: 'list_observations',
     name: 'List observations across all dams',
     description:
-      'Cross-dam feed of raw hourly measurements for a time window, ordered by (observed_at, dam_id, source_id) and keyset-paginated. Built for sync/ingest clients that want every dam at once rather than one series at a time. Returns measured values only; synthetic seed rows are never included.',
+      'Cross-dam feed of raw hourly measurements for a time window, ordered by (observed_at, dam_id, source_id) and keyset-paginated. Built for sync/ingest clients that want every dam at once rather than one series at a time. Returns measured values only.',
     endpoint: `${SITE_URL}/api/v1/observations`,
     method: 'GET',
     inputs: [
