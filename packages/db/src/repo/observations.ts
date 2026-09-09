@@ -153,12 +153,25 @@ export interface FindWatershedSeriesOptions {
   excludeSynthetic?: boolean;
 }
 
-// Aggregate the watershed's storage by summing latest-bucket volumes across
-// all dams that have observations in that bucket. Per-dam volumes can have
-// gaps so we use last() at the bucket level rather than avg() to avoid
-// double-counting partial observations.
+/**
+ * How far before `from` the hourly aggregate scans. `locf()` can only carry a
+ * value forward from a row it has seen, so without a run-up the first buckets
+ * omit every dam whose last report predates the window — the same cohort dip
+ * the carry-forward exists to remove. 48 h covers the hourly and daily feed
+ * cadences; a dam silent for longer than that stays out of the series, which
+ * is the honest outcome.
+ */
+const HOURLY_LOOKBACK_MS = 48 * 60 * 60 * 1000;
+
+// Aggregate the watershed's storage by summing per-dam bucket volumes. Dams in
+// one watershed don't share a reporting cadence, so summing only the dams that
+// posted inside each hour made the total jump by whole dams — 信濃川 alternated
+// between 13.5M and 4.3M m³, and every watershed's last bucket (the in-progress
+// hour) collapsed to whichever dams had already posted. Gapfill + locf carry
+// each dam's last known value forward so every bucket sums the same cohort.
 async function findWatershedSeriesHourly(opts: FindWatershedSeriesOptions): Promise<SeriesPoint[]> {
   const excludeSynthetic = opts.excludeSynthetic === true;
+  const scanFrom = new Date(opts.from.valueOf() - HOURLY_LOOKBACK_MS);
   return sql<SeriesPoint[]>`
     WITH ds AS (SELECT id FROM dams WHERE watershed_id = ${opts.watershedId}),
     -- One source per dam. A watershed's dams routinely report under different
@@ -176,7 +189,7 @@ async function findWatershedSeriesHourly(opts: FindWatershedSeriesOptions): Prom
       FROM observations o
       JOIN ds ON ds.id = o.dam_id
       LEFT JOIN source_priorities sp ON sp.source_id = o.source_id AND sp.active
-      WHERE o.observed_at >= ${opts.from}
+      WHERE o.observed_at >= ${scanFrom}
         AND o.observed_at <  ${opts.to}
       ORDER BY o.dam_id,
                (o.source_id = 'synthetic'),
@@ -186,14 +199,15 @@ async function findWatershedSeriesHourly(opts: FindWatershedSeriesOptions): Prom
     ),
     bucketed AS (
       SELECT
-        time_bucket('1 hour', o.observed_at) AS bucket,
+        time_bucket_gapfill('1 hour', o.observed_at,
+                            start => ${scanFrom}, finish => ${opts.to}) AS bucket,
         o.dam_id,
-        last(o.storage_volume_m3, o.observed_at) AS volume,
-        last(o.storage_rate, o.observed_at)      AS rate
+        locf(last(o.storage_volume_m3, o.observed_at)) AS volume,
+        locf(last(o.storage_rate, o.observed_at))      AS rate
       FROM observations o
       JOIN ds ON ds.id = o.dam_id
       LEFT JOIN pref ON pref.dam_id = o.dam_id
-      WHERE o.observed_at >= ${opts.from}
+      WHERE o.observed_at >= ${scanFrom}
         AND o.observed_at <  ${opts.to}
         AND (${excludeSynthetic}::boolean OR o.source_id = pref.source_id)
         AND (NOT ${excludeSynthetic}::boolean OR o.source_id <> 'synthetic')
@@ -205,6 +219,9 @@ async function findWatershedSeriesHourly(opts: FindWatershedSeriesOptions): Prom
            0::SMALLINT          AS "qualityFlag",
            'aggregate'          AS "sourceId"
     FROM bucketed
+    -- Drop the run-up buckets. Snapped to the hour so a mid-hour "from"
+    -- still keeps its own (now carry-forward-complete) bucket.
+    WHERE bucket >= time_bucket('1 hour', ${opts.from}::timestamptz)
     GROUP BY bucket
     ORDER BY bucket
   `;
