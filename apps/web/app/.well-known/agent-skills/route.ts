@@ -76,7 +76,7 @@ const SKILLS: Skill[] = [
     id: 'list_observations',
     name: 'List observations across all dams',
     description:
-      'Cross-dam feed of raw hourly measurements for a time window, ordered by (observed_at, dam_id, source_id) and keyset-paginated. Built for sync/ingest clients that want every dam at once rather than one series at a time. Synthetic seed rows are excluded unless include_synthetic is set.',
+      'Cross-dam feed of raw hourly measurements for a time window, ordered by (observed_at, dam_id, source_id) and keyset-paginated. Built for sync/ingest clients that want every dam at once rather than one series at a time. Returns measured values only; synthetic seed rows are never included.',
     endpoint: `${SITE_URL}/api/v1/observations`,
     method: 'GET',
     inputs: [
@@ -93,11 +93,6 @@ const SKILLS: Skill[] = [
         description: 'Opaque pagination cursor — follow _links.next rather than building it',
       },
       { name: 'pageSize', in: 'query', description: '1-1000, default 100' },
-      {
-        name: 'include_synthetic',
-        in: 'query',
-        description: "'1' to include synthetic seed rows (excluded by default)",
-      },
     ],
     output_format: 'application/hal+json',
     example_url: `${SITE_URL}/api/v1/observations?from=2026-05-01T00:00:00Z&to=2026-05-02T00:00:00Z`,

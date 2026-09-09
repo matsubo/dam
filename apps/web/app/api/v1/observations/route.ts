@@ -22,8 +22,6 @@ const Query = z.object({
     .string()
     .regex(/^[0-9]+$/)
     .optional(),
-  /** '1' / 'true' adds the synthetic seed rows this feed drops by default. */
-  include_synthetic: z.enum(['0', '1', 'true', 'false']).optional(),
 });
 
 function item(row: ObservationRow): Record<string, unknown> {
@@ -76,14 +74,7 @@ export async function GET(req: Request): Promise<Response> {
     const after = parsed.data.cursor ? decodeObservationCursor(parsed.data.cursor) : null;
     if (parsed.data.cursor && after === null) throw new HttpError(400, 'Invalid cursor');
 
-    const page = await findObservationsPage({
-      from,
-      to,
-      pageSize,
-      after,
-      includeSynthetic:
-        parsed.data.include_synthetic === '1' || parsed.data.include_synthetic === 'true',
-    });
+    const page = await findObservationsPage({ from, to, pageSize, after });
 
     const nextCursor = page.nextCursor ? encodeObservationCursor(page.nextCursor) : null;
     const self = url.pathname + url.search;

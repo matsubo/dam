@@ -121,15 +121,16 @@ describe('GET /api/v1/observations', () => {
     expect(href).toContain('pageSize=2');
   });
 
-  test('excludes synthetic rows unless include_synthetic is set', async () => {
+  test('never returns synthetic rows, even when asked for them', async () => {
     const measured = await (await GET(req(`?from=${FROM}&to=${TO}`))).json();
     expect(measured.items.some((i: { sourceId: string }) => i.sourceId === 'synthetic')).toBe(
       false,
     );
 
-    const all = await (await GET(req(`?from=${FROM}&to=${TO}&include_synthetic=1`))).json();
-    expect(all.count).toBe(7);
-    expect(all.items.some((i: { sourceId: string }) => i.sourceId === 'synthetic')).toBe(true);
+    // The old opt-in is gone: an unknown query param is ignored, not honoured.
+    const asked = await (await GET(req(`?from=${FROM}&to=${TO}&include_synthetic=1`))).json();
+    expect(asked.count).toBe(6);
+    expect(asked.items.some((i: { sourceId: string }) => i.sourceId === 'synthetic')).toBe(false);
   });
 
   test('400 on missing, malformed or out-of-range parameters', async () => {

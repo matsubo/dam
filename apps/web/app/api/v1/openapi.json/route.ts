@@ -111,14 +111,6 @@ const components = {
         '`1` / `true` を指定すると、シード値 (`source_id = "synthetic"`) を除外し、複数の実測ソース (例: `tokyo-waterworks` + `jwa-junpo`) を同時に返します。`hourly` バケット時のみ有効。',
       schema: { type: 'string', enum: ['0', '1', 'true', 'false'] },
     },
-    IncludeSynthetic: {
-      in: 'query',
-      name: 'include_synthetic',
-      required: false,
-      description:
-        '`1` / `true` を指定すると、シード値 (`source_id = "synthetic"`) も含めて返します。既定は実測値のみ。',
-      schema: { type: 'string', enum: ['0', '1', 'true', 'false'] },
-    },
     ObservationCursor: {
       in: 'query',
       name: 'cursor',
@@ -800,13 +792,12 @@ const paths = {
       summary: 'ダム横断の計測値フィード',
       tags: ['observations'],
       description:
-        '全ダムの生の観測値 (1 時間粒度) を `from`〜`to` のウィンドウで返します。ダムを指定せずに取り込みたい同期クライアント向け。`(observed_at, dam_id, source_id)` 昇順で、keyset カーソルによりページングします。シード値 (`source_id = "synthetic"`) は既定で除外されます。単一ダムの時系列やグラフ用途、集計バケット (`daily` / `monthly`)、CSV が必要な場合は `/api/v1/dams/{slug}/observations` を使ってください。\n\n30 日より古いデータは TimescaleDB の圧縮チャンクに載るため、1 ページの取得コストは `pageSize` ではなく「カーソル位置から現在の 14 日チャンク末尾まで」の行数に比例します (それより後のチャンクは走査されません)。過去データを大量に取り込む場合は `pageSize` を大きく (1000) 取るほど総コストが下がります。',
+        '全ダムの生の観測値 (1 時間粒度) を `from`〜`to` のウィンドウで返します。ダムを指定せずに取り込みたい同期クライアント向け。`(observed_at, dam_id, source_id)` 昇順で、keyset カーソルによりページングします。返すのは実測値のみです (シード値 `source_id = "synthetic"` は常に除外)。単一ダムの時系列やグラフ用途、集計バケット (`daily` / `monthly`)、CSV が必要な場合は `/api/v1/dams/{slug}/observations` を使ってください。\n\n30 日より古いデータは TimescaleDB の圧縮チャンクに載るため、1 ページの取得コストは `pageSize` ではなく「カーソル位置から現在の 14 日チャンク末尾まで」の行数に比例します (それより後のチャンクは走査されません)。過去データを大量に取り込む場合は `pageSize` を大きく (1000) 取るほど総コストが下がります。',
       parameters: [
         { $ref: '#/components/parameters/From' },
         { $ref: '#/components/parameters/To' },
         { $ref: '#/components/parameters/ObservationCursor' },
         { $ref: '#/components/parameters/ObservationPageSize' },
-        { $ref: '#/components/parameters/IncludeSynthetic' },
       ],
       responses: {
         '200': {

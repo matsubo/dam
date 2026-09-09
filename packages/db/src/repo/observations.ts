@@ -267,13 +267,6 @@ export interface FindObservationsPageOptions {
   pageSize: number;
   /** Position from the previous page; null starts at `from`. */
   after?: ObservationCursor | null;
-  /**
-   * Synthetic seed rows are excluded by default — the feed is a measured-value
-   * feed, and `source_priorities` pins `synthetic` to the top for dams that
-   * have no upstream yet, so including it silently would hand callers
-   * placeholder numbers as if they were measurements.
-   */
-  includeSynthetic?: boolean;
 }
 
 export interface ObservationsPage {
@@ -284,6 +277,12 @@ export interface ObservationsPage {
 /**
  * Cross-dam raw observation feed, ordered by `(observed_at, dam_id, source_id)`
  * and paged on that same tuple.
+ *
+ * Synthetic seed rows are dropped unconditionally and there is no opt-in:
+ * production holds none (verified 2026-09-09), and `seed_synthetic_observations.ts`
+ * only ever runs behind an explicit BOOTSTRAP_SEED_SYNTHETIC=1 on an empty
+ * table. The predicate stays so a fresh bring-up that does seed can't leak
+ * placeholder numbers into a feed whose whole contract is "measured values".
  *
  * Paging cost, measured against compressed chunks (0014 compresses anything
  * older than 30 days, `segmentby = dam_id`): ChunkAppend stops at the first
@@ -297,7 +296,6 @@ export async function findObservationsPage(
 ): Promise<ObservationsPage> {
   const limit = Math.max(1, Math.min(1000, opts.pageSize));
   const after = opts.after ?? null;
-  const includeSynthetic = opts.includeSynthetic === true;
   // Advancing the lower bound to the cursor's timestamp keeps TimescaleDB's
   // chunk exclusion in play: a row-constructor comparison alone doesn't prune
   // the 14-day chunks already behind us.
@@ -323,7 +321,7 @@ export async function findObservationsPage(
     JOIN dams d ON d.id = o.dam_id
     WHERE o.observed_at >= ${from}
       AND o.observed_at <  ${opts.to}
-      AND (${includeSynthetic}::boolean OR o.source_id <> 'synthetic')
+      AND o.source_id <> 'synthetic'
       AND (${afterAt}::timestamptz IS NULL
            OR (o.observed_at, o.dam_id, o.source_id)
               > (${afterAt}::timestamptz, ${afterDamId}::bigint, ${afterSourceId}::text))
