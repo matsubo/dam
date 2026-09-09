@@ -154,7 +154,10 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
     universe.push({
       externalId: m.chikugoName,
       name: m.chikugoName,
-      prefCode: m.prefCodes[0] ?? null,
+      // A multi-code entry (下筌 is on the 熊本/大分 border) is a
+      // LIKE-narrowing hint, not an attribution, and pref_code is
+      // COALESCE-sticky once written.
+      prefCode: m.prefCodes.length === 1 ? (m.prefCodes[0] ?? null) : null,
       resolvedDamId: r?.id ?? null,
     });
     if (!r) {
