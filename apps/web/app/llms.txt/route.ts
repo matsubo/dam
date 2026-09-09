@@ -79,6 +79,8 @@ and water agencies rather than exposed by a single national API. Developers
 through GitHub Sponsors.
 
 - Recruitment page: ${SITE_URL}/contribute
+- Applications and questions both go through Discord (below) — there is no
+  form and no email address
 - Live coverage figures: ${SITE_URL}/coverage
 - Sponsor: https://github.com/sponsors/matsubo
 
