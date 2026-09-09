@@ -873,7 +873,10 @@ const paths = {
       summary: '水系合計の貯水量履歴 (ダム横断 SUM)',
       tags: ['observations'],
       description:
-        '水系内のダムの `storage_volume_m3` をバケット時刻ごとに合算した時系列を返します。利水容量を持つダム subset でのみ集計するため、貯水率は信頼できます。',
+        '水系内のダムの `storage_volume_m3` をバケット時刻ごとに合算した時系列を返します。利水容量を持つダム subset でのみ集計するため、貯水率は信頼できます。\n\n' +
+        '`hourly` では、ソースはダムごとに優先度順で選ばれます (水系内のダムは別々のフィードで配信されるため)。' +
+        'また各ダムの最終観測値を次の観測まで持ち越すため、報告間隔が異なるダムが混在してもバケットごとの集計対象が変わりません。' +
+        'この持ち越しにより `source` は常に `null` です (水系合計に単一のソースは存在しない)。',
       parameters: [
         { $ref: '#/components/parameters/WatershedSlugPath' },
         { $ref: '#/components/parameters/From' },

@@ -248,3 +248,15 @@ test('hourly aggregate fills rows that exist with no volume', async () => {
     Array.from({ length: WINDOW_HOURS }, () => 6_000_000),
   );
 });
+
+// Gapfill over an empty input must stay empty rather than erroring — otherwise
+// a watershed with nothing in the window renders a 500 instead of a blank chart.
+test('hourly aggregate returns an empty series when nothing was observed', async () => {
+  const { status, body } = await fetchSeries(LEAD_SLUG, {
+    from: '2026-01-01T00:00:00Z',
+    to: '2026-01-02T00:00:00Z',
+  });
+  expect(status).toBe(200);
+  expect(body.series).toEqual([]);
+  expect(body.count).toBe(0);
+});
