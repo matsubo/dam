@@ -1,0 +1,116 @@
+@charset "utf-8";
+
+#gHeader {
+  width: 1000px;
+  margin: 0 auto;
+  position: relative;
+  height: 40px;
+  zoom: 1;
+  position: relative;
+  top: 0px;
+  left: 0px;
+}
+
+#gHeader:after {
+  content: ".";
+  display: block;
+  height: 0px;
+  clear: both;
+  visibility: hidden;
+}
+
+#logo {
+  float: left;
+  position: relative;
+  top: 0px;
+  left: 0px;
+}
+
+#yougo {
+  width: 65.53px;
+  float: left;
+  position: relative;
+  top: 22px;
+  left: 415px;
+}
+
+#link {
+  width: 81.82px;
+  float: left;
+  position: relative;
+  top: 22px;
+  left: 422px;
+}
+
+#relord {
+  float: left;
+  position: relative;
+  top: 14px;
+  left: 437px;
+}
+
+p.headlinktitle {
+  text-align: right;
+}
+img.headlinktitle {
+  float: right;
+  position: relative;
+  top: -1px;
+  right: -3px;
+  /*background-color:#eee;*/
+}
+
+/* Size setting of the menu screen */
+.menuTable {
+  width: 1000px;
+  height: 15px;
+}
+
+/* System name and logo */
+.mark {
+  float: left;
+}
+.logo {
+  float: left;
+  position: relative;
+  top: 9px;
+}
+.comment {
+  float: left;
+  position: relative;
+  top: 35px;
+  left: 150px;
+  font-size: 9pt;
+}
+img.mark {
+  width: 34px;
+  height: 40px;
+  position: relative;
+  top: 10px;
+  left: 10px;
+}
+img.logo01 {
+  width: 72px;
+  height: 22px;
+  position: relative;
+  top: 10px;
+  left: 15px;
+  background-color: #bbb;
+}
+img.logo02 {
+  width: 192px;
+  height: 22px;
+  position: relative;
+  top: 10px;
+  left: 25px;
+  background-color: #eee;
+}
+
+/*  */
+img {
+  border-top-width: 0px;
+  border-left-width: 0px;
+  border-bottom-width: 0px;
+  border-right-width: 0px;
+  vertical-align: bottom;
+}

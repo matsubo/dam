@@ -1,0 +1,745 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - heading "独立行政法人 水資源機構 木津川ダム総合管理所" [level=1] [ref=e5]:
+        - link "独立行政法人 水資源機構 木津川ダム総合管理所" [ref=e6] [cursor=pointer]:
+          - /url: index.htm
+      - generic [ref=e7]:
+        - generic [ref=e8]:
+          - list:
+            - listitem [ref=e9]:
+              - link "木津川ダム総合管理所トップ" [ref=e10] [cursor=pointer]:
+                - /url: index.htm
+            - listitem [ref=e11]:
+              - link "お問い合わせ" [ref=e12] [cursor=pointer]:
+                - /url: information/contact.htm
+            - listitem [ref=e13]:
+              - link "サイトマップ" [ref=e14] [cursor=pointer]:
+                - /url: takayama/sitemap/index.htm
+        - generic:
+          - generic [ref=e15]:
+            - term [ref=e16]: 文字の大きさ
+            - definition [ref=e17]:
+              - link "小" [ref=e18] [cursor=pointer]:
+                - /url: "#container"
+            - definition [ref=e19]:
+              - link "中" [ref=e20] [cursor=pointer]:
+                - /url: "#container"
+            - definition [ref=e21]:
+              - link "大" [ref=e22] [cursor=pointer]:
+                - /url: "#container"
+          - generic [ref=e24]:
+            - textbox [ref=e26]
+            - button "検索" [ref=e27] [cursor=pointer]
+    - generic [ref=e28]:
+      - generic [ref=e29]:
+        - link "HOME" [ref=e30] [cursor=pointer]:
+          - /url: index.htm
+        - text: "> 高山ダム管理所"
+      - link "このページを印刷する" [ref=e32] [cursor=pointer]:
+        - /url: javascript:window.print();
+    - generic [ref=e33]:
+      - list [ref=e34]:
+        - listitem [ref=e35]:
+          - link "木津川ダム総合管理所" [ref=e36] [cursor=pointer]:
+            - /url: index.htm
+        - listitem [ref=e37]:
+          - link "高山ダム" [ref=e38] [cursor=pointer]:
+            - /url: takayama.htm
+        - listitem [ref=e39]:
+          - link "青蓮寺ダム" [ref=e40] [cursor=pointer]:
+            - /url: syourenji.htm
+        - listitem [ref=e41]:
+          - link "室生ダム" [ref=e42] [cursor=pointer]:
+            - /url: muro.htm
+        - listitem [ref=e43]:
+          - link "布目ダム" [ref=e44] [cursor=pointer]:
+            - /url: nunome.htm
+        - listitem [ref=e45]:
+          - link "比奈知ダム" [ref=e46] [cursor=pointer]:
+            - /url: hinati.htm
+        - listitem [ref=e47]:
+          - link "川上ダム" [ref=e48] [cursor=pointer]:
+            - /url: kawakami.htm
+      - heading "高山ダム管理所" [level=2] [ref=e49]:
+        - link "高山ダム管理所" [ref=e50] [cursor=pointer]:
+          - /url: takayama.htm
+      - paragraph [ref=e51]:
+        - text: 〒619-1421 京都府相楽郡南山城村田山字ツルギ43
+        - text: 電話番号:(0743)-94-0201 FAX：(0743)-94-0531
+    - generic [ref=e52]:
+      - generic [ref=e54]:
+        - generic [ref=e56]:
+          - generic [ref=e57]:
+            - img "2019年は高山ダム50周年！" [ref=e58]
+            - paragraph [ref=e60]: 2019年は高山ダム50周年！
+          - generic [ref=e61]:
+            - img "月ヶ瀬橋と紅葉" [ref=e62]
+            - paragraph [ref=e64]: 月ヶ瀬橋と紅葉
+          - generic [ref=e65]:
+            - img "高山ダムの冬景色" [ref=e66]
+            - paragraph [ref=e68]: 高山ダムの冬景色
+          - generic [ref=e69]:
+            - img "高山ダムの放流" [ref=e70]
+            - paragraph [ref=e72]: 高山ダムの放流
+          - generic [ref=e73]:
+            - img "八幡橋と桜" [ref=e74]
+            - paragraph [ref=e76]: 八幡橋と桜
+        - generic [ref=e77]:
+          - link "next" [ref=e78] [cursor=pointer]:
+            - /url: javascript:;
+          - link "prev" [ref=e79] [cursor=pointer]:
+            - /url: javascript:;
+      - generic [ref=e80]:
+        - heading "重要なお知らせ" [level=2] [ref=e81]
+        - iframe [ref=e82]: <div align="left">この部分はインラインフレームを使用しています。 </div>:
+          - generic [active] [ref=f19e1]:
+            - text: 【川上ダム近辺におけるクマの目撃情報】
+            - text: 川上ダム近隣にてクマの目撃情報がありました。 川上ダムにお越しの際は、クマの出現にくれぐれもご注意ください。
+            - link "ツキノワグマ出没にご注意ください！ | 三重県伊賀市" [ref=f19e2] [cursor=pointer]:
+              - /url: " https://www.city.iga.lg.jp/0000013145.html "
+      - generic [ref=e83]:
+        - heading "高山ダムからのお知らせ" [level=2] [ref=e84]
+        - paragraph [ref=e85]:
+          - link "高山ダムからのお知らせ 一覧を見る" [ref=e86] [cursor=pointer]:
+            - /url: takayama/news/index.htm
+        - list [ref=e87]:
+          - listitem [ref=e88]:
+            - paragraph [ref=e89]: 令和8年3月12日
+            - paragraph [ref=e90]:
+              - link "曝気設備の運用を開始（3月12日）" [ref=e91] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20260312
+          - listitem [ref=e92]:
+            - paragraph [ref=e93]: 令和8年1月6日
+            - paragraph [ref=e94]:
+              - link "高山ダム通行規制のお知らせ（1月6日）" [ref=e95] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20260106
+          - listitem [ref=e96]:
+            - paragraph [ref=e97]: 令和7年12月23日
+            - paragraph [ref=e98]:
+              - link "高山ダム伐採木無料配布終了のお知らせ（12月23日）" [ref=e99] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20251223
+          - listitem [ref=e100]:
+            - paragraph [ref=e101]: 令和7年12月11日
+            - paragraph [ref=e102]:
+              - link "高山ダム伐採木無料配布のお知らせ（12月11日）" [ref=e103] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20251211
+          - listitem [ref=e104]:
+            - paragraph [ref=e105]: 令和7年11月6日
+            - paragraph [ref=e106]:
+              - link "曝気循環設備の運用停止のお知らせ（11月6日）" [ref=e107] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20251106
+          - listitem [ref=e108]:
+            - paragraph [ref=e109]: 令和7年10月21日
+            - paragraph [ref=e110]:
+              - link "高山ダム通行規制のお知らせ（10月21日）" [ref=e111] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20251021
+          - listitem [ref=e112]:
+            - paragraph [ref=e113]: 令和7年9月25日
+            - paragraph [ref=e114]:
+              - link "アオコの発生状況について（9月25日）" [ref=e115] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20250925
+          - listitem [ref=e116]:
+            - paragraph [ref=e117]: 令和7年9月2日
+            - paragraph [ref=e118]:
+              - link "高山ダム流木処理道駐車場利用規制のお知らせ（9月2日）" [ref=e119] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20250627
+          - listitem [ref=e120]:
+            - paragraph [ref=e121]: 令和7年8月7日
+            - paragraph [ref=e122]:
+              - link "高山ダム湖進入路利用規制日程変更のお知らせ（8月7日）" [ref=e123] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20250807
+                - text: 高山ダム湖進入路利用規制
+                - generic [ref=e124]: 日程変更のお知らせ
+                - text: （8月7日）
+          - listitem [ref=e125]:
+            - paragraph [ref=e126]: 令和7年6月27日
+            - paragraph [ref=e127]:
+              - link "高山ダム湖進入路利用規制のお知らせ（6月27日）" [ref=e128] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20250627
+          - listitem [ref=e129]:
+            - paragraph [ref=e130]: 令和7年6月06日
+            - paragraph [ref=e131]:
+              - link "高山ダム全面通行止めのお知らせ（6月06日）" [ref=e132] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20250606
+          - listitem [ref=e133]:
+            - paragraph [ref=e134]: 令和7年5月29日
+            - paragraph [ref=e135]:
+              - link "高山ダム通行規制のお知らせ（5月29日）" [ref=e136] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20250529
+          - listitem [ref=e137]:
+            - paragraph [ref=e138]: 令和7年3月31日
+            - paragraph [ref=e139]:
+              - link "曝気設備の運用を開始（3月31日）" [ref=e140] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20250331
+          - listitem [ref=e141]:
+            - paragraph [ref=e142]: 令和7年1月08日
+            - paragraph [ref=e143]:
+              - link "令和７年度からの現場組織再編のお知らせ" [ref=e144] [cursor=pointer]:
+                - /url: https://www.water.go.jp/honsya/honsya/news/pdf/20250107soshikisaihen.pdf
+          - listitem [ref=e145]:
+            - paragraph [ref=e146]: 令和6年12月23日
+            - paragraph [ref=e147]:
+              - link "高山ダム流木配布終了のお知らせ（12月23日）" [ref=e148] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20200317
+          - listitem [ref=e149]:
+            - paragraph [ref=e150]: 令和6年12月23日
+            - paragraph [ref=e151]:
+              - link "高山ダム通行規制のお知らせ（令和7年1月7日）（令和7年1月22日）" [ref=e152] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20200317
+          - listitem [ref=e153]:
+            - paragraph [ref=e154]: 令和6年11月1日
+            - paragraph [ref=e155]:
+              - link "高山ダム流木配布のお知らせ（11月12日更新）" [ref=e156] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20200317
+          - listitem [ref=e157]:
+            - generic [ref=e159]: 予約受付を終了いたしました。
+          - listitem [ref=e160]:
+            - paragraph [ref=e161]: 令和6年10月24日
+            - paragraph [ref=e162]:
+              - link "高山ダム通行規制のお知らせ（10月24日）" [ref=e163] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20200317
+          - listitem [ref=e164]:
+            - paragraph [ref=e165]: 令和6年10月1日
+            - paragraph [ref=e166]:
+              - link "八幡橋下流進入路の通行止め解除について（10月1日）" [ref=e167] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20200317
+          - listitem [ref=e168]:
+            - paragraph [ref=e169]: 令和6年8月7日
+            - paragraph [ref=e170]:
+              - link "高山ダム土砂運搬のお知らせ（8月7日）" [ref=e171] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20200317
+          - listitem [ref=e172]:
+            - paragraph [ref=e173]: 令和6年6月10日
+            - paragraph [ref=e174]:
+              - link "高山ダム通行規制のお知らせ（6月10日）" [ref=e175] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20200317
+          - listitem [ref=e176]:
+            - paragraph [ref=e177]: 令和6年4月16日
+            - paragraph [ref=e178]:
+              - link "高山ダムフラッシュ放流のお知らせ（4月16日）" [ref=e179] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20200317
+          - listitem [ref=e180]:
+            - paragraph [ref=e181]: 令和5年12月19日
+            - paragraph [ref=e182]:
+              - link "高山ダム伐採木無料配布終了のお知らせ（12月19日）" [ref=e183] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20200317
+          - listitem [ref=e184]:
+            - paragraph [ref=e185]: 令和5年10月23日
+            - paragraph [ref=e186]:
+              - link "高山ダム伐採木無料配布のお知らせ（10月23日）" [ref=e187] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20200317
+          - listitem [ref=e188]:
+            - paragraph [ref=e189]: 令和5年9月21日
+            - paragraph [ref=e190]:
+              - link "高山ダムで遊漁される方へ（9月21日）" [ref=e191] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20200317
+          - listitem [ref=e192]:
+            - paragraph [ref=e193]: 令和5年9月 6日
+            - paragraph [ref=e194]:
+              - link "高山ダム土砂運搬のお知らせ（9月6日）" [ref=e195] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20200317
+          - listitem [ref=e196]:
+            - paragraph [ref=e197]: 令和5年8月04日
+            - paragraph [ref=e198]:
+              - link "高山ダム下流道路通行止めと迂回ルートのお知らせ（8月04日）" [ref=e199] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20200317
+          - listitem [ref=e200]:
+            - paragraph [ref=e201]: 令和5年4月28日
+            - paragraph [ref=e202]:
+              - link "高山ダム通行規制のお知らせ（4月28日）" [ref=e203] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20200317
+          - listitem [ref=e204]:
+            - paragraph [ref=e205]: 令和5年4月14日
+            - paragraph [ref=e206]:
+              - link "高山ダムフラッシュ放流のお知らせ（4月14日）" [ref=e207] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20200317
+          - listitem [ref=e208]:
+            - paragraph [ref=e209]: 令和5年4月3日
+            - paragraph [ref=e210]:
+              - link "曝気設備の運用を開始（4月3日）" [ref=e211] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20210331
+          - listitem [ref=e212]:
+            - paragraph [ref=e213]: 令和5年2月13日
+            - paragraph [ref=e214]:
+              - link "月ヶ瀬梅渓梅まつりについて（2月13日）" [ref=e215] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20230213
+          - listitem [ref=e216]:
+            - paragraph [ref=e217]: 令和5年1月20日
+            - paragraph [ref=e218]:
+              - link "高山ダム湖公園駐車場制限のお知らせ（1月20日）" [ref=e219] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20230120
+          - listitem [ref=e220]:
+            - paragraph [ref=e221]: 令和5年1月19日
+            - paragraph [ref=e222]:
+              - link "高山ダム管理用道路片側交互通行のお知らせ（1月19日）" [ref=e223] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20230119
+          - listitem [ref=e224]:
+            - paragraph [ref=e225]: 令和4年10月12日
+            - paragraph [ref=e226]:
+              - link "曝気設備の運用を停止（10月12日）" [ref=e227] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20221012
+          - listitem [ref=e228]:
+            - paragraph [ref=e229]: 令和4年8月8日
+            - paragraph [ref=e230]:
+              - link "慰霊碑の清掃及び献花（8月8日）" [ref=e231] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20220808
+          - listitem [ref=e232]:
+            - paragraph [ref=e233]: 令和4年5月10日
+            - paragraph [ref=e234]:
+              - link "川の水位上昇にご注意ください（5月12日）" [ref=e235] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20220510
+          - listitem [ref=e236]:
+            - paragraph [ref=e237]: 令和4年3月31日
+            - paragraph [ref=e238]:
+              - link "曝気設備の運用を開始（3月31日）" [ref=e239] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20220331
+          - listitem [ref=e240]:
+            - paragraph [ref=e241]: 令和4年3月22日
+            - paragraph [ref=e242]:
+              - link "【再開】ダムカードの配布、鍵貸出、施設見学について（3月22日）" [ref=e243] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20220322
+          - listitem [ref=e244]:
+            - paragraph [ref=e245]: 令和4年3月14日
+            - paragraph [ref=e246]:
+              - link "高山ダム管理用道路の通行止め解除のお知らせ（3月14日）" [ref=e247] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20220314
+          - listitem [ref=e248]:
+            - paragraph [ref=e249]: 令和4年3月7日
+            - paragraph [ref=e250]:
+              - link "高山ダム管理用道路の通行止めについて（3月7日）" [ref=e251] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20220307
+          - listitem [ref=e252]:
+            - paragraph [ref=e253]: 令和4年2月22日
+            - paragraph [ref=e254]:
+              - link "月ヶ瀬梅渓梅まつりについて（2月22日）" [ref=e255] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20220222
+          - listitem [ref=e256]:
+            - paragraph [ref=e257]: 令和4年2月15日
+            - paragraph [ref=e258]:
+              - link "高山ダム管理用道路の通行規制について（2月15日）" [ref=e259] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20220215
+          - listitem [ref=e260]:
+            - paragraph [ref=e261]: 令和4年1月27日
+            - paragraph [ref=e262]:
+              - link "【休止】ダムカードの配布、鍵貸出、施設見学について（1月27日）" [ref=e263] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20220127
+          - listitem [ref=e264]:
+            - paragraph [ref=e265]: 令和4年1月19日
+            - paragraph [ref=e266]:
+              - link "[2021年]流木玉切り(薪)無料配布受付終了（1月19日）のお知らせ" [ref=e267] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20220119
+          - listitem [ref=e268]:
+            - paragraph [ref=e269]: 令和3年12月7日
+            - paragraph [ref=e270]:
+              - link "[2021年]流木玉切り(薪)無料配布受付開始（12月8日）のお知らせ" [ref=e271] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20211208
+          - listitem [ref=e272]:
+            - paragraph [ref=e273]: 令和3年11月10日
+            - paragraph [ref=e274]:
+              - link "高山ダムの貯水池運用について（11月10日）" [ref=e275] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20211110
+          - listitem [ref=e276]:
+            - paragraph [ref=e277]: 令和3年11月1日
+            - paragraph [ref=e278]:
+              - link "曝気設備の運用を停止（11月1日）" [ref=e279] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20211101
+          - listitem [ref=e280]:
+            - paragraph [ref=e281]: 令和3年10月28日
+            - paragraph [ref=e282]:
+              - link "みなみやましろカフェセブンフェスタ開催について（10月28日）" [ref=e283] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20211128
+          - listitem [ref=e284]:
+            - paragraph [ref=e285]: 令和3年10月6日
+            - paragraph [ref=e286]:
+              - link "高山ダム湖内の測量作業の案内について（10月6日）" [ref=e287] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20211006
+          - listitem [ref=e288]:
+            - paragraph [ref=e289]: 令和3年10月1日
+            - paragraph [ref=e290]:
+              - link "【再開】ダムカードの配布、鍵貸出、施設見学について（10月1日）" [ref=e291] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20211001
+          - listitem [ref=e292]:
+            - paragraph [ref=e293]: 令和3年8月4日
+            - paragraph [ref=e294]:
+              - link "慰霊碑の清掃及び献花（8月4日）" [ref=e295] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20210804
+          - listitem [ref=e296]:
+            - paragraph [ref=e297]: 令和3年8月2日
+            - paragraph [ref=e298]:
+              - link "【休止】ダムカードの配布、鍵貸出、施設見学について（8月2日）" [ref=e299] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20210802
+          - listitem [ref=e300]:
+            - paragraph [ref=e301]: 令和3年8月6日
+            - paragraph [ref=e302]:
+              - link "水難救助訓練（流木処理場前駐車場及び進入路の使用禁止）のお知らせについて（8月6日）" [ref=e303] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20210730
+          - listitem [ref=e304]:
+            - paragraph [ref=e305]: 令和3年7月12日
+            - paragraph [ref=e306]:
+              - link "【再開】ダムカードの配布、鍵貸出、施設見学について（7月12日）" [ref=e307] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20210712
+          - listitem [ref=e308]:
+            - paragraph [ref=e309]: 令和3年4月26日
+            - paragraph [ref=e310]:
+              - link "【休止】ダムカードの配布、鍵貸出、施設見学について（4月26日）" [ref=e311] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20210426
+          - listitem [ref=e312]:
+            - paragraph [ref=e313]: 令和3年4月22日
+            - paragraph [ref=e314]:
+              - link "高山ダムのフラッシュ放流の記録（令和3年4月14日実施）" [ref=e315] [cursor=pointer]:
+                - /url: news/pdf/R3/20210422_flashdischargeT.pdf
+          - listitem [ref=e316]:
+            - paragraph [ref=e317]: 令和3年3月31日
+            - paragraph [ref=e318]:
+              - link "曝気設備の運用を開始（3月31日）" [ref=e319] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20210331
+          - listitem [ref=e320]:
+            - paragraph [ref=e321]: 令和3年3月08日
+            - paragraph [ref=e322]:
+              - link "【再開】ダムカードの配布、鍵の貸出、施設見学について（3月8日）" [ref=e323] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20210308
+          - listitem [ref=e324]:
+            - paragraph [ref=e325]: 令和3年2月2日
+            - paragraph [ref=e326]:
+              - link "通船ゲート修理に伴うダム左岸駐車スペースの占有について（2月4日、2月5日：9時～17時）" [ref=e327] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20210202
+          - listitem [ref=e328]:
+            - paragraph [ref=e329]: 令和3年1月15日
+            - paragraph [ref=e330]:
+              - link "【休止】ダムカードの配布、鍵の貸出、施設見学について（1月15日）" [ref=e331] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20210115
+          - listitem [ref=e332]:
+            - paragraph [ref=e333]: 令和2年12月7日
+            - paragraph [ref=e334]:
+              - link "[2020年]流木玉切り(薪)無料配布受付終了（12月7日）のお知らせ" [ref=e335] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20201207
+          - listitem [ref=e336]:
+            - paragraph [ref=e337]: 令和2年11月26日
+            - paragraph [ref=e338]:
+              - link "【改訂】流木等を受け取る際の注意事項について（10月27日～）" [ref=e339] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20201126
+          - listitem [ref=e340]:
+            - paragraph [ref=e341]: 令和2年11月12日
+            - paragraph [ref=e342]:
+              - link "【再開日程変更】ダム湖流木処理場進入路の鍵の貸出について（11月22日～）" [ref=e343] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20201112_2
+          - listitem [ref=e344]:
+            - paragraph [ref=e345]: 令和2年11月12日
+            - paragraph [ref=e346]:
+              - link "ダム左岸直上にある流木処理道の通行止について（10月12日～11月21日）(期間再延長)" [ref=e347] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20201112
+          - listitem [ref=e348]:
+            - paragraph [ref=e349]: 令和2年10月28日
+            - paragraph [ref=e350]:
+              - link "【再開】ダム湖流木処理場進入路の鍵の貸出について（11月16日～）" [ref=e351] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20201028_2
+          - listitem [ref=e352]:
+            - paragraph [ref=e353]: 令和2年10月28日
+            - paragraph [ref=e354]:
+              - link "ダム左岸直上にある流木処理道の通行止について（10月12日～11月15日）(期間延長)" [ref=e355] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20201028
+          - listitem [ref=e356]:
+            - paragraph [ref=e357]: 令和2年10月27日
+            - paragraph [ref=e358]:
+              - link "高山ダム50周年記念ダムカード配布の再開について（11月1日～3月31日）" [ref=e359] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20201027_2
+          - listitem [ref=e360]:
+            - paragraph [ref=e361]: 令和2年10月27日
+            - paragraph [ref=e362]:
+              - link "[2020年]流木玉切り(薪)の無料配布を開始します（10月27日～）" [ref=e363] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20201027
+          - listitem [ref=e364]:
+            - paragraph [ref=e365]: 令和2年10月8日
+            - paragraph [ref=e366]:
+              - link "ダム左岸直上にある流木処理道の通行止について（10月12日～10月30日）" [ref=e367] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20201008
+          - listitem [ref=e368]:
+            - paragraph [ref=e369]: 令和2年8月5日
+            - paragraph [ref=e370]:
+              - link "慰霊碑の清掃及び献花（8月5日）" [ref=e371] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20200805
+          - listitem [ref=e372]:
+            - paragraph [ref=e373]: 令和2年4月20日
+            - paragraph [ref=e374]:
+              - link "【休止】ダム湖流木処理場進入路の鍵の貸出について(4月20日～)" [ref=e375] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20200420
+          - listitem [ref=e376]:
+            - paragraph [ref=e377]: 令和2年4月6日
+            - paragraph [ref=e378]:
+              - link "【中止】高山ダムフラッシュ放流のお知らせ（4月7日）" [ref=e379] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20200406
+          - listitem [ref=e380]:
+            - paragraph [ref=e381]: 令和2年3月31日
+            - paragraph [ref=e382]:
+              - link "曝気設備の運用を開始しました（3月31日）" [ref=e383] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20200331
+          - listitem [ref=e384]:
+            - paragraph [ref=e385]: 令和2年3月19日
+            - paragraph [ref=e386]:
+              - link "高山ダム50周年記念ダムカード配布期間の延長について" [ref=e387] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20200319
+          - listitem [ref=e388]:
+            - paragraph [ref=e389]: 令和2年3月17日
+            - paragraph [ref=e390]:
+              - link "高山ダムフラッシュ放流のお知らせ（4月7日）" [ref=e391] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20200317
+          - listitem [ref=e392]:
+            - paragraph [ref=e393]: 令和2年3月9日
+            - paragraph [ref=e394]:
+              - link "「写真・動画集」に写真を追加しました。" [ref=e395] [cursor=pointer]:
+                - /url: takayama/photo/memory.htm
+          - listitem [ref=e396]:
+            - paragraph [ref=e397]: 令和2年3月6日
+            - paragraph [ref=e398]:
+              - link "高山ダム堤頂道路の通行止め解除のお知らせ（3月6日）" [ref=e399] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20200306
+          - listitem [ref=e400]:
+            - paragraph [ref=e401]: 令和2年2月28日
+            - paragraph [ref=e402]:
+              - link "【休止】ダムカードの配布について（2月28日）" [ref=e403] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20191009
+          - listitem [ref=e404]:
+            - paragraph [ref=e405]: 令和2年2月17日
+            - paragraph [ref=e406]:
+              - link "【高山ダム管理開始50周年記念＿写真集】を「写真・動画集」に追加しました。" [ref=e407] [cursor=pointer]:
+                - /url: takayama/photo/memory.htm
+          - listitem [ref=e408]:
+            - paragraph [ref=e409]: 令和2年2月17日
+            - paragraph [ref=e410]:
+              - link "木津川流域クリーン大作戦（2月16日）活動報告" [ref=e411] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20200217
+          - listitem [ref=e412]:
+            - paragraph [ref=e413]: 令和2年2月10日
+            - paragraph [ref=e414]:
+              - link "ダム左岸直上にある流木処理道の通行止について（2月17日、2月20日）" [ref=e415] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20200210
+          - listitem [ref=e416]:
+            - paragraph [ref=e417]: 令和2年1月27日
+            - paragraph [ref=e418]:
+              - link "高山ダム堤頂道路の通行止めのお知らせ（2月19日～3月23日）" [ref=e419] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20200127
+          - listitem [ref=e420]:
+            - paragraph [ref=e421]: 令和1年12月24日
+            - paragraph [ref=e422]:
+              - link "高山ダム堤頂道路の通行止めのお知らせ（1月9日、1月10日）" [ref=e423] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20191224
+          - listitem [ref=e424]:
+            - paragraph [ref=e425]: 令和1年11月22日
+            - paragraph [ref=e426]:
+              - link "ダム左岸直上にある流木処理道の通行止の延長について（10月22日～11月30日）" [ref=e427] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20191122
+          - listitem [ref=e428]:
+            - paragraph [ref=e429]: 令和1年11月5日
+            - paragraph [ref=e430]:
+              - link "流木玉切り(薪)無料配布受付終了（11月5日）のお知らせ" [ref=e431] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20191105
+          - listitem [ref=e432]:
+            - paragraph [ref=e433]: 令和1年10月28日
+            - paragraph [ref=e434]:
+              - link "高山ダム水源地周辺一斉清掃day（10月26日）開催報告" [ref=e435] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20191028
+          - listitem [ref=e436]:
+            - paragraph [ref=e437]: 令和1年10月18日
+            - paragraph [ref=e438]:
+              - link "ダム左岸直上にある流木処理道の通行止について（10月22日～11月22日）" [ref=e439] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20191018
+          - listitem [ref=e440]:
+            - paragraph [ref=e441]: 令和1年10月9日
+            - paragraph [ref=e442]:
+              - link "高山ダム50周年記念ダムカード配布及び高山ダム堤体内写真展の開催についてのお知らせ（11月23日）" [ref=e443] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20191009
+          - listitem [ref=e444]:
+            - paragraph [ref=e445]: 令和1年6月28日
+            - paragraph [ref=e446]:
+              - link "写真・動画集ページ新設のお知らせ（6月28日）" [ref=e447] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20190628
+          - listitem [ref=e448]:
+            - paragraph [ref=e449]: 令和1年6月14日
+            - paragraph [ref=e450]:
+              - link "[2019年]流木玉切り(薪)の無料配布を開始します" [ref=e451] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20190614
+          - listitem [ref=e452]:
+            - paragraph [ref=e453]: 平成31年4月26日
+            - paragraph [ref=e454]:
+              - link "手作りダムカード配布終了のお知らせ（5月31日）" [ref=e455] [cursor=pointer]:
+                - /url: damcard/index.htm#n20190426
+          - listitem [ref=e456]:
+            - paragraph [ref=e457]: 平成31年4月26日
+            - paragraph [ref=e458]:
+              - link "高山ダムフラッシュ放流のお知らせ（5月8日）" [ref=e459] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20190426
+          - listitem [ref=e460]:
+            - paragraph [ref=e461]: 平成31年4月1日
+            - paragraph [ref=e462]:
+              - link "曝気設備の運用を開始しました" [ref=e463] [cursor=pointer]:
+                - /url: takayama/news/index.htm#n20190401
+      - generic [ref=e464]:
+        - heading "高山ダム周辺イベント情報" [level=2] [ref=e465]
+        - paragraph [ref=e466]:
+          - link "高山ダムイベント情報 一覧を見る" [ref=e467] [cursor=pointer]:
+            - /url: takayama/event/index.htm
+        - list [ref=e468]:
+          - listitem [ref=e469]:
+            - paragraph [ref=e470]: 令和2年9月15日
+            - paragraph [ref=e471]:
+              - link "高山ダムカレー情報を更新しました （梅の郷 月ヶ瀬温泉 お食事処 梅こころ）" [ref=e472] [cursor=pointer]:
+                - /url: takayama/event/index.htm#e20200915
+                - text: 高山ダムカレー情報を更新しました
+                - text: （梅の郷 月ヶ瀬温泉 お食事処 梅こころ）
+    - generic [ref=e474]:
+      - generic [ref=e475]:
+        - heading "高山ダム情報" [level=3] [ref=e476]
+        - list [ref=e477]:
+          - listitem [ref=e478]:
+            - link "防災操作実施状況 （関西支社HPへ）" [ref=e479] [cursor=pointer]:
+              - /url: https://www.water.go.jp/kansai/kansai/html/bousaisousa/bousaisousa.html
+              - text: 防災操作実施状況
+              - text: （関西支社HPへ）
+          - listitem [ref=e480]:
+            - text: ダム情報(関西支社HPへ)
+            - table [ref=e481]:
+              - rowgroup [ref=e482]:
+                - row "水源情報 リアルタイム情報" [ref=e483]:
+                  - cell "水源情報" [ref=e484]:
+                    - link "水源情報" [ref=e485] [cursor=pointer]:
+                      - /url: https://www.water.go.jp/kansai/kansai/html/suigen/suigen.html
+                      - paragraph [ref=e486]: 水源情報
+                  - cell "リアルタイム情報" [ref=e487]:
+                    - link "リアルタイム情報" [ref=e488] [cursor=pointer]:
+                      - /url: https://www.water.go.jp/kansai/kansai/html/suigen/realtime.html
+                      - paragraph [ref=e489]: リアルタイム情報
+          - listitem [ref=e490]:
+            - link "水質調査結果" [ref=e491] [cursor=pointer]:
+              - /url: takayama/water-survey/index.htm
+          - listitem [ref=e492]:
+            - link "ダムからのお願い" [ref=e493] [cursor=pointer]:
+              - /url: takayama/attention/index.htm
+      - generic [ref=e494]:
+        - heading "高山ダムインフォメーション" [level=3] [ref=e495]
+        - list [ref=e496]:
+          - listitem [ref=e497]:
+            - link "アクセス" [ref=e498] [cursor=pointer]:
+              - /url: takayama/access/index.htm
+          - listitem [ref=e499]:
+            - link "ダム湖利用規則・漁業規則" [ref=e500] [cursor=pointer]:
+              - /url: takayama/rule/index.htm
+          - listitem [ref=e501]:
+            - link "ダム周辺案内" [ref=e502] [cursor=pointer]:
+              - /url: takayama/guide/index.htm
+          - listitem [ref=e503]:
+            - link "パンフレット" [ref=e504] [cursor=pointer]:
+              - /url: takayama/pamphlet/index.htm
+          - listitem [ref=e505]:
+            - link "ドローン利用注意" [ref=e506] [cursor=pointer]:
+              - /url: takayama/drone/index.htm
+          - listitem [ref=e507]:
+            - paragraph [ref=e508]:
+              - link "著作権・リンク等について" [ref=e509] [cursor=pointer]:
+                - /url: https://www.water.go.jp/honsya/honsya/policy/copyright/index.html
+      - generic [ref=e510]:
+        - heading "高山ダム資料室" [level=3] [ref=e511]
+        - list [ref=e512]:
+          - listitem [ref=e513]:
+            - link "ダムの概要" [ref=e514] [cursor=pointer]:
+              - /url: takayama/outline/index.htm
+          - listitem [ref=e515]:
+            - link "ダムの効果" [ref=e516] [cursor=pointer]:
+              - /url: effect/index.htm
+          - listitem [ref=e517]:
+            - link "水源地域ビジョン" [ref=e518] [cursor=pointer]:
+              - /url: takayama/vision/index.htm
+      - generic [ref=e519]:
+        - heading "高山ダムフォトコーナー" [level=3] [ref=e520]
+        - list [ref=e521]:
+          - listitem [ref=e522]:
+            - link "ダム建設の記録" [ref=e523] [cursor=pointer]:
+              - /url: takayama/photo/index.htm
+          - listitem [ref=e524]:
+            - link "写真・動画集" [ref=e525] [cursor=pointer]:
+              - /url: takayama/photo/memory.htm
+          - listitem [ref=e526]:
+            - paragraph [ref=e527]:
+              - link "ダムに関する投稿フォト" [ref=e528] [cursor=pointer]:
+                - /url: photo/gallery.htm
+      - list [ref=e530]:
+        - listitem [ref=e531]:
+          - link "地域防災連携窓口" [ref=e532] [cursor=pointer]:
+            - /url: takayama/tiikibousai/tiikibousai.pdf
+            - img "地域防災連携窓口" [ref=e533]
+        - listitem [ref=e534]:
+          - link "木津川ダム群Ｘサイト" [ref=e535] [cursor=pointer]:
+            - /url: https://x.com/jwa_kizugawadam
+            - img "木津川ダム群Ｘサイト" [ref=e536]
+          - text: 木津川ダム群公式アカウント
+          - text: 運用ガイドライン →
+          - link "運用ガイドライン" [ref=e537] [cursor=pointer]:
+            - /url: img/common/twitter_guideline.pdf
+            - img "運用ガイドライン" [ref=e538]
+    - paragraph [ref=e540]:
+      - link "ページの先頭へ戻る" [ref=e541] [cursor=pointer]:
+        - /url: "#top"
+  - generic [ref=e542]:
+    - list [ref=e543]:
+      - listitem [ref=e544]:
+        - link "木津川ダム総合管理所" [ref=e545] [cursor=pointer]:
+          - /url: index.htm
+      - listitem [ref=e546]:
+        - link "高山ダム" [ref=e547] [cursor=pointer]:
+          - /url: takayama.htm
+      - listitem [ref=e548]:
+        - link "青蓮寺ダム" [ref=e549] [cursor=pointer]:
+          - /url: syourenji.htm
+      - listitem [ref=e550]:
+        - link "室生ダム" [ref=e551] [cursor=pointer]:
+          - /url: muro.htm
+      - listitem [ref=e552]:
+        - link "布目ダム" [ref=e553] [cursor=pointer]:
+          - /url: nunome.htm
+      - listitem [ref=e554]:
+        - link "比奈知ダム" [ref=e555] [cursor=pointer]:
+          - /url: hinati.htm
+      - listitem [ref=e556]:
+        - link "川上ダム" [ref=e557] [cursor=pointer]:
+          - /url: kawakami.htm
+    - generic [ref=e558]:
+      - generic [ref=e559]:
+        - heading "独立行政法人 水資源機構 木津川ダム総合管理所" [level=2] [ref=e560]
+        - paragraph [ref=e561]:
+          - text: 〒518-0413
+          - text: 三重県名張市下比奈知2811-2
+          - text: TEL：0595-64-8961 FAX：0595-64-8964
+      - generic [ref=e562]:
+        - term [ref=e563]:
+          - link "Adobe®Reader®のダウンロード" [ref=e564] [cursor=pointer]:
+            - /url: https://get.adobe.com/jp/reader/
+            - img "Adobe®Reader®のダウンロード" [ref=e565]
+        - definition [ref=e566]:
+          - link "PDFファイルをご覧いただくには、Adobe®Reader®が必要です。 Adobe®Reader®のダウンロードはこちら" [ref=e567] [cursor=pointer]:
+            - /url: https://get.adobe.com/jp/reader/
+            - text: PDFファイルをご覧いただくには、Adobe
+            - superscript [ref=e568]: ®
+            - text: Reader
+            - superscript [ref=e569]: ®
+            - text: が必要です。 Adobe
+            - superscript [ref=e570]: ®
+            - text: Reader
+            - superscript [ref=e571]: ®
+            - text: のダウンロードはこちら
+        - term [ref=e572]:
+          - link "Adobe®Flash®Playerのダウンロード" [ref=e573] [cursor=pointer]:
+            - /url: https://get.adobe.com/jp/flashplayer/
+            - img "Adobe®Flash®Playerのダウンロード" [ref=e574]
+        - definition [ref=e575]:
+          - link "コンテンツをご覧いただくにはAdobe®Flash®Playerが必要です。 Adobe®Flash®Playerのダウンロードはこちら" [ref=e576] [cursor=pointer]:
+            - /url: https://get.adobe.com/jp/flashplayer/
+            - text: コンテンツをご覧いただくにはAdobe
+            - superscript [ref=e577]: ®
+            - text: Flash
+            - superscript [ref=e578]: ®
+            - text: Playerが必要です。 Adobe
+            - superscript [ref=e579]: ®
+            - text: Flash
+            - superscript [ref=e580]: ®
+            - text: Playerのダウンロードはこちら
+      - generic [ref=e581]: Copyrights(c) 木津川ダム総合管理所 All Rights Reserved.

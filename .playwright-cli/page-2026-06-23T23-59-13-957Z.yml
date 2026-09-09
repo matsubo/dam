@@ -1,0 +1,113 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - heading "水資源機構関西・吉野川支社 淀川本部" [level=1] [ref=e5]:
+      - link "水資源機構関西・吉野川支社 淀川本部" [ref=e6] [cursor=pointer]:
+        - /url: ../../index.html
+        - img "水資源機構関西・吉野川支社 淀川本部" [ref=e7]
+    - paragraph [ref=e8]:
+      - strong [ref=e9]: 未来へつなごう びわ湖・よど川の水
+    - list [ref=e10]:
+      - listitem [ref=e11]:
+        - link "サイトマップ" [ref=e12] [cursor=pointer]:
+          - /url: ../../html/sitemap/sitemap.html
+      - listitem [ref=e13]:
+        - link "プライバシーポリシー" [ref=e14] [cursor=pointer]:
+          - /url: /honsya/honsya/policy/index.html
+      - listitem [ref=e15]:
+        - link "ご意見等" [ref=e16] [cursor=pointer]:
+          - /url: mailto:w-kansai2@mti.biglobe.ne.jp
+    - list [ref=e17]:
+      - listitem [ref=e18]:
+        - link "ホーム" [ref=e19] [cursor=pointer]:
+          - /url: ../../index.html
+      - listitem [ref=e20]:
+        - link "水源情報" [ref=e21] [cursor=pointer]:
+          - /url: ../../html/suigen/suigen.html
+      - listitem [ref=e22]:
+        - link "記者発表" [ref=e23] [cursor=pointer]:
+          - /url: https://www.water.go.jp/honsya/honsya/kisya/index.html
+      - listitem [ref=e24]:
+        - link "入札・契約情報" [ref=e25] [cursor=pointer]:
+          - /url: ../../html/nyusatsu/nyusatsu2.html
+      - listitem [ref=e26]:
+        - link "管内イベント" [ref=e27] [cursor=pointer]:
+          - /url: ../../html/evento/evento.html
+      - listitem [ref=e28]:
+        - link "アクセス" [ref=e29] [cursor=pointer]:
+          - /url: ../../html/access/access.html
+    - list [ref=e30]:
+      - listitem [ref=e31]:
+        - link "ホーム" [ref=e32] [cursor=pointer]:
+          - /url: ../../index.html
+      - listitem [ref=e33]:
+        - link "水源情報" [ref=e34] [cursor=pointer]:
+          - /url: suigen.html
+  - generic [ref=e36]:
+    - heading "水源情報" [level=1] [ref=e38]
+    - text: これまでご利用いただきました「リアルタイム情報」は設備更新に伴い、サービスを終了いたしました。
+    - text: 今後は、「国土交通省 川の防災情報」で、情報発信しますので、そちらをご覧下さい。
+    - text: ご覧になりたいダム名をクリックしてください。
+    - generic [ref=e39]:
+      - generic [ref=e40]:
+        - heading "ダム模式図" [level=2] [ref=e41]:
+          - generic [ref=e42]: ダム模式図
+        - link "高山ダム" [ref=e43] [cursor=pointer]:
+          - /url: https://www.river.go.jp/kawabou/pc/tm?zm=11&clat=34.77918215285125&clon=136.0140380775556&fld=0&mapType=0&viewGrpStg=0&viewRd=1&viewRW=1&viewRiver=1&viewPoint=1&ext=0&ofcCd=22067&itmkndCd=7&obsCd=6
+          - img "高山ダム" [ref=e44]
+        - link "青蓮寺ダム" [ref=e45] [cursor=pointer]:
+          - /url: https://www.river.go.jp/kawabou/pc/tm?zm=11&clat=34.62631490104805&clon=136.13914493937048&fld=0&mapType=0&viewGrpStg=0&viewRd=1&viewRW=1&viewRiver=1&viewPoint=1&ext=0&ofcCd=22067&itmkndCd=7&obsCd=5
+          - img "青蓮寺ダム" [ref=e46]
+        - link "室生ダム" [ref=e47] [cursor=pointer]:
+          - /url: https://www.river.go.jp/kawabou/pc/tm?zm=11&clat=34.57838704510975&clon=136.01719671394676&fld=0&mapType=0&viewGrpStg=0&viewRd=1&viewRW=1&viewRiver=1&viewPoint=1&ext=0&ofcCd=22067&itmkndCd=7&obsCd=4
+          - img "室生ダム" [ref=e48]
+        - link "布目ダム" [ref=e49] [cursor=pointer]:
+          - /url: https://www.river.go.jp/kawabou/pc/tm?zm=11&clat=34.72445793722384&clon=135.9812165144831&fld=0&mapType=0&viewGrpStg=0&viewRd=1&viewRW=1&viewRiver=1&viewPoint=1&ext=0&ofcCd=22067&itmkndCd=7&obsCd=7
+          - img "布目ダム" [ref=e50]
+        - link "比奈知ダム" [ref=e51] [cursor=pointer]:
+          - /url: https://www.river.go.jp/kawabou/pc/tm?zm=11&clat=34.63535478857628&clon=136.1902313819155&fld=0&mapType=0&viewGrpStg=0&viewRd=1&viewRW=1&viewRiver=1&viewPoint=1&ext=0&ofcCd=22067&itmkndCd=7&obsCd=9
+          - img "比奈知ダム" [ref=e52]
+        - link "川上ダム" [ref=e53] [cursor=pointer]:
+          - /url: https://www.river.go.jp/kawabou/pc/tm?zm=11&clat=34.680652419291164&clon=136.17951972875747&fld=0&mapType=0&viewGrpStg=0&viewRd=1&viewRW=1&viewRiver=1&viewPoint=1&ext=0&ofcCd=22067&itmkndCd=7&obsCd=10
+          - img "川上ダム" [ref=e54]
+        - link "一庫ダム" [ref=e55] [cursor=pointer]:
+          - /url: https://www.river.go.jp/kawabou/pc/tm?zm=11&clat=34.92579938555225&clon=135.40635680314153&fld=0&mapType=0&viewGrpStg=0&viewRd=1&viewRW=1&viewRiver=1&viewPoint=1&ext=0&ofcCd=22070&itmkndCd=7&obsCd=1
+          - img "一庫ダム" [ref=e56]
+        - link "日吉ダム" [ref=e57] [cursor=pointer]:
+          - /url: https://www.river.go.jp/kawabou/pc/tm?zm=10&clat=35.17852294653145&clon=135.5603026924655&fld=0&mapType=0&viewGrpStg=0&viewRd=1&viewRW=1&viewRiver=1&viewPoint=1&ext=0&ofcCd=22067&itmkndCd=7&obsCd=8
+          - img "日吉ダム" [ref=e58]
+        - link "琵琶湖(水位)" [ref=e59] [cursor=pointer]:
+          - /url: https://www.river.go.jp/kawabou/pc/tm?zm=12&clat=35.24197402268057&clon=136.04061123565774&fld=0&mapType=0&viewGrpStg=0&viewRd=1&viewRW=1&viewRiver=1&viewPoint=1&ext=0&ofcCd=22039&itmkndCd=4&obsCd=25
+          - img "琵琶湖(水位)" [ref=e60]
+      - generic [ref=e61]:
+        - heading "詳細情報" [level=2] [ref=e62]:
+          - generic [ref=e63]: 詳細情報
+        - link "高山ダム" [ref=e64] [cursor=pointer]:
+          - /url: https://www.river.go.jp/kawabou/pcfull/tm?itmkndCd=7&ofcCd=22067&obsCd=6&isCurrent=true&fld=0
+          - img "高山ダム" [ref=e65]
+        - link "青蓮寺ダム" [ref=e66] [cursor=pointer]:
+          - /url: https://www.river.go.jp/kawabou/pcfull/tm?itmkndCd=7&ofcCd=22067&obsCd=5&isCurrent=true&fld=0
+          - img "青蓮寺ダム" [ref=e67]
+        - link "室生ダム" [ref=e68] [cursor=pointer]:
+          - /url: https://www.river.go.jp/kawabou/pcfull/tm?itmkndCd=7&ofcCd=22067&obsCd=4&isCurrent=true&fld=0
+          - img "室生ダム" [ref=e69]
+        - link "布目ダム" [ref=e70] [cursor=pointer]:
+          - /url: https://www.river.go.jp/kawabou/pcfull/tm?itmkndCd=7&ofcCd=22067&obsCd=7&isCurrent=true&fld=0
+          - img "布目ダム" [ref=e71]
+        - link "比奈知ダム" [ref=e72] [cursor=pointer]:
+          - /url: https://www.river.go.jp/kawabou/pcfull/tm?itmkndCd=7&ofcCd=22067&obsCd=9&isCurrent=true&fld=0
+          - img "比奈知ダム" [ref=e73]
+        - link "川上ダム" [ref=e74] [cursor=pointer]:
+          - /url: https://www.river.go.jp/kawabou/pcfull/tm?itmkndCd=7&ofcCd=22067&obsCd=10&isCurrent=true&fld=0
+          - img "川上ダム" [ref=e75]
+        - link "一庫ダム" [ref=e76] [cursor=pointer]:
+          - /url: https://www.river.go.jp/kawabou/pcfull/tm?itmkndCd=7&ofcCd=22070&obsCd=1&isCurrent=true&fld=0
+          - img "一庫ダム" [ref=e77]
+        - link "日吉ダム" [ref=e78] [cursor=pointer]:
+          - /url: https://www.river.go.jp/kawabou/pcfull/tm?itmkndCd=7&ofcCd=22067&obsCd=8&isCurrent=true&fld=0
+          - img "日吉ダム" [ref=e79]
+        - link "琵琶湖(水位)" [ref=e80] [cursor=pointer]:
+          - /url: https://www.river.go.jp/kawabou/pcfull/tm?itmkndCd=4&ofcCd=22039&obsCd=25&isCurrent=true&fld=0
+          - img "琵琶湖(水位)" [ref=e81]
+  - generic [ref=e83]:
+    - text: 独立行政法人 水資源機構 関西・吉野川支社 淀川本部
+    - text: 〒540-0005 大阪府大阪市中央区上町Ａ-12 TEL 06-6763-5182（代表）
