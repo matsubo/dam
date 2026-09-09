@@ -113,5 +113,7 @@ export function middleware(req: NextRequest): NextResponse {
 export const config = {
   // Skip Next internals + the API itself + static assets so we don't override
   // upstream Link / Vary headers there.
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|.well-known).*)'],
+  matcher: [
+    '/((?!api|_next/static|_next/image|favicon.ico|robots.txt|ads.txt|sitemap.xml|.well-known).*)',
+  ],
 };

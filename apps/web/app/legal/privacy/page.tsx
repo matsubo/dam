@@ -8,7 +8,12 @@ export const metadata: Metadata = {
   alternates: { canonical: '/legal/privacy' },
 };
 
-const LAST_UPDATED = '2026-05-04';
+// The advertising section appears only on a deploy that actually serves ads,
+// so the policy never describes a data flow that isn't happening. Same env var
+// that gates <AdSlot /> and /ads.txt.
+const ADS_ENABLED = Boolean(process.env.NEXT_PUBLIC_ADSENSE_CLIENT);
+
+const LAST_UPDATED = ADS_ENABLED ? '2026-09-09' : '2026-05-04';
 
 export default function PrivacyPage() {
   return (
@@ -64,7 +69,38 @@ export default function PrivacyPage() {
           </a>{' '}
           で可能です。
         </p>
-        <h3 className="text-sm font-semibold mt-4 mb-1">2.4 サーバーログ</h3>
+        {ADS_ENABLED ? (
+          <>
+            <h3 className="text-sm font-semibold mt-4 mb-1">2.4 広告配信</h3>
+            <p>
+              一部のページに Google AdSense による広告を掲載しています。Google
+              および配信パートナーは、広告の配信・効果測定・パーソナライズのために Cookie
+              や端末識別子を利用する場合があります。パーソナライズ広告の無効化は{' '}
+              <a
+                className="text-primary hover:underline"
+                href="https://adssettings.google.com"
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                広告設定
+              </a>{' '}
+              から、詳細は{' '}
+              <a
+                className="text-primary hover:underline"
+                href="https://policies.google.com/technologies/partner-sites"
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                Google のポリシーと規約
+              </a>{' '}
+              をご確認ください。なお、国土数値情報を出典とするデータを表示するページには
+              広告を掲載していません。
+            </p>
+          </>
+        ) : null}
+        <h3 className="text-sm font-semibold mt-4 mb-1">
+          {ADS_ENABLED ? '2.5' : '2.4'} サーバーログ
+        </h3>
         <p>
           ホスティング (Coolify / Cloudflare 等)
           のレイヤで標準的なアクセスログ・エラーログが一定期間保持されます。
