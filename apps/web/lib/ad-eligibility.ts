@@ -1,42 +1,48 @@
 // Which routes may carry advertising.
 //
-// This is a LICENCE boundary, not a layout preference.
+// Deny-by-default: a route carries ads only by matching a rule below. A new
+// page is ad-free until someone adds it deliberately.
+//
+// ## Why this file exists
 //
 // 国土数値情報 W01 / W05 / W07 are licensed 「非商用」 (旧国土情報利用約款準拠版),
-// and W01 — the origin of the dam master — is 商用利用不可 outright. See the `ndi`
-// entry in ./source-details.ts. Advertising is 営利目的, so any page that renders a
-// W01/W05/W07-derived value must not carry ads.
+// and W01 — the origin of the dam master — is 商用利用不可 outright (see the
+// `ndi` entry in ./source-details.ts). Advertising is 営利目的, so this module
+// originally excluded every page built on that data.
 //
-// We cannot decide that per-field at runtime: `dams` and `watersheds` (see
-// packages/db/src/schema/) merge every upstream into one row and keep NO
-// per-field provenance, and `dams.location`, `watersheds.kind` and
-// `watersheds.boundary` are all NOT NULL. So a dam or watershed row is
-// NLNI-derived by construction.
+// **That is no longer what it does.** On 2026-09-10 the site owner decided to
+// run ads on the dam 貯水率 pages to measure what they earn, accepting the
+// licence exposure. Those pages render W01-derived values (location, height,
+// total capacity, completed year — apps/web/app/dams/[slug]/page.tsx). The
+// decision is recorded here so the code does not read as if the constraint
+// were still being honoured.
 //
-// Therefore the list below is an ALLOWLIST and matching is exact: a route earns
-// ads only by being named here. A new page is ad-free until someone confirms it
-// renders no NLNI-derived field and adds it deliberately.
+// What the deny-by-default shape still buys us: the set of advertised pages is
+// explicit, testable and small, so widening it is always a deliberate edit
+// rather than a side effect. Pages that were never part of that decision —
+// watershed and prefecture pages, /map, /stats, /search, /coverage, /sources,
+// /contribute, the home page — stay out.
+//
+// ⚠️ Two ways to bypass everything here, both of which must stay off:
+//   - AdSense「自動広告」(Auto ads) injects units from Google's side.
+//   - Adding an AdSense tag to the GTM container (<Gtm /> is mounted in
+//     app/layout.tsx) would inject them independently of this module.
 
 /**
- * Routes cleared to carry advertising. Static, hand-written content that reads
- * no dam or watershed row.
+ * Static routes cleared to carry advertising, matched exactly.
  *
- * Deliberately excluded, and why:
- *   /, /dams*, /watersheds*, /map, /stats, /search, /coverage, /prefectures/*
- *     → render W01/W05/W07-derived values
- *   /sources, /sources/[id]  → summarise dam counts per upstream
- *   /legal/*                 → our own terms; ads there serve nobody
- *   /account/*, /admin/*     → private / operator surfaces
- *   /api/docs                → machine-facing reference
- *
- * A route audit raised /coverage and /sources as borderline: they only GROUP BY
- * pref_code and bucket total_capacity_m3 / height_m / completed_year, never
- * printing a raw per-dam NLNI value. They stay excluded anyway. 非商用 restricts
- * 利用 of the data, not the display of raw values — an aggregate is a derived
- * work, and aggregating does not launder the licence. /sources is also the page
- * that publishes the 非商用 terms themselves, so advertising on it would be odd.
+ * Hand-written prose that reads no dam or watershed row — the pages that were
+ * licence-safe before the 2026-09-10 decision, kept because they still are.
  */
 export const AD_ELIGIBLE_ROUTES = ['/glossary', '/roadmap'] as const;
+
+/**
+ * Dynamic routes cleared to carry advertising.
+ *
+ * `/dams/<slug>` only — the per-dam 貯水率 pages the owner asked for. One
+ * segment, so the `/dams` list itself and anything deeper stay out.
+ */
+const AD_ELIGIBLE_PATTERNS: readonly RegExp[] = [/^\/dams\/[^/]+$/];
 
 const ELIGIBLE: ReadonlySet<string> = new Set(AD_ELIGIBLE_ROUTES);
 
@@ -48,7 +54,9 @@ function normalisePath(pathname: string): string {
   return pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
 }
 
-/** True only for a route explicitly cleared above. Unknown route → false. */
+/** True only for a route cleared above. Unknown route → false. */
 export function isAdEligible(pathname: string): boolean {
-  return ELIGIBLE.has(normalisePath(pathname));
+  const path = normalisePath(pathname);
+  if (ELIGIBLE.has(path)) return true;
+  return AD_ELIGIBLE_PATTERNS.some((re) => re.test(path));
 }
