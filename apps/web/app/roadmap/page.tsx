@@ -125,7 +125,17 @@ export default function RoadmapPage() {
           );
         })}
       </ol>
-      <p className="mt-8 text-xs text-on-surface-variant">
+      <div className="mt-8 border border-primary bg-primary/5 rounded-xl p-4">
+        <p className="text-sm leading-relaxed">
+          このロードマップは一人で進めています。歩みを速めるのを手伝ってくれる開発者を{' '}
+          <Link href="/contribute" className="text-primary font-semibold hover:underline">
+            開発者募集ページ
+          </Link>{' '}
+          で探しています。寄付でも支えられます。
+        </p>
+      </div>
+
+      <p className="mt-6 text-xs text-on-surface-variant">
         実測データの取得状況（ソース別・都道府県別）は{' '}
         <Link className="text-primary hover:underline" href="/coverage">
           カバレッジ

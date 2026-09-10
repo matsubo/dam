@@ -1,0 +1,173 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: 静岡県土木総合防災情報
+      - generic [ref=e7]: SIPOS-RADAR
+      - generic [ref=e8]: ShizuokaPrefecture
+    - generic [ref=e9]:
+      - list [ref=e11]:
+        - listitem [ref=e12]:
+          - link "マップ" [ref=e13] [cursor=pointer]:
+            - /url: ./Map/index.html?zoom=9&lat=35.45&lon=138.90&type=map
+          - link "?" [ref=e14] [cursor=pointer]:
+            - /url: ./img/MenuPDF/helpmenu-map-ver1.0.pdf?1785836425563
+        - listitem [ref=e15]:
+          - link "観測データ" [ref=e16] [cursor=pointer]:
+            - /url: ./Map/index.html?zoom=9&lat=35.45&lon=138.90&type=rain
+          - link "?" [ref=e17] [cursor=pointer]:
+            - /url: ./img/MenuPDF/helpmenu-kansoku-ver1.0.pdf?1785836425563
+        - listitem [ref=e18]:
+          - link "防災" [ref=e19] [cursor=pointer]:
+            - /url: ./Warn/index.html?Ver202606xx
+          - link "?" [ref=e20] [cursor=pointer]:
+            - /url: ./img/MenuPDF/helpmenu-bosai-ver1.0.pdf?1785836425563
+        - listitem [ref=e21]:
+          - link "気象情報" [ref=e22] [cursor=pointer]:
+            - /url: ./PinpointForecast/index.html
+          - link "?" [ref=e23] [cursor=pointer]:
+            - /url: ./img/MenuPDF/helpmenu-kisyo-ver1.0.pdf?1785836425563
+        - listitem [ref=e24]:
+          - link "カメラリンク" [ref=e25] [cursor=pointer]:
+            - /url: "#"
+        - listitem [ref=e26]:
+          - link "道路" [ref=e27] [cursor=pointer]:
+            - /url: "#"
+        - listitem [ref=e28]:
+          - link "お知らせ" [ref=e29] [cursor=pointer]:
+            - /url: ./Information/index.html
+        - listitem:
+          - link:
+            - /url: "#"
+      - list [ref=e31]:
+        - generic [ref=e32]:
+          - listitem [ref=e33]:
+            - checkbox [ref=e34]
+            - text: 雨量情報
+          - listitem [ref=e35]:
+            - radio [checked] [ref=e36]
+            - text: 5分雨量
+          - listitem [ref=e37]:
+            - radio [ref=e38]
+            - text: 10分雨量
+          - listitem [ref=e39]:
+            - radio [ref=e40]
+            - text: 60分雨量
+          - listitem [ref=e41]:
+            - radio [ref=e42]
+            - text: 累加雨量
+          - listitem [ref=e43]:
+            - checkbox [ref=e44]
+            - text: 水位情報
+          - listitem [ref=e45]:
+            - radio [checked] [ref=e46]
+            - text: 5分間隔
+          - listitem [ref=e47]:
+            - radio [ref=e48]
+            - text: 10分間隔
+          - listitem [ref=e49]:
+            - checkbox [ref=e50]
+            - text: ダム情報
+          - listitem [ref=e51]:
+            - checkbox [ref=e52]
+            - text: 波高情報
+          - listitem [ref=e53]:
+            - checkbox [ref=e54]
+            - text: 水門情報
+          - listitem [ref=e55]:
+            - checkbox [ref=e56]
+            - text: ライブカメラ
+          - listitem [ref=e57]:
+            - checkbox [ref=e58]
+            - text: 雨雲の様子
+          - listitem [ref=e59]:
+            - radio [checked] [ref=e60]
+            - text: これまでの様子
+          - listitem [ref=e61]:
+            - radio [ref=e62]
+            - text: これからの様子
+          - listitem [ref=e63]:
+            - radio [ref=e64]
+            - text: C-X合成レーダー
+          - listitem [ref=e65]:
+            - checkbox [ref=e66]
+            - text: 落雷情報
+          - listitem [ref=e67]:
+            - checkbox [disabled] [ref=e68]
+            - text: 洪水警報の危険度分布情報
+          - listitem [ref=e69]:
+            - checkbox [ref=e70]
+            - text: ナウキャスト情報
+          - listitem [ref=e71]:
+            - radio [checked] [ref=e72]
+            - text: 雷ナウキャスト
+          - listitem [ref=e73]:
+            - radio [ref=e74]
+            - text: 竜巻発生確度
+          - listitem [ref=e75]:
+            - checkbox [ref=e76]
+            - text: アメダス
+          - listitem [ref=e77]:
+            - radio [checked] [ref=e78]
+            - text: 気温
+          - listitem [ref=e79]:
+            - radio [ref=e80]
+            - text: 風向・風速
+          - listitem [ref=e81]:
+            - radio [ref=e82]
+            - text: 日照時間
+          - listitem [ref=e83]:
+            - checkbox [ref=e84]
+            - text: 雨雪判定情報
+    - generic [ref=e85]:
+      - list:
+        - listitem:
+          - paragraph [ref=e86]:
+            - link "気象警報・注意報" [ref=e87] [cursor=pointer]:
+              - /url: ./Warn/index.html?Ver202606xx
+        - listitem:
+          - paragraph [ref=e88]: 雨量情報
+        - listitem:
+          - paragraph [ref=e89]: 水位情報
+        - listitem:
+          - paragraph [ref=e90]:
+            - link "台風情報" [ref=e91] [cursor=pointer]:
+              - /url: ./JmaTyph/index.html
+        - listitem:
+          - paragraph [ref=e92]: 洪水予報
+        - listitem:
+          - paragraph [ref=e93]: 気象防災速報・竜巻
+        - listitem:
+          - paragraph [ref=e94]: 地震情報
+        - listitem:
+          - paragraph [ref=e95]: 津波予報
+    - generic [ref=e96]:
+      - list:
+        - listitem [ref=e97]:
+          - link "リンク集" [ref=e98] [cursor=pointer]:
+            - /url: ./Link/index.html?Ver.20260721
+        - listitem [ref=e99]:
+          - link "ご利用に際して" [ref=e100] [cursor=pointer]:
+            - /url: ./Caution/index.html
+        - listitem [ref=e101]:
+          - link "防災用語集" [ref=e102] [cursor=pointer]:
+            - /url: ./Yogo/index.html?Ver.20260528
+  - generic [ref=e104]:
+    - iframe [ref=e105]:
+      - generic [active] [ref=f1e1]:
+        - list [ref=f1e4]:
+          - listitem [ref=f1e5]: "|◀◀"
+          - listitem [ref=f1e6]: ◀
+          - listitem [ref=f1e7]: "|▶"
+          - listitem [ref=f1e8]: ▶
+          - listitem [ref=f1e9]: ▶▶|
+        - generic [ref=f1e10]:
+          - list:
+            - listitem [ref=f1e11] [cursor=pointer]:
+              - generic: 凡例ON 凡例OFF
+            - listitem [ref=f1e12] [cursor=pointer]:
+              - generic: 自動更新ON 自動更新OFF
+    - generic [ref=e106] [cursor=pointer]:
+      - generic [ref=e107]: トピックス
+      - generic [ref=e108]:
+        - generic [ref=e109]: ★「気象情報」の「ピンポイント予報」のページの精度の向上を図りました。その為、古いページの情報等が残っていると表示がされない事象が発生しております。お手数をおかけしますが、キャッシュやCookieの削除をお願いします。「おしらせ」→「静岡県交通基盤部からのお知らせ」をご覧ください。★「危機管理型水位計」のリアルタイムデータは、川の水位情報でも確認できます。アドレスは、お知らせの「静岡県交通基盤部からのお知らせ」をご覧ください。★欠測・異常値のお知らせ（危機管理型水位計全観測所、水位観測所、県内監視カメラ)詳細はお知らせをご覧下さい。★水位計故障の際は河川監視カメラでも河川状況が確認できます。
+        - generic [ref=e110]: ★「気象情報」の「ピンポイント予報」のページの精度の向上を図りました。その為、古いページの情報等が残っていると表示がされない事象が発生しております。お手数をおかけしますが、キャッシュやCookieの削除をお願いします。「おしらせ」→「静岡県交通基盤部からのお知らせ」をご覧ください。★「危機管理型水位計」のリアルタイムデータは、川の水位情報でも確認できます。アドレスは、お知らせの「静岡県交通基盤部からのお知らせ」をご覧ください。★欠測・異常値のお知らせ（危機管理型水位計全観測所、水位観測所、県内監視カメラ)詳細はお知らせをご覧下さい。★水位計故障の際は河川監視カメラでも河川状況が確認できます。

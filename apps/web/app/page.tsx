@@ -716,6 +716,33 @@ curl -s "https://dam.teraren.com/api/v1/dams/biwakokaihatsu-25/observations\\
           </div>
         </div>
       </section>
+
+      {/* Recruitment band. Sits directly after the API section because that's
+          where developers stop scrolling. */}
+      <section className="py-16 md:py-20 bg-surface-container-low border-t border-outline-variant">
+        <div className="max-w-3xl mx-auto px-5 md:px-10 text-center">
+          <div className="eyebrow mb-4 justify-center">
+            <span className="inline-block w-6 h-px bg-primary align-middle mr-3" />
+            CONTRIBUTE
+          </div>
+          <h2 className="font-display text-h2 font-semibold mb-4">
+            このサイトは、一人で作っています。
+          </h2>
+          <p className="text-body-md text-on-surface-variant mb-8">
+            全国のダムの実測値は、県・地方整備局・企業局へとバラバラに公開されていて、
+            まだ取り込めていないダムが数多く残っています。カバレッジを一緒に上げてくれる
+            開発者を探しています。データソースの情報提供だけでも歓迎です。
+          </p>
+          <div className="flex flex-wrap gap-3 justify-center">
+            <Link href="/contribute" className="btn-primary text-base">
+              開発者募集を見る
+            </Link>
+            <Link href="/coverage" className="btn-outline text-base">
+              いまのカバレッジ
+            </Link>
+          </div>
+        </div>
+      </section>
     </>
   );
 }

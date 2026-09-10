@@ -42,6 +42,13 @@ under /api/v1 requires an API key issued from /account/keys. Send it as
 - Observations: 1-hour native granularity, ingested in periodic batches
   from public archives (not realtime).
 
+## Contributing
+Built and run by one person. Coverage — getting live observations for the
+dams that still only have master data — is the current priority, and help is
+wanted: ${SITE_URL}/contribute. Applications and questions both go through
+Discord (see Contact); there is no form and no email address.
+Donations: https://github.com/sponsors/matsubo
+
 ## Contact
 - Contact: https://discord.gg/UbWqspWbAk (Discord — no email contact)
 - Terms: ${SITE_URL}/legal/terms

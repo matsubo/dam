@@ -1,0 +1,41 @@
+@charset "utf-8";
+
+#selectArea {
+  width: 140px;
+  margin-left: 0 auto;
+  position: relative;
+  height: 590px;
+  zoom: 1;
+  position: relative;
+  top: 0px;
+  left: 0px;
+}
+#mapOuterframe {
+  margin-left: 0 auto;
+  position: relative;
+  height: 204px;
+  position: relative;
+  top: 0px;
+  left: 0px;
+  background-color: #89b5e0;
+}
+#mapArea {
+  width: 134px;
+  margin-left: 0 auto;
+  position: relative;
+  height: 196px;
+  position: relative;
+  top: 4px;
+  left: 4px;
+}
+#selectArea:before {
+}
+#selectArea:after {
+}
+
+#buttonArea {
+  margin-left: 0 auto;
+  position: relative;
+  top: 8px;
+  left: 0px;
+}

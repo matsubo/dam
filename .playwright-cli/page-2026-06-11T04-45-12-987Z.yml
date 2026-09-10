@@ -1,0 +1,1559 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - navigation [ref=e3]:
+      - link "Dam Data · 日本のダム情報" [ref=e4] [cursor=pointer]:
+        - /url: /
+        - img [ref=e5]
+        - generic [ref=e8]: Dam Data
+        - generic [ref=e9]: · 日本のダム情報
+      - generic [ref=e10]:
+        - link "ダム ダム" [ref=e11] [cursor=pointer]:
+          - /url: /dams
+          - img "ダム" [ref=e12]
+          - text: ダム
+        - link "水系 水系" [ref=e16] [cursor=pointer]:
+          - /url: /watersheds
+          - img "水系" [ref=e17]
+          - text: 水系
+        - link "地図" [ref=e21] [cursor=pointer]:
+          - /url: /map
+        - link "統計" [ref=e22] [cursor=pointer]:
+          - /url: /stats
+        - link "データソース" [ref=e23] [cursor=pointer]:
+          - /url: /sources
+        - link "API" [ref=e24] [cursor=pointer]:
+          - /url: /api/docs
+        - link "アカウント" [ref=e25] [cursor=pointer]:
+          - /url: /account/keys
+      - searchbox "検索" [ref=e28]
+  - main [ref=e29]:
+    - generic [ref=e30]:
+      - navigation [ref=e31]:
+        - list [ref=e32]:
+          - listitem [ref=e33]:
+            - link "ホーム" [ref=e34] [cursor=pointer]:
+              - /url: /
+          - listitem [ref=e35]:
+            - generic [ref=e36]: ›
+            - link "水系" [ref=e37] [cursor=pointer]:
+              - /url: /watersheds
+          - listitem [ref=e38]:
+            - generic [ref=e39]: ›
+            - generic [ref=e40]: 利根川
+      - heading "水系 利根川" [level=1] [ref=e41]:
+        - img "水系" [ref=e42]
+        - generic [ref=e46]: 利根川
+      - paragraph [ref=e47]: 一級水系
+      - generic [ref=e48]:
+        - generic [ref=e49]:
+          - img "貯水率 17.2%" [ref=e50]:
+            - generic [ref=e55]: "25"
+            - generic [ref=e57]: "50"
+            - generic [ref=e59]: "75"
+            - generic [ref=e60]: 17.2%
+            - generic [ref=e61]: 17.2%
+          - generic [ref=e62]: 水系合計貯水率
+          - generic [ref=e63]: (70/79 基集計)
+        - generic [ref=e64]:
+          - generic [ref=e65]:
+            - generic [ref=e66]: ダム数
+            - generic [ref=e67]: "79"
+            - generic [ref=e68]: うち実測データあり 29 基（直近30日）
+          - generic [ref=e69]:
+            - generic [ref=e70]: 総貯水容量
+            - generic [ref=e71]: 25.83 億 m³
+          - generic [ref=e72]:
+            - generic [ref=e73]: 現在貯水量
+            - generic [ref=e74]: 2.94 億 m³
+            - generic [ref=e75]: 2026/06/11 13:30 JST
+          - generic [ref=e76]:
+            - generic [ref=e77]: 貯水率
+            - generic [ref=e78]: 17.2%
+            - generic [ref=e79]: 現在貯水量 ÷ 利水容量(70基)
+      - generic [ref=e80]:
+        - heading "推移グラフ（水系合計）" [level=2] [ref=e81]
+        - generic "グラフ読み込み中" [ref=e82]
+        - generic [ref=e83]:
+          - generic [ref=e84]: 水系合計貯水量の変化
+          - generic [ref=e85]:
+            - 'generic "基準点: 0 分前の観測" [ref=e86]':
+              - generic [ref=e87]: 1h
+              - generic [ref=e88]: ▼ -0.05 %
+            - 'generic "基準点: 0 分前の観測" [ref=e89]':
+              - generic [ref=e90]: 6h
+              - generic [ref=e91]: ▼ -8.80 %
+            - 'generic "基準点: 0 分前の観測" [ref=e92]':
+              - generic [ref=e93]: 12h
+              - generic [ref=e94]: ▼ -8.99 %
+            - 'generic "基準点: 0 分前の観測" [ref=e95]':
+              - generic [ref=e96]: 1d
+              - generic [ref=e97]: ▼ -0.96 %
+            - 'generic "基準点: 14.0 日前の観測 / 参照点が想定窓より古いため参考値" [ref=e98]':
+              - generic [ref=e99]: 7d
+              - generic [ref=e100]: ▼ -12.08 %
+            - 'generic "基準点: 27.4 日前の観測" [ref=e101]':
+              - generic [ref=e102]: 30d
+              - generic [ref=e103]: ▼ -9.22 %
+            - 'generic "基準点: 362.4 日前の観測" [ref=e104]':
+              - generic [ref=e105]: 1y
+              - generic [ref=e106]: ▲ +13.47 %
+            - generic "参照点が想定窓より古いため参考値" [ref=e107]:
+              - generic [ref=e108]: 5y
+              - generic [ref=e109]: —
+      - heading "この水系のダム" [level=2] [ref=e110]
+      - table [ref=e112]:
+        - rowgroup [ref=e113]:
+          - row "ダム名 都道府県 水系 管理者 貯水率 総貯水容量" [ref=e114]:
+            - columnheader "ダム名" [ref=e115]
+            - columnheader "都道府県" [ref=e116]
+            - columnheader "水系" [ref=e117]
+            - columnheader "管理者" [ref=e118]
+            - columnheader "貯水率" [ref=e119]
+            - columnheader "総貯水容量" [ref=e120]
+        - rowgroup [ref=e121]:
+          - row "ダム 庚申 栃木県 水系 利根川 栃木県 — 20 万 m³" [ref=e122]:
+            - cell "ダム 庚申" [ref=e123]:
+              - generic [ref=e124]:
+                - img "ダム" [ref=e125]
+                - link "庚申" [ref=e129] [cursor=pointer]:
+                  - /url: /dams/koushin-09
+            - cell "栃木県" [ref=e130]
+            - cell "水系 利根川" [ref=e131]:
+              - generic [ref=e132]:
+                - img "水系" [ref=e133]
+                - link "利根川" [ref=e137] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "栃木県" [ref=e138]
+            - cell "—" [ref=e139]:
+              - generic [ref=e140]: —
+            - cell "20 万 m³" [ref=e141]
+          - row "ダム 松田川 栃木県 水系 利根川 栃木県 実測データ（kasenbosai） 貯水率 60.8% 60.8% 190 万 m³" [ref=e142]:
+            - cell "ダム 松田川" [ref=e143]:
+              - generic [ref=e144]:
+                - img "ダム" [ref=e145]
+                - link "松田川" [ref=e149] [cursor=pointer]:
+                  - /url: /dams/matsudagawa-09
+            - cell "栃木県" [ref=e150]
+            - cell "水系 利根川" [ref=e151]:
+              - generic [ref=e152]:
+                - img "水系" [ref=e153]
+                - link "利根川" [ref=e157] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "栃木県" [ref=e158]
+            - cell "実測データ（kasenbosai） 貯水率 60.8% 60.8%" [ref=e159]:
+              - generic [ref=e160]:
+                - generic "実測データ（kasenbosai）" [ref=e161]
+                - generic "貯水率 60.8%" [ref=e162]
+                - generic [ref=e164]: 60.8%
+            - cell "190 万 m³" [ref=e165]
+          - row "ダム 南摩 栃木県 水系 利根川 水資源機構ダム事業部 — 5,100 万 m³" [ref=e166]:
+            - cell "ダム 南摩" [ref=e167]:
+              - generic [ref=e168]:
+                - img "ダム" [ref=e169]
+                - link "南摩" [ref=e173] [cursor=pointer]:
+                  - /url: /dams/namma-09
+            - cell "栃木県" [ref=e174]
+            - cell "水系 利根川" [ref=e175]:
+              - generic [ref=e176]:
+                - img "水系" [ref=e177]
+                - link "利根川" [ref=e181] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "水資源機構ダム事業部" [ref=e182]
+            - cell "—" [ref=e183]:
+              - generic [ref=e184]: —
+            - cell "5,100 万 m³" [ref=e185]
+          - row "ダム 赤川 栃木県 水系 利根川 栃木県 — 33 万 m³" [ref=e186]:
+            - cell "ダム 赤川" [ref=e187]:
+              - generic [ref=e188]:
+                - img "ダム" [ref=e189]
+                - link "赤川" [ref=e193] [cursor=pointer]:
+                  - /url: /dams/akagawa-09
+            - cell "栃木県" [ref=e194]
+            - cell "水系 利根川" [ref=e195]:
+              - generic [ref=e196]:
+                - img "水系" [ref=e197]
+                - link "利根川" [ref=e201] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "栃木県" [ref=e202]
+            - cell "—" [ref=e203]:
+              - generic [ref=e204]: —
+            - cell "33 万 m³" [ref=e205]
+          - row "ダム 川俣 栃木県 水系 利根川 関東地方建設局 実測データ（ktr-kinu-dam） 貯水率 47.9% 47.9% 8,760 万 m³" [ref=e206]:
+            - cell "ダム 川俣" [ref=e207]:
+              - generic [ref=e208]:
+                - img "ダム" [ref=e209]
+                - link "川俣" [ref=e213] [cursor=pointer]:
+                  - /url: /dams/kawamata-09
+            - cell "栃木県" [ref=e214]
+            - cell "水系 利根川" [ref=e215]:
+              - generic [ref=e216]:
+                - img "水系" [ref=e217]
+                - link "利根川" [ref=e221] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "関東地方建設局" [ref=e222]
+            - cell "実測データ（ktr-kinu-dam） 貯水率 47.9% 47.9%" [ref=e223]:
+              - generic [ref=e224]:
+                - generic "実測データ（ktr-kinu-dam）" [ref=e225]
+                - generic "貯水率 47.9%" [ref=e226]
+                - generic [ref=e228]: 47.9%
+            - cell "8,760 万 m³" [ref=e229]
+          - row "ダム 黒部 栃木県 水系 利根川 東京電力（株） — 237 万 m³" [ref=e230]:
+            - cell "ダム 黒部" [ref=e231]:
+              - generic [ref=e232]:
+                - img "ダム" [ref=e233]
+                - link "黒部" [ref=e237] [cursor=pointer]:
+                  - /url: /dams/kurobe-09
+            - cell "栃木県" [ref=e238]
+            - cell "水系 利根川" [ref=e239]:
+              - generic [ref=e240]:
+                - img "水系" [ref=e241]
+                - link "利根川" [ref=e245] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "東京電力（株）" [ref=e246]
+            - cell "—" [ref=e247]:
+              - generic [ref=e248]: —
+            - cell "237 万 m³" [ref=e249]
+          - row "ダム 川治 栃木県 水系 利根川 関東地方建設局 実測データ（ktr-kinu-dam） 貯水率 0.0% 0% 8,300 万 m³" [ref=e250]:
+            - cell "ダム 川治" [ref=e251]:
+              - generic [ref=e252]:
+                - img "ダム" [ref=e253]
+                - link "川治" [ref=e257] [cursor=pointer]:
+                  - /url: /dams/kawaji-09
+            - cell "栃木県" [ref=e258]
+            - cell "水系 利根川" [ref=e259]:
+              - generic [ref=e260]:
+                - img "水系" [ref=e261]
+                - link "利根川" [ref=e265] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "関東地方建設局" [ref=e266]
+            - cell "実測データ（ktr-kinu-dam） 貯水率 0.0% 0%" [ref=e267]:
+              - generic [ref=e268]:
+                - generic "実測データ（ktr-kinu-dam）" [ref=e269]
+                - generic "貯水率 0.0%" [ref=e270]
+                - generic [ref=e271]: 0%
+            - cell "8,300 万 m³" [ref=e272]
+          - row "ダム 小網 栃木県 水系 利根川 栃木県 — 63 万 m³" [ref=e273]:
+            - cell "ダム 小網" [ref=e274]:
+              - generic [ref=e275]:
+                - img "ダム" [ref=e276]
+                - link "小網" [ref=e280] [cursor=pointer]:
+                  - /url: /dams/koami-09
+            - cell "栃木県" [ref=e281]
+            - cell "水系 利根川" [ref=e282]:
+              - generic [ref=e283]:
+                - img "水系" [ref=e284]
+                - link "利根川" [ref=e288] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "栃木県" [ref=e289]
+            - cell "—" [ref=e290]:
+              - generic [ref=e291]: —
+            - cell "63 万 m³" [ref=e292]
+          - row "ダム 中岩 栃木県 水系 利根川 東京電力（株） — 149 万 m³" [ref=e293]:
+            - cell "ダム 中岩" [ref=e294]:
+              - generic [ref=e295]:
+                - img "ダム" [ref=e296]
+                - link "中岩" [ref=e300] [cursor=pointer]:
+                  - /url: /dams/nakaiwa-09
+            - cell "栃木県" [ref=e301]
+            - cell "水系 利根川" [ref=e302]:
+              - generic [ref=e303]:
+                - img "水系" [ref=e304]
+                - link "利根川" [ref=e308] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "東京電力（株）" [ref=e309]
+            - cell "—" [ref=e310]:
+              - generic [ref=e311]: —
+            - cell "149 万 m³" [ref=e312]
+          - row "ダム 西古屋 栃木県 水系 利根川 東京電力（株） — 55 万 m³" [ref=e313]:
+            - cell "ダム 西古屋" [ref=e314]:
+              - generic [ref=e315]:
+                - img "ダム" [ref=e316]
+                - link "西古屋" [ref=e320] [cursor=pointer]:
+                  - /url: /dams/nishigoya-09
+            - cell "栃木県" [ref=e321]
+            - cell "水系 利根川" [ref=e322]:
+              - generic [ref=e323]:
+                - img "水系" [ref=e324]
+                - link "利根川" [ref=e328] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "東京電力（株）" [ref=e329]
+            - cell "—" [ref=e330]:
+              - generic [ref=e331]: —
+            - cell "55 万 m³" [ref=e332]
+          - row "ダム 土呂部 栃木県 水系 利根川 東京電力（株） — 23 万 m³" [ref=e333]:
+            - cell "ダム 土呂部" [ref=e334]:
+              - generic [ref=e335]:
+                - img "ダム" [ref=e336]
+                - link "土呂部" [ref=e340] [cursor=pointer]:
+                  - /url: /dams/dorobu-09
+            - cell "栃木県" [ref=e341]
+            - cell "水系 利根川" [ref=e342]:
+              - generic [ref=e343]:
+                - img "水系" [ref=e344]
+                - link "利根川" [ref=e348] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "東京電力（株）" [ref=e349]
+            - cell "—" [ref=e350]:
+              - generic [ref=e351]: —
+            - cell "23 万 m³" [ref=e352]
+          - row "ダム 五十里 栃木県 水系 利根川 関東地方建設局 実測データ（ktr-kinu-dam） 貯水率 23.3% 23.3% 5,500 万 m³" [ref=e353]:
+            - cell "ダム 五十里" [ref=e354]:
+              - generic [ref=e355]:
+                - img "ダム" [ref=e356]
+                - link "五十里" [ref=e360] [cursor=pointer]:
+                  - /url: /dams/ikari-09
+            - cell "栃木県" [ref=e361]
+            - cell "水系 利根川" [ref=e362]:
+              - generic [ref=e363]:
+                - img "水系" [ref=e364]
+                - link "利根川" [ref=e368] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "関東地方建設局" [ref=e369]
+            - cell "実測データ（ktr-kinu-dam） 貯水率 23.3% 23.3%" [ref=e370]:
+              - generic [ref=e371]:
+                - generic "実測データ（ktr-kinu-dam）" [ref=e372]
+                - generic "貯水率 23.3%" [ref=e373]
+                - generic [ref=e375]: 23.3%
+            - cell "5,500 万 m³" [ref=e376]
+          - row "ダム 湯西川 栃木県 水系 利根川 関東地方整備局 実測データ（ktr-kinu-dam） 貯水率 56.5% 56.5% 7,500 万 m³" [ref=e377]:
+            - cell "ダム 湯西川" [ref=e378]:
+              - generic [ref=e379]:
+                - img "ダム" [ref=e380]
+                - link "湯西川" [ref=e384] [cursor=pointer]:
+                  - /url: /dams/yunishigawa-09-2
+            - cell "栃木県" [ref=e385]
+            - cell "水系 利根川" [ref=e386]:
+              - generic [ref=e387]:
+                - img "水系" [ref=e388]
+                - link "利根川" [ref=e392] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "関東地方整備局" [ref=e393]
+            - cell "実測データ（ktr-kinu-dam） 貯水率 56.5% 56.5%" [ref=e394]:
+              - generic [ref=e395]:
+                - generic "実測データ（ktr-kinu-dam）" [ref=e396]
+                - generic "貯水率 56.5%" [ref=e397]
+                - generic [ref=e399]: 56.5%
+            - cell "7,500 万 m³" [ref=e400]
+          - row "ダム 三河沢 栃木県 水系 利根川 栃木県 実測データ（kasenbosai） 貯水率 25.8% 25.8% 90 万 m³" [ref=e401]:
+            - cell "ダム 三河沢" [ref=e402]:
+              - generic [ref=e403]:
+                - img "ダム" [ref=e404]
+                - link "三河沢" [ref=e408] [cursor=pointer]:
+                  - /url: /dams/mikawasawa-09
+            - cell "栃木県" [ref=e409]
+            - cell "水系 利根川" [ref=e410]:
+              - generic [ref=e411]:
+                - img "水系" [ref=e412]
+                - link "利根川" [ref=e416] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "栃木県" [ref=e417]
+            - cell "実測データ（kasenbosai） 貯水率 25.8% 25.8%" [ref=e418]:
+              - generic [ref=e419]:
+                - generic "実測データ（kasenbosai）" [ref=e420]
+                - generic "貯水率 25.8%" [ref=e421]
+                - generic [ref=e423]: 25.8%
+            - cell "90 万 m³" [ref=e424]
+          - row "ダム 逆川 栃木県 水系 利根川 東京電力（株） — 9 万 m³" [ref=e425]:
+            - cell "ダム 逆川" [ref=e426]:
+              - generic [ref=e427]:
+                - img "ダム" [ref=e428]
+                - link "逆川" [ref=e432] [cursor=pointer]:
+                  - /url: /dams/sakasegawa-09
+            - cell "栃木県" [ref=e433]
+            - cell "水系 利根川" [ref=e434]:
+              - generic [ref=e435]:
+                - img "水系" [ref=e436]
+                - link "利根川" [ref=e440] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "東京電力（株）" [ref=e441]
+            - cell "—" [ref=e442]:
+              - generic [ref=e443]: —
+            - cell "9 万 m³" [ref=e444]
+          - row "ダム 栗山 栃木県 水系 利根川 東京電力（株） — 707 万 m³" [ref=e445]:
+            - cell "ダム 栗山" [ref=e446]:
+              - generic [ref=e447]:
+                - img "ダム" [ref=e448]
+                - link "栗山" [ref=e452] [cursor=pointer]:
+                  - /url: /dams/kuriyama-09
+            - cell "栃木県" [ref=e453]
+            - cell "水系 利根川" [ref=e454]:
+              - generic [ref=e455]:
+                - img "水系" [ref=e456]
+                - link "利根川" [ref=e460] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "東京電力（株）" [ref=e461]
+            - cell "—" [ref=e462]:
+              - generic [ref=e463]: —
+            - cell "707 万 m³" [ref=e464]
+          - row "ダム 今市 栃木県 水系 利根川 東京電力（株） — 910 万 m³" [ref=e465]:
+            - cell "ダム 今市" [ref=e466]:
+              - generic [ref=e467]:
+                - img "ダム" [ref=e468]
+                - link "今市" [ref=e472] [cursor=pointer]:
+                  - /url: /dams/imaichi-09
+            - cell "栃木県" [ref=e473]
+            - cell "水系 利根川" [ref=e474]:
+              - generic [ref=e475]:
+                - img "水系" [ref=e476]
+                - link "利根川" [ref=e480] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "東京電力（株）" [ref=e481]
+            - cell "—" [ref=e482]:
+              - generic [ref=e483]: —
+            - cell "910 万 m³" [ref=e484]
+          - row "ダム 中禅寺（元） 栃木県 水系 利根川 栃木県 実測データ（kasenbosai） 貯水率 0.0% 0% 2,510 万 m³" [ref=e485]:
+            - cell "ダム 中禅寺（元）" [ref=e486]:
+              - generic [ref=e487]:
+                - img "ダム" [ref=e488]
+                - link "中禅寺（元）" [ref=e492] [cursor=pointer]:
+                  - /url: /dams/dam-633-09
+            - cell "栃木県" [ref=e493]
+            - cell "水系 利根川" [ref=e494]:
+              - generic [ref=e495]:
+                - img "水系" [ref=e496]
+                - link "利根川" [ref=e500] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "栃木県" [ref=e501]
+            - cell "実測データ（kasenbosai） 貯水率 0.0% 0%" [ref=e502]:
+              - generic [ref=e503]:
+                - generic "実測データ（kasenbosai）" [ref=e504]
+                - generic "貯水率 0.0%" [ref=e505]
+                - generic [ref=e506]: 0%
+            - cell "2,510 万 m³" [ref=e507]
+          - row "ダム 中禅寺（再） 栃木県 水系 利根川 栃木県 — 2,510 万 m³" [ref=e508]:
+            - cell "ダム 中禅寺（再）" [ref=e509]:
+              - generic [ref=e510]:
+                - img "ダム" [ref=e511]
+                - link "中禅寺（再）" [ref=e515] [cursor=pointer]:
+                  - /url: /dams/chuuzenji-09-2
+            - cell "栃木県" [ref=e516]
+            - cell "水系 利根川" [ref=e517]:
+              - generic [ref=e518]:
+                - img "水系" [ref=e519]
+                - link "利根川" [ref=e523] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "栃木県" [ref=e524]
+            - cell "—" [ref=e525]:
+              - generic [ref=e526]: —
+            - cell "2,510 万 m³" [ref=e527]
+          - row "ダム 大郷戸 栃木県 水系 利根川 栃木県 — 29 万 m³" [ref=e528]:
+            - cell "ダム 大郷戸" [ref=e529]:
+              - generic [ref=e530]:
+                - img "ダム" [ref=e531]
+                - link "大郷戸" [ref=e535] [cursor=pointer]:
+                  - /url: /dams/oogouto-09
+            - cell "栃木県" [ref=e536]
+            - cell "水系 利根川" [ref=e537]:
+              - generic [ref=e538]:
+                - img "水系" [ref=e539]
+                - link "利根川" [ref=e543] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "栃木県" [ref=e544]
+            - cell "—" [ref=e545]:
+              - generic [ref=e546]: —
+            - cell "29 万 m³" [ref=e547]
+          - row "ダム 鬼怒川上流ダム群連携 栃木県 水系 利根川 関東地方整備局 — —" [ref=e548]:
+            - cell "ダム 鬼怒川上流ダム群連携" [ref=e549]:
+              - generic [ref=e550]:
+                - img "ダム" [ref=e551]
+                - link "鬼怒川上流ダム群連携" [ref=e555] [cursor=pointer]:
+                  - /url: /dams/damu-09
+            - cell "栃木県" [ref=e556]
+            - cell "水系 利根川" [ref=e557]:
+              - generic [ref=e558]:
+                - img "水系" [ref=e559]
+                - link "利根川" [ref=e563] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "関東地方整備局" [ref=e564]
+            - cell "—" [ref=e565]:
+              - generic [ref=e566]: —
+            - cell "—" [ref=e567]
+          - row "ダム 栗谷沢 栃木県 水系 利根川 栃木県 — —" [ref=e568]:
+            - cell "ダム 栗谷沢" [ref=e569]:
+              - generic [ref=e570]:
+                - img "ダム" [ref=e571]
+                - link "栗谷沢" [ref=e575] [cursor=pointer]:
+                  - /url: /dams/kuriyasawa-09
+            - cell "栃木県" [ref=e576]
+            - cell "水系 利根川" [ref=e577]:
+              - generic [ref=e578]:
+                - img "水系" [ref=e579]
+                - link "利根川" [ref=e583] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "栃木県" [ref=e584]
+            - cell "—" [ref=e585]:
+              - generic [ref=e586]: —
+            - cell "—" [ref=e587]
+          - row "ダム 利根川河口堰 茨城県 水系 利根川 水資源開発公団一工 — 9,000 万 m³" [ref=e588]:
+            - cell "ダム 利根川河口堰" [ref=e589]:
+              - generic [ref=e590]:
+                - img "ダム" [ref=e591]
+                - link "利根川河口堰" [ref=e595] [cursor=pointer]:
+                  - /url: /dams/tonegawakakouzeki-08
+            - cell "茨城県" [ref=e596]
+            - cell "水系 利根川" [ref=e597]:
+              - generic [ref=e598]:
+                - img "水系" [ref=e599]
+                - link "利根川" [ref=e603] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "水資源開発公団一工" [ref=e604]
+            - cell "—" [ref=e605]:
+              - generic [ref=e606]: —
+            - cell "9,000 万 m³" [ref=e607]
+          - row "ダム 南椎尾調整池 茨城県 水系 利根川 関東農政局 — 56 万 m³" [ref=e608]:
+            - cell "ダム 南椎尾調整池" [ref=e609]:
+              - generic [ref=e610]:
+                - img "ダム" [ref=e611]
+                - link "南椎尾調整池" [ref=e615] [cursor=pointer]:
+                  - /url: /dams/minamishiiochouseichi-08
+            - cell "茨城県" [ref=e616]
+            - cell "水系 利根川" [ref=e617]:
+              - generic [ref=e618]:
+                - img "水系" [ref=e619]
+                - link "利根川" [ref=e623] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "関東農政局" [ref=e624]
+            - cell "—" [ref=e625]:
+              - generic [ref=e626]: —
+            - cell "56 万 m³" [ref=e627]
+          - row "ダム 霞ヶ浦開発 茨城県 水系 利根川 関東地建→水公団一工 — 12.53 億 m³" [ref=e628]:
+            - cell "ダム 霞ヶ浦開発" [ref=e629]:
+              - generic [ref=e630]:
+                - img "ダム" [ref=e631]
+                - link "霞ヶ浦開発" [ref=e635] [cursor=pointer]:
+                  - /url: /dams/kasumigaurakaihatsu-08
+            - cell "茨城県" [ref=e636]
+            - cell "水系 利根川" [ref=e637]:
+              - generic [ref=e638]:
+                - img "水系" [ref=e639]
+                - link "利根川" [ref=e643] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "関東地建→水公団一工" [ref=e644]
+            - cell "—" [ref=e645]:
+              - generic [ref=e646]: —
+            - cell "12.53 億 m³" [ref=e647]
+          - row "ダム 水の口池 茨城県 水系 利根川 — — 4,000 m³" [ref=e648]:
+            - cell "ダム 水の口池" [ref=e649]:
+              - generic [ref=e650]:
+                - img "ダム" [ref=e651]
+                - link "水の口池" [ref=e655] [cursor=pointer]:
+                  - /url: /dams/no-08
+            - cell "茨城県" [ref=e656]
+            - cell "水系 利根川" [ref=e657]:
+              - generic [ref=e658]:
+                - img "水系" [ref=e659]
+                - link "利根川" [ref=e663] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "—" [ref=e664]
+            - cell "—" [ref=e665]:
+              - generic [ref=e666]: —
+            - cell "4,000 m³" [ref=e667]
+          - row "ダム 矢木沢 群馬県 水系 利根川 関東地建→水公団一工 実測データ（ktr-tone-dam） 貯水率 29.5% 29.5% 2.04 億 m³" [ref=e668]:
+            - cell "ダム 矢木沢" [ref=e669]:
+              - generic [ref=e670]:
+                - img "ダム" [ref=e671]
+                - link "矢木沢" [ref=e675] [cursor=pointer]:
+                  - /url: /dams/yagisawa-10
+            - cell "群馬県" [ref=e676]
+            - cell "水系 利根川" [ref=e677]:
+              - generic [ref=e678]:
+                - img "水系" [ref=e679]
+                - link "利根川" [ref=e683] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "関東地建→水公団一工" [ref=e684]
+            - cell "実測データ（ktr-tone-dam） 貯水率 29.5% 29.5%" [ref=e685]:
+              - generic [ref=e686]:
+                - generic "実測データ（ktr-tone-dam）" [ref=e687]
+                - generic "貯水率 29.5%" [ref=e688]
+                - generic [ref=e690]: 29.5%
+            - cell "2.04 億 m³" [ref=e691]
+          - row "ダム 真壁 群馬県 水系 利根川 東京電力（株） — 114 万 m³" [ref=e692]:
+            - cell "ダム 真壁" [ref=e693]:
+              - generic [ref=e694]:
+                - img "ダム" [ref=e695]
+                - link "真壁" [ref=e699] [cursor=pointer]:
+                  - /url: /dams/makabe-10
+            - cell "群馬県" [ref=e700]
+            - cell "水系 利根川" [ref=e701]:
+              - generic [ref=e702]:
+                - img "水系" [ref=e703]
+                - link "利根川" [ref=e707] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "東京電力（株）" [ref=e708]
+            - cell "—" [ref=e709]:
+              - generic [ref=e710]: —
+            - cell "114 万 m³" [ref=e711]
+          - row "ダム 須田貝 群馬県 水系 利根川 東京電力（株） — 2,850 万 m³" [ref=e712]:
+            - cell "ダム 須田貝" [ref=e713]:
+              - generic [ref=e714]:
+                - img "ダム" [ref=e715]
+                - link "須田貝" [ref=e719] [cursor=pointer]:
+                  - /url: /dams/sudagai-10
+            - cell "群馬県" [ref=e720]
+            - cell "水系 利根川" [ref=e721]:
+              - generic [ref=e722]:
+                - img "水系" [ref=e723]
+                - link "利根川" [ref=e727] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "東京電力（株）" [ref=e728]
+            - cell "—" [ref=e729]:
+              - generic [ref=e730]: —
+            - cell "2,850 万 m³" [ref=e731]
+          - row "ダム 藤原 群馬県 水系 利根川 関東地方整備局 実測データ（ktr-tone-dam） 貯水率 47.2% 47.2% 5,249 万 m³" [ref=e732]:
+            - cell "ダム 藤原" [ref=e733]:
+              - generic [ref=e734]:
+                - img "ダム" [ref=e735]
+                - link "藤原" [ref=e739] [cursor=pointer]:
+                  - /url: /dams/fujiwara-10-2
+            - cell "群馬県" [ref=e740]
+            - cell "水系 利根川" [ref=e741]:
+              - generic [ref=e742]:
+                - img "水系" [ref=e743]
+                - link "利根川" [ref=e747] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "関東地方整備局" [ref=e748]
+            - cell "実測データ（ktr-tone-dam） 貯水率 47.2% 47.2%" [ref=e749]:
+              - generic [ref=e750]:
+                - generic "実測データ（ktr-tone-dam）" [ref=e751]
+                - generic "貯水率 47.2%" [ref=e752]
+                - generic [ref=e754]: 47.2%
+            - cell "5,249 万 m³" [ref=e755]
+          - row "ダム 小森 群馬県 水系 利根川 東京電力（株） — 86 万 m³" [ref=e756]:
+            - cell "ダム 小森" [ref=e757]:
+              - generic [ref=e758]:
+                - img "ダム" [ref=e759]
+                - link "小森" [ref=e763] [cursor=pointer]:
+                  - /url: /dams/komori-10
+            - cell "群馬県" [ref=e764]
+            - cell "水系 利根川" [ref=e765]:
+              - generic [ref=e766]:
+                - img "水系" [ref=e767]
+                - link "利根川" [ref=e771] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "東京電力（株）" [ref=e772]
+            - cell "—" [ref=e773]:
+              - generic [ref=e774]: —
+            - cell "86 万 m³" [ref=e775]
+          - row "ダム 奈良俣 群馬県 水系 利根川 水資源機構ダム事業部 実測データ（ktr-tone-dam） 貯水率 68.3% 68.3% 9,000 万 m³" [ref=e776]:
+            - cell "ダム 奈良俣" [ref=e777]:
+              - generic [ref=e778]:
+                - img "ダム" [ref=e779]
+                - link "奈良俣" [ref=e783] [cursor=pointer]:
+                  - /url: /dams/naramata-10-2
+            - cell "群馬県" [ref=e784]
+            - cell "水系 利根川" [ref=e785]:
+              - generic [ref=e786]:
+                - img "水系" [ref=e787]
+                - link "利根川" [ref=e791] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "水資源機構ダム事業部" [ref=e792]
+            - cell "実測データ（ktr-tone-dam） 貯水率 68.3% 68.3%" [ref=e793]:
+              - generic [ref=e794]:
+                - generic "実測データ（ktr-tone-dam）" [ref=e795]
+                - generic "貯水率 68.3%" [ref=e796]
+                - generic [ref=e798]: 68.3%
+            - cell "9,000 万 m³" [ref=e799]
+          - row "ダム 相俣 群馬県 水系 利根川 関東地方建設局 実測データ（ktr-tone-dam） 貯水率 58.1% 58.1% 2,500 万 m³" [ref=e800]:
+            - cell "ダム 相俣" [ref=e801]:
+              - generic [ref=e802]:
+                - img "ダム" [ref=e803]
+                - link "相俣" [ref=e807] [cursor=pointer]:
+                  - /url: /dams/aimata-10
+            - cell "群馬県" [ref=e808]
+            - cell "水系 利根川" [ref=e809]:
+              - generic [ref=e810]:
+                - img "水系" [ref=e811]
+                - link "利根川" [ref=e815] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "関東地方建設局" [ref=e816]
+            - cell "実測データ（ktr-tone-dam） 貯水率 58.1% 58.1%" [ref=e817]:
+              - generic [ref=e818]:
+                - generic "実測データ（ktr-tone-dam）" [ref=e819]
+                - generic "貯水率 58.1%" [ref=e820]
+                - generic [ref=e822]: 58.1%
+            - cell "2,500 万 m³" [ref=e823]
+          - row "ダム 玉原 群馬県 水系 利根川 東京電力（株） — 1,480 万 m³" [ref=e824]:
+            - cell "ダム 玉原" [ref=e825]:
+              - generic [ref=e826]:
+                - img "ダム" [ref=e827]
+                - link "玉原" [ref=e831] [cursor=pointer]:
+                  - /url: /dams/tambara-10
+            - cell "群馬県" [ref=e832]
+            - cell "水系 利根川" [ref=e833]:
+              - generic [ref=e834]:
+                - img "水系" [ref=e835]
+                - link "利根川" [ref=e839] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "東京電力（株）" [ref=e840]
+            - cell "—" [ref=e841]:
+              - generic [ref=e842]: —
+            - cell "1,480 万 m³" [ref=e843]
+          - row "ダム 平出 群馬県 水系 利根川 群馬県 — 140 万 m³" [ref=e844]:
+            - cell "ダム 平出" [ref=e845]:
+              - generic [ref=e846]:
+                - img "ダム" [ref=e847]
+                - link "平出" [ref=e851] [cursor=pointer]:
+                  - /url: /dams/hiraide-10
+            - cell "群馬県" [ref=e852]
+            - cell "水系 利根川" [ref=e853]:
+              - generic [ref=e854]:
+                - img "水系" [ref=e855]
+                - link "利根川" [ref=e859] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "群馬県" [ref=e860]
+            - cell "—" [ref=e861]:
+              - generic [ref=e862]: —
+            - cell "140 万 m³" [ref=e863]
+          - row "ダム 薗原 群馬県 水系 利根川 関東地方建設局 実測データ（ktr-tone-dam） 貯水率 37.2% 37.2% 2,031 万 m³" [ref=e864]:
+            - cell "ダム 薗原" [ref=e865]:
+              - generic [ref=e866]:
+                - img "ダム" [ref=e867]
+                - link "薗原" [ref=e871] [cursor=pointer]:
+                  - /url: /dams/sonohara-10
+            - cell "群馬県" [ref=e872]
+            - cell "水系 利根川" [ref=e873]:
+              - generic [ref=e874]:
+                - img "水系" [ref=e875]
+                - link "利根川" [ref=e879] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "関東地方建設局" [ref=e880]
+            - cell "実測データ（ktr-tone-dam） 貯水率 37.2% 37.2%" [ref=e881]:
+              - generic [ref=e882]:
+                - generic "実測データ（ktr-tone-dam）" [ref=e883]
+                - generic "貯水率 37.2%" [ref=e884]
+                - generic [ref=e886]: 37.2%
+            - cell "2,031 万 m³" [ref=e887]
+          - row "ダム 丸沼 群馬県 水系 利根川 東京電力（株） — 1,360 万 m³" [ref=e888]:
+            - cell "ダム 丸沼" [ref=e889]:
+              - generic [ref=e890]:
+                - img "ダム" [ref=e891]
+                - link "丸沼" [ref=e895] [cursor=pointer]:
+                  - /url: /dams/marunuma-10
+            - cell "群馬県" [ref=e896]
+            - cell "水系 利根川" [ref=e897]:
+              - generic [ref=e898]:
+                - img "水系" [ref=e899]
+                - link "利根川" [ref=e903] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "東京電力（株）" [ref=e904]
+            - cell "—" [ref=e905]:
+              - generic [ref=e906]: —
+            - cell "1,360 万 m³" [ref=e907]
+          - row "ダム 鍛冶屋沢 群馬県 水系 利根川 東京電力（株） — 26 万 m³" [ref=e908]:
+            - cell "ダム 鍛冶屋沢" [ref=e909]:
+              - generic [ref=e910]:
+                - img "ダム" [ref=e911]
+                - link "鍛冶屋沢" [ref=e915] [cursor=pointer]:
+                  - /url: /dams/kajiyazawa-10
+            - cell "群馬県" [ref=e916]
+            - cell "水系 利根川" [ref=e917]:
+              - generic [ref=e918]:
+                - img "水系" [ref=e919]
+                - link "利根川" [ref=e923] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "東京電力（株）" [ref=e924]
+            - cell "—" [ref=e925]:
+              - generic [ref=e926]: —
+            - cell "26 万 m³" [ref=e927]
+          - row "ダム 八ッ場 群馬県 水系 利根川 関東地方整備局 実測データ（ktr-tone-dam） 貯水率 60.1% 60.1% 1.07 億 m³" [ref=e928]:
+            - cell "ダム 八ッ場" [ref=e929]:
+              - generic [ref=e930]:
+                - img "ダム" [ref=e931]
+                - link "八ッ場" [ref=e935] [cursor=pointer]:
+                  - /url: /dams/yamba-10
+            - cell "群馬県" [ref=e936]
+            - cell "水系 利根川" [ref=e937]:
+              - generic [ref=e938]:
+                - img "水系" [ref=e939]
+                - link "利根川" [ref=e943] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "関東地方整備局" [ref=e944]
+            - cell "実測データ（ktr-tone-dam） 貯水率 60.1% 60.1%" [ref=e945]:
+              - generic [ref=e946]:
+                - generic "実測データ（ktr-tone-dam）" [ref=e947]
+                - generic "貯水率 60.1%" [ref=e948]
+                - generic [ref=e950]: 60.1%
+            - cell "1.07 億 m³" [ref=e951]
+          - row "ダム 鹿沢 群馬県 水系 利根川 東京電力（株） — 563 万 m³" [ref=e952]:
+            - cell "ダム 鹿沢" [ref=e953]:
+              - generic [ref=e954]:
+                - img "ダム" [ref=e955]
+                - link "鹿沢" [ref=e959] [cursor=pointer]:
+                  - /url: /dams/kazawa-10
+            - cell "群馬県" [ref=e960]
+            - cell "水系 利根川" [ref=e961]:
+              - generic [ref=e962]:
+                - img "水系" [ref=e963]
+                - link "利根川" [ref=e967] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "東京電力（株）" [ref=e968]
+            - cell "—" [ref=e969]:
+              - generic [ref=e970]: —
+            - cell "563 万 m³" [ref=e971]
+          - row "ダム 大津 群馬県 水系 利根川 東京電力（株） — 11 万 m³" [ref=e972]:
+            - cell "ダム 大津" [ref=e973]:
+              - generic [ref=e974]:
+                - img "ダム" [ref=e975]
+                - link "大津" [ref=e979] [cursor=pointer]:
+                  - /url: /dams/ootsu-10
+            - cell "群馬県" [ref=e980]
+            - cell "水系 利根川" [ref=e981]:
+              - generic [ref=e982]:
+                - img "水系" [ref=e983]
+                - link "利根川" [ref=e987] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "東京電力（株）" [ref=e988]
+            - cell "—" [ref=e989]:
+              - generic [ref=e990]: —
+            - cell "11 万 m³" [ref=e991]
+          - row "ダム 品木 群馬県 水系 利根川 関東地方整備局 実測データ（kasenbosai） 貯水率 0.0% 0% 167 万 m³" [ref=e992]:
+            - cell "ダム 品木" [ref=e993]:
+              - generic [ref=e994]:
+                - img "ダム" [ref=e995]
+                - link "品木" [ref=e999] [cursor=pointer]:
+                  - /url: /dams/shinaki-10
+            - cell "群馬県" [ref=e1000]
+            - cell "水系 利根川" [ref=e1001]:
+              - generic [ref=e1002]:
+                - img "水系" [ref=e1003]
+                - link "利根川" [ref=e1007] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "関東地方整備局" [ref=e1008]
+            - cell "実測データ（kasenbosai） 貯水率 0.0% 0%" [ref=e1009]:
+              - generic [ref=e1010]:
+                - generic "実測データ（kasenbosai）" [ref=e1011]
+                - generic "貯水率 0.0%" [ref=e1012]
+                - generic [ref=e1013]: 0%
+            - cell "167 万 m³" [ref=e1014]
+          - row "ダム 茂沢 群馬県 水系 利根川 群馬県 — 17 万 m³" [ref=e1015]:
+            - cell "ダム 茂沢" [ref=e1016]:
+              - generic [ref=e1017]:
+                - img "ダム" [ref=e1018]
+                - link "茂沢" [ref=e1022] [cursor=pointer]:
+                  - /url: /dams/mozawa-10
+            - cell "群馬県" [ref=e1023]
+            - cell "水系 利根川" [ref=e1024]:
+              - generic [ref=e1025]:
+                - img "水系" [ref=e1026]
+                - link "利根川" [ref=e1030] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "群馬県" [ref=e1031]
+            - cell "—" [ref=e1032]:
+              - generic [ref=e1033]: —
+            - cell "17 万 m³" [ref=e1034]
+          - row "ダム 白砂 群馬県 水系 利根川 東京電力（株） — 63 万 m³" [ref=e1035]:
+            - cell "ダム 白砂" [ref=e1036]:
+              - generic [ref=e1037]:
+                - img "ダム" [ref=e1038]
+                - link "白砂" [ref=e1042] [cursor=pointer]:
+                  - /url: /dams/shirasuna-10
+            - cell "群馬県" [ref=e1043]
+            - cell "水系 利根川" [ref=e1044]:
+              - generic [ref=e1045]:
+                - img "水系" [ref=e1046]
+                - link "利根川" [ref=e1050] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "東京電力（株）" [ref=e1051]
+            - cell "—" [ref=e1052]:
+              - generic [ref=e1053]: —
+            - cell "63 万 m³" [ref=e1054]
+          - row "ダム 四万川 群馬県 水系 利根川 群馬県 実測データ（kasenbosai） 貯水率 31.9% 31.9% 920 万 m³" [ref=e1055]:
+            - cell "ダム 四万川" [ref=e1056]:
+              - generic [ref=e1057]:
+                - img "ダム" [ref=e1058]
+                - link "四万川" [ref=e1062] [cursor=pointer]:
+                  - /url: /dams/shimagawa-10
+            - cell "群馬県" [ref=e1063]
+            - cell "水系 利根川" [ref=e1064]:
+              - generic [ref=e1065]:
+                - img "水系" [ref=e1066]
+                - link "利根川" [ref=e1070] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "群馬県" [ref=e1071]
+            - cell "実測データ（kasenbosai） 貯水率 31.9% 31.9%" [ref=e1072]:
+              - generic [ref=e1073]:
+                - generic "実測データ（kasenbosai）" [ref=e1074]
+                - generic "貯水率 31.9%" [ref=e1075]
+                - generic [ref=e1077]: 31.9%
+            - cell "920 万 m³" [ref=e1078]
+          - row "ダム 中之条 群馬県 水系 利根川 群馬県 実測データ（kasenbosai） 貯水率 0.0% 0% 118 万 m³" [ref=e1079]:
+            - cell "ダム 中之条" [ref=e1080]:
+              - generic [ref=e1081]:
+                - img "ダム" [ref=e1082]
+                - link "中之条" [ref=e1086] [cursor=pointer]:
+                  - /url: /dams/nakanojou-10
+            - cell "群馬県" [ref=e1087]
+            - cell "水系 利根川" [ref=e1088]:
+              - generic [ref=e1089]:
+                - img "水系" [ref=e1090]
+                - link "利根川" [ref=e1094] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "群馬県" [ref=e1095]
+            - cell "実測データ（kasenbosai） 貯水率 0.0% 0%" [ref=e1096]:
+              - generic [ref=e1097]:
+                - generic "実測データ（kasenbosai）" [ref=e1098]
+                - generic "貯水率 0.0%" [ref=e1099]
+                - generic [ref=e1100]: 0%
+            - cell "118 万 m³" [ref=e1101]
+          - row "ダム 倉渕 群馬県 水系 利根川 — — 1,160 万 m³" [ref=e1102]:
+            - cell "ダム 倉渕" [ref=e1103]:
+              - generic [ref=e1104]:
+                - img "ダム" [ref=e1105]
+                - link "倉渕" [ref=e1109] [cursor=pointer]:
+                  - /url: /dams/dam-606-10
+            - cell "群馬県" [ref=e1110]
+            - cell "水系 利根川" [ref=e1111]:
+              - generic [ref=e1112]:
+                - img "水系" [ref=e1113]
+                - link "利根川" [ref=e1117] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "—" [ref=e1118]
+            - cell "—" [ref=e1119]:
+              - generic [ref=e1120]: —
+            - cell "1,160 万 m³" [ref=e1121]
+          - row "ダム 鳴沢 群馬県 水系 利根川 群馬県 — 128 万 m³" [ref=e1122]:
+            - cell "ダム 鳴沢" [ref=e1123]:
+              - generic [ref=e1124]:
+                - img "ダム" [ref=e1125]
+                - link "鳴沢" [ref=e1129] [cursor=pointer]:
+                  - /url: /dams/narusawa-10
+            - cell "群馬県" [ref=e1130]
+            - cell "水系 利根川" [ref=e1131]:
+              - generic [ref=e1132]:
+                - img "水系" [ref=e1133]
+                - link "利根川" [ref=e1137] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "群馬県" [ref=e1138]
+            - cell "—" [ref=e1139]:
+              - generic [ref=e1140]: —
+            - cell "128 万 m³" [ref=e1141]
+          - row "ダム 坂本（再） 群馬県 水系 利根川 群馬県 実測データ（kasenbosai） 貯水率 100.0% 100% 78 万 m³" [ref=e1142]:
+            - cell "ダム 坂本（再）" [ref=e1143]:
+              - generic [ref=e1144]:
+                - img "ダム" [ref=e1145]
+                - link "坂本（再）" [ref=e1149] [cursor=pointer]:
+                  - /url: /dams/sakamoto-10
+            - cell "群馬県" [ref=e1150]
+            - cell "水系 利根川" [ref=e1151]:
+              - generic [ref=e1152]:
+                - img "水系" [ref=e1153]
+                - link "利根川" [ref=e1157] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "群馬県" [ref=e1158]
+            - cell "実測データ（kasenbosai） 貯水率 100.0% 100%" [ref=e1159]:
+              - generic [ref=e1160]:
+                - generic "実測データ（kasenbosai）" [ref=e1161]
+                - generic "貯水率 100.0%" [ref=e1162]
+                - generic [ref=e1164]: 100%
+            - cell "78 万 m³" [ref=e1165]
+          - row "ダム 霧積 群馬県 水系 利根川 群馬県 実測データ（kasenbosai） 貯水率 73.0% 73% 250 万 m³" [ref=e1166]:
+            - cell "ダム 霧積" [ref=e1167]:
+              - generic [ref=e1168]:
+                - img "ダム" [ref=e1169]
+                - link "霧積" [ref=e1173] [cursor=pointer]:
+                  - /url: /dams/kirizumi-10
+            - cell "群馬県" [ref=e1174]
+            - cell "水系 利根川" [ref=e1175]:
+              - generic [ref=e1176]:
+                - img "水系" [ref=e1177]
+                - link "利根川" [ref=e1181] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "群馬県" [ref=e1182]
+            - cell "実測データ（kasenbosai） 貯水率 73.0% 73%" [ref=e1183]:
+              - generic [ref=e1184]:
+                - generic "実測データ（kasenbosai）" [ref=e1185]
+                - generic "貯水率 73.0%" [ref=e1186]
+                - generic [ref=e1188]: 73%
+            - cell "250 万 m³" [ref=e1189]
+          - row "ダム 中木 群馬県 水系 利根川 群馬県 — 160 万 m³" [ref=e1190]:
+            - cell "ダム 中木" [ref=e1191]:
+              - generic [ref=e1192]:
+                - img "ダム" [ref=e1193]
+                - link "中木" [ref=e1197] [cursor=pointer]:
+                  - /url: /dams/nakagi-10
+            - cell "群馬県" [ref=e1198]
+            - cell "水系 利根川" [ref=e1199]:
+              - generic [ref=e1200]:
+                - img "水系" [ref=e1201]
+                - link "利根川" [ref=e1205] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "群馬県" [ref=e1206]
+            - cell "—" [ref=e1207]:
+              - generic [ref=e1208]: —
+            - cell "160 万 m³" [ref=e1209]
+          - row "ダム 道平川 群馬県 水系 利根川 群馬県 実測データ（kasenbosai） 貯水率 49.8% 49.8% 510 万 m³" [ref=e1210]:
+            - cell "ダム 道平川" [ref=e1211]:
+              - generic [ref=e1212]:
+                - img "ダム" [ref=e1213]
+                - link "道平川" [ref=e1217] [cursor=pointer]:
+                  - /url: /dams/doudairagawa-10
+            - cell "群馬県" [ref=e1218]
+            - cell "水系 利根川" [ref=e1219]:
+              - generic [ref=e1220]:
+                - img "水系" [ref=e1221]
+                - link "利根川" [ref=e1225] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "群馬県" [ref=e1226]
+            - cell "実測データ（kasenbosai） 貯水率 49.8% 49.8%" [ref=e1227]:
+              - generic [ref=e1228]:
+                - generic "実測データ（kasenbosai）" [ref=e1229]
+                - generic "貯水率 49.8%" [ref=e1230]
+                - generic [ref=e1232]: 49.8%
+            - cell "510 万 m³" [ref=e1233]
+          - row "ダム 大仁田 群馬県 水系 利根川 群馬県 実測データ（kasenbosai） 貯水率 18.4% 18.4% 44 万 m³" [ref=e1234]:
+            - cell "ダム 大仁田" [ref=e1235]:
+              - generic [ref=e1236]:
+                - img "ダム" [ref=e1237]
+                - link "大仁田" [ref=e1241] [cursor=pointer]:
+                  - /url: /dams/oonita-10
+            - cell "群馬県" [ref=e1242]
+            - cell "水系 利根川" [ref=e1243]:
+              - generic [ref=e1244]:
+                - img "水系" [ref=e1245]
+                - link "利根川" [ref=e1249] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "群馬県" [ref=e1250]
+            - cell "実測データ（kasenbosai） 貯水率 18.4% 18.4%" [ref=e1251]:
+              - generic [ref=e1252]:
+                - generic "実測データ（kasenbosai）" [ref=e1253]
+                - generic "貯水率 18.4%" [ref=e1254]
+                - generic [ref=e1256]: 18.4%
+            - cell "44 万 m³" [ref=e1257]
+          - row "ダム 相沢川取水 群馬県 水系 利根川 群馬県 — —" [ref=e1258]:
+            - cell "ダム 相沢川取水" [ref=e1259]:
+              - generic [ref=e1260]:
+                - img "ダム" [ref=e1261]
+                - link "相沢川取水" [ref=e1265] [cursor=pointer]:
+                  - /url: /dams/aizawagawashusui-10
+            - cell "群馬県" [ref=e1266]
+            - cell "水系 利根川" [ref=e1267]:
+              - generic [ref=e1268]:
+                - img "水系" [ref=e1269]
+                - link "利根川" [ref=e1273] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "群馬県" [ref=e1274]
+            - cell "—" [ref=e1275]:
+              - generic [ref=e1276]: —
+            - cell "—" [ref=e1277]
+          - row "ダム 屋敷川取水 群馬県 水系 利根川 群馬県 — —" [ref=e1278]:
+            - cell "ダム 屋敷川取水" [ref=e1279]:
+              - generic [ref=e1280]:
+                - img "ダム" [ref=e1281]
+                - link "屋敷川取水" [ref=e1285] [cursor=pointer]:
+                  - /url: /dams/yashikigawashusui-10
+            - cell "群馬県" [ref=e1286]
+            - cell "水系 利根川" [ref=e1287]:
+              - generic [ref=e1288]:
+                - img "水系" [ref=e1289]
+                - link "利根川" [ref=e1293] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "群馬県" [ref=e1294]
+            - cell "—" [ref=e1295]:
+              - generic [ref=e1296]: —
+            - cell "—" [ref=e1297]
+          - row "ダム 丹生 群馬県 水系 利根川 群馬県 — 145 万 m³" [ref=e1298]:
+            - cell "ダム 丹生" [ref=e1299]:
+              - generic [ref=e1300]:
+                - img "ダム" [ref=e1301]
+                - link "丹生" [ref=e1305] [cursor=pointer]:
+                  - /url: /dams/nyuu-10
+            - cell "群馬県" [ref=e1306]
+            - cell "水系 利根川" [ref=e1307]:
+              - generic [ref=e1308]:
+                - img "水系" [ref=e1309]
+                - link "利根川" [ref=e1313] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "群馬県" [ref=e1314]
+            - cell "—" [ref=e1315]:
+              - generic [ref=e1316]: —
+            - cell "145 万 m³" [ref=e1317]
+          - row "ダム 大塩 群馬県 水系 利根川 関東農政局 — 184 万 m³" [ref=e1318]:
+            - cell "ダム 大塩" [ref=e1319]:
+              - generic [ref=e1320]:
+                - img "ダム" [ref=e1321]
+                - link "大塩" [ref=e1325] [cursor=pointer]:
+                  - /url: /dams/ooshio-10
+            - cell "群馬県" [ref=e1326]
+            - cell "水系 利根川" [ref=e1327]:
+              - generic [ref=e1328]:
+                - img "水系" [ref=e1329]
+                - link "利根川" [ref=e1333] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "関東農政局" [ref=e1334]
+            - cell "—" [ref=e1335]:
+              - generic [ref=e1336]: —
+            - cell "184 万 m³" [ref=e1337]
+          - row "ダム 牛秣 群馬県 水系 利根川 群馬県 — 90 万 m³" [ref=e1338]:
+            - cell "ダム 牛秣" [ref=e1339]:
+              - generic [ref=e1340]:
+                - img "ダム" [ref=e1341]
+                - link "牛秣" [ref=e1345] [cursor=pointer]:
+                  - /url: /dams/ushimagusa-10
+            - cell "群馬県" [ref=e1346]
+            - cell "水系 利根川" [ref=e1347]:
+              - generic [ref=e1348]:
+                - img "水系" [ref=e1349]
+                - link "利根川" [ref=e1353] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "群馬県" [ref=e1354]
+            - cell "—" [ref=e1355]:
+              - generic [ref=e1356]: —
+            - cell "90 万 m³" [ref=e1357]
+          - row "ダム 竹沼 群馬県 水系 利根川 関東農政局 — 103 万 m³" [ref=e1358]:
+            - cell "ダム 竹沼" [ref=e1359]:
+              - generic [ref=e1360]:
+                - img "ダム" [ref=e1361]
+                - link "竹沼" [ref=e1365] [cursor=pointer]:
+                  - /url: /dams/takenuma-10
+            - cell "群馬県" [ref=e1366]
+            - cell "水系 利根川" [ref=e1367]:
+              - generic [ref=e1368]:
+                - img "水系" [ref=e1369]
+                - link "利根川" [ref=e1373] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "関東農政局" [ref=e1374]
+            - cell "—" [ref=e1375]:
+              - generic [ref=e1376]: —
+            - cell "103 万 m³" [ref=e1377]
+          - row "ダム 上野 群馬県 水系 利根川 東京電力（株） — 1,840 万 m³" [ref=e1378]:
+            - cell "ダム 上野" [ref=e1379]:
+              - generic [ref=e1380]:
+                - img "ダム" [ref=e1381]
+                - link "上野" [ref=e1385] [cursor=pointer]:
+                  - /url: /dams/ueno-10
+            - cell "群馬県" [ref=e1386]
+            - cell "水系 利根川" [ref=e1387]:
+              - generic [ref=e1388]:
+                - img "水系" [ref=e1389]
+                - link "利根川" [ref=e1393] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "東京電力（株）" [ref=e1394]
+            - cell "—" [ref=e1395]:
+              - generic [ref=e1396]: —
+            - cell "1,840 万 m³" [ref=e1397]
+          - row "ダム 下久保 群馬県 水系 利根川 関東地建→水公団一工 実測データ（saitama-suibo） 貯水率 32.1% 32.1% 1.30 億 m³" [ref=e1398]:
+            - cell "ダム 下久保" [ref=e1399]:
+              - generic [ref=e1400]:
+                - img "ダム" [ref=e1401]
+                - link "下久保" [ref=e1405] [cursor=pointer]:
+                  - /url: /dams/shimokubo-10
+            - cell "群馬県" [ref=e1406]
+            - cell "水系 利根川" [ref=e1407]:
+              - generic [ref=e1408]:
+                - img "水系" [ref=e1409]
+                - link "利根川" [ref=e1413] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "関東地建→水公団一工" [ref=e1414]
+            - cell "実測データ（saitama-suibo） 貯水率 32.1% 32.1%" [ref=e1415]:
+              - generic [ref=e1416]:
+                - generic "実測データ（saitama-suibo）" [ref=e1417]
+                - generic "貯水率 32.1%" [ref=e1418]
+                - generic [ref=e1420]: 32.1%
+            - cell "1.30 億 m³" [ref=e1421]
+          - row "ダム 神水 群馬県 水系 利根川 群馬県 — 50 万 m³" [ref=e1422]:
+            - cell "ダム 神水" [ref=e1423]:
+              - generic [ref=e1424]:
+                - img "ダム" [ref=e1425]
+                - link "神水" [ref=e1429] [cursor=pointer]:
+                  - /url: /dams/shinsui-10
+            - cell "群馬県" [ref=e1430]
+            - cell "水系 利根川" [ref=e1431]:
+              - generic [ref=e1432]:
+                - img "水系" [ref=e1433]
+                - link "利根川" [ref=e1437] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "群馬県" [ref=e1438]
+            - cell "—" [ref=e1439]:
+              - generic [ref=e1440]: —
+            - cell "50 万 m³" [ref=e1441]
+          - row "ダム 塩沢 群馬県 水系 利根川 群馬県 実測データ（kasenbosai） 貯水率 66.1% 66.1% 30 万 m³" [ref=e1442]:
+            - cell "ダム 塩沢" [ref=e1443]:
+              - generic [ref=e1444]:
+                - img "ダム" [ref=e1445]
+                - link "塩沢" [ref=e1449] [cursor=pointer]:
+                  - /url: /dams/shiozawa-10
+            - cell "群馬県" [ref=e1450]
+            - cell "水系 利根川" [ref=e1451]:
+              - generic [ref=e1452]:
+                - img "水系" [ref=e1453]
+                - link "利根川" [ref=e1457] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "群馬県" [ref=e1458]
+            - cell "実測データ（kasenbosai） 貯水率 66.1% 66.1%" [ref=e1459]:
+              - generic [ref=e1460]:
+                - generic "実測データ（kasenbosai）" [ref=e1461]
+                - generic "貯水率 66.1%" [ref=e1462]
+                - generic [ref=e1464]: 66.1%
+            - cell "30 万 m³" [ref=e1465]
+          - row "ダム 三名川 群馬県 水系 利根川 群馬県 — 143 万 m³" [ref=e1466]:
+            - cell "ダム 三名川" [ref=e1467]:
+              - generic [ref=e1468]:
+                - img "ダム" [ref=e1469]
+                - link "三名川" [ref=e1473] [cursor=pointer]:
+                  - /url: /dams/sannakawa-10
+            - cell "群馬県" [ref=e1474]
+            - cell "水系 利根川" [ref=e1475]:
+              - generic [ref=e1476]:
+                - img "水系" [ref=e1477]
+                - link "利根川" [ref=e1481] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "群馬県" [ref=e1482]
+            - cell "—" [ref=e1483]:
+              - generic [ref=e1484]: —
+            - cell "143 万 m³" [ref=e1485]
+          - row "ダム 寺沢 群馬県 水系 利根川 寺沢貯水池増設土地改良事業 — 14 万 m³" [ref=e1486]:
+            - cell "ダム 寺沢" [ref=e1487]:
+              - generic [ref=e1488]:
+                - img "ダム" [ref=e1489]
+                - link "寺沢" [ref=e1493] [cursor=pointer]:
+                  - /url: /dams/terazawa-10
+            - cell "群馬県" [ref=e1494]
+            - cell "水系 利根川" [ref=e1495]:
+              - generic [ref=e1496]:
+                - img "水系" [ref=e1497]
+                - link "利根川" [ref=e1501] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "寺沢貯水池増設土地改良事業" [ref=e1502]
+            - cell "—" [ref=e1503]:
+              - generic [ref=e1504]: —
+            - cell "14 万 m³" [ref=e1505]
+          - row "ダム 早川 群馬県 水系 利根川 群馬県 — 120 万 m³" [ref=e1506]:
+            - cell "ダム 早川" [ref=e1507]:
+              - generic [ref=e1508]:
+                - img "ダム" [ref=e1509]
+                - link "早川" [ref=e1513] [cursor=pointer]:
+                  - /url: /dams/hayakawa-10
+            - cell "群馬県" [ref=e1514]
+            - cell "水系 利根川" [ref=e1515]:
+              - generic [ref=e1516]:
+                - img "水系" [ref=e1517]
+                - link "利根川" [ref=e1521] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "群馬県" [ref=e1522]
+            - cell "—" [ref=e1523]:
+              - generic [ref=e1524]: —
+            - cell "120 万 m³" [ref=e1525]
+          - row "ダム 草木 群馬県 水系 利根川 水資源開発公団一工 実測データ（ktr-tone-dam） 貯水率 85.2% 85.2% 6,050 万 m³" [ref=e1526]:
+            - cell "ダム 草木" [ref=e1527]:
+              - generic [ref=e1528]:
+                - img "ダム" [ref=e1529]
+                - link "草木" [ref=e1533] [cursor=pointer]:
+                  - /url: /dams/kusaki-10
+            - cell "群馬県" [ref=e1534]
+            - cell "水系 利根川" [ref=e1535]:
+              - generic [ref=e1536]:
+                - img "水系" [ref=e1537]
+                - link "利根川" [ref=e1541] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "水資源開発公団一工" [ref=e1542]
+            - cell "実測データ（ktr-tone-dam） 貯水率 85.2% 85.2%" [ref=e1543]:
+              - generic [ref=e1544]:
+                - generic "実測データ（ktr-tone-dam）" [ref=e1545]
+                - generic "貯水率 85.2%" [ref=e1546]
+                - generic [ref=e1548]: 85.2%
+            - cell "6,050 万 m³" [ref=e1549]
+          - row "ダム 高津戸 群馬県 水系 利根川 群馬県 — 81 万 m³" [ref=e1550]:
+            - cell "ダム 高津戸" [ref=e1551]:
+              - generic [ref=e1552]:
+                - img "ダム" [ref=e1553]
+                - link "高津戸" [ref=e1557] [cursor=pointer]:
+                  - /url: /dams/takatsudo-10
+            - cell "群馬県" [ref=e1558]
+            - cell "水系 利根川" [ref=e1559]:
+              - generic [ref=e1560]:
+                - img "水系" [ref=e1561]
+                - link "利根川" [ref=e1565] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "群馬県" [ref=e1566]
+            - cell "—" [ref=e1567]:
+              - generic [ref=e1568]: —
+            - cell "81 万 m³" [ref=e1569]
+          - row "ダム 渡良瀬遊水地（一期） 群馬県 水系 利根川 — 実測データ（saitama-suibo） — 2,640 万 m³" [ref=e1570]:
+            - cell "ダム 渡良瀬遊水地（一期）" [ref=e1571]:
+              - generic [ref=e1572]:
+                - img "ダム" [ref=e1573]
+                - link "渡良瀬遊水地（一期）" [ref=e1577] [cursor=pointer]:
+                  - /url: /dams/dam-614-10
+            - cell "群馬県" [ref=e1578]
+            - cell "水系 利根川" [ref=e1579]:
+              - generic [ref=e1580]:
+                - img "水系" [ref=e1581]
+                - link "利根川" [ref=e1585] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "—" [ref=e1586]
+            - cell "実測データ（saitama-suibo） —" [ref=e1587]:
+              - generic [ref=e1588]:
+                - generic "実測データ（saitama-suibo）" [ref=e1589]
+                - text: —
+            - cell "2,640 万 m³" [ref=e1590]
+          - row "ダム 黒坂石 群馬県 水系 利根川 群馬県 実測データ（kasenbosai） 貯水率 0.0% 0% 12 万 m³" [ref=e1591]:
+            - cell "ダム 黒坂石" [ref=e1592]:
+              - generic [ref=e1593]:
+                - img "ダム" [ref=e1594]
+                - link "黒坂石" [ref=e1598] [cursor=pointer]:
+                  - /url: /dams/kurosakaishi-10
+            - cell "群馬県" [ref=e1599]
+            - cell "水系 利根川" [ref=e1600]:
+              - generic [ref=e1601]:
+                - img "水系" [ref=e1602]
+                - link "利根川" [ref=e1606] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "群馬県" [ref=e1607]
+            - cell "実測データ（kasenbosai） 貯水率 0.0% 0%" [ref=e1608]:
+              - generic [ref=e1609]:
+                - generic "実測データ（kasenbosai）" [ref=e1610]
+                - generic "貯水率 0.0%" [ref=e1611]
+                - generic [ref=e1612]: 0%
+            - cell "12 万 m³" [ref=e1613]
+          - row "ダム 桐生川 群馬県 水系 利根川 群馬県 実測データ（kasenbosai） 貯水率 36.3% 36.3% 1,220 万 m³" [ref=e1614]:
+            - cell "ダム 桐生川" [ref=e1615]:
+              - generic [ref=e1616]:
+                - img "ダム" [ref=e1617]
+                - link "桐生川" [ref=e1621] [cursor=pointer]:
+                  - /url: /dams/kiryuugawa-10
+            - cell "群馬県" [ref=e1622]
+            - cell "水系 利根川" [ref=e1623]:
+              - generic [ref=e1624]:
+                - img "水系" [ref=e1625]
+                - link "利根川" [ref=e1629] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "群馬県" [ref=e1630]
+            - cell "実測データ（kasenbosai） 貯水率 36.3% 36.3%" [ref=e1631]:
+              - generic [ref=e1632]:
+                - generic "実測データ（kasenbosai）" [ref=e1633]
+                - generic "貯水率 36.3%" [ref=e1634]
+                - generic [ref=e1636]: 36.3%
+            - cell "1,220 万 m³" [ref=e1637]
+          - row "ダム 増田川 群馬県 水系 利根川 — — 580 万 m³" [ref=e1638]:
+            - cell "ダム 増田川" [ref=e1639]:
+              - generic [ref=e1640]:
+                - img "ダム" [ref=e1641]
+                - link "増田川" [ref=e1645] [cursor=pointer]:
+                  - /url: /dams/dam-590-10
+            - cell "群馬県" [ref=e1646]
+            - cell "水系 利根川" [ref=e1647]:
+              - generic [ref=e1648]:
+                - img "水系" [ref=e1649]
+                - link "利根川" [ref=e1653] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "—" [ref=e1654]
+            - cell "—" [ref=e1655]:
+              - generic [ref=e1656]: —
+            - cell "580 万 m³" [ref=e1657]
+          - row "ダム 市野萱川取水 群馬県 水系 利根川 群馬県 — —" [ref=e1658]:
+            - cell "ダム 市野萱川取水" [ref=e1659]:
+              - generic [ref=e1660]:
+                - img "ダム" [ref=e1661]
+                - link "市野萱川取水" [ref=e1665] [cursor=pointer]:
+                  - /url: /dams/ichinokayagawashusui-10
+            - cell "群馬県" [ref=e1666]
+            - cell "水系 利根川" [ref=e1667]:
+              - generic [ref=e1668]:
+                - img "水系" [ref=e1669]
+                - link "利根川" [ref=e1673] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "群馬県" [ref=e1674]
+            - cell "—" [ref=e1675]:
+              - generic [ref=e1676]: —
+            - cell "—" [ref=e1677]
+          - row "ダム 利根川上流ダム群再編 群馬県 水系 利根川 — — —" [ref=e1678]:
+            - cell "ダム 利根川上流ダム群再編" [ref=e1679]:
+              - generic [ref=e1680]:
+                - img "ダム" [ref=e1681]
+                - link "利根川上流ダム群再編" [ref=e1685] [cursor=pointer]:
+                  - /url: /dams/damu-10
+            - cell "群馬県" [ref=e1686]
+            - cell "水系 利根川" [ref=e1687]:
+              - generic [ref=e1688]:
+                - img "水系" [ref=e1689]
+                - link "利根川" [ref=e1693] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "—" [ref=e1694]
+            - cell "—" [ref=e1695]:
+              - generic [ref=e1696]: —
+            - cell "—" [ref=e1697]
+          - row "ダム 赤三調整池 群馬県 水系 利根川 東京発電（株） — 3 万 m³" [ref=e1698]:
+            - cell "ダム 赤三調整池" [ref=e1699]:
+              - generic [ref=e1700]:
+                - img "ダム" [ref=e1701]
+                - link "赤三調整池" [ref=e1705] [cursor=pointer]:
+                  - /url: /dams/akasanchouseichi-10
+            - cell "群馬県" [ref=e1706]
+            - cell "水系 利根川" [ref=e1707]:
+              - generic [ref=e1708]:
+                - img "水系" [ref=e1709]
+                - link "利根川" [ref=e1713] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "東京発電（株）" [ref=e1714]
+            - cell "—" [ref=e1715]:
+              - generic [ref=e1716]: —
+            - cell "3 万 m³" [ref=e1717]
+          - row "ダム 東金 千葉県 水系 利根川 水資源開発公団二工 実測データ（jwa-chiba-bouso） — 230 万 m³" [ref=e1718]:
+            - cell "ダム 東金" [ref=e1719]:
+              - generic [ref=e1720]:
+                - img "ダム" [ref=e1721]
+                - link "東金" [ref=e1725] [cursor=pointer]:
+                  - /url: /dams/tougane-12
+            - cell "千葉県" [ref=e1726]
+            - cell "水系 利根川" [ref=e1727]:
+              - generic [ref=e1728]:
+                - img "水系" [ref=e1729]
+                - link "利根川" [ref=e1733] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "水資源開発公団二工" [ref=e1734]
+            - cell "実測データ（jwa-chiba-bouso） —" [ref=e1735]:
+              - generic [ref=e1736]:
+                - generic "実測データ（jwa-chiba-bouso）" [ref=e1737]
+                - text: —
+            - cell "230 万 m³" [ref=e1738]
+          - row "ダム 白石 千葉県 水系 利根川 銚子市 実測データ（chiba-suisei） 貯水率 53.3% 53.3% 80 万 m³" [ref=e1739]:
+            - cell "ダム 白石" [ref=e1740]:
+              - generic [ref=e1741]:
+                - img "ダム" [ref=e1742]
+                - link "白石" [ref=e1746] [cursor=pointer]:
+                  - /url: /dams/shiraishi-12
+            - cell "千葉県" [ref=e1747]
+            - cell "水系 利根川" [ref=e1748]:
+              - generic [ref=e1749]:
+                - img "水系" [ref=e1750]
+                - link "利根川" [ref=e1754] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "銚子市" [ref=e1755]
+            - cell "実測データ（chiba-suisei） 貯水率 53.3% 53.3%" [ref=e1756]:
+              - generic [ref=e1757]:
+                - generic "実測データ（chiba-suisei）" [ref=e1758]
+                - generic "貯水率 53.3%" [ref=e1759]
+                - generic [ref=e1761]: 53.3%
+            - cell "80 万 m³" [ref=e1762]
+          - row "ダム 間瀬 埼玉県 水系 利根川 埼玉県 — 53 万 m³" [ref=e1763]:
+            - cell "ダム 間瀬" [ref=e1764]:
+              - generic [ref=e1765]:
+                - img "ダム" [ref=e1766]
+                - link "間瀬" [ref=e1770] [cursor=pointer]:
+                  - /url: /dams/maze-11
+            - cell "埼玉県" [ref=e1771]
+            - cell "水系 利根川" [ref=e1772]:
+              - generic [ref=e1773]:
+                - img "水系" [ref=e1774]
+                - link "利根川" [ref=e1778] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "埼玉県" [ref=e1779]
+            - cell "—" [ref=e1780]:
+              - generic [ref=e1781]: —
+            - cell "53 万 m³" [ref=e1782]
+          - row "ダム 権現堂調節池 埼玉県 水系 利根川 埼玉県 実測データ（saitama-suibo） 貯水率 24.3% 24.3% 411 万 m³" [ref=e1783]:
+            - cell "ダム 権現堂調節池" [ref=e1784]:
+              - generic [ref=e1785]:
+                - img "ダム" [ref=e1786]
+                - link "権現堂調節池" [ref=e1790] [cursor=pointer]:
+                  - /url: /dams/gongendouchousetsuchi-11
+            - cell "埼玉県" [ref=e1791]
+            - cell "水系 利根川" [ref=e1792]:
+              - generic [ref=e1793]:
+                - img "水系" [ref=e1794]
+                - link "利根川" [ref=e1798] [cursor=pointer]:
+                  - /url: /watersheds/利根川
+            - cell "埼玉県" [ref=e1799]
+            - cell "実測データ（saitama-suibo） 貯水率 24.3% 24.3%" [ref=e1800]:
+              - generic [ref=e1801]:
+                - generic "実測データ（saitama-suibo）" [ref=e1802]
+                - generic "貯水率 24.3%" [ref=e1803]
+                - generic [ref=e1805]: 24.3%
+            - cell "411 万 m³" [ref=e1806]
+  - contentinfo [ref=e1807]:
+    - generic [ref=e1808]:
+      - generic [ref=e1809]:
+        - generic [ref=e1810]:
+          - generic [ref=e1811]:
+            - img [ref=e1812]
+            - generic [ref=e1815]: Dam Data
+          - paragraph [ref=e1816]: 国土交通省・国土数値情報・ダム便覧の公開データをもとに、全国 2,749 基のダムの諸元と貯水量履歴を集約・配信するサービス。 研究・防災・教育・商用、いずれの用途にも無償でご利用いただけます。 なお、観測値のリアルタイム提供は行っていません — 各時点の値は 一次情報源 (川の防災情報など) を併用してください。
+          - generic [ref=e1817]:
+            - generic [ref=e1818]: Open Data
+            - generic [ref=e1819]: 無料 API
+            - generic [ref=e1820]: 履歴データ
+        - generic [ref=e1821]:
+          - generic [ref=e1822]: カタログ
+          - list [ref=e1823]:
+            - listitem [ref=e1824]:
+              - link "ダム一覧" [ref=e1825] [cursor=pointer]:
+                - /url: /dams
+            - listitem [ref=e1826]:
+              - link "水系一覧" [ref=e1827] [cursor=pointer]:
+                - /url: /watersheds
+            - listitem [ref=e1828]:
+              - link "日本地図" [ref=e1829] [cursor=pointer]:
+                - /url: /map
+            - listitem [ref=e1830]:
+              - link "マクロ統計" [ref=e1831] [cursor=pointer]:
+                - /url: /stats
+        - generic [ref=e1832]:
+          - generic [ref=e1833]: 開発者向け
+          - list [ref=e1834]:
+            - listitem [ref=e1835]:
+              - link "API 仕様" [ref=e1836] [cursor=pointer]:
+                - /url: /api/docs
+            - listitem [ref=e1837]:
+              - link "OpenAPI JSON" [ref=e1838] [cursor=pointer]:
+                - /url: /api/v1/openapi.json
+            - listitem [ref=e1839]:
+              - link "データソース" [ref=e1840] [cursor=pointer]:
+                - /url: /sources
+            - listitem [ref=e1841]:
+              - link "カバレッジ" [ref=e1842] [cursor=pointer]:
+                - /url: /coverage
+            - listitem [ref=e1843]:
+              - link "ロードマップ" [ref=e1844] [cursor=pointer]:
+                - /url: /roadmap
+            - listitem [ref=e1845]:
+              - link "用語集" [ref=e1846] [cursor=pointer]:
+                - /url: /glossary
+            - listitem [ref=e1847]:
+              - link "サイトマップ" [ref=e1848] [cursor=pointer]:
+                - /url: /sitemap.xml
+            - listitem [ref=e1849]:
+              - link "ヘルスチェック" [ref=e1850] [cursor=pointer]:
+                - /url: /api/v1/healthz
+        - generic [ref=e1851]:
+          - generic [ref=e1852]: アカウント
+          - list [ref=e1853]:
+            - listitem [ref=e1854]:
+              - link "API キー管理" [ref=e1855] [cursor=pointer]:
+                - /url: /account/keys
+            - listitem [ref=e1856]:
+              - link "サインイン" [ref=e1857] [cursor=pointer]:
+                - /url: /account/sign-in
+          - generic [ref=e1858]: 運営
+          - list [ref=e1859]:
+            - listitem [ref=e1860]:
+              - link "利用規約" [ref=e1861] [cursor=pointer]:
+                - /url: /legal/terms
+            - listitem [ref=e1862]:
+              - link "プライバシーポリシー" [ref=e1863] [cursor=pointer]:
+                - /url: /legal/privacy
+            - listitem [ref=e1864]:
+              - link "お問い合わせ (Discord)" [ref=e1865] [cursor=pointer]:
+                - /url: https://discord.gg/UbWqspWbAk
+      - generic [ref=e1866]:
+        - generic [ref=e1867]: データ出典 · ライセンス
+        - list [ref=e1868]:
+          - listitem [ref=e1869]: 国土数値情報 ダム諸元 W01・流域界 A21（出典明示で再配布可）
+          - listitem [ref=e1870]: 一般財団法人 日本ダム協会 ダム便覧（諸元・写真の引用は出典明示。写真の著作権は撮影者に帰属）
+          - listitem [ref=e1871]: 国土地理院 地理院タイル（出典明示で利用可）
+          - listitem [ref=e1872]: ja.wikipedia.org ダム写真フォールバック（CC BY-SA 4.0、各ページの著作者に従う）
+        - paragraph [ref=e1873]: 写真は外部サーバから配信されており、各画像のライセンスは原典に従います。 再利用する場合は必ず原典の権利者に従ってください。
+      - generic [ref=e1874]:
+        - paragraph [ref=e1875]:
+          - text: © 2026 Dam Data Japan · Open Reservoir Data ·
+          - link "v0.0.1 alpha" [ref=e1876] [cursor=pointer]:
+            - /url: /roadmap
+        - generic [ref=e1877]:
+          - link "X (Twitter)" [ref=e1878] [cursor=pointer]:
+            - /url: https://x.com/matsubokkuri
+            - generic [ref=e1879]: X (Twitter)
+            - img [ref=e1880]
+          - link "Discord" [ref=e1882] [cursor=pointer]:
+            - /url: https://discord.gg/UbWqspWbAk
+            - generic [ref=e1883]: Discord
+            - img [ref=e1884]
+  - alert [ref=e1886]

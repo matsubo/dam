@@ -1,4 +1,4 @@
-import { Droplets, MessageCircle } from 'lucide-react';
+import { Droplets, Heart, MessageCircle } from 'lucide-react';
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { ExtensionErrorShield } from '../components/extension-error-shield.tsx';
@@ -181,6 +181,11 @@ function SiteFooter() {
                 </a>
               </li>
               <li>
+                <a className="text-primary font-semibold hover:underline" href="/contribute">
+                  開発者募集
+                </a>
+              </li>
+              <li>
                 <a
                   className="text-on-surface-variant hover:text-primary transition-colors"
                   href="/sitemap.xml"
@@ -295,6 +300,16 @@ function SiteFooter() {
             </a>
           </p>
           <div className="flex items-center gap-3">
+            <a
+              title="GitHub Sponsors で支援する"
+              href="https://github.com/sponsors/matsubo"
+              target="_blank"
+              rel="noreferrer noopener"
+              className="inline-flex items-center gap-1.5 px-3 h-9 border border-outline-variant rounded-lg text-xs font-semibold text-on-surface-variant hover:bg-pink-600 hover:text-white hover:border-pink-600 transition-colors"
+            >
+              <Heart size={14} aria-hidden="true" />
+              Sponsor
+            </a>
             <a
               title="X"
               href="https://x.com/matsubokkuri"

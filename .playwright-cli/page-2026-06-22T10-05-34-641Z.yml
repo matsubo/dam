@@ -1,0 +1,1109 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - navigation [ref=e3]:
+      - link "Dam Data · 日本のダム情報" [ref=e4] [cursor=pointer]:
+        - /url: /
+        - img [ref=e5]
+        - generic [ref=e8]: Dam Data
+        - generic [ref=e9]: · 日本のダム情報
+      - generic [ref=e10]:
+        - link "ダム ダム" [ref=e11] [cursor=pointer]:
+          - /url: /dams
+          - img "ダム" [ref=e12]
+          - text: ダム
+        - link "水系 水系" [ref=e16] [cursor=pointer]:
+          - /url: /watersheds
+          - img "水系" [ref=e17]
+          - text: 水系
+        - link "地図" [ref=e21] [cursor=pointer]:
+          - /url: /map
+        - link "統計" [ref=e22] [cursor=pointer]:
+          - /url: /stats
+        - link "データソース" [ref=e23] [cursor=pointer]:
+          - /url: /sources
+        - link "API" [ref=e24] [cursor=pointer]:
+          - /url: /api/docs
+        - link "アカウント" [ref=e25] [cursor=pointer]:
+          - /url: /account/keys
+      - searchbox "検索" [ref=e28]
+  - main [ref=e29]:
+    - generic [ref=e30]:
+      - navigation [ref=e31]:
+        - list [ref=e32]:
+          - listitem [ref=e33]:
+            - link "ホーム" [ref=e34] [cursor=pointer]:
+              - /url: /
+          - listitem [ref=e35]:
+            - generic [ref=e36]: ›
+            - generic [ref=e37]: マクロ統計
+      - heading "マクロ統計" [level=1] [ref=e38]
+      - paragraph [ref=e39]: 全国のダムに関する集計指標。最新貯水量は直近 7 日間の最新観測値。貯水率は利水容量を分母とし、利水容量データのあるダムのみで集計しています。
+      - heading "サマリー" [level=2] [ref=e40]
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - generic [ref=e43]: ダム
+          - generic [ref=e44]: 2,754
+        - generic [ref=e45]:
+          - generic [ref=e46]: 水系
+          - generic [ref=e47]: "644"
+        - generic [ref=e48]:
+          - generic [ref=e49]: 観測レコード総数
+          - generic [ref=e50]: 1,924,962
+        - generic [ref=e51]:
+          - generic [ref=e52]: 直近24時間の観測
+          - generic [ref=e53]: 34,352
+        - generic [ref=e54]:
+          - generic [ref=e55]: 全国合計貯水容量
+          - generic [ref=e56]: 295.69 億 m³
+        - generic [ref=e57]:
+          - generic [ref=e58]: 現在の合計貯水量
+          - generic [ref=e59]: 52.38 億 m³
+        - generic [ref=e60]:
+          - generic [ref=e61]: 全国貯水率
+          - generic [ref=e62]: 21.9 %
+          - generic [ref=e63]: 利水容量比 (2,394 基)
+        - generic [ref=e64]:
+          - generic [ref=e65]: 観測カバー期間
+          - generic [ref=e66]: 2019-12-31 〜 2026-06-22
+        - generic [ref=e67]:
+          - generic [ref=e68]: 生データ・スナップショット
+          - generic [ref=e69]: 37,443
+        - generic [ref=e70]:
+          - generic [ref=e71]: 有効APIキー
+          - generic [ref=e72]: "0"
+      - heading "都道府県ランキング（容量上位）" [level=2] [ref=e73]
+      - table [ref=e74]:
+        - rowgroup [ref=e75]:
+          - row "順位 都道府県 ダム数 総貯水容量 現在貯水量 貯水率" [ref=e76]:
+            - columnheader "順位" [ref=e77]
+            - columnheader "都道府県" [ref=e78]
+            - columnheader "ダム数" [ref=e79]
+            - columnheader "総貯水容量" [ref=e80]
+            - columnheader "現在貯水量" [ref=e81]
+            - columnheader "貯水率" [ref=e82]
+        - rowgroup [ref=e83]:
+          - row "1 北海道 190 37.28 億 m³ 9.69 億 m³ 33.2 %(183/190)" [ref=e84]:
+            - cell "1" [ref=e85]
+            - cell "北海道" [ref=e86]:
+              - link "北海道" [ref=e87] [cursor=pointer]:
+                - /url: /prefectures/01
+            - cell "190" [ref=e88]
+            - cell "37.28 億 m³" [ref=e89]
+            - cell "9.69 億 m³" [ref=e90]
+            - cell "33.2 %(183/190)" [ref=e91]:
+              - text: 33.2 %
+              - generic [ref=e92]: (183/190)
+          - row "2 滋賀県 25 21.53 億 m³ 0 m³ 0.0 %(23/25)" [ref=e93]:
+            - cell "2" [ref=e94]
+            - cell "滋賀県" [ref=e95]:
+              - link "滋賀県" [ref=e96] [cursor=pointer]:
+                - /url: /prefectures/25
+            - cell "25" [ref=e97]
+            - cell "21.53 億 m³" [ref=e98]
+            - cell "0 m³" [ref=e99]
+            - cell "0.0 %(23/25)" [ref=e100]:
+              - text: 0.0 %
+              - generic [ref=e101]: (23/25)
+          - row "3 岐阜県 95 20.96 億 m³ 3.82 億 m³ 27.0 %(91/95)" [ref=e102]:
+            - cell "3" [ref=e103]
+            - cell "岐阜県" [ref=e104]:
+              - link "岐阜県" [ref=e105] [cursor=pointer]:
+                - /url: /prefectures/21
+            - cell "95" [ref=e106]
+            - cell "20.96 億 m³" [ref=e107]
+            - cell "3.82 億 m³" [ref=e108]
+            - cell "27.0 %(91/95)" [ref=e109]:
+              - text: 27.0 %
+              - generic [ref=e110]: (91/95)
+          - row "4 茨城県 16 13.91 億 m³ 63 万 m³ 0.1 %(15/16)" [ref=e111]:
+            - cell "4" [ref=e112]
+            - cell "茨城県" [ref=e113]:
+              - link "茨城県" [ref=e114] [cursor=pointer]:
+                - /url: /prefectures/08
+            - cell "16" [ref=e115]
+            - cell "13.91 億 m³" [ref=e116]
+            - cell "63 万 m³" [ref=e117]
+            - cell "0.1 %(15/16)" [ref=e118]:
+              - text: 0.1 %
+              - generic [ref=e119]: (15/16)
+          - row "5 福島県 89 12.74 億 m³ 4.18 億 m³ 44.0 %(86/89)" [ref=e120]:
+            - cell "5" [ref=e121]
+            - cell "福島県" [ref=e122]:
+              - link "福島県" [ref=e123] [cursor=pointer]:
+                - /url: /prefectures/07
+            - cell "89" [ref=e124]
+            - cell "12.74 億 m³" [ref=e125]
+            - cell "4.18 億 m³" [ref=e126]
+            - cell "44.0 %(86/89)" [ref=e127]:
+              - text: 44.0 %
+              - generic [ref=e128]: (86/89)
+          - row "6 新潟県 114 12.70 億 m³ 1,396 万 m³ 1.4 %(97/114)" [ref=e129]:
+            - cell "6" [ref=e130]
+            - cell "新潟県" [ref=e131]:
+              - link "新潟県" [ref=e132] [cursor=pointer]:
+                - /url: /prefectures/15
+            - cell "114" [ref=e133]
+            - cell "12.70 億 m³" [ref=e134]
+            - cell "1,396 万 m³" [ref=e135]
+            - cell "1.4 %(97/114)" [ref=e136]:
+              - text: 1.4 %
+              - generic [ref=e137]: (97/114)
+          - row "7 静岡県 45 11.38 億 m³ 2,581 万 m³ 3.4 %(37/45)" [ref=e138]:
+            - cell "7" [ref=e139]
+            - cell "静岡県" [ref=e140]:
+              - link "静岡県" [ref=e141] [cursor=pointer]:
+                - /url: /prefectures/22
+            - cell "45" [ref=e142]
+            - cell "11.38 億 m³" [ref=e143]
+            - cell "2,581 万 m³" [ref=e144]
+            - cell "3.4 %(37/45)" [ref=e145]:
+              - text: 3.4 %
+              - generic [ref=e146]: (37/45)
+          - row "8 長野県 66 8.71 億 m³ 1.72 億 m³ 27.9 %(64/66)" [ref=e147]:
+            - cell "8" [ref=e148]
+            - cell "長野県" [ref=e149]:
+              - link "長野県" [ref=e150] [cursor=pointer]:
+                - /url: /prefectures/20
+            - cell "66" [ref=e151]
+            - cell "8.71 億 m³" [ref=e152]
+            - cell "1.72 億 m³" [ref=e153]
+            - cell "27.9 %(64/66)" [ref=e154]:
+              - text: 27.9 %
+              - generic [ref=e155]: (64/66)
+          - row "9 岩手県 53 8.65 億 m³ 1.56 億 m³ 22.6 %(48/53)" [ref=e156]:
+            - cell "9" [ref=e157]
+            - cell "岩手県" [ref=e158]:
+              - link "岩手県" [ref=e159] [cursor=pointer]:
+                - /url: /prefectures/03
+            - cell "53" [ref=e160]
+            - cell "8.65 億 m³" [ref=e161]
+            - cell "1.56 億 m³" [ref=e162]
+            - cell "22.6 %(48/53)" [ref=e163]:
+              - text: 22.6 %
+              - generic [ref=e164]: (48/53)
+          - row "10 群馬県 50 8.52 億 m³ 2.92 億 m³ 37.9 %(43/50)" [ref=e165]:
+            - cell "10" [ref=e166]
+            - cell "群馬県" [ref=e167]:
+              - link "群馬県" [ref=e168] [cursor=pointer]:
+                - /url: /prefectures/10
+            - cell "50" [ref=e169]
+            - cell "8.52 億 m³" [ref=e170]
+            - cell "2.92 億 m³" [ref=e171]
+            - cell "37.9 %(43/50)" [ref=e172]:
+              - text: 37.9 %
+              - generic [ref=e173]: (43/50)
+          - row "11 奈良県 33 8.42 億 m³ 1.05 億 m³ 17.2 %(29/33)" [ref=e174]:
+            - cell "11" [ref=e175]
+            - cell "奈良県" [ref=e176]:
+              - link "奈良県" [ref=e177] [cursor=pointer]:
+                - /url: /prefectures/29
+            - cell "33" [ref=e178]
+            - cell "8.42 億 m³" [ref=e179]
+            - cell "1.05 億 m³" [ref=e180]
+            - cell "17.2 %(29/33)" [ref=e181]:
+              - text: 17.2 %
+              - generic [ref=e182]: (29/33)
+          - row "12 富山県 76 8.01 億 m³ 7,556 万 m³ 11.9 %(71/76)" [ref=e183]:
+            - cell "12" [ref=e184]
+            - cell "富山県" [ref=e185]:
+              - link "富山県" [ref=e186] [cursor=pointer]:
+                - /url: /prefectures/16
+            - cell "76" [ref=e187]
+            - cell "8.01 億 m³" [ref=e188]
+            - cell "7,556 万 m³" [ref=e189]
+            - cell "11.9 %(71/76)" [ref=e190]:
+              - text: 11.9 %
+              - generic [ref=e191]: (71/76)
+          - row "13 高知県 51 7.66 億 m³ 2.18 億 m³ 33.7 %(42/51)" [ref=e192]:
+            - cell "13" [ref=e193]
+            - cell "高知県" [ref=e194]:
+              - link "高知県" [ref=e195] [cursor=pointer]:
+                - /url: /prefectures/39
+            - cell "51" [ref=e196]
+            - cell "7.66 億 m³" [ref=e197]
+            - cell "2.18 億 m³" [ref=e198]
+            - cell "33.7 %(42/51)" [ref=e199]:
+              - text: 33.7 %
+              - generic [ref=e200]: (42/51)
+          - row "14 宮崎県 51 7.63 億 m³ 179 万 m³ 0.3 %" [ref=e201]:
+            - cell "14" [ref=e202]
+            - cell "宮崎県" [ref=e203]:
+              - link "宮崎県" [ref=e204] [cursor=pointer]:
+                - /url: /prefectures/45
+            - cell "51" [ref=e205]
+            - cell "7.63 億 m³" [ref=e206]
+            - cell "179 万 m³" [ref=e207]
+            - cell "0.3 %" [ref=e208]
+          - row "15 秋田県 66 7.56 億 m³ 1,572 万 m³ 2.4 %(65/66)" [ref=e209]:
+            - cell "15" [ref=e210]
+            - cell "秋田県" [ref=e211]:
+              - link "秋田県" [ref=e212] [cursor=pointer]:
+                - /url: /prefectures/05
+            - cell "66" [ref=e213]
+            - cell "7.56 億 m³" [ref=e214]
+            - cell "1,572 万 m³" [ref=e215]
+            - cell "2.4 %(65/66)" [ref=e216]:
+              - text: 2.4 %
+              - generic [ref=e217]: (65/66)
+          - row "16 福井県 26 6.32 億 m³ 1.91 億 m³ 40.7 %(24/26)" [ref=e218]:
+            - cell "16" [ref=e219]
+            - cell "福井県" [ref=e220]:
+              - link "福井県" [ref=e221] [cursor=pointer]:
+                - /url: /prefectures/18
+            - cell "26" [ref=e222]
+            - cell "6.32 億 m³" [ref=e223]
+            - cell "1.91 億 m³" [ref=e224]
+            - cell "40.7 %(24/26)" [ref=e225]:
+              - text: 40.7 %
+              - generic [ref=e226]: (24/26)
+          - row "17 広島県 100 6.01 億 m³ 6,932 万 m³ 12.6 %(89/100)" [ref=e227]:
+            - cell "17" [ref=e228]
+            - cell "広島県" [ref=e229]:
+              - link "広島県" [ref=e230] [cursor=pointer]:
+                - /url: /prefectures/34
+            - cell "100" [ref=e231]
+            - cell "6.01 億 m³" [ref=e232]
+            - cell "6,932 万 m³" [ref=e233]
+            - cell "12.6 %(89/100)" [ref=e234]:
+              - text: 12.6 %
+              - generic [ref=e235]: (89/100)
+          - row "18 山形県 59 5.68 億 m³ 1.53 億 m³ 32.2 %(53/59)" [ref=e236]:
+            - cell "18" [ref=e237]
+            - cell "山形県" [ref=e238]:
+              - link "山形県" [ref=e239] [cursor=pointer]:
+                - /url: /prefectures/06
+            - cell "59" [ref=e240]
+            - cell "5.68 億 m³" [ref=e241]
+            - cell "1.53 億 m³" [ref=e242]
+            - cell "32.2 %(53/59)" [ref=e243]:
+              - text: 32.2 %
+              - generic [ref=e244]: (53/59)
+          - row "19 岡山県 166 5.19 億 m³ 1.04 億 m³ 23.9 %(116/166)" [ref=e245]:
+            - cell "19" [ref=e246]
+            - cell "岡山県" [ref=e247]:
+              - link "岡山県" [ref=e248] [cursor=pointer]:
+                - /url: /prefectures/33
+            - cell "166" [ref=e249]
+            - cell "5.19 億 m³" [ref=e250]
+            - cell "1.04 億 m³" [ref=e251]
+            - cell "23.9 %(116/166)" [ref=e252]:
+              - text: 23.9 %
+              - generic [ref=e253]: (116/166)
+          - row "20 宮城県 39 4.86 億 m³ 2.18 億 m³ 49.8 %(37/39)" [ref=e254]:
+            - cell "20" [ref=e255]
+            - cell "宮城県" [ref=e256]:
+              - link "宮城県" [ref=e257] [cursor=pointer]:
+                - /url: /prefectures/04
+            - cell "39" [ref=e258]
+            - cell "4.86 億 m³" [ref=e259]
+            - cell "2.18 億 m³" [ref=e260]
+            - cell "49.8 %(37/39)" [ref=e261]:
+              - text: 49.8 %
+              - generic [ref=e262]: (37/39)
+          - row "21 栃木県 36 4.85 億 m³ 4,007 万 m³ 9.1 %(35/36)" [ref=e263]:
+            - cell "21" [ref=e264]
+            - cell "栃木県" [ref=e265]:
+              - link "栃木県" [ref=e266] [cursor=pointer]:
+                - /url: /prefectures/09
+            - cell "36" [ref=e267]
+            - cell "4.85 億 m³" [ref=e268]
+            - cell "4,007 万 m³" [ref=e269]
+            - cell "9.1 %(35/36)" [ref=e270]:
+              - text: 9.1 %
+              - generic [ref=e271]: (35/36)
+          - row "22 大分県 84 4.36 億 m³ 5,074 万 m³ 13.4 %(65/84)" [ref=e272]:
+            - cell "22" [ref=e273]
+            - cell "大分県" [ref=e274]:
+              - link "大分県" [ref=e275] [cursor=pointer]:
+                - /url: /prefectures/44
+            - cell "84" [ref=e276]
+            - cell "4.36 億 m³" [ref=e277]
+            - cell "5,074 万 m³" [ref=e278]
+            - cell "13.4 %(65/84)" [ref=e279]:
+              - text: 13.4 %
+              - generic [ref=e280]: (65/84)
+          - row "23 青森県 34 4.11 億 m³ 7,813 万 m³ 23.6 %(33/34)" [ref=e281]:
+            - cell "23" [ref=e282]
+            - cell "青森県" [ref=e283]:
+              - link "青森県" [ref=e284] [cursor=pointer]:
+                - /url: /prefectures/02
+            - cell "34" [ref=e285]
+            - cell "4.11 億 m³" [ref=e286]
+            - cell "7,813 万 m³" [ref=e287]
+            - cell "23.6 %(33/34)" [ref=e288]:
+              - text: 23.6 %
+              - generic [ref=e289]: (33/34)
+          - row "24 兵庫県 105 3.94 億 m³ 7,990 万 m³ 21.7 %(93/105)" [ref=e290]:
+            - cell "24" [ref=e291]
+            - cell "兵庫県" [ref=e292]:
+              - link "兵庫県" [ref=e293] [cursor=pointer]:
+                - /url: /prefectures/28
+            - cell "105" [ref=e294]
+            - cell "3.94 億 m³" [ref=e295]
+            - cell "7,990 万 m³" [ref=e296]
+            - cell "21.7 %(93/105)" [ref=e297]:
+              - text: 21.7 %
+              - generic [ref=e298]: (93/105)
+          - row "25 福岡県 97 3.82 億 m³ 1.13 億 m³ 24.5 %(84/97)" [ref=e299]:
+            - cell "25" [ref=e300]
+            - cell "福岡県" [ref=e301]:
+              - link "福岡県" [ref=e302] [cursor=pointer]:
+                - /url: /prefectures/40
+            - cell "97" [ref=e303]
+            - cell "3.82 億 m³" [ref=e304]
+            - cell "1.13 億 m³" [ref=e305]
+            - cell "24.5 %(84/97)" [ref=e306]:
+              - text: 24.5 %
+              - generic [ref=e307]: (84/97)
+          - row "26 熊本県 36 3.79 億 m³ 6,166 万 m³ 19.8 %(34/36)" [ref=e308]:
+            - cell "26" [ref=e309]
+            - cell "熊本県" [ref=e310]:
+              - link "熊本県" [ref=e311] [cursor=pointer]:
+                - /url: /prefectures/43
+            - cell "36" [ref=e312]
+            - cell "3.79 億 m³" [ref=e313]
+            - cell "6,166 万 m³" [ref=e314]
+            - cell "19.8 %(34/36)" [ref=e315]:
+              - text: 19.8 %
+              - generic [ref=e316]: (34/36)
+          - row "27 愛媛県 71 3.64 億 m³ 1.53 億 m³ 49.1 %(59/71)" [ref=e317]:
+            - cell "27" [ref=e318]
+            - cell "愛媛県" [ref=e319]:
+              - link "愛媛県" [ref=e320] [cursor=pointer]:
+                - /url: /prefectures/38
+            - cell "71" [ref=e321]
+            - cell "3.64 億 m³" [ref=e322]
+            - cell "1.53 億 m³" [ref=e323]
+            - cell "49.1 %(59/71)" [ref=e324]:
+              - text: 49.1 %
+              - generic [ref=e325]: (59/71)
+          - row "28 神奈川県 13 3.63 億 m³ 2.19 億 m³ 62.9 %(9/13)" [ref=e326]:
+            - cell "28" [ref=e327]
+            - cell "神奈川県" [ref=e328]:
+              - link "神奈川県" [ref=e329] [cursor=pointer]:
+                - /url: /prefectures/14
+            - cell "13" [ref=e330]
+            - cell "3.63 億 m³" [ref=e331]
+            - cell "2.19 億 m³" [ref=e332]
+            - cell "62.9 %(9/13)" [ref=e333]:
+              - text: 62.9 %
+              - generic [ref=e334]: (9/13)
+          - row "29 山口県 86 3.53 億 m³ 1,267 万 m³ 2.6 %(66/86)" [ref=e335]:
+            - cell "29" [ref=e336]
+            - cell "山口県" [ref=e337]:
+              - link "山口県" [ref=e338] [cursor=pointer]:
+                - /url: /prefectures/35
+            - cell "86" [ref=e339]
+            - cell "3.53 億 m³" [ref=e340]
+            - cell "1,267 万 m³" [ref=e341]
+            - cell "2.6 %(66/86)" [ref=e342]:
+              - text: 2.6 %
+              - generic [ref=e343]: (66/86)
+          - row "30 鹿児島県 42 3.39 億 m³ 514 万 m³ 1.9 %(40/42)" [ref=e344]:
+            - cell "30" [ref=e345]
+            - cell "鹿児島県" [ref=e346]:
+              - link "鹿児島県" [ref=e347] [cursor=pointer]:
+                - /url: /prefectures/46
+            - cell "42" [ref=e348]
+            - cell "3.39 億 m³" [ref=e349]
+            - cell "514 万 m³" [ref=e350]
+            - cell "1.9 %(40/42)" [ref=e351]:
+              - text: 1.9 %
+              - generic [ref=e352]: (40/42)
+          - row "31 三重県 86 3.33 億 m³ 1.20 億 m³ 47.9 %(49/86)" [ref=e353]:
+            - cell "31" [ref=e354]
+            - cell "三重県" [ref=e355]:
+              - link "三重県" [ref=e356] [cursor=pointer]:
+                - /url: /prefectures/24
+            - cell "86" [ref=e357]
+            - cell "3.33 億 m³" [ref=e358]
+            - cell "1.20 億 m³" [ref=e359]
+            - cell "47.9 %(49/86)" [ref=e360]:
+              - text: 47.9 %
+              - generic [ref=e361]: (49/86)
+          - row "32 石川県 55 3.18 億 m³ 1.46 億 m³ 48.5 %(32/55)" [ref=e362]:
+            - cell "32" [ref=e363]
+            - cell "石川県" [ref=e364]:
+              - link "石川県" [ref=e365] [cursor=pointer]:
+                - /url: /prefectures/17
+            - cell "55" [ref=e366]
+            - cell "3.18 億 m³" [ref=e367]
+            - cell "1.46 億 m³" [ref=e368]
+            - cell "48.5 %(32/55)" [ref=e369]:
+              - text: 48.5 %
+              - generic [ref=e370]: (32/55)
+          - row "33 愛知県 48 3.08 億 m³ 4,967 万 m³ 14.8 %(36/48)" [ref=e371]:
+            - cell "33" [ref=e372]
+            - cell "愛知県" [ref=e373]:
+              - link "愛知県" [ref=e374] [cursor=pointer]:
+                - /url: /prefectures/23
+            - cell "48" [ref=e375]
+            - cell "3.08 億 m³" [ref=e376]
+            - cell "4,967 万 m³" [ref=e377]
+            - cell "14.8 %(36/48)" [ref=e378]:
+              - text: 14.8 %
+              - generic [ref=e379]: (36/48)
+          - row "34 島根県 49 2.90 億 m³ 1,669 万 m³ 6.5 %(47/49)" [ref=e380]:
+            - cell "34" [ref=e381]
+            - cell "島根県" [ref=e382]:
+              - link "島根県" [ref=e383] [cursor=pointer]:
+                - /url: /prefectures/32
+            - cell "49" [ref=e384]
+            - cell "2.90 億 m³" [ref=e385]
+            - cell "1,669 万 m³" [ref=e386]
+            - cell "6.5 %(47/49)" [ref=e387]:
+              - text: 6.5 %
+              - generic [ref=e388]: (47/49)
+          - row "35 埼玉県 15 2.61 億 m³ 8,146 万 m³ 34.0 %" [ref=e389]:
+            - cell "35" [ref=e390]
+            - cell "埼玉県" [ref=e391]:
+              - link "埼玉県" [ref=e392] [cursor=pointer]:
+                - /url: /prefectures/11
+            - cell "15" [ref=e393]
+            - cell "2.61 億 m³" [ref=e394]
+            - cell "8,146 万 m³" [ref=e395]
+            - cell "34.0 %" [ref=e396]
+          - row "36 京都府 29 2.59 億 m³ 4,651 万 m³ 22.6 %(26/29)" [ref=e397]:
+            - cell "36" [ref=e398]
+            - cell "京都府" [ref=e399]:
+              - link "京都府" [ref=e400] [cursor=pointer]:
+                - /url: /prefectures/26
+            - cell "29" [ref=e401]
+            - cell "2.59 億 m³" [ref=e402]
+            - cell "4,651 万 m³" [ref=e403]
+            - cell "22.6 %(26/29)" [ref=e404]:
+              - text: 22.6 %
+              - generic [ref=e405]: (26/29)
+          - row "37 沖縄県 46 2.37 億 m³ 1.11 億 m³ 50.0 %" [ref=e406]:
+            - cell "37" [ref=e407]
+            - cell "沖縄県" [ref=e408]:
+              - link "沖縄県" [ref=e409] [cursor=pointer]:
+                - /url: /prefectures/47
+            - cell "46" [ref=e410]
+            - cell "2.37 億 m³" [ref=e411]
+            - cell "1.11 億 m³" [ref=e412]
+            - cell "50.0 %" [ref=e413]
+          - row "38 東京都 8 2.18 億 m³ 9,543 万 m³ 44.9 %" [ref=e414]:
+            - cell "38" [ref=e415]
+            - cell "東京都" [ref=e416]:
+              - link "東京都" [ref=e417] [cursor=pointer]:
+                - /url: /prefectures/13
+            - cell "8" [ref=e418]
+            - cell "2.18 億 m³" [ref=e419]
+            - cell "9,543 万 m³" [ref=e420]
+            - cell "44.9 %" [ref=e421]
+          - row "39 徳島県 23 1.89 億 m³ 3,484 万 m³ 29.5 %(19/23)" [ref=e422]:
+            - cell "39" [ref=e423]
+            - cell "徳島県" [ref=e424]:
+              - link "徳島県" [ref=e425] [cursor=pointer]:
+                - /url: /prefectures/36
+            - cell "23" [ref=e426]
+            - cell "1.89 億 m³" [ref=e427]
+            - cell "3,484 万 m³" [ref=e428]
+            - cell "29.5 %(19/23)" [ref=e429]:
+              - text: 29.5 %
+              - generic [ref=e430]: (19/23)
+          - row "40 佐賀県 57 1.67 億 m³ 3,422 万 m³ 22.3 %(44/57)" [ref=e431]:
+            - cell "40" [ref=e432]
+            - cell "佐賀県" [ref=e433]:
+              - link "佐賀県" [ref=e434] [cursor=pointer]:
+                - /url: /prefectures/41
+            - cell "57" [ref=e435]
+            - cell "1.67 億 m³" [ref=e436]
+            - cell "3,422 万 m³" [ref=e437]
+            - cell "22.3 %(44/57)" [ref=e438]:
+              - text: 22.3 %
+              - generic [ref=e439]: (44/57)
+          - row "41 和歌山県 28 1.62 億 m³ 2,826 万 m³ 23.4 %(16/28)" [ref=e440]:
+            - cell "41" [ref=e441]
+            - cell "和歌山県" [ref=e442]:
+              - link "和歌山県" [ref=e443] [cursor=pointer]:
+                - /url: /prefectures/30
+            - cell "28" [ref=e444]
+            - cell "1.62 億 m³" [ref=e445]
+            - cell "2,826 万 m³" [ref=e446]
+            - cell "23.4 %(16/28)" [ref=e447]:
+              - text: 23.4 %
+              - generic [ref=e448]: (16/28)
+          - row "42 香川県 65 1.23 億 m³ 3,978 万 m³ 32.4 %(61/65)" [ref=e449]:
+            - cell "42" [ref=e450]
+            - cell "香川県" [ref=e451]:
+              - link "香川県" [ref=e452] [cursor=pointer]:
+                - /url: /prefectures/37
+            - cell "65" [ref=e453]
+            - cell "1.23 億 m³" [ref=e454]
+            - cell "3,978 万 m³" [ref=e455]
+            - cell "32.4 %(61/65)" [ref=e456]:
+              - text: 32.4 %
+              - generic [ref=e457]: (61/65)
+          - row "43 山梨県 20 9,958 万 m³ 0 m³ 0.0 %" [ref=e458]:
+            - cell "43" [ref=e459]
+            - cell "山梨県" [ref=e460]:
+              - link "山梨県" [ref=e461] [cursor=pointer]:
+                - /url: /prefectures/19
+            - cell "20" [ref=e462]
+            - cell "9,958 万 m³" [ref=e463]
+            - cell "0 m³" [ref=e464]
+            - cell "0.0 %" [ref=e465]
+          - row "44 千葉県 50 9,869 万 m³ 936 万 m³ 10.5 %(49/50)" [ref=e466]:
+            - cell "44" [ref=e467]
+            - cell "千葉県" [ref=e468]:
+              - link "千葉県" [ref=e469] [cursor=pointer]:
+                - /url: /prefectures/12
+            - cell "50" [ref=e470]
+            - cell "9,869 万 m³" [ref=e471]
+            - cell "936 万 m³" [ref=e472]
+            - cell "10.5 %(49/50)" [ref=e473]:
+              - text: 10.5 %
+              - generic [ref=e474]: (49/50)
+          - row "45 長崎県 97 9,750 万 m³ 1,245 万 m³ 14.1 %(94/97)" [ref=e475]:
+            - cell "45" [ref=e476]
+            - cell "長崎県" [ref=e477]:
+              - link "長崎県" [ref=e478] [cursor=pointer]:
+                - /url: /prefectures/42
+            - cell "97" [ref=e479]
+            - cell "9,750 万 m³" [ref=e480]
+            - cell "1,245 万 m³" [ref=e481]
+            - cell "14.1 %(94/97)" [ref=e482]:
+              - text: 14.1 %
+              - generic [ref=e483]: (94/97)
+          - row "46 鳥取県 32 6,742 万 m³ 820 万 m³ 13.9 %(29/32)" [ref=e484]:
+            - cell "46" [ref=e485]
+            - cell "鳥取県" [ref=e486]:
+              - link "鳥取県" [ref=e487] [cursor=pointer]:
+                - /url: /prefectures/31
+            - cell "32" [ref=e488]
+            - cell "6,742 万 m³" [ref=e489]
+            - cell "820 万 m³" [ref=e490]
+            - cell "13.9 %(29/32)" [ref=e491]:
+              - text: 13.9 %
+              - generic [ref=e492]: (29/32)
+          - row "47 大阪府 32 6,018 万 m³ 1,138 万 m³ 16.1 %(21/32)" [ref=e493]:
+            - cell "47" [ref=e494]
+            - cell "大阪府" [ref=e495]:
+              - link "大阪府" [ref=e496] [cursor=pointer]:
+                - /url: /prefectures/27
+            - cell "32" [ref=e497]
+            - cell "6,018 万 m³" [ref=e498]
+            - cell "1,138 万 m³" [ref=e499]
+            - cell "16.1 %(21/32)" [ref=e500]:
+              - text: 16.1 %
+              - generic [ref=e501]: (21/32)
+      - heading "水系ランキング（容量上位 20）" [level=2] [ref=e502]
+      - table [ref=e503]:
+        - rowgroup [ref=e504]:
+          - row "順位 水系 ダム数 総貯水容量 現在貯水量 貯水率" [ref=e505]:
+            - columnheader "順位" [ref=e506]
+            - columnheader "水系" [ref=e507]
+            - columnheader "ダム数" [ref=e508]
+            - columnheader "総貯水容量" [ref=e509]
+            - columnheader "現在貯水量" [ref=e510]
+            - columnheader "貯水率" [ref=e511]
+        - rowgroup [ref=e512]:
+          - row "1 利根川 79 25.83 億 m³ 3.24 億 m³ 18.0 %(70/79)" [ref=e513]:
+            - cell "1" [ref=e514]
+            - cell "利根川" [ref=e515]:
+              - link "利根川" [ref=e516] [cursor=pointer]:
+                - /url: /watersheds/利根川
+            - cell "79" [ref=e517]
+            - cell "25.83 億 m³" [ref=e518]
+            - cell "3.24 億 m³" [ref=e519]
+            - cell "18.0 %(70/79)" [ref=e520]:
+              - text: 18.0 %
+              - generic [ref=e521]: (70/79)
+          - row "2 淀川 79 25.23 億 m³ 1.20 億 m³ 5.2 %(63/79)" [ref=e522]:
+            - cell "2" [ref=e523]
+            - cell "淀川" [ref=e524]:
+              - link "淀川" [ref=e525] [cursor=pointer]:
+                - /url: /watersheds/淀川
+            - cell "79" [ref=e526]
+            - cell "25.23 億 m³" [ref=e527]
+            - cell "1.20 億 m³" [ref=e528]
+            - cell "5.2 %(63/79)" [ref=e529]:
+              - text: 5.2 %
+              - generic [ref=e530]: (63/79)
+          - row "3 石狩川 88 21.82 億 m³ 6.67 億 m³ 38.9 %(82/88)" [ref=e531]:
+            - cell "3" [ref=e532]
+            - cell "石狩川" [ref=e533]:
+              - link "石狩川" [ref=e534] [cursor=pointer]:
+                - /url: /watersheds/石狩川
+            - cell "88" [ref=e535]
+            - cell "21.82 億 m³" [ref=e536]
+            - cell "6.67 億 m³" [ref=e537]
+            - cell "38.9 %(82/88)" [ref=e538]:
+              - text: 38.9 %
+              - generic [ref=e539]: (82/88)
+          - row "4 木曾川 80 17.70 億 m³ 5.28 億 m³ 42.9 %(76/80)" [ref=e540]:
+            - cell "4" [ref=e541]
+            - cell "木曾川" [ref=e542]:
+              - link "木曾川" [ref=e543] [cursor=pointer]:
+                - /url: /watersheds/木曾川
+            - cell "80" [ref=e544]
+            - cell "17.70 億 m³" [ref=e545]
+            - cell "5.28 億 m³" [ref=e546]
+            - cell "42.9 %(76/80)" [ref=e547]:
+              - text: 42.9 %
+              - generic [ref=e548]: (76/80)
+          - row "5 阿賀野川 42 14.99 億 m³ 3.20 億 m³ 30.5 %(39/42)" [ref=e549]:
+            - cell "5" [ref=e550]
+            - cell "阿賀野川" [ref=e551]:
+              - link "阿賀野川" [ref=e552] [cursor=pointer]:
+                - /url: /watersheds/阿賀野川
+            - cell "42" [ref=e553]
+            - cell "14.99 億 m³" [ref=e554]
+            - cell "3.20 億 m³" [ref=e555]
+            - cell "30.5 %(39/42)" [ref=e556]:
+              - text: 30.5 %
+              - generic [ref=e557]: (39/42)
+          - row "6 北上川 51 10.26 億 m³ 2.37 億 m³ 28.5 %(47/51)" [ref=e558]:
+            - cell "6" [ref=e559]
+            - cell "北上川" [ref=e560]:
+              - link "北上川" [ref=e561] [cursor=pointer]:
+                - /url: /watersheds/北上川
+            - cell "51" [ref=e562]
+            - cell "10.26 億 m³" [ref=e563]
+            - cell "2.37 億 m³" [ref=e564]
+            - cell "28.5 %(47/51)" [ref=e565]:
+              - text: 28.5 %
+              - generic [ref=e566]: (47/51)
+          - row "7 天竜川 18 9.88 億 m³ 3,487 万 m³ 5.9 %" [ref=e567]:
+            - cell "7" [ref=e568]
+            - cell "天竜川" [ref=e569]:
+              - link "天竜川" [ref=e570] [cursor=pointer]:
+                - /url: /watersheds/天竜川
+            - cell "18" [ref=e571]
+            - cell "9.88 億 m³" [ref=e572]
+            - cell "3,487 万 m³" [ref=e573]
+            - cell "5.9 %" [ref=e574]
+          - row "8 新宮川 13 7.18 億 m³ 1,443 万 m³ 3.2 %(11/13)" [ref=e575]:
+            - cell "8" [ref=e576]
+            - cell "新宮川" [ref=e577]:
+              - link "新宮川" [ref=e578] [cursor=pointer]:
+                - /url: /watersheds/新宮川
+            - cell "13" [ref=e579]
+            - cell "7.18 億 m³" [ref=e580]
+            - cell "1,443 万 m³" [ref=e581]
+            - cell "3.2 %(11/13)" [ref=e582]:
+              - text: 3.2 %
+              - generic [ref=e583]: (11/13)
+          - row "9 庄川 20 6.94 億 m³ 4,882 万 m³ 9.6 %(18/20)" [ref=e584]:
+            - cell "9" [ref=e585]
+            - cell "庄川" [ref=e586]:
+              - link "庄川" [ref=e587] [cursor=pointer]:
+                - /url: /watersheds/庄川
+            - cell "20" [ref=e588]
+            - cell "6.94 億 m³" [ref=e589]
+            - cell "4,882 万 m³" [ref=e590]
+            - cell "9.6 %(18/20)" [ref=e591]:
+              - text: 9.6 %
+              - generic [ref=e592]: (18/20)
+          - row "10 信濃川 87 6.68 億 m³ 646 万 m³ 1.4 %(80/87)" [ref=e593]:
+            - cell "10" [ref=e594]
+            - cell "信濃川" [ref=e595]:
+              - link "信濃川" [ref=e596] [cursor=pointer]:
+                - /url: /watersheds/信濃川
+            - cell "87" [ref=e597]
+            - cell "6.68 億 m³" [ref=e598]
+            - cell "646 万 m³" [ref=e599]
+            - cell "1.4 %(80/87)" [ref=e600]:
+              - text: 1.4 %
+              - generic [ref=e601]: (80/87)
+          - row "11 九頭竜川 23 6.21 億 m³ 1.86 億 m³ 40.3 %(21/23)" [ref=e602]:
+            - cell "11" [ref=e603]
+            - cell "九頭竜川" [ref=e604]:
+              - link "九頭竜川" [ref=e605] [cursor=pointer]:
+                - /url: /watersheds/九頭竜川
+            - cell "23" [ref=e606]
+            - cell "6.21 億 m³" [ref=e607]
+            - cell "1.86 億 m³" [ref=e608]
+            - cell "40.3 %(21/23)" [ref=e609]:
+              - text: 40.3 %
+              - generic [ref=e610]: (21/23)
+          - row "12 吉野川 28 5.83 億 m³ 2.40 億 m³ 46.4 %(24/28)" [ref=e611]:
+            - cell "12" [ref=e612]
+            - cell "吉野川" [ref=e613]:
+              - link "吉野川" [ref=e614] [cursor=pointer]:
+                - /url: /watersheds/吉野川
+            - cell "28" [ref=e615]
+            - cell "5.83 億 m³" [ref=e616]
+            - cell "2.40 億 m³" [ref=e617]
+            - cell "46.4 %(24/28)" [ref=e618]:
+              - text: 46.4 %
+              - generic [ref=e619]: (24/28)
+          - row "13 雄物川 32 4.89 億 m³ — —" [ref=e620]:
+            - cell "13" [ref=e621]
+            - cell "雄物川" [ref=e622]:
+              - link "雄物川" [ref=e623] [cursor=pointer]:
+                - /url: /watersheds/雄物川
+            - cell "32" [ref=e624]
+            - cell "4.89 億 m³" [ref=e625]
+            - cell "—" [ref=e626]
+            - cell "—" [ref=e627]
+          - row "14 十勝川 14 4.21 億 m³ 1.53 億 m³ 47.1 %" [ref=e628]:
+            - cell "14" [ref=e629]
+            - cell "十勝川" [ref=e630]:
+              - link "十勝川" [ref=e631] [cursor=pointer]:
+                - /url: /watersheds/十勝川
+            - cell "14" [ref=e632]
+            - cell "4.21 億 m³" [ref=e633]
+            - cell "1.53 億 m³" [ref=e634]
+            - cell "47.1 %" [ref=e635]
+          - row "15 最上川 49 3.76 億 m³ 1.15 億 m³ 35.5 %(43/49)" [ref=e636]:
+            - cell "15" [ref=e637]
+            - cell "最上川" [ref=e638]:
+              - link "最上川" [ref=e639] [cursor=pointer]:
+                - /url: /watersheds/最上川
+            - cell "49" [ref=e640]
+            - cell "3.76 億 m³" [ref=e641]
+            - cell "1.15 億 m³" [ref=e642]
+            - cell "35.5 %(43/49)" [ref=e643]:
+              - text: 35.5 %
+              - generic [ref=e644]: (43/49)
+          - row "16 阿武隈川 29 3.73 億 m³ 1.69 億 m³ 49.3 %(28/29)" [ref=e645]:
+            - cell "16" [ref=e646]
+            - cell "阿武隈川" [ref=e647]:
+              - link "阿武隈川" [ref=e648] [cursor=pointer]:
+                - /url: /watersheds/阿武隈川
+            - cell "29" [ref=e649]
+            - cell "3.73 億 m³" [ref=e650]
+            - cell "1.69 億 m³" [ref=e651]
+            - cell "49.3 %(28/29)" [ref=e652]:
+              - text: 49.3 %
+              - generic [ref=e653]: (28/29)
+          - row "17 筑後川 25 3.70 億 m³ 2,216 万 m³ 6.8 %(23/25)" [ref=e654]:
+            - cell "17" [ref=e655]
+            - cell "筑後川" [ref=e656]:
+              - link "筑後川" [ref=e657] [cursor=pointer]:
+                - /url: /watersheds/筑後川
+            - cell "25" [ref=e658]
+            - cell "3.70 億 m³" [ref=e659]
+            - cell "2,216 万 m³" [ref=e660]
+            - cell "6.8 %(23/25)" [ref=e661]:
+              - text: 6.8 %
+              - generic [ref=e662]: (23/25)
+          - row "18 大井川 18 3.50 億 m³ 1,877 万 m³ 6.5 %(16/18)" [ref=e663]:
+            - cell "18" [ref=e664]
+            - cell "大井川" [ref=e665]:
+              - link "大井川" [ref=e666] [cursor=pointer]:
+                - /url: /watersheds/大井川
+            - cell "18" [ref=e667]
+            - cell "3.50 億 m³" [ref=e668]
+            - cell "1,877 万 m³" [ref=e669]
+            - cell "6.5 %(16/18)" [ref=e670]:
+              - text: 6.5 %
+              - generic [ref=e671]: (16/18)
+          - row "19 相模川 13 3.24 億 m³ 1.75 億 m³ 57.8 %(10/13)" [ref=e672]:
+            - cell "19" [ref=e673]
+            - cell "相模川" [ref=e674]:
+              - link "相模川" [ref=e675] [cursor=pointer]:
+                - /url: /watersheds/相模川
+            - cell "13" [ref=e676]
+            - cell "3.24 億 m³" [ref=e677]
+            - cell "1.75 億 m³" [ref=e678]
+            - cell "57.8 %(10/13)" [ref=e679]:
+              - text: 57.8 %
+              - generic [ref=e680]: (10/13)
+          - row "20 岩木川 16 2.99 億 m³ 7,813 万 m³ 33.6 %(15/16)" [ref=e681]:
+            - cell "20" [ref=e682]
+            - cell "岩木川" [ref=e683]:
+              - link "岩木川" [ref=e684] [cursor=pointer]:
+                - /url: /watersheds/岩木川
+            - cell "16" [ref=e685]
+            - cell "2.99 億 m³" [ref=e686]
+            - cell "7,813 万 m³" [ref=e687]
+            - cell "33.6 %(15/16)" [ref=e688]:
+              - text: 33.6 %
+              - generic [ref=e689]: (15/16)
+      - heading "規模別の分布" [level=2] [ref=e690]
+      - table [ref=e691]:
+        - rowgroup [ref=e692]:
+          - row "容量レンジ ダム数 合計容量" [ref=e693]:
+            - columnheader "容量レンジ" [ref=e694]
+            - columnheader "ダム数" [ref=e695]
+            - columnheader "合計容量" [ref=e696]
+        - rowgroup [ref=e697]:
+          - row "10億 m³ 以上 2 31.53 億 m³" [ref=e698]:
+            - cell "10億 m³ 以上" [ref=e699]
+            - cell "2" [ref=e700]
+            - cell "31.53 億 m³" [ref=e701]
+          - row "1〜10億 m³ 54 110.05 億 m³" [ref=e702]:
+            - cell "1〜10億 m³" [ref=e703]
+            - cell "54" [ref=e704]
+            - cell "110.05 億 m³" [ref=e705]
+          - row "1000万〜1億 m³ 412 125.53 億 m³" [ref=e706]:
+            - cell "1000万〜1億 m³" [ref=e707]
+            - cell "412" [ref=e708]
+            - cell "125.53 億 m³" [ref=e709]
+          - row "100〜1000万 m³ 845 29.91 億 m³" [ref=e710]:
+            - cell "100〜1000万 m³" [ref=e711]
+            - cell "845" [ref=e712]
+            - cell "29.91 億 m³" [ref=e713]
+          - row "10〜100万 m³ 942 3.97 億 m³" [ref=e714]:
+            - cell "10〜100万 m³" [ref=e715]
+            - cell "942" [ref=e716]
+            - cell "3.97 億 m³" [ref=e717]
+          - row "10万 m³ 未満 494 —" [ref=e718]:
+            - cell "10万 m³ 未満" [ref=e719]
+            - cell "494" [ref=e720]
+            - cell "—" [ref=e721]
+          - row "不明 5 —" [ref=e722]:
+            - cell "不明" [ref=e723]
+            - cell "5" [ref=e724]
+            - cell "—" [ref=e725]
+      - heading "竣工年代の分布" [level=2] [ref=e726]
+      - table [ref=e727]:
+        - rowgroup [ref=e728]:
+          - row "年代 ダム数 合計容量" [ref=e729]:
+            - columnheader "年代" [ref=e730]
+            - columnheader "ダム数" [ref=e731]
+            - columnheader "合計容量" [ref=e732]
+        - rowgroup [ref=e733]:
+          - row "610〜 1 177 万 m³" [ref=e734]:
+            - cell "610〜" [ref=e735]
+            - cell "1" [ref=e736]
+            - cell "177 万 m³" [ref=e737]
+          - row "820〜 1 500 万 m³" [ref=e738]:
+            - cell "820〜" [ref=e739]
+            - cell "1" [ref=e740]
+            - cell "500 万 m³" [ref=e741]
+          - row "1500〜 1 33 万 m³" [ref=e742]:
+            - cell "1500〜" [ref=e743]
+            - cell "1" [ref=e744]
+            - cell "33 万 m³" [ref=e745]
+          - row "1600〜 1 10 万 m³" [ref=e746]:
+            - cell "1600〜" [ref=e747]
+            - cell "1" [ref=e748]
+            - cell "10 万 m³" [ref=e749]
+          - row "1630〜 1 1,520 万 m³" [ref=e750]:
+            - cell "1630〜" [ref=e751]
+            - cell "1" [ref=e752]
+            - cell "1,520 万 m³" [ref=e753]
+          - row "1650〜 1 1 万 m³" [ref=e754]:
+            - cell "1650〜" [ref=e755]
+            - cell "1" [ref=e756]
+            - cell "1 万 m³" [ref=e757]
+          - row "1660〜 3 135 万 m³" [ref=e758]:
+            - cell "1660〜" [ref=e759]
+            - cell "3" [ref=e760]
+            - cell "135 万 m³" [ref=e761]
+          - row "1670〜 2 292 万 m³" [ref=e762]:
+            - cell "1670〜" [ref=e763]
+            - cell "2" [ref=e764]
+            - cell "292 万 m³" [ref=e765]
+          - row "1710〜 3 94 万 m³" [ref=e766]:
+            - cell "1710〜" [ref=e767]
+            - cell "3" [ref=e768]
+            - cell "94 万 m³" [ref=e769]
+          - row "1720〜 1 35 万 m³" [ref=e770]:
+            - cell "1720〜" [ref=e771]
+            - cell "1" [ref=e772]
+            - cell "35 万 m³" [ref=e773]
+          - row "1730〜 1 42 万 m³" [ref=e774]:
+            - cell "1730〜" [ref=e775]
+            - cell "1" [ref=e776]
+            - cell "42 万 m³" [ref=e777]
+          - row "1750〜 6 10 万 m³" [ref=e778]:
+            - cell "1750〜" [ref=e779]
+            - cell "6" [ref=e780]
+            - cell "10 万 m³" [ref=e781]
+          - row "1760〜 3 49 万 m³" [ref=e782]:
+            - cell "1760〜" [ref=e783]
+            - cell "3" [ref=e784]
+            - cell "49 万 m³" [ref=e785]
+          - row "1790〜 28 354 万 m³" [ref=e786]:
+            - cell "1790〜" [ref=e787]
+            - cell "28" [ref=e788]
+            - cell "354 万 m³" [ref=e789]
+          - row "1800〜 3 26 万 m³" [ref=e790]:
+            - cell "1800〜" [ref=e791]
+            - cell "3" [ref=e792]
+            - cell "26 万 m³" [ref=e793]
+          - row "1810〜 3 24 万 m³" [ref=e794]:
+            - cell "1810〜" [ref=e795]
+            - cell "3" [ref=e796]
+            - cell "24 万 m³" [ref=e797]
+          - row "1820〜 1 37 万 m³" [ref=e798]:
+            - cell "1820〜" [ref=e799]
+            - cell "1" [ref=e800]
+            - cell "37 万 m³" [ref=e801]
+          - row "1830〜 5 38 万 m³" [ref=e802]:
+            - cell "1830〜" [ref=e803]
+            - cell "5" [ref=e804]
+            - cell "38 万 m³" [ref=e805]
+          - row "1840〜 4 45 万 m³" [ref=e806]:
+            - cell "1840〜" [ref=e807]
+            - cell "4" [ref=e808]
+            - cell "45 万 m³" [ref=e809]
+          - row "1850〜 8 79 万 m³" [ref=e810]:
+            - cell "1850〜" [ref=e811]
+            - cell "8" [ref=e812]
+            - cell "79 万 m³" [ref=e813]
+          - row "1860〜 13 182 万 m³" [ref=e814]:
+            - cell "1860〜" [ref=e815]
+            - cell "13" [ref=e816]
+            - cell "182 万 m³" [ref=e817]
+          - row "1870〜 10 71 万 m³" [ref=e818]:
+            - cell "1870〜" [ref=e819]
+            - cell "10" [ref=e820]
+            - cell "71 万 m³" [ref=e821]
+          - row "1880〜 10 175 万 m³" [ref=e822]:
+            - cell "1880〜" [ref=e823]
+            - cell "10" [ref=e824]
+            - cell "175 万 m³" [ref=e825]
+          - row "1890〜 14 225 万 m³" [ref=e826]:
+            - cell "1890〜" [ref=e827]
+            - cell "14" [ref=e828]
+            - cell "225 万 m³" [ref=e829]
+          - row "1900〜 17 820 万 m³" [ref=e830]:
+            - cell "1900〜" [ref=e831]
+            - cell "17" [ref=e832]
+            - cell "820 万 m³" [ref=e833]
+          - row "1910〜 76 2,362 万 m³" [ref=e834]:
+            - cell "1910〜" [ref=e835]
+            - cell "76" [ref=e836]
+            - cell "2,362 万 m³" [ref=e837]
+          - row "1920〜 108 1.29 億 m³" [ref=e838]:
+            - cell "1920〜" [ref=e839]
+            - cell "108" [ref=e840]
+            - cell "1.29 億 m³" [ref=e841]
+          - row "1930〜 167 3.20 億 m³" [ref=e842]:
+            - cell "1930〜" [ref=e843]
+            - cell "167" [ref=e844]
+            - cell "3.20 億 m³" [ref=e845]
+          - row "1940〜 127 9.23 億 m³" [ref=e846]:
+            - cell "1940〜" [ref=e847]
+            - cell "127" [ref=e848]
+            - cell "9.23 億 m³" [ref=e849]
+          - row "1950〜 282 45.27 億 m³" [ref=e850]:
+            - cell "1950〜" [ref=e851]
+            - cell "282" [ref=e852]
+            - cell "45.27 億 m³" [ref=e853]
+          - row "1960〜 368 57.01 億 m³" [ref=e854]:
+            - cell "1960〜" [ref=e855]
+            - cell "368" [ref=e856]
+            - cell "57.01 億 m³" [ref=e857]
+          - row "1970〜 343 36.30 億 m³" [ref=e858]:
+            - cell "1970〜" [ref=e859]
+            - cell "343" [ref=e860]
+            - cell "36.30 億 m³" [ref=e861]
+          - row "1980〜 292 20.44 億 m³" [ref=e862]:
+            - cell "1980〜" [ref=e863]
+            - cell "292" [ref=e864]
+            - cell "20.44 億 m³" [ref=e865]
+          - row "1990〜 277 56.03 億 m³" [ref=e866]:
+            - cell "1990〜" [ref=e867]
+            - cell "277" [ref=e868]
+            - cell "56.03 億 m³" [ref=e869]
+          - row "2000〜 225 29.13 億 m³" [ref=e870]:
+            - cell "2000〜" [ref=e871]
+            - cell "225" [ref=e872]
+            - cell "29.13 億 m³" [ref=e873]
+          - row "2010〜 97 23.92 億 m³" [ref=e874]:
+            - cell "2010〜" [ref=e875]
+            - cell "97" [ref=e876]
+            - cell "23.92 億 m³" [ref=e877]
+          - row "2020〜 23 7.84 億 m³" [ref=e878]:
+            - cell "2020〜" [ref=e879]
+            - cell "23" [ref=e880]
+            - cell "7.84 億 m³" [ref=e881]
+          - row "2030〜 5 1.26 億 m³" [ref=e882]:
+            - cell "2030〜" [ref=e883]
+            - cell "5" [ref=e884]
+            - cell "1.26 億 m³" [ref=e885]
+  - contentinfo [ref=e886]:
+    - generic [ref=e887]:
+      - generic [ref=e888]:
+        - generic [ref=e889]:
+          - generic [ref=e890]:
+            - img [ref=e891]
+            - generic [ref=e894]: Dam Data
+          - paragraph [ref=e895]: 国土交通省・国土数値情報・ダム便覧の公開データをもとに、全国 2,749 基のダムの諸元と貯水量履歴を集約・配信するサービス。 研究・防災・教育・商用、いずれの用途にも無償でご利用いただけます。 なお、観測値のリアルタイム提供は行っていません — 各時点の値は 一次情報源 (川の防災情報など) を併用してください。
+          - generic [ref=e896]:
+            - generic [ref=e897]: Open Data
+            - generic [ref=e898]: 無料 API
+            - generic [ref=e899]: 履歴データ
+        - generic [ref=e900]:
+          - generic [ref=e901]: カタログ
+          - list [ref=e902]:
+            - listitem [ref=e903]:
+              - link "ダム一覧" [ref=e904] [cursor=pointer]:
+                - /url: /dams
+            - listitem [ref=e905]:
+              - link "水系一覧" [ref=e906] [cursor=pointer]:
+                - /url: /watersheds
+            - listitem [ref=e907]:
+              - link "日本地図" [ref=e908] [cursor=pointer]:
+                - /url: /map
+            - listitem [ref=e909]:
+              - link "マクロ統計" [ref=e910] [cursor=pointer]:
+                - /url: /stats
+        - generic [ref=e911]:
+          - generic [ref=e912]: 開発者向け
+          - list [ref=e913]:
+            - listitem [ref=e914]:
+              - link "API 仕様" [ref=e915] [cursor=pointer]:
+                - /url: /api/docs
+            - listitem [ref=e916]:
+              - link "OpenAPI JSON" [ref=e917] [cursor=pointer]:
+                - /url: /api/v1/openapi.json
+            - listitem [ref=e918]:
+              - link "データソース" [ref=e919] [cursor=pointer]:
+                - /url: /sources
+            - listitem [ref=e920]:
+              - link "カバレッジ" [ref=e921] [cursor=pointer]:
+                - /url: /coverage
+            - listitem [ref=e922]:
+              - link "ロードマップ" [ref=e923] [cursor=pointer]:
+                - /url: /roadmap
+            - listitem [ref=e924]:
+              - link "用語集" [ref=e925] [cursor=pointer]:
+                - /url: /glossary
+            - listitem [ref=e926]:
+              - link "サイトマップ" [ref=e927] [cursor=pointer]:
+                - /url: /sitemap.xml
+            - listitem [ref=e928]:
+              - link "ヘルスチェック" [ref=e929] [cursor=pointer]:
+                - /url: /api/v1/healthz
+        - generic [ref=e930]:
+          - generic [ref=e931]: アカウント
+          - list [ref=e932]:
+            - listitem [ref=e933]:
+              - link "API キー管理" [ref=e934] [cursor=pointer]:
+                - /url: /account/keys
+            - listitem [ref=e935]:
+              - link "サインイン" [ref=e936] [cursor=pointer]:
+                - /url: /account/sign-in
+          - generic [ref=e937]: 運営
+          - list [ref=e938]:
+            - listitem [ref=e939]:
+              - link "利用規約" [ref=e940] [cursor=pointer]:
+                - /url: /legal/terms
+            - listitem [ref=e941]:
+              - link "プライバシーポリシー" [ref=e942] [cursor=pointer]:
+                - /url: /legal/privacy
+            - listitem [ref=e943]:
+              - link "お問い合わせ (Discord)" [ref=e944] [cursor=pointer]:
+                - /url: https://discord.gg/UbWqspWbAk
+      - generic [ref=e945]:
+        - generic [ref=e946]: データ出典 · ライセンス
+        - list [ref=e947]:
+          - listitem [ref=e948]: 国土数値情報 ダム諸元 W01・流域界 A21（出典明示で再配布可）
+          - listitem [ref=e949]: 一般財団法人 日本ダム協会 ダム便覧（諸元・写真の引用は出典明示。写真の著作権は撮影者に帰属）
+          - listitem [ref=e950]: 国土地理院 地理院タイル（出典明示で利用可）
+          - listitem [ref=e951]: ja.wikipedia.org ダム写真フォールバック（CC BY-SA 4.0、各ページの著作者に従う）
+        - paragraph [ref=e952]: 写真は外部サーバから配信されており、各画像のライセンスは原典に従います。 再利用する場合は必ず原典の権利者に従ってください。
+      - generic [ref=e953]:
+        - paragraph [ref=e954]:
+          - text: © 2026 Dam Data Japan · Open Reservoir Data ·
+          - link "v0.0.1 alpha" [ref=e955] [cursor=pointer]:
+            - /url: /roadmap
+        - generic [ref=e956]:
+          - link "X (Twitter)" [ref=e957] [cursor=pointer]:
+            - /url: https://x.com/matsubokkuri
+            - generic [ref=e958]: X (Twitter)
+            - img [ref=e959]
+          - link "Discord" [ref=e961] [cursor=pointer]:
+            - /url: https://discord.gg/UbWqspWbAk
+            - generic [ref=e962]: Discord
+            - img [ref=e963]
+  - alert [ref=e965]

@@ -1,7 +1,7 @@
-// Source-aware image credit. The two sources we actually use both require
-// attribution; not showing it would be a license violation (CC-BY-SA for
-// Wikipedia, Damnet's per-photo copyright). This helper produces the
-// caption + link given a stored image URL.
+// Source-aware image credit. Wikimedia is the only photo source we display;
+// its licences (CC-BY-SA and friends) require attribution, so not showing it
+// would be a licence violation. This helper produces the caption + link given
+// a stored image URL, and returns null for anything it cannot credit.
 
 export interface ImageCredit {
   /** Short text shown directly under or over the photo (e.g. "ダム便覧"). */
@@ -50,20 +50,12 @@ export function imageCredit(url: string | null | undefined): ImageCredit | null 
   if (!url) return null;
   try {
     const u = new URL(url);
-    if (u.hostname.endsWith('damnet.or.jp')) {
-      // Damnet photos are uploaded under wp-content/uploads/<yyyy>/<mm>/<DAMID>...jpg.
-      // We can't link to the exact photo-detail page, but the dam landing
-      // page on Damnet is recoverable from the file basename (NNNN prefix).
-      const m = url.match(/\/(\d{4})[A-Z]{2}/);
-      const damnetHref = m
-        ? `https://dambinran.damnet.or.jp/dams/japan/${m[1]}/`
-        : 'https://dambinran.damnet.or.jp/';
-      return {
-        text: '© ダム便覧',
-        href: damnetHref,
-        license: '一般財団法人日本ダム協会 / 写真の著作権は撮影者に帰属',
-      };
-    }
+    // ダム便覧 photos are deliberately unsupported. Their /media-policy/ grants
+    // no blanket reuse — each photo carries its own 使用条件 and, where none is
+    // stated, the policy directs you to ask the association. Copyright rests
+    // with the individual contributor, not the association, so attribution
+    // alone is not a licence. Falling through to null means a stale row can
+    // never render one.
     if (u.hostname.endsWith('wikipedia.org') || u.hostname.endsWith('wikimedia.org')) {
       // Wikimedia thumbnails (upload.wikimedia.org/wikipedia/commons/thumb/...)
       // and per-language wikipedia thumbnails. We resolve the file page so

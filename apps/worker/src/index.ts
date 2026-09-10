@@ -84,7 +84,6 @@ import matchKasenbosai from './tasks/match_kasenbosai.ts';
 import qualityFreshness from './tasks/quality_freshness.ts';
 import qualityRecompute from './tasks/quality_recompute.ts';
 import refreshDamElevation from './tasks/refresh_dam_elevation.ts';
-import refreshDamImagesDamnet from './tasks/refresh_dam_images_damnet.ts';
 import refreshDamImagesWikipedia from './tasks/refresh_dam_images_wikipedia.ts';
 import storageRateRecompute from './tasks/storage_rate_recompute.ts';
 
@@ -185,7 +184,6 @@ async function main(): Promise<void> {
       'storageRate:recompute': storageRateRecompute,
       'aggregates:refresh': aggregatesRefresh,
       'quality:freshness-check': qualityFreshness,
-      'images:refresh:damnet': refreshDamImagesDamnet,
       'images:refresh:wikipedia': refreshDamImagesWikipedia,
       'master:refresh:elevation': refreshDamElevation,
     },

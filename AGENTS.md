@@ -29,7 +29,7 @@ canonical product/architecture spec. It precedes any LLM-written doc.
 - **Do not push without explicit human consent.** Local commits are fine.
 - **Do not run `DELETE FROM dams ...`** without scoping to a fixture-id list.
   Past test code wiped 2,749 production rows twice in the same week.
-- **`synthetic` is retired.** Migration 0042 dropped it from
+- **`synthetic` is retired.** Migration 0045 dropped it from
   `source_priorities`; production has no synthetic rows and no API parameter
   or doc mentions it. `seed_synthetic_observations.ts` still exists for a
   local/fresh bring-up and re-inserts the row if you run it — don't

@@ -1,0 +1,328 @@
+[
+  {
+    "key": "top",
+    "tab": [
+      {
+        "urlid": "url_00_00",
+        "title": "トップページ",
+        "url": "http://kasensabo.pref.ehime.jp/dosha/servlet/Gamen1Servlet",
+        "text": "トップページ",
+        "grpid": false,
+        "pg": false,
+        "ktm": false,
+        "kra": false,
+        "grpid_value": "",
+        "pg_value": "0"
+      },
+      {
+        "urlid": "url_00_01",
+        "title": "使用上の注意事項",
+        "url": "http://kasensabo.pref.ehime.jp/dosha/cyuui.html",
+        "text": "このホームページの使用にあたっての注意事項について説明します。",
+        "grpid": false,
+        "pg": false,
+        "ktm": false,
+        "kra": false,
+        "grpid_value": "",
+        "pg_value": "0"
+      },
+      {
+        "urlid": "url_00_02",
+        "title": "用語の説明",
+        "url": "http://kasensabo.pref.ehime.jp/dosha/yougo.html",
+        "text": "このホームページで使用している用語について説明します。",
+        "grpid": false,
+        "pg": false,
+        "ktm": false,
+        "kra": false,
+        "grpid_value": "",
+        "pg_value": "0"
+      }
+    ]
+  },
+  {
+    "key": "kisyo",
+    "tab": [
+      {
+        "urlid": "url_01_00",
+        "title": "警報・注意報(気象庁)",
+        "url": "http://www.jma.go.jp/jp/warn/213.html",
+        "text": "現在の警報・注意報を確認できます。",
+        "grpid": false,
+        "pg": false,
+        "ktm": false,
+        "kra": false,
+        "grpid_value": "",
+        "pg_value": "0"
+      }
+    ]
+  },
+  {
+    "key": "kaseninfo",
+    "tab": [
+      {
+        "urlid": "url_02_00",
+        "title": "洪水予報管内地図",
+        "url": "http://183.176.244.72/kawabou-mng/fldForeMap.do?areaCd=88&userId=U1001&GID=05-0601",
+        "text": "現在の洪水予報管内地図を確認できます。",
+        "grpid": false,
+        "pg": false,
+        "ktm": false,
+        "kra": false,
+        "grpid_value": "",
+        "pg_value": "0"
+      },
+      {
+        "urlid": "url_02_01",
+        "title": "洪水予報状況履歴表",
+        "url": "http://183.176.244.72/kawabou-mng/fldForeRireki.do?areaCd=88&userId=U1001&GID=05-0603",
+        "text": "現在の洪水予報状況履歴表を確認できます。",
+        "grpid": false,
+        "pg": false,
+        "ktm": false,
+        "kra": false,
+        "grpid_value": "",
+        "pg_value": "0"
+      },
+      {
+        "urlid": "url_02_02",
+        "title": "ダム放流通知履歴表",
+        "url": "http://183.176.244.72/kawabou-mng/damDischgRireki.do?areaCd=88&userId=U1001&GID=05-0802",
+        "text": "現在のダム放流通知履歴表を確認できます。",
+        "grpid": false,
+        "pg": false,
+        "ktm": false,
+        "kra": false,
+        "grpid_value": "",
+        "pg_value": "0"
+      }
+    ]
+  },
+  {
+    "key": "dosya",
+    "tab": [
+      {
+        "urlid": "url_03_00",
+        "title": "えひめ土砂災害危険度情報",
+        "url": "https://www.sabo.pref.ehime.jp/kikendo",
+        "text": "現在の土砂災害危険度情報を確認できます。",
+        "grpid": false,
+        "pg": false,
+        "ktm": false,
+        "kra": false,
+        "grpid_value": "",
+        "pg_value": "0"
+      }
+    ]
+  },
+  {
+    "key": "mizu",
+    "tab": [
+      {
+        "urlid": "url_04_00",
+        "title": "水位観測所概況図",
+        "url": "http://183.176.244.72/kawabou-mng/gaikyoImage.do?rn=0&stg=1&grpId=U1001_MMAP006&userId=U1001&GID=05-0201",
+        "text": "現在の水位観測所概況図を確認できます。",
+        "grpid": false,
+        "pg": false,
+        "ktm": false,
+        "kra": false,
+        "grpid_value": "",
+        "pg_value": "0"
+      },
+      {
+        "urlid": "url_04_01",
+        "title": "時刻水位経過表",
+        "url": "http://183.176.244.72/kawabou-mng/stageKeikaTime.do?GID=05-1002&KKB=100011&SGN=0110&YKE=01101&datatype=10000&userId=U1001",
+        "text": "現在の時刻水位経過表を確認できます。",
+        "grpid": true,
+        "pg": true,
+        "ktm": true,
+        "kra": false,
+        "grpid_value": "U1001_MMAP001:東予東部,U1001_MMAP002:東予西部,U1001_MMAP003:中予,U1001_MMAP004:南予北部,U1001_MMAP005:南予南部",
+        "pg_value": "3,1,3,3,2"
+      },
+      {
+        "urlid": "url_04_02",
+        "title": "基準値超過水位観測所一覧表",
+        "url": "http://183.176.244.72/kawabou-mng/stageChouka.do?GID=05-0302&KKB=100011&YKE=10101&KSU=1&userId=U1001&prefCd=3801",
+        "text": "現在の基準値超過水位観測所一覧表を確認できます。",
+        "grpid": false,
+        "pg": true,
+        "ktm": false,
+        "kra": false,
+        "grpid_value": "",
+        "pg_value": "3"
+      }
+    ]
+  },
+  {
+    "key": "damu",
+    "tab": [
+      {
+        "urlid": "url_05_00",
+        "title": "時刻ダム諸量経過表",
+        "url": "http://183.176.244.72/kawabou-mng/customizeMyMenuKeika.do?GID=05-5101&userId=U1001",
+        "text": "現在の時刻ダム諸量経過表を確認できます。",
+        "grpid": true,
+        "pg": true,
+        "ktm": true,
+        "kra": false,
+        "grpid_value": "U1001_MMENU001:鹿森ダム,U1001_MMENU002:黒瀬ダム,U1001_MMENU003:玉川ダム,U1001_MMENU004:台ダム,U1001_MMENU005:須賀川ダム,U1001_MMENU006:山財ダム,U1001_MMENU007:柳瀬ダム(国),U1001_MMENU008:石手川ダム(国),U1001_MMENU009:鹿野川ダム(国),U1001_MMENU010:野村ダム(国),U1001_MMENU011:新宮ダム(国),U1001_MMENU012:富郷ダム(国)",
+        "pg_value": "1,1,1,1,1,1,1,1,1,1,1,1"
+      }
+    ]
+  },
+  {
+    "key": "ame",
+    "tab": [
+      {
+        "urlid": "url_06_00",
+        "title": "雨量観測所概況図",
+        "url": "http://183.176.244.72/kawabou-mng/gaikyoImage.do?rn=1&stg=0&grpId=U1001_MMAP006&userId=U1001&GID=05-0201",
+        "text": "現在の雨量観測所概況図を確認できます。",
+        "grpid": false,
+        "pg": false,
+        "ktm": false,
+        "kra": false,
+        "grpid_value": "",
+        "pg_value": "0"
+      },
+      {
+        "urlid": "url_06_01",
+        "title": "時間雨量経過表",
+        "url": "http://183.176.244.72/kawabou-mng/rainKeikaTime.do?&GID=05-0902&KKB=111011&SGN=0110&RBC=111&RDC=1&userId=U1001",
+        "text": "現在の時間雨量経過表を確認できます。",
+        "grpid": true,
+        "pg": true,
+        "ktm": true,
+        "kra": false,
+        "grpid_value": "U1001_MMAP001:東予東部,U1001_MMAP002:東予西部,U1001_MMAP003:中予,U1001_MMAP004:南予北部,U1001_MMAP005:南予南部",
+        "pg_value": "4,2,5,5,3"
+      },
+      {
+        "urlid": "url_06_02",
+        "title": "基準値超過雨量観測所一覧表",
+        "url": "http://183.176.244.72/kawabou-mng/rainChouka.do?&GID=05-0301&KKB=111011&userId=U1001&prefCd=3801",
+        "text": "現在の基準値超過雨量観測所一覧表を確認できます。",
+        "grpid": false,
+        "pg": true,
+        "ktm": false,
+        "kra": true,
+        "grpid_value": "",
+        "pg_value": "3"
+      }
+    ]
+  },
+  {
+    "key": "radar",
+    "tab": [
+      {
+        "urlid": "url_07_02",
+        "title": "現況レーダ雨量(広域)",
+        "url": "http://183.176.244.72/kawabou-mng/radarGenkyoImage.do?rd=1&prefCd=3801&userId=U1001&GID=05-1801",
+        "text": "現在の現況レーダ雨量（広域）を確認できます。",
+        "grpid": false,
+        "pg": false,
+        "ktm": false,
+        "kra": false,
+        "grpid_value": "",
+        "pg_value": "0"
+      },
+      {
+        "urlid": "url_07_03",
+        "title": "雨量レーダ履歴(広域)",
+        "url": "http://183.176.244.72/kawabou-mng/radarRirekiImage.do?rd=1&interval=30&prefCd=3801&userId=U1001&GID=05-1804",
+        "text": "現在の現況レーダ雨量（広域）を確認できます。",
+        "grpid": false,
+        "pg": false,
+        "ktm": false,
+        "kra": false,
+        "grpid_value": "",
+        "pg_value": "0"
+      },
+      {
+        "urlid": "url_07_04",
+        "title": "降水短時間予報(広域)(気象庁)",
+        "url": "http://www.jma.go.jp/jp/radame/index.html?areaCode=213",
+        "text": "現在の降水短時間予報（広域）を確認できます。",
+        "grpid": false,
+        "pg": false,
+        "ktm": false,
+        "kra": false,
+        "grpid_value": "",
+        "pg_value": "0"
+      },
+      {
+        "urlid": "url_07_05",
+        "title": "降水ナウキャスト(広域)(気象庁)",
+        "url": "http://www.jma.go.jp/jp/radnowc/index.html?areaCode=213",
+        "text": "現在の降水ナウキャスト（広域）を確認できます。",
+        "grpid": false,
+        "pg": false,
+        "ktm": false,
+        "kra": false,
+        "grpid_value": "",
+        "pg_value": "0"
+      }
+    ]
+  },
+  {
+    "key": "excess",
+    "tab": [
+      {
+        "urlid": "url_08_00",
+        "title": "基準値超過雨量観測所一覧表",
+        "url": "http://183.176.244.72/kawabou-mng/rainChouka.do?&GID=05-0301&KKB=111011&userId=U1001&prefCd=3801",
+        "text": "現在の基準値超過雨量観測所一覧表を確認できます。",
+        "grpid": false,
+        "pg": true,
+        "ktm": false,
+        "kra": true,
+        "grpid_value": "",
+        "pg_value": "3"
+      },
+      {
+        "urlid": "url_08_01",
+        "title": "基準値超過水位観測所一覧表",
+        "url": "http://183.176.244.72/kawabou-mng/stageChouka.do?GID=05-0302&KKB=100011&YKE=10101&KSU=1&userId=U1001&prefCd=3801",
+        "text": "現在の基準値超過水位観測所一覧表を確認できます。",
+        "grpid": false,
+        "pg": true,
+        "ktm": false,
+        "kra": false,
+        "grpid_value": "",
+        "pg_value": "3"
+      }
+    ]
+  },
+  {
+    "key": "etc",
+    "tab": [
+      {
+        "urlid": "url_09_00",
+        "title": "水質観測所概況図",
+        "url": "http://183.176.244.72/kawabou-mng/gaikyoImage.do?wq=1&grpId=U1001_MMAP006&userId=U1001&GID=05-0201",
+        "text": "現在の水質観測所概況図を確認できます。",
+        "grpid": false,
+        "pg": false,
+        "ktm": false,
+        "kra": false,
+        "grpid_value": "",
+        "pg_value": "0"
+      },
+      {
+        "urlid": "url_09_01",
+        "title": "時刻水質概況表",
+        "url": "http://183.176.244.72/kawabou-mng/waterGenkyouTime.do?GID=05-1301&KKB=100011&SGN=0110&userId=U1001",
+        "text": "現在の時刻水質概況表を確認できます。",
+        "grpid": true,
+        "pg": true,
+        "ktm": false,
+        "kra": false,
+        "grpid_value": "U1001_MMAP006:愛媛県",
+        "pg_value": "1"
+      }
+    ]
+  }
+]
