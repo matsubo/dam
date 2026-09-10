@@ -34,6 +34,9 @@ describe('isAdEligible — 国土数値情報由来のページは不可', () =>
     // /sources and /coverage only aggregate NLNI columns rather than printing
     // raw values. Aggregating does not launder the licence — they stay denied.
     ['source list', '/sources'],
+    // /contribute counts rows in dams/watersheds. Same call as /coverage:
+    // an aggregate over an NLNI-derived table is still a derived work.
+    ['contribute', '/contribute'],
   ])('%s (%s) earns no ad', (_label, path) => {
     expect(isAdEligible(path)).toBe(false);
   });
