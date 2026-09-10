@@ -130,7 +130,9 @@ describe('parseAllDamsJson', () => {
     expect(rows[0]?.observedAt.toISOString()).toBe('2026-06-05T06:30:00.000Z');
     expect(rows[0]?.waterLevelM).toBeCloseTo(64.77);
     expect(rows[0]?.storageVolumeM3).toBeCloseTo(97 * 1000);
-    expect(rows[0]?.storageRate).toBeCloseTo(0.367);
+    // rate_r is the 利水容量貯水率 the manager publishes; `rate` / rate_y
+    // divide by the full 有効貯水容量. Issue #38 §2-2.
+    expect(rows[0]?.storageRate).toBeCloseTo(0.962);
     expect(rows[0]?.inflowM3s).toBeCloseTo(0.01);
     expect(rows[0]?.outflowM3s).toBeCloseTo(0.01);
   });
@@ -190,5 +192,29 @@ describe('parseAllDamsJson', () => {
     expect(rows[0]?.storageRate).toBeNull();
     expect(rows[0]?.inflowM3s).toBeNull();
     expect(rows[0]?.outflowM3s).toBeNull();
+  });
+
+  test('falls back to the 有効容量 rate when 利水 is unpublished', () => {
+    const [base] = sampleJson.list;
+    if (!base) throw new Error('fixture missing');
+    const json = {
+      ymd: '2026/06/05',
+      time: '15:30',
+      list: [{ ...base, rate_r: '-', rate_y: '36.6' }],
+    };
+    const rows = parseAllDamsJson(json, masters);
+    expect(rows[0]?.storageRate).toBeCloseTo(0.366);
+  });
+
+  test('parses thousands separators in pondage', () => {
+    const [base] = sampleJson.list;
+    if (!base) throw new Error('fixture missing');
+    const json = {
+      ymd: '2026/06/05',
+      time: '15:30',
+      list: [{ ...base, pondage: '1,938' }],
+    };
+    const rows = parseAllDamsJson(json, masters);
+    expect(rows[0]?.storageVolumeM3).toBeCloseTo(1_938_000);
   });
 });

@@ -66,6 +66,40 @@ describe('parseTottoriItems', () => {
     expect(sugisawa?.storageRate).toBeCloseTo(0.688, 3);
   });
 
+  it('prefers 利水容量貯水率 over 有効容量貯水率', () => {
+    // 鳥取県防災Web publishes both columns; today every dam reports
+    // storageRateWaterUseCapacity as null/flg=2, so this only bites when the
+    // 利水 column starts arriving. 有効 divides by the full 有効貯水容量 and
+    // understates flood-control dams — same inversion as issue #19.
+    const [base] = listFixture.items as Parameters<typeof parseTottoriItems>[0];
+    if (!base) throw new Error('fixture missing');
+    const rows = parseTottoriItems([
+      {
+        ...base,
+        storageRateEffectiveCapacity: 31.0,
+        storageRateEffectiveCapacityFlg: '0',
+        storageRateWaterUseCapacity: 96.2,
+        storageRateWaterUseCapacityFlg: '0',
+      },
+    ]);
+    expect(rows[0]?.storageRate).toBeCloseTo(0.962, 3);
+  });
+
+  it('falls back to 有効容量貯水率 when 利水 is unpublished', () => {
+    const [base] = listFixture.items as Parameters<typeof parseTottoriItems>[0];
+    if (!base) throw new Error('fixture missing');
+    const rows = parseTottoriItems([
+      {
+        ...base,
+        storageRateEffectiveCapacity: 31.0,
+        storageRateEffectiveCapacityFlg: '0',
+        storageRateWaterUseCapacity: null,
+        storageRateWaterUseCapacityFlg: '2',
+      },
+    ]);
+    expect(rows[0]?.storageRate).toBeCloseTo(0.31, 3);
+  });
+
   it('observatoryId is stringified', () => {
     const rows = parseTottoriItems(listFixture.items as Parameters<typeof parseTottoriItems>[0]);
     expect(rows[0]?.observatoryId).toBe('71001');
