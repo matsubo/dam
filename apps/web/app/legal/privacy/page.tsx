@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 
 // The advertising section appears only on a deploy that actually serves ads,
 // so the policy never describes a data flow that isn't happening. Same env var
-// that gates <AdSlot /> and /ads.txt.
+// that gates the AdSense components and /ads.txt.
 const ADS_ENABLED = Boolean(process.env.NEXT_PUBLIC_ADSENSE_CLIENT);
 
 const LAST_UPDATED = ADS_ENABLED ? '2026-09-09' : '2026-05-04';

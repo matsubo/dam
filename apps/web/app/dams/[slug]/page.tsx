@@ -14,7 +14,6 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { AdSlot } from '../../../components/adsense.tsx';
 import { Breadcrumbs } from '../../../components/breadcrumbs.tsx';
 import { DamCard } from '../../../components/dam-card.tsx';
 import { DamLocationMap } from '../../../components/dam-location-map.tsx';
@@ -491,10 +490,6 @@ export default async function DamDetail({ params }: PageProps) {
           </ul>
         </section>
       )}
-
-      {/* Below the data, never between a reading and its context. Renders
-          nothing unless NEXT_PUBLIC_ADSENSE_CLIENT + a slot are configured. */}
-      <AdSlot className="mt-12" />
 
       {/* biome-ignore lint/security/noDangerouslySetInnerHtml: required to emit schema.org JSON-LD */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />

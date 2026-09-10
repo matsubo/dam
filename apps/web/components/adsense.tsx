@@ -5,25 +5,58 @@ import Script from 'next/script';
 import { useEffect } from 'react';
 import { isAdEligible } from '../lib/ad-eligibility.ts';
 
-// Google AdSense, gated twice over.
+// Google AdSense. Two components, one gate.
 //
-//   1. NEXT_PUBLIC_ADSENSE_CLIENT unset  → renders nothing at all.
-//      Dev, CI and any deploy that hasn't opted in stay completely ad-free,
-//      exactly like <GoogleAnalytics />.
-//   2. Route not on the allowlist        → renders nothing.
-//      See ../lib/ad-eligibility.ts: 国土数値情報 W01 is 商用利用不可 and feeds
-//      the dam master, so most of this site may not carry ads.
+//   <AdSenseAuto />  — loads the AdSense script. Mounted once in app/layout.tsx.
+//                      With 自動広告 enabled in the console, Google places the
+//                      ads itself; no slot id needed.
+//   <AdSlot slot=… /> — one manual unit at a spot you choose. Needs a slot id.
 //
-// ⚠️ AUTO ADS MUST STAY OFF IN THE ADSENSE CONSOLE.
-// "Auto ads" / 自動広告 inject units into every page from Google's side,
-// ignoring this component entirely — which would silently defeat gate 2 and put
-// ads on 国土数値情報-derived pages. Use manual ad units (this component) only.
+// Both are gated the same way, and both render nothing unless:
+//   1. NEXT_PUBLIC_ADSENSE_CLIENT is set — dev, CI and any deploy that hasn't
+//      opted in stay completely ad-free, exactly like <GoogleAnalytics />; and
+//   2. isAdEligible(pathname) is true — see ../lib/ad-eligibility.ts.
+//
+// Auto ads respect gate 2 because they only run where the AdSense script is
+// present, and <AdSenseAuto /> injects the script on eligible routes only.
+// The gate fails if the script reaches a page some other way, so:
+//
+// ⚠️ Do NOT add the AdSense tag to the GTM container (<Gtm /> is mounted
+//    site-wide in app/layout.tsx) and do NOT hard-code the script into
+//    layout.tsx. Either would put it on every page and let auto ads run there.
+//
+// One residual hole: on a client-side navigation the script stays loaded, so
+// moving from an eligible page to an ineligible one can carry auto ads along.
+// Use AdSense → 自動広告 → ページ除外 for anything that must never show them.
 
 const ADSENSE_CLIENT = process.env.NEXT_PUBLIC_ADSENSE_CLIENT;
 /** Default in-content unit id, so pages don't each hard-code one. */
 const DEFAULT_SLOT = process.env.NEXT_PUBLIC_ADSENSE_SLOT_CONTENT;
 
 type AdsByGoogleWindow = Window & { adsbygoogle?: unknown[] };
+
+const SCRIPT_SRC = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}`;
+
+/**
+ * Loads the AdSense script on ad-eligible routes only.
+ *
+ * Mount once, near the top of <body> in app/layout.tsx. With 自動広告 on,
+ * this is the whole integration — Google chooses placements. Because the
+ * script is absent everywhere else, auto ads stay confined to the routes
+ * ad-eligibility.ts allows.
+ */
+export function AdSenseAuto() {
+  const pathname = usePathname();
+  if (!ADSENSE_CLIENT || !isAdEligible(pathname)) return null;
+  return (
+    <Script
+      id="adsbygoogle-lib"
+      src={SCRIPT_SRC}
+      strategy="afterInteractive"
+      crossOrigin="anonymous"
+    />
+  );
+}
 
 export interface AdSlotProps {
   /**
@@ -66,7 +99,7 @@ export function AdSlot({ slot, className }: AdSlotProps) {
     <>
       <Script
         id="adsbygoogle-lib"
-        src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}`}
+        src={SCRIPT_SRC}
         strategy="afterInteractive"
         crossOrigin="anonymous"
       />

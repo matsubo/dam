@@ -5,7 +5,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dam.teraren.com';
 
 // Advertising clauses appear only on a deploy that actually serves ads, so the
 // policy never claims a data flow that isn't happening. Same env var that gates
-// <AdSlot /> and /ads.txt.
+// the AdSense components and /ads.txt.
 const ADS_ENABLED = Boolean(process.env.NEXT_PUBLIC_ADSENSE_CLIENT);
 
 // The list is data so the advertising clause can slot in without hand-renumbering.
