@@ -1,0 +1,262 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - link "本文へ移動" [ref=e3] [cursor=pointer]:
+      - /url: "#contents"
+    - generic [ref=e6]:
+      - link "国土交通省" [ref=e8] [cursor=pointer]:
+        - /url: /index.html
+        - img "国土交通省" [ref=e9]
+      - generic [ref=e10]:
+        - link "English" [ref=e12] [cursor=pointer]:
+          - /url: /en/index.html
+        - search [ref=e14]:
+          - textbox "検索" [ref=e15]:
+            - /placeholder: " "
+          - button "検索" [ref=e16] [cursor=pointer]
+        - generic [ref=e17]:
+          - term [ref=e18]: 文字サイズ変更
+          - definition [ref=e19]:
+            - link "標準" [ref=e20] [cursor=pointer]:
+              - /url: javascript:void(0);
+          - definition [ref=e21]:
+            - link "拡大" [ref=e22] [cursor=pointer]:
+              - /url: javascript:void(0);
+        - link "音声読み上げ・ルビ振り" [ref=e24] [cursor=pointer]:
+          - /url: http://zoomsight.social.or.jp/?url=https://www.mlit.go.jp
+        - link "検索方法" [ref=e26] [cursor=pointer]:
+          - /url: /search_help.html
+        - link "サイトマップ" [ref=e28] [cursor=pointer]:
+          - /url: /sitemap.html
+    - navigation "グローバルナビゲーション" [ref=e31]:
+      - list [ref=e32]:
+        - listitem [ref=e33]:
+          - link "ホーム" [ref=e34] [cursor=pointer]:
+            - /url: /index.html
+            - generic [ref=e35]: ホーム
+        - listitem [ref=e36]:
+          - link "国土交通省について" [ref=e37] [cursor=pointer]:
+            - /url: /about/index.html
+            - generic [ref=e38]: 国土交通省について
+        - listitem [ref=e39]:
+          - link "報道・広報" [ref=e40] [cursor=pointer]:
+            - /url: /report/index.html
+            - generic [ref=e41]: 報道・広報
+        - listitem [ref=e42]:
+          - link "政策・法令・予算" [ref=e43] [cursor=pointer]:
+            - /url: /page/kanbo01_hy_002651.html
+            - generic [ref=e44]: 政策・法令・予算
+        - listitem [ref=e45]:
+          - link "オープンデータ・統計" [ref=e46] [cursor=pointer]:
+            - /url: /statistics/index.html
+            - generic [ref=e47]: オープンデータ・統計
+        - listitem [ref=e48]:
+          - link "お問い合わせ・申請" [ref=e49] [cursor=pointer]:
+            - /url: /appli/index.html
+            - generic [ref=e50]: お問い合わせ・申請
+    - heading "水資源" [level=1] [ref=e52]:
+      - img "水資源" [ref=e53]
+    - list [ref=e55]:
+      - listitem [ref=e56]:
+        - link "ホーム" [ref=e57] [cursor=pointer]:
+          - /url: /index_old.html
+      - listitem [ref=e58]:
+        - text: ">"
+        - link "政策・仕事" [ref=e59] [cursor=pointer]:
+          - /url: /policy/index.html
+      - listitem [ref=e60]:
+        - text: ">"
+        - link "水管理・国土保全" [ref=e61] [cursor=pointer]:
+          - /url: /mizukokudo/index.html
+      - listitem [ref=e62]:
+        - text: ">"
+        - link "水資源" [ref=e63] [cursor=pointer]:
+          - /url: /mizukokudo/mizsei/index.html
+      - listitem [ref=e64]: ">全国のダム貯水情報 リンク集"
+    - generic [ref=e68]:
+      - heading "全国のダム貯水情報 リンク集" [level=2] [ref=e71]
+      - generic [ref=e72]:
+        - paragraph [ref=e73]:
+          - text: 全国の公表されているダム貯水情報のリンクを掲載しております。
+          - text: 北海道 ：
+          - link "北海道開発局" [ref=e74] [cursor=pointer]:
+            - /url: http://info-dam.hdb.hkd.mlit.go.jp/dam/
+          - link "北海道" [ref=e75] [cursor=pointer]:
+            - /url: https://www.pref.hokkaido.lg.jp/kn/sbs/ksn/kasenkahome/dam/damhome.html
+        - paragraph [ref=e76]:
+          - text: 東＿北 ：
+          - link "東北地方整備局" [ref=e77] [cursor=pointer]:
+            - /url: https://www.thr.mlit.go.jp/bumon/b00037/k00290/river-hp/kasen/damu/touhokurealtimedamu.pdf
+          - link "青森県" [ref=e78] [cursor=pointer]:
+            - /url: https://www.kasensabo.bousai.pref.aomori.jp/bousai/static/dam/map_0_0.html
+          - link "岩手県" [ref=e79] [cursor=pointer]:
+            - /url: http://kasen.pref.iwate.jp/iwate/servlet/Gamen32Servlet
+          - link "宮城県" [ref=e80] [cursor=pointer]:
+            - /url: https://www.pref.miyagi.jp/soshiki/kasen/dam-cyosuiiall.html
+          - link "秋田県" [ref=e81] [cursor=pointer]:
+            - /url: https://kasen.pref.akita.lg.jp/?dtype=1&no=4&vtype=1&no2=0
+          - link "山形県" [ref=e82] [cursor=pointer]:
+            - /url: http://www.kasen.pref.yamagata.jp/bousai/main.html?fnm=openMap&no=4&no2=0
+          - link "福島県" [ref=e83] [cursor=pointer]:
+            - /url: https://kaseninf.pref.fukushima.jp/web_pub/dam/010401_60_1_0.html
+        - paragraph [ref=e84]:
+          - text: 関＿東 ：
+          - link "関東地方整備局" [ref=e85] [cursor=pointer]:
+            - /url: https://www.ktr.mlit.go.jp/river/shihon/river_shihon00000226.html
+          - link "茨城県" [ref=e86] [cursor=pointer]:
+            - /url: http://www.kasen.pref.ibaraki.jp/pc/main.html?fnm=openTable&no=4&no2=0&sct=m2_4
+          - link "栃木県" [ref=e87] [cursor=pointer]:
+            - /url: http://www.dif.pref.tochigi.lg.jp/main.asp?screen=dam
+          - link "群馬県" [ref=e88] [cursor=pointer]:
+            - /url: https://www.river-gunma.jp/gunma/top/10/1_0_1_0.html
+          - link "埼玉県" [ref=e89] [cursor=pointer]:
+            - /url: https://www.pref.saitama.lg.jp/a0108/kawa-damu-jokyo.html
+          - link "千葉県" [ref=e90] [cursor=pointer]:
+            - /url: http://www.pref.chiba.lg.jp/suisei/chosui/chosuijoukyou.html
+          - link "東京都" [ref=e91] [cursor=pointer]:
+            - /url: https://www.waterworks.metro.tokyo.lg.jp/suigen/suigen.html
+          - link "神奈川県" [ref=e92] [cursor=pointer]:
+            - /url: http://kanagawa-dam.jp/web_data/news_mizugame.html
+        - paragraph [ref=e93]:
+          - text: 北＿陸 ：
+          - link "北陸地方整備局" [ref=e94] [cursor=pointer]:
+            - /url: http://www.hrr.mlit.go.jp/river/dam-bousai/
+          - link "新潟県" [ref=e95] [cursor=pointer]:
+            - /url: http://doboku-bousai.pref.niigata.jp/kasen/
+          - link "富山県" [ref=e96] [cursor=pointer]:
+            - /url: https://kawa.pref.toyama.jp/camera/02condlist.html?id=0&sel=3
+          - link "石川県" [ref=e97] [cursor=pointer]:
+            - /url: http://kasen.pref.ishikawa.lg.jp/ishikawa/map/top.html
+          - link "福井県" [ref=e98] [cursor=pointer]:
+            - /url: https://sabo.pref.fukui.lg.jp/bousai/main.html?fnm=openTable&no=4&no2=0
+        - paragraph [ref=e99]:
+          - text: 中＿部 ：
+          - link "中部地方整備局" [ref=e100] [cursor=pointer]:
+            - /url: https://www.cbr.mlit.go.jp/kawatomizu/kassui_zyouhou/index.htm
+          - link "山梨県" [ref=e101] [cursor=pointer]:
+            - /url: http://www3.pref.yamanashi.jp/yamanashiweb/sub/dam/dam001.asp
+          - link "長野県" [ref=e102] [cursor=pointer]:
+            - /url: https://www.sabo-nagano.jp/dps/dam/dam_list_2_0.html?mode=60&etim=2023-08-24-11-00&last=1&_ad=20230824111634
+          - link "岐阜県" [ref=e103] [cursor=pointer]:
+            - /url: http://www.kasen.pref.gifu.lg.jp/Menu.exe?310
+          - link "静岡県" [ref=e104] [cursor=pointer]:
+            - /url: https://sipos.pref.shizuoka.jp/
+          - link "愛知県" [ref=e105] [cursor=pointer]:
+            - /url: http://www.pref.aichi.jp/0000014118.html
+          - link "三重県" [ref=e106] [cursor=pointer]:
+            - /url: http://www.pref.mie.lg.jp/D1KIGYO/12674013222.htm
+        - paragraph [ref=e107]:
+          - text: 近＿畿 ：
+          - link "近畿地方整備局" [ref=e108] [cursor=pointer]:
+            - /url: https://www.kkr.mlit.go.jp/river/biwakosuiidamutyosuiritsu.html
+          - link "滋賀県" [ref=e109] [cursor=pointer]:
+            - /url: http://shiga-bousai.jp/dam/dam_map.php
+          - link "京都府" [ref=e110] [cursor=pointer]:
+            - /url: http://chisuibousai.pref.kyoto.jp/index.html
+          - link "大阪府" [ref=e111] [cursor=pointer]:
+            - /url: https://www.osaka-kasen-portal.net/suibou/public/ja/choryuryo.html
+          - link "兵庫県" [ref=e112] [cursor=pointer]:
+            - /url: http://web.pref.hyogo.lg.jp/kc02/ea02_000000005.html
+          - link "奈良県" [ref=e113] [cursor=pointer]:
+            - /url: http://www.kasen.pref.nara.jp/river_pub/jsp/index_kasen.jsp?disp=4
+          - link "和歌山県" [ref=e114] [cursor=pointer]:
+            - /url: https://kasensabo01.pref.wakayama.lg.jp/sp/damList.html?scd=000
+        - paragraph [ref=e115]:
+          - text: 中＿国 ：
+          - link "中国地方整備局" [ref=e116] [cursor=pointer]:
+            - /url: https://www.cgr.mlit.go.jp/kasen/kassui/index.html
+          - link "鳥取県" [ref=e117] [cursor=pointer]:
+            - /url: http://tottoridam.jp/
+          - link "島根県" [ref=e118] [cursor=pointer]:
+            - /url: https://www.suibou-shimane.jp/pc/dam/2110.html?dummy=20190613101118
+          - link "岡山県" [ref=e119] [cursor=pointer]:
+            - /url: https://www.bousai.pref.okayama.jp/?p=observation%2Fdam
+          - link "広島県" [ref=e120] [cursor=pointer]:
+            - /url: http://www.pref.hiroshima.lg.jp/soshiki/99/1171367357547.html
+          - link "山口県" [ref=e121] [cursor=pointer]:
+            - /url: https://y-bousai.pref.yamaguchi.lg.jp/citizen/dam/kdm_station_list.aspx
+        - paragraph [ref=e122]:
+          - text: 四＿国 ：
+          - link "四国地方整備局" [ref=e123] [cursor=pointer]:
+            - /url: https://www.skr.mlit.go.jp/kasen/damu/
+          - link "徳島県" [ref=e124] [cursor=pointer]:
+            - /url: https://www.kasen.pref.tokushima.lg.jp/pc/index.html
+          - link "香川県" [ref=e125] [cursor=pointer]:
+            - /url: http://www.pref.kagawa.lg.jp/content/etc/subsite/mizu/index.shtml
+          - link "愛媛県" [ref=e126] [cursor=pointer]:
+            - /url: http://kasensabo.pref.ehime.jp/dosha/servlet/Gamen2Servlet?url_05_00
+          - link "高知県" [ref=e127] [cursor=pointer]:
+            - /url: https://suibo-kouho.suibou.pref.kochi.lg.jp/suibou/main.html?no=4&no2=0&fnm=openMap&gis=1
+        - paragraph [ref=e128]:
+          - text: 九＿州 ：
+          - link "九州地方整備局" [ref=e129] [cursor=pointer]:
+            - /url: https://www.river.go.jp/kawabou/pc/ov?zm=8&fld=0&clat=32.535236240827224&clon=130.63842773437503&mapType=0&viewGrpStg=0&viewRd=1&viewRW=1&viewRiver=1&viewPoint=1&area=89
+          - link "福岡県" [ref=e130] [cursor=pointer]:
+            - /url: https://www.pref.fukuoka.lg.jp/contents/damuchosui.html
+          - link "佐賀県" [ref=e131] [cursor=pointer]:
+            - /url: https://www.pref.saga.lg.jp/kiji00312382/index.html
+          - link "長崎県" [ref=e132] [cursor=pointer]:
+            - /url: https://www.pref.nagasaki.jp/bunrui/kurashi-kankyo/mizukankyo/mizu/cyosuiritsu/
+          - link "熊本県" [ref=e133] [cursor=pointer]:
+            - /url: http://www.bousai.pref.kumamoto.jp/Dsp/GmnDspD.exe?52A0
+          - link "大分県" [ref=e134] [cursor=pointer]:
+            - /url: https://river.pref.oita.jp/bousai_c/main.html?fnm=openTable&no=4&no2=0
+          - link "宮崎県" [ref=e135] [cursor=pointer]:
+            - /url: http://kasen.pref.miyazaki.jp/bousai/main.html?fnm=openMap&no=4&no2=0
+          - link "鹿児島県" [ref=e136] [cursor=pointer]:
+            - /url: http://www3.doboku-bousai.pref.kagoshima.jp/bousai/jsp/index.jsp
+        - paragraph [ref=e137]:
+          - text: 沖＿縄 ：
+          - link "沖縄総合事務局" [ref=e138] [cursor=pointer]:
+            - /url: http://www.dc.ogb.go.jp/kyoku/mizu/suigen_portal/suigen_portal.html
+          - link "沖縄県" [ref=e139] [cursor=pointer]:
+            - /url: http://www.eb.pref.okinawa.jp/kassui/
+        - paragraph [ref=e140]:
+          - link "水資源機構" [ref=e141] [cursor=pointer]:
+            - /url: http://www.water.go.jp/honsya/honsya/suigen/index.html
+          - text: ：
+          - link "利根川・荒川水系" [ref=e142] [cursor=pointer]:
+            - /url: https://www.water.go.jp/honsya/honsya/suigen/sokuhou/toneara/index.html
+          - link "木曽川・豊川水系" [ref=e143] [cursor=pointer]:
+            - /url: https://www.water.go.jp/mizu/chubu/report/
+          - link "淀川水系" [ref=e144] [cursor=pointer]:
+            - /url: http://www.water.go.jp/kansai/kansai/html/suigen/suigen.html
+          - link "吉野川水系" [ref=e145] [cursor=pointer]:
+            - /url: https://www.water.go.jp/mizu/ikeda/mizuinfo/dyn/html/p0001/60/p000101.html
+          - link "筑後川水系" [ref=e146] [cursor=pointer]:
+            - /url: https://www.water.go.jp/chikugo/chikugo/water-source.html
+  - link "ページの 先頭に戻る" [ref=e149] [cursor=pointer]:
+    - /url: "#wrapper"
+  - generic [ref=e150]:
+    - generic [ref=e151]:
+      - generic [ref=e153]:
+        - generic [ref=e154]:
+          - link "国土交通省" [ref=e156] [cursor=pointer]:
+            - /url: /
+            - img "国土交通省" [ref=e157]
+          - generic [ref=e158]:
+            - text: 法人番号2000012100001
+            - link "アクセス情報・地図" [ref=e159] [cursor=pointer]:
+              - /url: /about/file000028.html
+            - text: 〒100-8918 東京都千代田区霞が関2-1-3 (代表電話) 03-5253-8111
+            - text: ・お問合せに円滑に対応するため、まずはお問合せ窓口でご用件を伺います。
+        - list [ref=e161]:
+          - listitem [ref=e162]:
+            - link "プライバシーポリシー" [ref=e163] [cursor=pointer]:
+              - /url: /privacy.html
+          - listitem [ref=e164]:
+            - link "リンク・著作権・免責事項について" [ref=e165] [cursor=pointer]:
+              - /url: /link.html
+          - listitem [ref=e166]:
+            - link "国土交通省のRSSについて" [ref=e167] [cursor=pointer]:
+              - /url: /page/rssinfo.html
+          - listitem [ref=e168]:
+            - link "関連リンク集" [ref=e169] [cursor=pointer]:
+              - /url: /kanrenlink.html
+          - listitem [ref=e170]:
+            - link "国土交通省 ソーシャルメディア関連リンク集" [ref=e171] [cursor=pointer]:
+              - /url: /social_media_kanrenlink.html
+          - listitem [ref=e172]:
+            - link "ソーシャルメディア利用方針" [ref=e173] [cursor=pointer]:
+              - /url: /page/kanbo01_hy_002516.html
+      - img "Ministry of Land, Infrastructure, Transport and Tourism" [ref=e175]
+    - paragraph [ref=e178]: Copyright© 2008 MLIT Japan. All Rights Reserved.

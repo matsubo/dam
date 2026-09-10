@@ -1,0 +1,432 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - link "エンターキーを押すと、ナビゲーション部分をスキップし本文へ移動します。" [ref=e5] [cursor=pointer]:
+      - /url: "#HONBUN"
+    - generic [ref=e6]:
+      - heading "静岡県公式ホームページ トップページ" [level=1] [ref=e8]:
+        - link "静岡県公式ホームページ トップページ" [ref=e9] [cursor=pointer]:
+          - /url: https://www.pref.shizuoka.jp/
+          - img "静岡県公式ホームページ トップページ" [ref=e10]
+      - generic [ref=e11]:
+        - paragraph [ref=e12]:
+          - link "防災・緊急情報" [ref=e13] [cursor=pointer]:
+            - /url: ./bosaikinkyu/index.html
+        - generic [ref=e14]:
+          - paragraph [ref=e15]:
+            - link "閲覧補助" [ref=e16] [cursor=pointer]:
+              - /url: ./about/site/hojyo.html
+          - button "Foreign language" [ref=e18] [cursor=pointer]
+  - navigation "メインメニュー" [ref=e19]:
+    - list [ref=e21]:
+      - listitem [ref=e22]:
+        - link "ホーム" [ref=e23] [cursor=pointer]:
+          - /url: ./index.html
+      - listitem [ref=e24]:
+        - button "目的から探す" [ref=e25] [cursor=pointer]
+      - listitem [ref=e26]:
+        - button "テーマから探す" [ref=e27] [cursor=pointer]
+      - listitem [ref=e28]:
+        - button "組織から探す" [ref=e29] [cursor=pointer]
+      - listitem [ref=e30]:
+        - button "県政情報" [ref=e31] [cursor=pointer]
+  - main [ref=e32]:
+    - generic [ref=e34]:
+      - paragraph [ref=e35]: ここから本文です。
+      - generic [ref=e36]:
+        - paragraph [ref=e38]:
+          - img "冬の夜景と富士山の写真" [ref=e39]
+        - generic [ref=e42]:
+          - generic [ref=e43]:
+            - list [ref=e44]:
+              - listitem [ref=e45]:
+                - link "静岡県民向け" [ref=e46] [cursor=pointer]:
+                  - /url: ./index.html
+              - listitem [ref=e47]:
+                - link "事業者向け" [ref=e48] [cursor=pointer]:
+                  - /url: ./jigyousha/index.html
+              - listitem [ref=e49]:
+                - link "観光者向け" [ref=e50] [cursor=pointer]:
+                  - /url: ./kankousha/index.html
+            - paragraph [ref=e51]:
+              - link "ライブカメラ富士山" [ref=e52] [cursor=pointer]:
+                - /url: ./fujisanview/index.html
+                - img "ライブカメラ富士山" [ref=e53]
+          - generic [ref=e54]:
+            - generic [ref=e55]:
+              - heading "静岡県をかたる偽ホームページにご注意ください" [level=2] [ref=e56]
+              - list [ref=e57]:
+                - listitem [ref=e58]:
+                  - link "静岡県をかたる偽ホームページにご注意ください" [ref=e59] [cursor=pointer]:
+                    - /url: ./kensei/pr/1081681.html
+            - generic [ref=e60]:
+              - heading "令和7年台風第15号関連情報" [level=2] [ref=e61]
+              - paragraph [ref=e62]: 被害状況、被害にあわれた方々への支援制度及び災害義援金の募集等について掲載しています。
+              - list [ref=e63]:
+                - listitem [ref=e64]:
+                  - link "令和7年台風第15号情報" [ref=e65] [cursor=pointer]:
+                    - /url: ./bosaikinkyu/saigai/1077298/index.html
+          - generic [ref=e66]:
+            - tablist [ref=e67]:
+              - tab "サイト内検索" [selected] [ref=e68]:
+                - link "サイト内検索" [ref=e69] [cursor=pointer]:
+                  - /url: "#search1"
+              - tab "ページID表示" [ref=e70]:
+                - link "ページID表示" [ref=e71] [cursor=pointer]:
+                  - /url: "#search2"
+            - tabpanel "サイト内検索" [ref=e73]:
+              - generic [ref=e74]:
+                - search [ref=e75]:
+                  - textbox "サイト内検索" [ref=e76]:
+                    - /placeholder: 文章で検索できます
+                  - button "検索" [ref=e77] [cursor=pointer]
+                - paragraph [ref=e78]:
+                  - link "検索の方法" [ref=e79] [cursor=pointer]:
+                    - /url: ./about/site/search.html
+      - generic [ref=e82]:
+        - generic [ref=e83]:
+          - paragraph [ref=e87]:
+            - link [ref=e88] [cursor=pointer]:
+              - /url: ./kurashikankyo/kankyo/1040554/1002001/index.html
+              - img [ref=e89]
+              - generic [ref=e90]: 詳しく見る
+          - list [ref=e92]:
+            - listitem [ref=e93]:
+              - link "ようこそ知事室へ" [ref=e94] [cursor=pointer]:
+                - /url: ./kensei/introduction/governor/index.html
+                - img "ようこそ知事室へ" [ref=e95]
+            - listitem [ref=e96]:
+              - link "職員採用情報" [ref=e97] [cursor=pointer]:
+                - /url: ./kensei/saiyoinfo/employ/index.html
+                - img "職員採用情報" [ref=e98]
+            - listitem [ref=e99]:
+              - link "静岡県誕生150周年ポータルサイトはこちら" [ref=e100] [cursor=pointer]:
+                - /url: ./kensei/information/kenminnohi/1005208.html
+                - img "静岡県誕生150周年ポータルサイトはこちら" [ref=e101]
+            - listitem [ref=e102]:
+              - link "自動車税AIチャットボット令和8年1月5日から運用開始" [ref=e103] [cursor=pointer]:
+                - /url: ./kurashikankyo/zei/kenzeigaiyou/1002344/1078431.html
+                - img "自動車税AIチャットボット令和8年1月5日から運用開始" [ref=e104]
+        - generic [ref=e105]:
+          - tablist [ref=e106]:
+            - tab "新着情報" [selected] [ref=e107]:
+              - link "新着情報" [ref=e108] [cursor=pointer]:
+                - /url: "#topics1"
+            - tab "注目情報" [ref=e109]:
+              - link "注目情報" [ref=e110] [cursor=pointer]:
+                - /url: "#topics2"
+          - generic [ref=e113]:
+            - tabpanel "新着情報" [ref=e114]:
+              - list [ref=e115]:
+                - listitem [ref=e116]:
+                  - generic [ref=e117]: 6月22日
+                  - link "令和8年度静岡県東部児童相談所第三者評価業務委託企画提案の募集" [ref=e119] [cursor=pointer]:
+                    - /url: ./kenkofukushi/fukushicenter/tobukenkofukushi/1004101/1083270.html
+                - listitem [ref=e120]:
+                  - generic [ref=e121]: 6月22日
+                  - link "【参加者募集中！】Cha-1（チャワン）グランプリの開催について" [ref=e123] [cursor=pointer]:
+                    - /url: ./kensei/introduction/soshiki/1002123/1041029/chanomiyako/1047008/1043492.html
+                - listitem [ref=e124]:
+                  - generic [ref=e125]: 6月20日
+                  - link "HUG体験会を開催します！(令和8年度前期)" [ref=e127] [cursor=pointer]:
+                    - /url: ./bosaikinkyu/sonae/earthquake/bosaicenter/1043918/1054135.html
+                - listitem [ref=e128]:
+                  - generic [ref=e129]: 6月19日
+                  - link "砂防課ホームページをリニューアルしました！！！" [ref=e131] [cursor=pointer]:
+                    - /url: ./machizukuri/kasensabo/1076945/index.html
+                - listitem [ref=e132]:
+                  - generic [ref=e133]: 6月19日
+                  - link "しずおか若者インターンナビ" [ref=e135] [cursor=pointer]:
+                    - /url: ./sangyoshigoto/shuroshien/1083367/1083385/1083433/index.html
+            - list [ref=e136]:
+              - listitem [ref=e137]:
+                - link "新着更新情報一覧" [ref=e138] [cursor=pointer]:
+                  - /url: ./newslist.html
+              - listitem [ref=e139]:
+                - link "RSS" [ref=e140] [cursor=pointer]:
+                  - /url: ./news.rss
+      - generic [ref=e143]:
+        - heading "広報・メディア" [level=2] [ref=e144]:
+          - generic [ref=e145]: 広報・メディア
+        - generic [ref=e146]:
+          - generic [ref=e147]:
+            - heading "しずおかメディアチャンネル" [level=3] [ref=e148]:
+              - img "しずおかメディアチャンネル" [ref=e149]
+            - link "しずおかメディアチャンネル" [ref=e150] [cursor=pointer]:
+              - /url: https://fmc.pref.shizuoka.jp/
+              - paragraph [ref=e151]:
+                - img "しずおかメディアチャンネル" [ref=e152]
+            - paragraph [ref=e153]:
+              - link "静岡県のさまざまな情報を動画でチェック！外部リンク・新しいウィンドウで開きます" [ref=e154] [cursor=pointer]:
+                - /url: https://fmc.pref.shizuoka.jp/
+                - text: 静岡県のさまざまな情報を動画でチェック！
+                - img "外部リンク・新しいウィンドウで開きます" [ref=e155]
+          - generic [ref=e156]:
+            - generic [ref=e157]:
+              - heading "県民だより" [level=3] [ref=e158]:
+                - img "県民だより" [ref=e159]
+              - paragraph [ref=e160]: 県民向けに県内情報や、生活に役立つ情報をお届けしています。
+            - img "県民だより2026年6月号" [ref=e162]
+            - list [ref=e163]:
+              - listitem [ref=e164]:
+                - link "最新号を見る" [ref=e165] [cursor=pointer]:
+                  - /url: ./kensei/pr/johoshi/kenmin/1080800/1082614/index.html
+              - listitem [ref=e166]:
+                - link "県民だより一覧" [ref=e167] [cursor=pointer]:
+                  - /url: ./kensei/pr/johoshi/kenmin/index.html
+        - list [ref=e168]:
+          - listitem [ref=e169]:
+            - link "公式SNS 静岡県庁の主なソーシャル メディア公式アカウント" [ref=e170] [cursor=pointer]:
+              - /url: ./kensei/pr/sns/index.html
+              - paragraph [ref=e171]:
+                - generic [ref=e172]: 公式SNS
+                - generic [ref=e173]:
+                  - text: 静岡県庁の主なソーシャル
+                  - text: メディア公式アカウント
+          - listitem [ref=e174]:
+            - link "ふじっぴー 静岡県イメージ キャラクター" [ref=e175] [cursor=pointer]:
+              - /url: ./kensei/information/fujippi/1005206.html
+              - paragraph [ref=e176]:
+                - generic [ref=e177]: ふじっぴー
+                - generic [ref=e178]:
+                  - text: 静岡県イメージ
+                  - text: キャラクター
+          - listitem [ref=e179]:
+            - link "しずおかWELL-BE＋ 外部リンク・新しいウィンドウで開きます タイムリーな県政情報を発信 県政デジタル広報誌" [ref=e180] [cursor=pointer]:
+              - /url: https://fmc.pref.shizuoka.jp/fujinokuni/
+              - paragraph [ref=e181]:
+                - generic [ref=e182]:
+                  - text: しずおかWELL-BE＋
+                  - img "外部リンク・新しいウィンドウで開きます" [ref=e183]
+                - generic [ref=e184]:
+                  - text: タイムリーな県政情報を発信
+                  - text: 県政デジタル広報誌
+          - listitem [ref=e185]:
+            - link "報道発表 報道機関に対し提供された 県政情報資料を公開" [ref=e186] [cursor=pointer]:
+              - /url: http://www2.pref.shizuoka.jp/all/kisha.nsf/webDateView
+              - paragraph [ref=e187]:
+                - generic [ref=e188]: 報道発表
+                - generic [ref=e189]:
+                  - text: 報道機関に対し提供された
+                  - text: 県政情報資料を公開
+        - heading "みんなの「いいね！」ランキング" [level=3] [ref=e191]:
+          - generic [ref=e192]: みんなの「いいね！」ランキング
+      - generic [ref=e194]:
+        - heading "情報を探す" [level=2] [ref=e195]:
+          - generic [ref=e196]: 情報を探す
+        - generic [ref=e197]:
+          - generic [ref=e198]:
+            - heading "目的から探す" [level=3] [ref=e199]
+            - list [ref=e200]:
+              - listitem [ref=e201]:
+                - link "イベント" [ref=e202] [cursor=pointer]:
+                  - /url: ./event_calendar.html
+                  - generic [ref=e203]: イベント
+              - listitem [ref=e204]:
+                - link "電子申請" [ref=e205] [cursor=pointer]:
+                  - /url: ./kensei/onlineservice/denshishinsei/1041985.html
+                  - generic [ref=e206]: 電子申請
+              - listitem [ref=e207]:
+                - link "オープンデータ・統計データ" [ref=e208] [cursor=pointer]:
+                  - /url: ./kensei/gyoseikaikaku/johokokai/1040879/1011377.html
+                  - generic [ref=e209]: オープンデータ・統計データ
+              - listitem [ref=e210]:
+                - link "ご意見・ご要望" [ref=e211] [cursor=pointer]:
+                  - /url: ./kensei/pr/hiroba/index.html
+                  - generic [ref=e212]: ご意見・ご要望
+              - listitem [ref=e213]:
+                - link "パブリックコメント" [ref=e214] [cursor=pointer]:
+                  - /url: ./kensei/gyoseikaikaku/johokokai/1002310/1067293/index.html
+                  - generic [ref=e215]: パブリックコメント
+              - listitem [ref=e216]:
+                - link "採用情報" [ref=e217] [cursor=pointer]:
+                  - /url: ./kensei/saiyoinfo/index.html
+                  - generic [ref=e218]: 採用情報
+              - listitem [ref=e219]:
+                - link "条例・規則・公報" [ref=e220] [cursor=pointer]:
+                  - /url: ./kensei/joreikisoku/index.html
+                  - generic [ref=e221]: 条例・規則・公報
+              - listitem [ref=e222]:
+                - link "申請書ダウンロード" [ref=e223] [cursor=pointer]:
+                  - /url: ./1066349/index.html
+                  - generic [ref=e224]: 申請書ダウンロード
+          - generic [ref=e225]:
+            - heading "テーマから探す" [level=3] [ref=e226]
+            - list [ref=e227]:
+              - listitem [ref=e228]:
+                - link "くらし・環境" [ref=e229] [cursor=pointer]:
+                  - /url: ./kurashikankyo/index.html
+                  - generic [ref=e230]: くらし・環境
+              - listitem [ref=e231]:
+                - link "健康・福祉" [ref=e232] [cursor=pointer]:
+                  - /url: ./kenkofukushi/index.html
+                  - generic [ref=e233]: 健康・福祉
+              - listitem [ref=e234]:
+                - link "子ども・教育" [ref=e235] [cursor=pointer]:
+                  - /url: ./kodomokyoiku/index.html
+                  - generic [ref=e236]: 子ども・教育
+              - listitem [ref=e237]:
+                - link "観光・スポーツ・交流" [ref=e238] [cursor=pointer]:
+                  - /url: ./kankosports/index.html
+                  - generic [ref=e239]: 観光・スポーツ・交流
+              - listitem [ref=e240]:
+                - link "産業・しごと" [ref=e241] [cursor=pointer]:
+                  - /url: ./sangyoshigoto/index.html
+                  - generic [ref=e242]: 産業・しごと
+              - listitem [ref=e243]:
+                - link "まちづくり・県土づくり" [ref=e244] [cursor=pointer]:
+                  - /url: ./machizukuri/index.html
+                  - generic [ref=e245]: まちづくり・県土づくり
+          - generic [ref=e246]:
+            - heading "組織から探す" [level=3] [ref=e247]
+            - list [ref=e248]:
+              - listitem [ref=e249]:
+                - link "県庁の組織" [ref=e250] [cursor=pointer]:
+                  - /url: ./kensei/introduction/soshiki/index.html
+                  - generic [ref=e251]: 県庁の組織
+              - listitem [ref=e252]:
+                - link "静岡県議会" [ref=e253] [cursor=pointer]:
+                  - /url: ./kensei/kengikai/index.html
+                  - generic [ref=e254]: 静岡県議会
+              - listitem [ref=e255]:
+                - link "教育委員会" [ref=e256] [cursor=pointer]:
+                  - /url: ./kodomokyoiku/school/kyoiku/index.html
+                  - generic [ref=e257]: 教育委員会
+              - listitem [ref=e258]:
+                - link "静岡県警察" [ref=e259] [cursor=pointer]:
+                  - /url: https://www.pref.shizuoka.jp/police/index.html
+                  - generic [ref=e260]: 静岡県警察
+              - listitem [ref=e261]:
+                - link "県立病院 外部リンク・新しいウィンドウで開きます" [ref=e262] [cursor=pointer]:
+                  - /url: http://www.shizuoka-pho.jp/
+                  - generic [ref=e263]:
+                    - text: 県立病院
+                    - img "外部リンク・新しいウィンドウで開きます" [ref=e264]
+              - listitem [ref=e265]:
+                - link "県内市町" [ref=e266] [cursor=pointer]:
+                  - /url: ./kensei/link/1007806.html
+                  - generic [ref=e267]: 県内市町
+      - generic [ref=e270]:
+        - heading "ピックアップ" [level=2] [ref=e271]:
+          - generic [ref=e272]: ピックアップ
+        - generic [ref=e273]:
+          - list [ref=e274]
+          - list [ref=e277]:
+            - listitem [ref=e278]:
+              - link "経済センサス活動調査（外部リンク・新しいウィンドウで開きます）" [ref=e279] [cursor=pointer]:
+                - /url: https://www.e-census2026.go.jp/
+                - img "経済センサス活動調査（外部リンク・新しいウィンドウで開きます）" [ref=e280]
+            - listitem [ref=e281]:
+              - link "パートナーシップ構築宣言" [ref=e282] [cursor=pointer]:
+                - /url: ./kensei/introduction/soshiki/1002123/1054361.html
+                - img "パートナーシップ構築宣言" [ref=e283]
+            - listitem [ref=e284]:
+              - link "しずおか食の情報センター（外部リンク・新しいウィンドウで開きます）" [ref=e285] [cursor=pointer]:
+                - /url: https://fujinokuni.shokunomiyako-shizuoka.pref.shizuoka.jp/
+                - img "しずおか食の情報センター（外部リンク・新しいウィンドウで開きます）" [ref=e286]
+            - listitem [ref=e287]:
+              - link "ふじのくに魅力ある個店（外部リンク・新しいウィンドウで開きます）" [ref=e288] [cursor=pointer]:
+                - /url: https://f-koten.jp/
+                - img "ふじのくに魅力ある個店（外部リンク・新しいウィンドウで開きます）" [ref=e289]
+            - listitem [ref=e290]:
+              - link "SHIZUKURU 静岡で、ライフスタイル、ネットワーク、ビジネスを創る（外部リンク・新しいウィンドウで開きます）" [ref=e291] [cursor=pointer]:
+                - /url: https://shizukuru.pref.shizuoka.jp/
+                - img "SHIZUKURU 静岡で、ライフスタイル、ネットワーク、ビジネスを創る（外部リンク・新しいウィンドウで開きます）" [ref=e292]
+            - listitem [ref=e293]:
+              - link "静岡県地理情報システムGIS（外部リンク・新しいウィンドウで開きます）" [ref=e294] [cursor=pointer]:
+                - /url: https://www.gis.pref.shizuoka.jp/
+                - img "静岡県地理情報システムGIS（外部リンク・新しいウィンドウで開きます）" [ref=e295]
+  - complementary [ref=e296]:
+    - generic [ref=e297]:
+      - heading "バナー広告" [level=2] [ref=e298]
+      - paragraph [ref=e299]: バナー広告やリンク先については県が保証するものではありません。
+      - paragraph [ref=e300]:
+        - text: "["
+        - link "静岡県ホームページバナー広告のご案内" [ref=e301] [cursor=pointer]:
+          - /url: ./about/1007311.html
+        - text: "]"
+      - list [ref=e302]:
+        - listitem [ref=e303]:
+          - link "建設業で働く仲間の組合 くらしとしごとをサポートします！静岡建労（外部リンク・新しいウィンドウで開きます）" [ref=e304] [cursor=pointer]:
+            - /url: https://www.shizuokakenro.jp/
+            - img "建設業で働く仲間の組合 くらしとしごとをサポートします！静岡建労（外部リンク・新しいウィンドウで開きます）" [ref=e305]
+        - listitem [ref=e306]:
+          - link "浄化槽をお使いの方は毎年1回法廷検査を受検しましょう 一般財団法人 静岡県生活科学検査センター（外部リンク・新しいウィンドウで開きます）" [ref=e307] [cursor=pointer]:
+            - /url: https://www.shizuokaseikaken.or.jp/
+            - img "浄化槽をお使いの方は毎年1回法廷検査を受検しましょう 一般財団法人 静岡県生活科学検査センター（外部リンク・新しいウィンドウで開きます）" [ref=e308]
+        - listitem [ref=e309]:
+          - link "バス広告情報サイト（外部リンク・新しいウィンドウで開きます）" [ref=e310] [cursor=pointer]:
+            - /url: https://busad.jp/
+            - img "バス広告情報サイト（外部リンク・新しいウィンドウで開きます）" [ref=e311]
+        - listitem [ref=e312]:
+          - link "愛される人になってほしい障がい児・障がい者の成長の架け橋 株式会社富士山ドリームビレッジ（外部リンク・新しいウィンドウで開きます）" [ref=e313] [cursor=pointer]:
+            - /url: https://www.dream-village.net/
+            - img "愛される人になってほしい障がい児・障がい者の成長の架け橋 株式会社富士山ドリームビレッジ（外部リンク・新しいウィンドウで開きます）" [ref=e314]
+  - complementary [ref=e315]:
+    - generic:
+      - heading "広告" [level=2] [ref=e316]
+      - paragraph [ref=e317]: バナー広告やリンク先については県が保証するものではありません。
+      - paragraph [ref=e318]:
+        - text: "["
+        - link "静岡県ホームページバナー広告のご案内" [ref=e319] [cursor=pointer]:
+          - /url: ./about/1007311.html
+        - text: "]"
+    - paragraph [ref=e320]:
+      - link [ref=e321] [cursor=pointer]:
+        - /url: javascript:void(0);
+        - text: 閉じる
+    - list [ref=e322]:
+      - listitem [ref=e323]:
+        - link "愛される人になってほしい障がい児・障がい者の成長の架け橋 株式会社富士山ドリームビレッジ（外部リンク・新しいウィンドウで開きます）" [ref=e324] [cursor=pointer]:
+          - /url: https://www.dream-village.net/
+          - img "愛される人になってほしい障がい児・障がい者の成長の架け橋 株式会社富士山ドリームビレッジ（外部リンク・新しいウィンドウで開きます）" [ref=e325]
+      - listitem [ref=e326]:
+        - link "浄化槽をお使いの方は毎年1回法廷検査を受検しましょう 一般財団法人 静岡県生活科学検査センター（外部リンク・新しいウィンドウで開きます）" [ref=e327] [cursor=pointer]:
+          - /url: https://www.shizuokaseikaken.or.jp/
+          - img "浄化槽をお使いの方は毎年1回法廷検査を受検しましょう 一般財団法人 静岡県生活科学検査センター（外部リンク・新しいウィンドウで開きます）" [ref=e328]
+      - listitem [ref=e329]:
+        - link "建設業で働く仲間の組合 くらしとしごとをサポートします！静岡建労（外部リンク・新しいウィンドウで開きます）" [ref=e330] [cursor=pointer]:
+          - /url: https://www.shizuokakenro.jp/
+          - img "建設業で働く仲間の組合 くらしとしごとをサポートします！静岡建労（外部リンク・新しいウィンドウで開きます）" [ref=e331]
+      - listitem [ref=e332]:
+        - link "バス広告情報サイト（外部リンク・新しいウィンドウで開きます）" [ref=e333] [cursor=pointer]:
+          - /url: https://busad.jp/
+          - img "バス広告情報サイト（外部リンク・新しいウィンドウで開きます）" [ref=e334]
+  - complementary [ref=e335]:
+    - list [ref=e337]:
+      - listitem [ref=e338]:
+        - link "前のページへ戻る" [ref=e339] [cursor=pointer]:
+          - /url: javascript:history.back();
+  - contentinfo [ref=e340]:
+    - generic [ref=e341]:
+      - paragraph [ref=e343]
+      - generic [ref=e344]:
+        - generic [ref=e345]:
+          - heading "静岡県" [level=2] [ref=e346]:
+            - img "静岡県" [ref=e347]
+          - generic [ref=e348]:
+            - text: 静岡県 法人番号 7000020220001
+            - text: 〒420-8601 静岡県静岡市葵区追手町9番6号
+          - list [ref=e350]:
+            - listitem [ref=e351]:
+              - link "各種お問い合わせ" [ref=e352] [cursor=pointer]:
+                - /url: ./kensei/pr/hiroba/1007313.html
+            - listitem [ref=e353]:
+              - link "県庁へのアクセス" [ref=e354] [cursor=pointer]:
+                - /url: ./kensei/introduction/kenchosha/1002011/1009017.html
+        - list [ref=e356]:
+          - listitem [ref=e357]:
+            - link "著作権・リンクについて" [ref=e358] [cursor=pointer]:
+              - /url: ./about/link.html
+          - listitem [ref=e359]:
+            - link "個人情報保護について" [ref=e360] [cursor=pointer]:
+              - /url: ./kensei/gyoseikaikaku/kojinjohohogo/1001987/1007786.html
+          - listitem [ref=e361]:
+            - link "静岡県公式ホームページウェブアクセシビリティ方針について" [ref=e362] [cursor=pointer]:
+              - /url: ./about/accesibility/1007779.html
+          - listitem [ref=e363]:
+            - link "リンク集" [ref=e364] [cursor=pointer]:
+              - /url: ./kensei/link/index.html
+          - listitem [ref=e365]:
+            - link "サイトマップ" [ref=e366] [cursor=pointer]:
+              - /url: ./sitemap.html
+    - paragraph [ref=e368]: Copyright © Shizuoka Prefecture. All Rights Reserved.

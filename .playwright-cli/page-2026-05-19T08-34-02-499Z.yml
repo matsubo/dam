@@ -1,0 +1,153 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - img [ref=e6] [cursor=pointer]
+      - generic [ref=e7]:
+        - button "観測所検索" [ref=e8] [cursor=pointer]:
+          - generic [ref=e9]:
+            - generic [ref=e10]: search
+            - generic [ref=e11]: 観測所検索
+        - button "操作説明" [ref=e12] [cursor=pointer]:
+          - generic [ref=e13]:
+            - generic [ref=e14]: headset_mic
+            - generic [ref=e15]: 操作説明
+        - button [ref=e16] [cursor=pointer]:
+          - generic [ref=e18]: menu
+  - generic [ref=e19]:
+    - generic [ref=e21]:
+      - navigation [ref=e23]:
+        - generic [ref=e24]:
+          - button [ref=e25] [cursor=pointer]:
+            - generic [ref=e27]: search
+          - generic [ref=e28]: 全国
+          - button [ref=e29] [cursor=pointer]:
+            - generic [ref=e31]: calendar_today
+          - generic [ref=e32]: Invalid Date
+          - generic [ref=e33]: Invalid Date
+          - button [ref=e34] [cursor=pointer]:
+            - generic [ref=e36]: autorenew
+      - generic [ref=e37]:
+        - generic [ref=e38]:
+          - generic:
+            - generic:
+              - img "Marker" [ref=e39] [cursor=pointer]
+              - img "Marker" [ref=e40] [cursor=pointer]
+              - img "Marker" [ref=e41] [cursor=pointer]
+              - img "Marker" [ref=e42] [cursor=pointer]
+              - img "Marker" [ref=e43] [cursor=pointer]
+        - generic [ref=e45]:
+          - button [ref=e47] [cursor=pointer]:
+            - generic [ref=e49]: 󰐙
+          - generic [ref=e51] [cursor=pointer]: 市
+          - generic [ref=e53] [cursor=pointer]: 県
+          - generic [ref=e55] [cursor=pointer]: 地方
+          - generic [ref=e57] [cursor=pointer]: 全国
+          - button [ref=e59] [cursor=pointer]:
+            - generic [ref=e61]: 󰍷
+        - generic [ref=e64]:
+          - button "凡例" [ref=e65] [cursor=pointer]:
+            - generic [ref=e66]: 凡例
+          - button "モバイルモード" [ref=e67] [cursor=pointer]:
+            - generic [ref=e68]: モバイルモード
+          - button "表示切替" [ref=e69] [cursor=pointer]:
+            - generic [ref=e70]: 表示切替
+        - generic [ref=e71]:
+          - generic [ref=e73]:
+            - generic [ref=e76]:
+              - generic [ref=e77]:
+                - generic [ref=e78]: 観測所種別
+                - button [ref=e79] [cursor=pointer]:
+                  - generic [ref=e81]: highlight_off
+              - generic [ref=e84]:
+                - generic [ref=e85]:
+                  - img [ref=e87]
+                  - generic [ref=e88]: 水位観測
+                - generic [ref=e89]:
+                  - img [ref=e91]
+                  - generic [ref=e92]: 危機管理型水位計
+                - generic [ref=e93]:
+                  - img [ref=e95]
+                  - generic [ref=e96]: ダム諸量
+                - generic [ref=e97]:
+                  - img [ref=e99]
+                  - generic [ref=e100]: 雨量
+                - generic [ref=e101]:
+                  - img [ref=e103]
+                  - generic [ref=e104]: 水質
+                - generic [ref=e105]:
+                  - img [ref=e107]
+                  - generic [ref=e108]: 海岸
+                - generic [ref=e109]:
+                  - img [ref=e111]
+                  - generic [ref=e112]: 積雪深
+                - generic [ref=e113]:
+                  - img [ref=e115]
+                  - generic [ref=e116]: 河川カメラ
+            - button "Previous visual" [ref=e118] [cursor=pointer]:
+              - generic [ref=e120]: chevron_left
+            - button "Next visual" [ref=e122] [cursor=pointer]:
+              - generic [ref=e124]: chevron_right
+          - generic [ref=e125]: 1/10
+        - generic [ref=e128] [cursor=pointer]: 水位・ダム・河川カメラ 設定へ
+    - generic [ref=e130]:
+      - generic [ref=e132]:
+        - button "概況" [ref=e133] [cursor=pointer]:
+          - generic [ref=e134]:
+            - generic [ref=e135]: 概況
+            - generic [ref=e136]: report_problem
+        - button "発表情報一覧" [ref=e137] [cursor=pointer]:
+          - generic [ref=e138]:
+            - generic [ref=e139]: 発表情報一覧
+            - generic [ref=e140]: error
+        - button "観測所一覧" [ref=e141] [cursor=pointer]:
+          - generic [ref=e142]:
+            - generic [ref=e143]: 観測所一覧
+            - generic [ref=e144]: home_work
+        - button "登録地点" [ref=e145] [cursor=pointer]:
+          - generic [ref=e146]:
+            - generic [ref=e147]: 登録地点
+            - generic [ref=e148]: house
+        - button "レーダ雨量" [ref=e149] [cursor=pointer]:
+          - generic [ref=e150]:
+            - generic [ref=e151]: レーダ雨量
+            - generic [ref=e152]: rss_feed
+        - button "浸水想定" [ref=e153] [cursor=pointer]:
+          - generic [ref=e154]:
+            - generic [ref=e155]: 浸水想定
+            - generic [ref=e156]: waves
+        - button "表示設定" [ref=e157] [cursor=pointer]:
+          - generic [ref=e158]:
+            - generic [ref=e159]: 表示設定
+            - generic [ref=e160]: build
+      - generic [ref=e162]:
+        - generic [ref=e164]:
+          - generic [ref=e166]:
+            - generic [ref=e167]: 発表情報概況
+            - generic [ref=e168]: help_outline
+            - button [ref=e169] [cursor=pointer]:
+              - generic [ref=e171]: fullscreen
+          - generic [ref=e172]:
+            - generic [ref=e173]:
+              - button "洪水予報等" [ref=e174] [cursor=pointer]:
+                - generic [ref=e175]: 洪水予報等
+              - button "ダム放流通知" [ref=e176] [cursor=pointer]:
+                - generic [ref=e177]: ダム放流通知
+            - progressbar [ref=e183]:
+              - img [ref=e184]
+        - generic [ref=e187]:
+          - generic [ref=e189]:
+            - generic [ref=e190]: 基準値超過観測所一覧
+            - button [ref=e191] [cursor=pointer]:
+              - generic [ref=e193]: fullscreen
+            - button [ref=e194] [cursor=pointer]:
+              - generic [ref=e196]: open_in_new
+          - generic [ref=e197]:
+            - generic [ref=e198]:
+              - button "水位観測" [ref=e199] [cursor=pointer]:
+                - generic [ref=e200]: 水位観測
+              - button "雨量" [ref=e201] [cursor=pointer]:
+                - generic [ref=e202]: 雨量
+              - button "危機管理型 水位計" [ref=e203] [cursor=pointer]:
+                - generic [ref=e204]: 危機管理型 水位計
+            - progressbar [ref=e208]:
+              - img [ref=e209]

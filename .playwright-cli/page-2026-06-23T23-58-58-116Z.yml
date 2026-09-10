@@ -1,0 +1,246 @@
+- generic [ref=e2]:
+  - generic [ref=e4]:
+    - generic [ref=e6]:
+      - button "webReader メニュー" [ref=e7]:
+        - generic [ref=e8]: 
+      - button "読み上げる" [ref=e9] [cursor=pointer]:
+        - generic [ref=e11]:
+          - text: 
+          - generic [ref=e12]: 読み上げる
+          - text: 
+        - generic [ref=e13]: 
+    - link "Foreign Language" [ref=e15] [cursor=pointer]:
+      - /url: https://www.pref.hokkaido.lg.jp/foreign/translate.html
+  - banner [ref=e16]:
+    - generic [ref=e17]:
+      - generic [ref=e18]:
+        - generic [ref=e19]:
+          - link "北海道トップ" [ref=e21] [cursor=pointer]:
+            - /url: https://www.pref.hokkaido.lg.jp/
+            - generic [ref=e23]: 北海道トップ
+          - link "空知総合振興局トップ" [ref=e25] [cursor=pointer]:
+            - /url: /
+            - generic [ref=e26]: 空知総合振興局トップ
+        - navigation [ref=e28]:
+          - list [ref=e29]:
+            - listitem [ref=e30]:
+              - link "カテゴリから探す" [ref=e31] [cursor=pointer]:
+                - /url: /category/index.html
+                - generic [ref=e33]: カテゴリから探す
+            - listitem [ref=e34]:
+              - link "組織から探す" [ref=e35] [cursor=pointer]:
+                - /url: /soshiki/index.html
+                - generic [ref=e37]: 組織から探す
+            - listitem [ref=e38]:
+              - link "防災 情報" [ref=e39] [cursor=pointer]:
+                - /url: https://www.pref.hokkaido.lg.jp/sm/ktk/saigai-bousai.html
+                - generic [ref=e41]: 防災 情報
+      - generic [ref=e42]:
+        - generic:
+          - list
+        - generic [ref=e43]:
+          - textbox [ref=e44]
+          - button "検索" [ref=e45] [cursor=pointer]
+  - generic [ref=e48]:
+    - link "HOME" [ref=e51] [cursor=pointer]:
+      - /url: /
+    - text: ›
+    - link "建設管理部" [ref=e54] [cursor=pointer]:
+      - /url: /kk/
+    - text: ›
+    - link "札幌建設管理部" [ref=e57] [cursor=pointer]:
+      - /url: /kk/skk/
+    - text: ›
+    - generic [ref=e58]: 防災・河川情報
+  - main [ref=e59]:
+    - generic [ref=e60]:
+      - generic [ref=e61]:
+        - heading "防災・河川情報" [level=1] [ref=e63]
+        - article [ref=e67]:
+          - heading "洪水・土砂災害に関するお知らせ" [level=2] [ref=e69]:
+            - link "洪水・土砂災害に関するお知らせ" [ref=e70] [cursor=pointer]:
+              - /url: /kk/skk/a0006/b0005/
+        - link "cc-by" [ref=e72] [cursor=pointer]:
+          - /url: /site-info/sitepolicy.html#chapter-3
+          - img "cc-by" [ref=e73]
+      - generic [ref=e76]:
+        - heading "札幌建設管理部メニュー" [level=2] [ref=e78]
+        - generic [ref=e79]:
+          - list [ref=e80]:
+            - listitem [ref=e81]:
+              - link "注目情報" [ref=e82] [cursor=pointer]:
+                - /url: /kk/skk/a0000/
+              - list
+          - list [ref=e83]:
+            - listitem [ref=e84]:
+              - link "建設管理部の概要" [ref=e85] [cursor=pointer]:
+                - /url: /kk/skk/a0001/
+              - list
+          - list [ref=e86]:
+            - listitem [ref=e87]:
+              - link "事業の概要" [ref=e88] [cursor=pointer]:
+                - /url: /kk/skk/jigyougaiyou/
+              - list
+          - list [ref=e89]:
+            - listitem [ref=e90]:
+              - link "建設指導課" [ref=e91] [cursor=pointer]:
+                - /url: /kk/skk/a0003/
+              - list [ref=e92]:
+                - listitem [ref=e93]:
+                  - link "住宅" [ref=e94] [cursor=pointer]:
+                    - /url: /kk/skk/a0003/b0001/
+                - listitem [ref=e95]:
+                  - link "建設業" [ref=e96] [cursor=pointer]:
+                    - /url: /kk/skk/a0003/b0002/
+                - listitem [ref=e97]:
+                  - link "開発許可" [ref=e98] [cursor=pointer]:
+                    - /url: /kk/skk/a0003/b0004/
+                - listitem [ref=e99]:
+                  - link "宅地建物取引業・取引士" [ref=e100] [cursor=pointer]:
+                    - /url: /kk/skk/a0003/b0005/
+                - listitem [ref=e101]:
+                  - link "景観・屋外広告物" [ref=e102] [cursor=pointer]:
+                    - /url: /kk/skk/a0003/b0006/
+                - listitem [ref=e103]:
+                  - link "建築" [ref=e104] [cursor=pointer]:
+                    - /url: /kk/skk/a0003/b0007/
+          - list [ref=e105]:
+            - listitem [ref=e106]:
+              - link "入札情報" [ref=e107] [cursor=pointer]:
+                - /url: /kk/skk/nyuusatujouhou/
+              - list [ref=e108]:
+                - listitem [ref=e109]:
+                  - link "入札関連事項・様式集等" [ref=e110] [cursor=pointer]:
+                    - /url: /kk/skk/nyuusatujouhou/nyuusatukanren/
+                - listitem [ref=e111]:
+                  - link "発注予定・入札公告・入札結果等" [ref=e112] [cursor=pointer]:
+                    - /url: /kk/skk/nyuusatujouhou/hacyuu/
+                - listitem [ref=e113]:
+                  - link "工事に関係する契約以外の入札公告等" [ref=e114] [cursor=pointer]:
+                    - /url: /kk/skk/nyuusatujouhou/koukoku/
+                - listitem [ref=e115]:
+                  - link "工事に関係する契約以外の入札結果等" [ref=e116] [cursor=pointer]:
+                    - /url: /kk/skk/nyuusatujouhou/nyuusatukekka/
+                - listitem [ref=e117]:
+                  - link "契約関連事項・様式集等" [ref=e118] [cursor=pointer]:
+                    - /url: /kk/skk/nyuusatujouhou/keiyaku/
+          - list [ref=e119]:
+            - listitem [ref=e120]:
+              - link "通行規制情報" [ref=e121] [cursor=pointer]:
+                - /url: /kk/skk/a0005/
+              - list [ref=e122]:
+                - listitem [ref=e123]:
+                  - link "北海道地区道路情報" [ref=e124] [cursor=pointer]:
+                    - /url: /kk/skk/a0005/dourojouhou/
+                - listitem [ref=e125]:
+                  - link "工事等による通行止区間" [ref=e126] [cursor=pointer]:
+                    - /url: /kk/skk/a0005/b0002/
+                - listitem [ref=e127]:
+                  - link "事前通行規制" [ref=e128] [cursor=pointer]:
+                    - /url: /kk/skk/a0005/b0003/
+                - listitem [ref=e129]:
+                  - link "冬期通行規制" [ref=e130] [cursor=pointer]:
+                    - /url: /kk/skk/a0005/b0004/
+                - listitem [ref=e131]:
+                  - link "通行規制区間への進入の危険性について" [ref=e132] [cursor=pointer]:
+                    - /url: /kk/skk/a0005/tuukoukiseikukannhenosinnnyuunokikennsei/
+          - list [ref=e133]:
+            - listitem [ref=e134]:
+              - link "お知らせ・お願い" [ref=e135] [cursor=pointer]:
+                - /url: /kk/skk/osirase/
+              - list [ref=e136]:
+                - listitem [ref=e137]:
+                  - link "ラウンドアバウト（円形交差点）の交通ルール" [ref=e138] [cursor=pointer]:
+                    - /url: /kk/skk/osirase/enkeikousaten/
+                - listitem [ref=e139]:
+                  - link "お知らせ・お願い" [ref=e140] [cursor=pointer]:
+                    - /url: /kk/skk/osirase/osiraseonegai/
+          - list [ref=e141]:
+            - listitem [ref=e142]:
+              - link "防災・河川情報" [ref=e143] [cursor=pointer]:
+                - /url: /kk/skk/a0006/
+              - list [ref=e144]:
+                - listitem [ref=e145]:
+                  - link "洪水・土砂災害に関するお知らせ" [ref=e146] [cursor=pointer]:
+                    - /url: /kk/skk/a0006/b0005/
+          - list [ref=e147]:
+            - listitem [ref=e148]:
+              - link "各種情報" [ref=e149] [cursor=pointer]:
+                - /url: /kk/skk/a0007/
+              - list [ref=e150]:
+                - listitem [ref=e151]:
+                  - link "ダム" [ref=e152] [cursor=pointer]:
+                    - /url: /kk/skk/a0007/b0001/
+                - listitem [ref=e153]:
+                  - link "河川" [ref=e154] [cursor=pointer]:
+                    - /url: /kk/skk/a0007/kasen/
+                - listitem [ref=e155]:
+                  - link "漁港" [ref=e156] [cursor=pointer]:
+                    - /url: /kk/skk/a0007/gyokoh/
+                - listitem [ref=e157]:
+                  - link "都市公園" [ref=e158] [cursor=pointer]:
+                    - /url: /kk/skk/a0007/b0003/
+                - listitem [ref=e159]:
+                  - link "石狩湾新港地域公共下水道" [ref=e160] [cursor=pointer]:
+                    - /url: /kk/skk/a0007/b0004/
+          - list [ref=e161]:
+            - listitem [ref=e162]:
+              - link "その他" [ref=e163] [cursor=pointer]:
+                - /url: /kk/skk/a0008/
+              - list [ref=e164]:
+                - listitem [ref=e165]:
+                  - link "社会資本整備に関するアカウンタビリティ" [ref=e166] [cursor=pointer]:
+                    - /url: /kk/skk/a0008/b0001/
+                - listitem [ref=e167]:
+                  - link "公共土木施設の維持管理基本方針に基づく実施計画" [ref=e168] [cursor=pointer]:
+                    - /url: /kk/skk/a0008/b0002/
+                - listitem [ref=e169]:
+                  - link "道道きたひろしま総合運動公園線の整備における環境保全を考える協議会" [ref=e170] [cursor=pointer]:
+                    - /url: /kk/skk/a0008/b0003/
+                - listitem [ref=e171]:
+                  - link "事業の記録ビデオ・DVD貸出" [ref=e172] [cursor=pointer]:
+                    - /url: /kk/skk/a0008/b0004/
+                - listitem [ref=e173]:
+                  - link "河川整備計画" [ref=e174] [cursor=pointer]:
+                    - /url: /kk/skk/a0008/b0005/
+          - list [ref=e175]:
+            - listitem [ref=e176]:
+              - link "リンク集" [ref=e177] [cursor=pointer]:
+                - /url: /kk/skk/a0010/
+              - list
+  - paragraph [ref=e178]:
+    - link "page top" [ref=e179] [cursor=pointer]:
+      - /url: "#page"
+      - generic [ref=e180]: page top
+  - contentinfo [ref=e181]:
+    - navigation [ref=e182]:
+      - generic [ref=e183]:
+        - generic [ref=e184]:
+          - paragraph [ref=e185]:
+            - link "お問合せ・相談窓口" [ref=e186] [cursor=pointer]:
+              - /url: /site-info/contact.html
+          - paragraph [ref=e187]:
+            - link "庁舎のご案内" [ref=e188] [cursor=pointer]:
+              - /url: /chosha/index.html
+        - list [ref=e189]:
+          - listitem [ref=e190]:
+            - link "サイトポリシー" [ref=e191] [cursor=pointer]:
+              - /url: /site-info/sitepolicy.html
+          - listitem [ref=e192]:
+            - link "個人情報の取扱いについて" [ref=e193] [cursor=pointer]:
+              - /url: https://www.pref.hokkaido.lg.jp/site-info/kojinjoho.html
+          - listitem [ref=e194]:
+            - link "サイトマップ" [ref=e195] [cursor=pointer]:
+              - /url: /sitemap/index.html
+          - listitem [ref=e196]:
+            - link "北海道のオープンデータの取組" [ref=e197] [cursor=pointer]:
+              - /url: https://www.pref.hokkaido.lg.jp/kz/dxs/opendata/opendata.html
+    - generic [ref=e199]:
+      - generic [ref=e200]:
+        - text: 〒068-8558 岩見沢市8条西5丁目 電話番号
+        - generic [ref=e201]:
+          - link "0126-20-0200":
+            - /url: tel:0126200200
+        - text: （総合案内）
+      - generic [ref=e202]: 一般的な業務時間：8時45分から17時30分 （土日祝日および12月29日～1月3日はお休み）
+    - generic [ref=e203]: © 2021 HOKKAIDO GOVERNMENT

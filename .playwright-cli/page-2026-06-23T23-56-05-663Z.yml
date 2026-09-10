@@ -1,0 +1,227 @@
+- generic [ref=e2]:
+  - table [ref=e3]:
+    - rowgroup [ref=e4]:
+      - row "五大ダムリアルタイム情報 四十四田ダム 御所ダム 田瀬ダム 湯田ダム 胆沢ダム" [ref=e5]:
+        - cell "五大ダムリアルタイム情報" [ref=e6]:
+          - img "五大ダムリアルタイム情報" [ref=e7]
+        - cell "四十四田ダム" [ref=e8]:
+          - link "四十四田ダム" [ref=e9] [cursor=pointer]:
+            - /url: sjs_01.html
+            - img "四十四田ダム" [ref=e10]
+        - cell "御所ダム" [ref=e11]:
+          - link "御所ダム" [ref=e12] [cursor=pointer]:
+            - /url: gsh_01.html
+            - img "御所ダム" [ref=e13]
+        - cell "田瀬ダム" [ref=e14]:
+          - link "田瀬ダム" [ref=e15] [cursor=pointer]:
+            - /url: tas_01.html
+            - img "田瀬ダム" [ref=e16]
+        - cell "湯田ダム" [ref=e17]:
+          - link "湯田ダム" [ref=e18] [cursor=pointer]:
+            - /url: yud_01.html
+            - img "湯田ダム" [ref=e19]
+        - cell "胆沢ダム" [ref=e20]:
+          - link "胆沢ダム" [ref=e21] [cursor=pointer]:
+            - /url: isw_01.html
+            - img "胆沢ダム" [ref=e22]
+        - cell [ref=e23]
+  - table [ref=e24]:
+    - rowgroup [ref=e25]:
+      - row "用語解説 最新情報 操作状況 雨量・水位情報 ライブカメラ 五大ダム速報" [ref=e26]:
+        - cell [ref=e27]
+        - cell "用語解説" [ref=e28]:
+          - link "用語解説" [ref=e29] [cursor=pointer]:
+            - /url: 5.html
+            - img "用語解説" [ref=e30]
+        - cell [ref=e31]
+        - cell "最新情報" [ref=e32]:
+          - link "最新情報" [ref=e33] [cursor=pointer]:
+            - /url: sjs_01.html
+            - img "最新情報" [ref=e34]
+        - cell "操作状況" [ref=e35]:
+          - link "操作状況" [ref=e36] [cursor=pointer]:
+            - /url: sjs_02.html
+            - img "操作状況" [ref=e37]
+        - cell "雨量・水位情報" [ref=e38]:
+          - link "雨量・水位情報" [ref=e39] [cursor=pointer]:
+            - /url: sjs_03.html
+            - img "雨量・水位情報" [ref=e40]
+        - cell "ライブカメラ" [ref=e41]:
+          - link "ライブカメラ" [ref=e42] [cursor=pointer]:
+            - /url: sjs_06.html
+            - img "ライブカメラ" [ref=e43]
+        - cell "五大ダム速報" [ref=e44]:
+          - img "五大ダム速報" [ref=e45]
+        - cell [ref=e46]
+      - row [ref=e47]:
+        - cell [ref=e48]
+  - table [ref=e50]:
+    - rowgroup [ref=e51]:
+      - row "五大ダムリアルタイム速報 2026/06/24 08:30 現在 ダムマップ 四十四田ダム 田瀬ダム 胆沢ダム 湯田ダム 御所ダム 各ダムの情報は上図マップのダム名をクリックして下さい。 ダム名 貯水位 流入量 放流量 貯水量 貯水率 流域平均雨量 利水 容量 有効 容量 時間 累加 (m) (m3/s) (m3/s) (千m3) (%) (%) (mm) (mm) 四十四田ダム 【放流中】 163.46 56.24 70.12 9686 32.50 28.90 0 0 御所ダム 【放流中】 177.29 70.77 64.65 18397 56.00 41.00 0 0 田瀬ダム 198.01 33.53 36.93 16845 17.40 17.40 0 0.1 湯田ダム 222.81 34.15 47.40 16447 22.20 18.30 0 0 胆沢ダム 0.00 閉局 閉局 閉局 閉局 閉局 0 0.1 ※表示数値は速報値であり、検証がなされていませんので実際とは異なる場合があります。 ※放流量は、発電のための放流量を含んでおります。" [ref=e52]:
+        - cell "五大ダムリアルタイム速報 2026/06/24 08:30 現在 ダムマップ 四十四田ダム 田瀬ダム 胆沢ダム 湯田ダム 御所ダム 各ダムの情報は上図マップのダム名をクリックして下さい。" [ref=e53]:
+          - table [ref=e54]:
+            - rowgroup [ref=e55]:
+              - row "五大ダムリアルタイム速報" [ref=e56]:
+                - cell "五大ダムリアルタイム速報" [ref=e57]:
+                  - img "五大ダムリアルタイム速報" [ref=e58]
+              - row "2026/06/24 08:30 現在" [ref=e59]:
+                - cell "2026/06/24 08:30 現在" [ref=e60]
+              - row [ref=e61]:
+                - cell [ref=e62]
+          - img "ダムマップ" [ref=e63]
+          - generic:
+            - link "四十四田ダム":
+              - /url: sjs_01.html
+            - link "田瀬ダム":
+              - /url: tas_01.html
+            - link "胆沢ダム":
+              - /url: isw_01.html
+            - link "湯田ダム":
+              - /url: yud_01.html
+            - link "御所ダム":
+              - /url: gsh_01.html
+          - table [ref=e64]:
+            - rowgroup [ref=e65]:
+              - row "各ダムの情報は上図マップのダム名をクリックして下さい。" [ref=e66]:
+                - cell [ref=e67]
+                - cell "各ダムの情報は上図マップのダム名をクリックして下さい。" [ref=e68]
+        - cell "ダム名 貯水位 流入量 放流量 貯水量 貯水率 流域平均雨量 利水 容量 有効 容量 時間 累加 (m) (m3/s) (m3/s) (千m3) (%) (%) (mm) (mm) 四十四田ダム 【放流中】 163.46 56.24 70.12 9686 32.50 28.90 0 0 御所ダム 【放流中】 177.29 70.77 64.65 18397 56.00 41.00 0 0 田瀬ダム 198.01 33.53 36.93 16845 17.40 17.40 0 0.1 湯田ダム 222.81 34.15 47.40 16447 22.20 18.30 0 0 胆沢ダム 0.00 閉局 閉局 閉局 閉局 閉局 0 0.1 ※表示数値は速報値であり、検証がなされていませんので実際とは異なる場合があります。 ※放流量は、発電のための放流量を含んでおります。" [ref=e69]:
+          - table [ref=e70]:
+            - rowgroup [ref=e71]:
+              - row "ダム名 貯水位 流入量 放流量 貯水量 貯水率 流域平均雨量 利水 容量 有効 容量 時間 累加 (m) (m3/s) (m3/s) (千m3) (%) (%) (mm) (mm) 四十四田ダム 【放流中】 163.46 56.24 70.12 9686 32.50 28.90 0 0 御所ダム 【放流中】 177.29 70.77 64.65 18397 56.00 41.00 0 0 田瀬ダム 198.01 33.53 36.93 16845 17.40 17.40 0 0.1 湯田ダム 222.81 34.15 47.40 16447 22.20 18.30 0 0 胆沢ダム 0.00 閉局 閉局 閉局 閉局 閉局 0 0.1" [ref=e72]:
+                - cell "ダム名 貯水位 流入量 放流量 貯水量 貯水率 流域平均雨量 利水 容量 有効 容量 時間 累加 (m) (m3/s) (m3/s) (千m3) (%) (%) (mm) (mm) 四十四田ダム 【放流中】 163.46 56.24 70.12 9686 32.50 28.90 0 0 御所ダム 【放流中】 177.29 70.77 64.65 18397 56.00 41.00 0 0 田瀬ダム 198.01 33.53 36.93 16845 17.40 17.40 0 0.1 湯田ダム 222.81 34.15 47.40 16447 22.20 18.30 0 0 胆沢ダム 0.00 閉局 閉局 閉局 閉局 閉局 0 0.1" [ref=e73]:
+                  - table [ref=e74]:
+                    - rowgroup [ref=e75]:
+                      - row "ダム名 貯水位 流入量 放流量 貯水量 貯水率 流域平均雨量" [ref=e76]:
+                        - cell "ダム名" [ref=e77]
+                        - cell "貯水位" [ref=e78]
+                        - cell "流入量" [ref=e79]
+                        - cell "放流量" [ref=e80]
+                        - cell "貯水量" [ref=e81]
+                        - cell "貯水率" [ref=e82]
+                        - cell "流域平均雨量" [ref=e83]
+                      - row "利水 容量 有効 容量 時間 累加" [ref=e84]:
+                        - cell "利水 容量" [ref=e85]:
+                          - text: 利水
+                          - text: 容量
+                        - cell "有効 容量" [ref=e86]:
+                          - text: 有効
+                          - text: 容量
+                        - cell "時間" [ref=e87]
+                        - cell "累加" [ref=e88]
+                      - row "(m) (m3/s) (m3/s) (千m3) (%) (%) (mm) (mm)" [ref=e89]:
+                        - cell "(m)" [ref=e90]
+                        - cell "(m3/s)" [ref=e91]
+                        - cell "(m3/s)" [ref=e92]
+                        - cell "(千m3)" [ref=e93]
+                        - cell "(%)" [ref=e94]
+                        - cell "(%)" [ref=e95]
+                        - cell "(mm)" [ref=e96]
+                        - cell "(mm)" [ref=e97]
+                      - row "四十四田ダム 【放流中】 163.46 56.24 70.12 9686 32.50 28.90 0 0" [ref=e98]:
+                        - cell "四十四田ダム 【放流中】" [ref=e99]:
+                          - link "四十四田ダム" [ref=e100] [cursor=pointer]:
+                            - /url: sjs_01.html
+                          - generic [ref=e101]: 【放流中】
+                        - cell "163.46" [ref=e102]
+                        - cell [ref=e103]
+                        - cell "56.24" [ref=e104]
+                        - cell [ref=e105]
+                        - cell "70.12" [ref=e106]
+                        - cell [ref=e107]
+                        - cell "9686" [ref=e108]
+                        - cell [ref=e109]
+                        - cell "32.50" [ref=e110]
+                        - cell "28.90" [ref=e111]
+                        - cell "0" [ref=e112]
+                        - cell "0" [ref=e113]
+                      - row "御所ダム 【放流中】 177.29 70.77 64.65 18397 56.00 41.00 0 0" [ref=e114]:
+                        - cell "御所ダム 【放流中】" [ref=e115]:
+                          - link "御所ダム" [ref=e116] [cursor=pointer]:
+                            - /url: gsh_01.html
+                          - generic [ref=e117]: 【放流中】
+                        - cell "177.29" [ref=e118]
+                        - cell [ref=e119]
+                        - cell "70.77" [ref=e120]
+                        - cell [ref=e121]
+                        - cell "64.65" [ref=e122]
+                        - cell [ref=e123]
+                        - cell "18397" [ref=e124]
+                        - cell [ref=e125]
+                        - cell "56.00" [ref=e126]
+                        - cell "41.00" [ref=e127]
+                        - cell "0" [ref=e128]
+                        - cell "0" [ref=e129]
+                      - row "田瀬ダム 198.01 33.53 36.93 16845 17.40 17.40 0 0.1" [ref=e130]:
+                        - cell "田瀬ダム" [ref=e131]:
+                          - link "田瀬ダム" [ref=e132] [cursor=pointer]:
+                            - /url: tas_01.html
+                        - cell "198.01" [ref=e133]
+                        - cell [ref=e134]
+                        - cell "33.53" [ref=e135]
+                        - cell [ref=e136]
+                        - cell "36.93" [ref=e137]
+                        - cell [ref=e138]
+                        - cell "16845" [ref=e139]
+                        - cell [ref=e140]
+                        - cell "17.40" [ref=e141]
+                        - cell "17.40" [ref=e142]
+                        - cell "0" [ref=e143]
+                        - cell "0.1" [ref=e144]
+                      - row "湯田ダム 222.81 34.15 47.40 16447 22.20 18.30 0 0" [ref=e145]:
+                        - cell "湯田ダム" [ref=e146]:
+                          - link "湯田ダム" [ref=e147] [cursor=pointer]:
+                            - /url: yud_01.html
+                        - cell "222.81" [ref=e148]
+                        - cell [ref=e149]
+                        - cell "34.15" [ref=e150]
+                        - cell [ref=e151]
+                        - cell "47.40" [ref=e152]
+                        - cell [ref=e153]
+                        - cell "16447" [ref=e154]
+                        - cell [ref=e155]
+                        - cell "22.20" [ref=e156]
+                        - cell "18.30" [ref=e157]
+                        - cell "0" [ref=e158]
+                        - cell "0" [ref=e159]
+                      - row "胆沢ダム 0.00 閉局 閉局 閉局 閉局 閉局 0 0.1" [ref=e160]:
+                        - cell "胆沢ダム" [ref=e161]:
+                          - link "胆沢ダム" [ref=e162] [cursor=pointer]:
+                            - /url: isw_01.html
+                        - cell "0.00" [ref=e163]
+                        - cell [ref=e164]
+                        - cell "閉局" [ref=e165]
+                        - cell [ref=e166]
+                        - cell "閉局" [ref=e167]
+                        - cell [ref=e168]
+                        - cell "閉局" [ref=e169]
+                        - cell [ref=e170]
+                        - cell "閉局" [ref=e171]
+                        - cell "閉局" [ref=e172]
+                        - cell "0" [ref=e173]
+                        - cell "0.1" [ref=e174]
+          - table [ref=e175]:
+            - rowgroup [ref=e176]:
+              - row "※表示数値は速報値であり、検証がなされていませんので実際とは異なる場合があります。 ※放流量は、発電のための放流量を含んでおります。" [ref=e177]:
+                - cell "※表示数値は速報値であり、検証がなされていませんので実際とは異なる場合があります。 ※放流量は、発電のための放流量を含んでおります。" [ref=e178]:
+                  - text: ※表示数値は速報値であり、検証がなされていませんので実際とは異なる場合があります。
+                  - text: ※放流量は、発電のための放流量を含んでおります。
+          - table [ref=e179]:
+            - rowgroup [ref=e180]:
+              - row [ref=e181]:
+                - cell [ref=e182]
+  - table [ref=e183]:
+    - rowgroup [ref=e184]:
+      - row [ref=e185]:
+        - cell [ref=e186]
+  - table [ref=e187]:
+    - rowgroup [ref=e188]:
+      - row "ウィンドウを閉じる" [ref=e189]:
+        - cell "ウィンドウを閉じる" [ref=e190]:
+          - link "ウィンドウを閉じる" [ref=e191] [cursor=pointer]:
+            - /url: javascript:window.close()
+  - table [ref=e192]:
+    - rowgroup [ref=e193]:
+      - row [ref=e194]:
+        - cell [ref=e195]
+  - generic [ref=e196]: Copyright(C)2007.KitakamiRiver Integrated DAM Management office. All Rights Reserved

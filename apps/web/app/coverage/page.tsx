@@ -3,9 +3,12 @@
 // sub-issues #2-#16 break it down by phase.
 //
 // Two metrics live here and they are NOT interchangeable: 実測 counts any
-// non-synthetic observation (a level-only feed counts), 貯水率取得 counts the
-// dams we can actually render a 貯水率 for. Both come from repo/coverage.ts,
-// which the home page shares.
+// observation (a level-only feed counts), 貯水率取得 counts the dams we can
+// actually render a 貯水率 for. Both come from repo/coverage.ts, which the
+// home page shares.
+//
+// Do not link the issue tracker from rendered output — the repo is private,
+// so visitors get a 404. The public-facing roadmap is /roadmap.
 
 import { PREFECTURES } from '@dam/core/prefectures';
 import { sql } from '@dam/db/client';
@@ -196,17 +199,27 @@ export default async function CoveragePage() {
         全国 <strong>{Number(total).toLocaleString()}</strong> ダムに対する実測データ取得状況。
         「実測」は水位・雨量だけでも 1 基と数え、「貯水率取得」は貯水率を表示できるダムに限った、
         より厳しい指標です（分母も河川管理ダムに限定）。数字が食い違って見えるのはこの定義差によるものです。
-        ロードマップは{' '}
-        <a
-          className="text-primary hover:underline"
-          href="https://github.com/matsubo/dam/issues/1"
-          rel="noopener noreferrer"
-          target="_blank"
-        >
-          GitHub issue #1
-        </a>{' '}
-        で管理。
+        今後の方針は{' '}
+        <Link className="text-primary hover:underline" href="/roadmap">
+          ロードマップ
+        </Link>{' '}
+        に。
       </p>
+
+      {/* Coverage is the one number a would-be contributor can move, so the
+          recruitment CTA belongs here rather than only in the footer. */}
+      <div className="border border-primary bg-primary/5 rounded-xl p-4 mb-8 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <p className="text-sm flex-1 min-w-[16rem] leading-relaxed">
+          この数字を上げるのを手伝ってくれる開発者を探しています。個人が一人で運営しているため、
+          未取得のダムがまだ多く残っています。
+        </p>
+        <Link
+          href="/contribute"
+          className="text-sm font-semibold text-primary hover:underline whitespace-nowrap"
+        >
+          開発者募集を見る →
+        </Link>
+      </div>
 
       <section className="mb-10">
         <h2 className="text-lg font-semibold mb-1">未取得ダムの内訳</h2>

@@ -1098,7 +1098,10 @@ const paths = {
       summary: '水系合計の貯水量履歴 (ダム横断 SUM)',
       tags: ['observations'],
       description:
-        '水系内のダムの `storage_volume_m3` をバケット時刻ごとに合算した時系列を返します。利水容量を持つダム subset でのみ集計するため、貯水率は信頼できます。',
+        '水系内のダムの `storage_volume_m3` をバケット時刻ごとに合算した時系列を返します。利水容量を持つダム subset でのみ集計するため、貯水率は信頼できます。\n\n' +
+        '`hourly` では、ソースはダムごとに優先度順で選ばれます (水系内のダムは別々のフィードで配信されるため)。' +
+        'また各ダムの最終観測値を次の観測まで持ち越すため、報告間隔が異なるダムが混在してもバケットごとの集計対象が変わりません。' +
+        'この持ち越しにより `source` は常に `null` です (水系合計に単一のソースは存在しない)。',
       parameters: [
         { $ref: '#/components/parameters/WatershedSlugPath' },
         { $ref: '#/components/parameters/From' },
@@ -1246,6 +1249,9 @@ export async function GET() {
         '',
         '## 出典・ライセンス',
         '原典は 国土数値情報・ダム便覧・国土地理院・ja.wikipedia (写真フォールバック)。再配布時は原典のライセンス条件 (CC-BY-SA 等) に従ってください。詳細は /sources。',
+        '',
+        '## 開発者募集',
+        'この API は個人が一人で開発・運用しています。実測値のカバレッジ拡大 (未取得ダムのアダプタ実装、公開データソースの情報提供) を手伝ってくださる方を募集しています → [/contribute](/contribute)。寄付は GitHub Sponsors から。',
       ].join('\n'),
       contact: { name: 'Dam Data Japan', url: 'https://discord.gg/UbWqspWbAk' },
       license: { name: 'Terms of use', url: 'https://dam.teraren.com/legal/terms' },
