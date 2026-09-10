@@ -109,37 +109,40 @@ export default async function DamDetail({ params }: PageProps) {
         ]}
       />
       <div className="flex items-start gap-4 mb-2">
-        {d.imageUrl ? (
-          <figure className="shrink-0">
-            <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-surface-container-low border border-outline-variant/40">
-              <Image
-                src={d.imageUrl}
-                alt={`${d.name}の写真`}
-                fill
-                sizes="80px"
-                className="object-cover"
-                unoptimized={d.imageUrl.includes('wikimedia.org')}
-              />
-            </div>
-            {(() => {
-              const credit = imageCredit(d.imageUrl);
-              if (!credit) return null;
-              return (
-                <figcaption className="text-[10px] leading-tight text-on-surface-variant mt-1 max-w-[88px]">
-                  <a
-                    href={credit.href}
-                    target="_blank"
-                    rel="noopener noreferrer license"
-                    className="block font-medium hover:underline"
-                  >
-                    {credit.text}
-                  </a>
-                  <span className="block text-[9px] opacity-80">{credit.license}</span>
-                </figcaption>
-              );
-            })()}
-          </figure>
-        ) : null}
+        {/* A photo is shown only when imageCredit() can attribute it. That
+            function recognises just the hosts we are licensed to display, so
+            anything else — e.g. a ダム便覧 URL predating migration 0042 —
+            fails closed rather than rendering an uncredited hotlink (or
+            throwing, since next/image rejects hosts outside remotePatterns). */}
+        {(() => {
+          const credit = imageCredit(d.imageUrl);
+          if (!d.imageUrl || !credit) return null;
+          return (
+            <figure className="shrink-0">
+              <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-surface-container-low border border-outline-variant/40">
+                <Image
+                  src={d.imageUrl}
+                  alt={`${d.name}の写真`}
+                  fill
+                  sizes="80px"
+                  className="object-cover"
+                  unoptimized={d.imageUrl.includes('wikimedia.org')}
+                />
+              </div>
+              <figcaption className="text-[10px] leading-tight text-on-surface-variant mt-1 max-w-[88px]">
+                <a
+                  href={credit.href}
+                  target="_blank"
+                  rel="noopener noreferrer license"
+                  className="block font-medium hover:underline"
+                >
+                  {credit.text}
+                </a>
+                <span className="block text-[9px] opacity-80">{credit.license}</span>
+              </figcaption>
+            </figure>
+          );
+        })()}
         <h1 className="text-3xl font-semibold inline-flex items-center gap-2">
           <EntityIcon kind="dam" size={28} className="text-primary shrink-0" />
           <span>{dn}の貯水率・貯水量</span>

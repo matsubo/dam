@@ -1,0 +1,992 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - iframe [ref=e5]:
+      - generic [ref=f13e2]:
+        - img "状況図" [ref=f13e3]
+        - generic [ref=f13e4]:
+          - generic [ref=f13e5]: "情報選択:"
+          - generic [ref=f13e6]: 雨量
+          - generic [ref=f13e7]: 水位（指定観測所）
+        - paragraph [ref=f13e8]: ※地図をクリックすると、クリックした地域の地図情報が表示されます。
+        - generic:
+          - link [ref=f13e10]:
+            - /url: javascript:void(0)
+          - link [ref=f13e12]:
+            - /url: javascript:void(0)
+          - link [ref=f13e14]:
+            - /url: javascript:void(0)
+          - link [ref=f13e16]:
+            - /url: javascript:void(0)
+          - link [ref=f13e18]:
+            - /url: javascript:void(0)
+          - link [ref=f13e20]:
+            - /url: javascript:void(0)
+          - link [ref=f13e22]:
+            - /url: javascript:void(0)
+          - link [ref=f13e24]:
+            - /url: javascript:void(0)
+          - link [ref=f13e26]:
+            - /url: javascript:void(0)
+          - link [ref=f13e28]:
+            - /url: javascript:void(0)
+          - link [ref=f13e30]:
+            - /url: javascript:void(0)
+          - link [ref=f13e32]:
+            - /url: javascript:void(0)
+          - link [ref=f13e34]:
+            - /url: javascript:void(0)
+          - link [ref=f13e36]:
+            - /url: javascript:void(0)
+          - link [ref=f13e38]:
+            - /url: javascript:void(0)
+          - link [ref=f13e40]:
+            - /url: javascript:void(0)
+          - link [ref=f13e42]:
+            - /url: javascript:void(0)
+          - link [ref=f13e44]:
+            - /url: javascript:void(0)
+          - link [ref=f13e46]:
+            - /url: javascript:void(0)
+          - link [ref=f13e48]:
+            - /url: javascript:void(0)
+          - link [ref=f13e50]:
+            - /url: javascript:void(0)
+          - link [ref=f13e52]:
+            - /url: javascript:void(0)
+          - link [ref=f13e54]:
+            - /url: javascript:void(0)
+          - link [ref=f13e56]:
+            - /url: javascript:void(0)
+          - link [ref=f13e58]:
+            - /url: javascript:void(0)
+          - link [ref=f13e60]:
+            - /url: javascript:void(0)
+          - link [ref=f13e62]:
+            - /url: javascript:void(0)
+          - link [ref=f13e64]:
+            - /url: javascript:void(0)
+          - link [ref=f13e66]:
+            - /url: javascript:void(0)
+          - link [ref=f13e68]:
+            - /url: javascript:void(0)
+          - link [ref=f13e70]:
+            - /url: javascript:void(0)
+          - link [ref=f13e72]:
+            - /url: javascript:void(0)
+          - link [ref=f13e74]:
+            - /url: javascript:void(0)
+          - link [ref=f13e76]:
+            - /url: javascript:void(0)
+          - link [ref=f13e78]:
+            - /url: javascript:void(0)
+          - link [ref=f13e80]:
+            - /url: javascript:void(0)
+          - link [ref=f13e82]:
+            - /url: javascript:void(0)
+          - link [ref=f13e84]:
+            - /url: javascript:void(0)
+          - link [ref=f13e86]:
+            - /url: javascript:void(0)
+          - link [ref=f13e88]:
+            - /url: javascript:void(0)
+          - link [ref=f13e90]:
+            - /url: javascript:void(0)
+          - link [ref=f13e92]:
+            - /url: javascript:void(0)
+          - link [ref=f13e94]:
+            - /url: javascript:void(0)
+          - link [ref=f13e96]:
+            - /url: javascript:void(0)
+          - link [ref=f13e98]:
+            - /url: javascript:void(0)
+          - link [ref=f13e100]:
+            - /url: javascript:void(0)
+          - link [ref=f13e102]:
+            - /url: javascript:void(0)
+          - link [ref=f13e104]:
+            - /url: javascript:void(0)
+          - link [ref=f13e106]:
+            - /url: javascript:void(0)
+          - link [ref=f13e108]:
+            - /url: javascript:void(0)
+          - link [ref=f13e110]:
+            - /url: javascript:void(0)
+          - link [ref=f13e112]:
+            - /url: javascript:void(0)
+          - link [ref=f13e114]:
+            - /url: javascript:void(0)
+          - link [ref=f13e116]:
+            - /url: javascript:void(0)
+          - link [ref=f13e118]:
+            - /url: javascript:void(0)
+          - link [ref=f13e120]:
+            - /url: javascript:void(0)
+          - link [ref=f13e122]:
+            - /url: javascript:void(0)
+          - link [ref=f13e124]:
+            - /url: javascript:void(0)
+          - link [ref=f13e126]:
+            - /url: javascript:void(0)
+          - link [ref=f13e128]:
+            - /url: javascript:void(0)
+          - link [ref=f13e130]:
+            - /url: javascript:void(0)
+          - link [ref=f13e132]:
+            - /url: javascript:void(0)
+          - link [ref=f13e134]:
+            - /url: javascript:void(0)
+          - link [ref=f13e136]:
+            - /url: javascript:void(0)
+          - link [ref=f13e138]:
+            - /url: javascript:void(0)
+          - link [ref=f13e140]:
+            - /url: javascript:void(0)
+          - link [ref=f13e142]:
+            - /url: javascript:void(0)
+          - link [ref=f13e144]:
+            - /url: javascript:void(0)
+          - link [ref=f13e146]:
+            - /url: javascript:void(0)
+          - link [ref=f13e148]:
+            - /url: javascript:void(0)
+          - link [ref=f13e150]:
+            - /url: javascript:void(0)
+          - link [ref=f13e152]:
+            - /url: javascript:void(0)
+          - link [ref=f13e154]:
+            - /url: javascript:void(0)
+          - link [ref=f13e156]:
+            - /url: javascript:void(0)
+          - link [ref=f13e158]:
+            - /url: javascript:void(0)
+          - link [ref=f13e160]:
+            - /url: javascript:void(0)
+          - link [ref=f13e162]:
+            - /url: javascript:void(0)
+          - link [ref=f13e164]:
+            - /url: javascript:void(0)
+          - link [ref=f13e166]:
+            - /url: javascript:void(0)
+          - link [ref=f13e168]:
+            - /url: javascript:void(0)
+          - link [ref=f13e170]:
+            - /url: javascript:void(0)
+          - link [ref=f13e172]:
+            - /url: javascript:void(0)
+          - link [ref=f13e174]:
+            - /url: javascript:void(0)
+          - link [ref=f13e176]:
+            - /url: javascript:void(0)
+          - link [ref=f13e178]:
+            - /url: javascript:void(0)
+          - link [ref=f13e180]:
+            - /url: javascript:void(0)
+          - link [ref=f13e182]:
+            - /url: javascript:void(0)
+          - link [ref=f13e184]:
+            - /url: javascript:void(0)
+          - link [ref=f13e186]:
+            - /url: javascript:void(0)
+          - link [ref=f13e188]:
+            - /url: javascript:void(0)
+          - link [ref=f13e190]:
+            - /url: javascript:void(0)
+          - link [ref=f13e192]:
+            - /url: javascript:void(0)
+          - link [ref=f13e194]:
+            - /url: javascript:void(0)
+          - link [ref=f13e196]:
+            - /url: javascript:void(0)
+          - link [ref=f13e198]:
+            - /url: javascript:void(0)
+          - link [ref=f13e200]:
+            - /url: javascript:void(0)
+          - link [ref=f13e202]:
+            - /url: javascript:void(0)
+          - link [ref=f13e204]:
+            - /url: javascript:void(0)
+          - link [ref=f13e206]:
+            - /url: javascript:void(0)
+          - link [ref=f13e208]:
+            - /url: javascript:void(0)
+          - link [ref=f13e210]:
+            - /url: javascript:void(0)
+          - link [ref=f13e212]:
+            - /url: javascript:void(0)
+          - link [ref=f13e214]:
+            - /url: javascript:void(0)
+          - link [ref=f13e216]:
+            - /url: javascript:void(0)
+          - link [ref=f13e218]:
+            - /url: javascript:void(0)
+          - link [ref=f13e220]:
+            - /url: javascript:void(0)
+          - link [ref=f13e222]:
+            - /url: javascript:void(0)
+          - link [ref=f13e224]:
+            - /url: javascript:void(0)
+          - link [ref=f13e226]:
+            - /url: javascript:void(0)
+          - link [ref=f13e228]:
+            - /url: javascript:void(0)
+          - link [ref=f13e230]:
+            - /url: javascript:void(0)
+          - link [ref=f13e232]:
+            - /url: javascript:void(0)
+          - link [ref=f13e234]:
+            - /url: javascript:void(0)
+          - link [ref=f13e236]:
+            - /url: javascript:void(0)
+          - link [ref=f13e238]:
+            - /url: javascript:void(0)
+          - link [ref=f13e240]:
+            - /url: javascript:void(0)
+          - link [ref=f13e242]:
+            - /url: javascript:void(0)
+          - link [ref=f13e244]:
+            - /url: javascript:void(0)
+          - link [ref=f13e246]:
+            - /url: javascript:void(0)
+          - link [ref=f13e248]:
+            - /url: javascript:void(0)
+          - link [ref=f13e250]:
+            - /url: javascript:void(0)
+          - link [ref=f13e252]:
+            - /url: javascript:void(0)
+          - link [ref=f13e254]:
+            - /url: javascript:void(0)
+          - link [ref=f13e256]:
+            - /url: javascript:void(0)
+          - link [ref=f13e258]:
+            - /url: javascript:void(0)
+          - link [ref=f13e260]:
+            - /url: javascript:void(0)
+          - link [ref=f13e262]:
+            - /url: javascript:void(0)
+          - link [ref=f13e264]:
+            - /url: javascript:void(0)
+          - link [ref=f13e266]:
+            - /url: javascript:void(0)
+          - link [ref=f13e268]:
+            - /url: javascript:void(0)
+          - link [ref=f13e270]:
+            - /url: javascript:void(0)
+          - link [ref=f13e272]:
+            - /url: javascript:void(0)
+          - link [ref=f13e274]:
+            - /url: javascript:void(0)
+          - link [ref=f13e276]:
+            - /url: javascript:void(0)
+          - link [ref=f13e278]:
+            - /url: javascript:void(0)
+          - link [ref=f13e280]:
+            - /url: javascript:void(0)
+          - link [ref=f13e282]:
+            - /url: javascript:void(0)
+          - link [ref=f13e284]:
+            - /url: javascript:void(0)
+          - link [ref=f13e286]:
+            - /url: javascript:void(0)
+          - link [ref=f13e288]:
+            - /url: javascript:void(0)
+          - link [ref=f13e290]:
+            - /url: javascript:void(0)
+          - link [ref=f13e292]:
+            - /url: javascript:void(0)
+          - link [ref=f13e294]:
+            - /url: javascript:void(0)
+          - link [ref=f13e296]:
+            - /url: javascript:void(0)
+          - link [ref=f13e298]:
+            - /url: javascript:void(0)
+          - link [ref=f13e300]:
+            - /url: javascript:void(0)
+          - link [ref=f13e302]:
+            - /url: javascript:void(0)
+          - link [ref=f13e304]:
+            - /url: javascript:void(0)
+          - link [ref=f13e306]:
+            - /url: javascript:void(0)
+          - link [ref=f13e308]:
+            - /url: javascript:void(0)
+          - link [ref=f13e310]:
+            - /url: javascript:void(0)
+          - link [ref=f13e312]:
+            - /url: javascript:void(0)
+          - link [ref=f13e314]:
+            - /url: javascript:void(0)
+          - link [ref=f13e316]:
+            - /url: javascript:void(0)
+          - link [ref=f13e318]:
+            - /url: javascript:void(0)
+          - link [ref=f13e320]:
+            - /url: javascript:void(0)
+          - link [ref=f13e322]:
+            - /url: javascript:void(0)
+          - link [ref=f13e324]:
+            - /url: javascript:void(0)
+          - link [ref=f13e326]:
+            - /url: javascript:void(0)
+          - link [ref=f13e328]:
+            - /url: javascript:void(0)
+          - link [ref=f13e330]:
+            - /url: javascript:void(0)
+          - link [ref=f13e332]:
+            - /url: javascript:void(0)
+          - link [ref=f13e334]:
+            - /url: javascript:void(0)
+          - link [ref=f13e336]:
+            - /url: javascript:void(0)
+          - link [ref=f13e338]:
+            - /url: javascript:void(0)
+          - link [ref=f13e340]:
+            - /url: javascript:void(0)
+          - link [ref=f13e342]:
+            - /url: javascript:void(0)
+          - link [ref=f13e344]:
+            - /url: javascript:void(0)
+          - link [ref=f13e346]:
+            - /url: javascript:void(0)
+          - link [ref=f13e348]:
+            - /url: javascript:void(0)
+          - link [ref=f13e350]:
+            - /url: javascript:void(0)
+          - link [ref=f13e352]:
+            - /url: javascript:void(0)
+          - link [ref=f13e354]:
+            - /url: javascript:void(0)
+          - link [ref=f13e356]:
+            - /url: javascript:void(0)
+          - link [ref=f13e358]:
+            - /url: javascript:void(0)
+          - link [ref=f13e360]:
+            - /url: javascript:void(0)
+          - link [ref=f13e362]:
+            - /url: javascript:void(0)
+          - link [ref=f13e364]:
+            - /url: javascript:void(0)
+          - link [ref=f13e366]:
+            - /url: javascript:void(0)
+          - link [ref=f13e368]:
+            - /url: javascript:void(0)
+          - link [ref=f13e370]:
+            - /url: javascript:void(0)
+          - link [ref=f13e372]:
+            - /url: javascript:void(0)
+          - link [ref=f13e374]:
+            - /url: javascript:void(0)
+          - link [ref=f13e376]:
+            - /url: javascript:void(0)
+          - link [ref=f13e378]:
+            - /url: javascript:void(0)
+          - link [ref=f13e380]:
+            - /url: javascript:void(0)
+          - link [ref=f13e382]:
+            - /url: javascript:void(0)
+          - link [ref=f13e384]:
+            - /url: javascript:void(0)
+          - link [ref=f13e386]:
+            - /url: javascript:void(0)
+          - link [ref=f13e388]:
+            - /url: javascript:void(0)
+          - link [ref=f13e390]:
+            - /url: javascript:void(0)
+          - link [ref=f13e392]:
+            - /url: javascript:void(0)
+          - link [ref=f13e394]:
+            - /url: javascript:void(0)
+          - link [ref=f13e396]:
+            - /url: javascript:void(0)
+          - link [ref=f13e398]:
+            - /url: javascript:void(0)
+          - link [ref=f13e400]:
+            - /url: javascript:void(0)
+          - link [ref=f13e402]:
+            - /url: javascript:void(0)
+          - link [ref=f13e404]:
+            - /url: javascript:void(0)
+          - link [ref=f13e406]:
+            - /url: javascript:void(0)
+          - link [ref=f13e408]:
+            - /url: javascript:void(0)
+          - link [ref=f13e410]:
+            - /url: javascript:void(0)
+          - link [ref=f13e412]:
+            - /url: javascript:void(0)
+          - link [ref=f13e414]:
+            - /url: javascript:void(0)
+          - link [ref=f13e416]:
+            - /url: javascript:void(0)
+          - link [ref=f13e418]:
+            - /url: javascript:void(0)
+          - link [ref=f13e420]:
+            - /url: javascript:void(0)
+          - link [ref=f13e422]:
+            - /url: javascript:void(0)
+          - link [ref=f13e424]:
+            - /url: javascript:void(0)
+          - link [ref=f13e426]:
+            - /url: javascript:void(0)
+          - link [ref=f13e428]:
+            - /url: javascript:void(0)
+          - link [ref=f13e430]:
+            - /url: javascript:void(0)
+          - link [ref=f13e432]:
+            - /url: javascript:void(0)
+          - link [ref=f13e434]:
+            - /url: javascript:void(0)
+          - link [ref=f13e436]:
+            - /url: javascript:void(0)
+          - link [ref=f13e438]:
+            - /url: javascript:void(0)
+          - link [ref=f13e440]:
+            - /url: javascript:void(0)
+          - link [ref=f13e442]:
+            - /url: javascript:void(0)
+          - link [ref=f13e444]:
+            - /url: javascript:void(0)
+          - link [ref=f13e446]:
+            - /url: javascript:void(0)
+          - link [ref=f13e448]:
+            - /url: javascript:void(0)
+          - link [ref=f13e450]:
+            - /url: javascript:void(0)
+          - link [ref=f13e452]:
+            - /url: javascript:void(0)
+          - link [ref=f13e454]:
+            - /url: javascript:void(0)
+          - link [ref=f13e456]:
+            - /url: javascript:void(0)
+          - link [ref=f13e458]:
+            - /url: javascript:void(0)
+          - link [ref=f13e460]:
+            - /url: javascript:void(0)
+          - link [ref=f13e462]:
+            - /url: javascript:void(0)
+          - link [ref=f13e464]:
+            - /url: javascript:void(0)
+          - link [ref=f13e466]:
+            - /url: javascript:void(0)
+          - link [ref=f13e468]:
+            - /url: javascript:void(0)
+          - link [ref=f13e470]:
+            - /url: javascript:void(0)
+          - link [ref=f13e472]:
+            - /url: javascript:void(0)
+          - link [ref=f13e474]:
+            - /url: javascript:void(0)
+          - link [ref=f13e476]:
+            - /url: javascript:void(0)
+          - link [ref=f13e478]:
+            - /url: javascript:void(0)
+          - link [ref=f13e480]:
+            - /url: javascript:void(0)
+          - link [ref=f13e482]:
+            - /url: javascript:void(0)
+          - link [ref=f13e484]:
+            - /url: javascript:void(0)
+          - link [ref=f13e486]:
+            - /url: javascript:void(0)
+          - link [ref=f13e488]:
+            - /url: javascript:void(0)
+          - link [ref=f13e490]:
+            - /url: javascript:void(0)
+          - link [ref=f13e492]:
+            - /url: javascript:void(0)
+          - link [ref=f13e494]:
+            - /url: javascript:void(0)
+          - link [ref=f13e496]:
+            - /url: javascript:void(0)
+          - link [ref=f13e498]:
+            - /url: javascript:void(0)
+          - link [ref=f13e500]:
+            - /url: javascript:void(0)
+          - link [ref=f13e502]:
+            - /url: javascript:void(0)
+          - link [ref=f13e504]:
+            - /url: javascript:void(0)
+          - link [ref=f13e506]:
+            - /url: javascript:void(0)
+          - link [ref=f13e508]:
+            - /url: javascript:void(0)
+          - link [ref=f13e510]:
+            - /url: javascript:void(0)
+          - link [ref=f13e512]:
+            - /url: javascript:void(0)
+          - link [ref=f13e514]:
+            - /url: javascript:void(0)
+          - link [ref=f13e516]:
+            - /url: javascript:void(0)
+          - link [ref=f13e518]:
+            - /url: javascript:void(0)
+          - link [ref=f13e520]:
+            - /url: javascript:void(0)
+          - link [ref=f13e522]:
+            - /url: javascript:void(0)
+          - link [ref=f13e524]:
+            - /url: javascript:void(0)
+          - link [ref=f13e526]:
+            - /url: javascript:void(0)
+          - link [ref=f13e528]:
+            - /url: javascript:void(0)
+          - link [ref=f13e530]:
+            - /url: javascript:void(0)
+        - generic:
+          - link [ref=f13e532]:
+            - /url: javascript:void(0)
+          - link [ref=f13e534]:
+            - /url: javascript:void(0)
+          - link [ref=f13e536]:
+            - /url: javascript:void(0)
+          - link [ref=f13e538]:
+            - /url: javascript:void(0)
+          - link [ref=f13e540]:
+            - /url: javascript:void(0)
+          - link [ref=f13e542]:
+            - /url: javascript:void(0)
+          - link [ref=f13e544]:
+            - /url: javascript:void(0)
+          - link [ref=f13e546]:
+            - /url: javascript:void(0)
+          - link [ref=f13e548]:
+            - /url: javascript:void(0)
+          - link [ref=f13e550]:
+            - /url: javascript:void(0)
+          - link [ref=f13e552]:
+            - /url: javascript:void(0)
+          - link [ref=f13e554]:
+            - /url: javascript:void(0)
+          - link [ref=f13e556]:
+            - /url: javascript:void(0)
+          - link [ref=f13e558]:
+            - /url: javascript:void(0)
+          - link [ref=f13e560]:
+            - /url: javascript:void(0)
+          - link [ref=f13e562]:
+            - /url: javascript:void(0)
+          - link [ref=f13e564]:
+            - /url: javascript:void(0)
+          - link [ref=f13e566]:
+            - /url: javascript:void(0)
+          - link [ref=f13e568]:
+            - /url: javascript:void(0)
+          - link [ref=f13e570]:
+            - /url: javascript:void(0)
+          - link [ref=f13e572]:
+            - /url: javascript:void(0)
+          - link [ref=f13e574]:
+            - /url: javascript:void(0)
+          - link [ref=f13e576]:
+            - /url: javascript:void(0)
+          - link [ref=f13e578]:
+            - /url: javascript:void(0)
+          - link [ref=f13e580]:
+            - /url: javascript:void(0)
+          - link [ref=f13e582]:
+            - /url: javascript:void(0)
+          - link [ref=f13e584]:
+            - /url: javascript:void(0)
+          - link [ref=f13e586]:
+            - /url: javascript:void(0)
+          - link [ref=f13e588]:
+            - /url: javascript:void(0)
+          - link [ref=f13e590]:
+            - /url: javascript:void(0)
+          - link [ref=f13e592]:
+            - /url: javascript:void(0)
+          - link [ref=f13e594]:
+            - /url: javascript:void(0)
+          - link [ref=f13e596]:
+            - /url: javascript:void(0)
+          - link [ref=f13e598]:
+            - /url: javascript:void(0)
+          - link [ref=f13e600]:
+            - /url: javascript:void(0)
+          - link [ref=f13e602]:
+            - /url: javascript:void(0)
+          - link [ref=f13e604]:
+            - /url: javascript:void(0)
+          - link [ref=f13e606]:
+            - /url: javascript:void(0)
+          - link [ref=f13e608]:
+            - /url: javascript:void(0)
+          - link [ref=f13e610]:
+            - /url: javascript:void(0)
+          - link [ref=f13e612]:
+            - /url: javascript:void(0)
+          - link [ref=f13e614]:
+            - /url: javascript:void(0)
+          - link [ref=f13e616]:
+            - /url: javascript:void(0)
+          - link [ref=f13e618]:
+            - /url: javascript:void(0)
+          - link [ref=f13e620]:
+            - /url: javascript:void(0)
+          - link [ref=f13e622]:
+            - /url: javascript:void(0)
+          - link [ref=f13e624]:
+            - /url: javascript:void(0)
+          - link [ref=f13e626]:
+            - /url: javascript:void(0)
+          - link [ref=f13e628]:
+            - /url: javascript:void(0)
+          - link [ref=f13e630]:
+            - /url: javascript:void(0)
+          - link [ref=f13e632]:
+            - /url: javascript:void(0)
+          - link [ref=f13e634]:
+            - /url: javascript:void(0)
+          - link [ref=f13e636]:
+            - /url: javascript:void(0)
+          - link [ref=f13e638]:
+            - /url: javascript:void(0)
+          - link [ref=f13e640]:
+            - /url: javascript:void(0)
+          - link [ref=f13e642]:
+            - /url: javascript:void(0)
+          - link [ref=f13e644]:
+            - /url: javascript:void(0)
+          - link [ref=f13e646]:
+            - /url: javascript:void(0)
+          - link [ref=f13e648]:
+            - /url: javascript:void(0)
+          - link [ref=f13e650]:
+            - /url: javascript:void(0)
+          - link [ref=f13e652]:
+            - /url: javascript:void(0)
+          - link [ref=f13e654]:
+            - /url: javascript:void(0)
+          - link [ref=f13e656]:
+            - /url: javascript:void(0)
+          - link [ref=f13e658]:
+            - /url: javascript:void(0)
+          - link [ref=f13e660]:
+            - /url: javascript:void(0)
+          - link [ref=f13e662]:
+            - /url: javascript:void(0)
+          - link [ref=f13e664]:
+            - /url: javascript:void(0)
+          - link [ref=f13e666]:
+            - /url: javascript:void(0)
+          - link [ref=f13e668]:
+            - /url: javascript:void(0)
+          - link [ref=f13e670]:
+            - /url: javascript:void(0)
+          - link [ref=f13e672]:
+            - /url: javascript:void(0)
+          - link [ref=f13e674]:
+            - /url: javascript:void(0)
+          - link [ref=f13e676]:
+            - /url: javascript:void(0)
+          - link [ref=f13e678]:
+            - /url: javascript:void(0)
+          - link [ref=f13e680]:
+            - /url: javascript:void(0)
+          - link [ref=f13e682]:
+            - /url: javascript:void(0)
+          - link [ref=f13e684]:
+            - /url: javascript:void(0)
+          - link [ref=f13e686]:
+            - /url: javascript:void(0)
+    - generic [ref=e6]:
+      - generic [ref=e7]: 凡例
+      - generic [ref=e8]:
+        - generic [ref=e9]:
+          - generic [ref=e10]: 雨量［時間雨量］
+          - list [ref=e11]:
+            - listitem [ref=e12]:
+              - img [ref=e13]
+              - text: 80mm ～
+            - listitem [ref=e14]:
+              - img [ref=e15]
+              - text: 50mm ～ 79mm
+            - listitem [ref=e16]:
+              - img [ref=e17]
+              - text: 30mm ～ 49mm
+            - listitem [ref=e18]:
+              - img [ref=e19]
+              - text: 20mm ～ 29mm
+            - listitem [ref=e20]:
+              - img [ref=e21]
+              - text: 10mm ～ 19mm
+            - listitem [ref=e22]:
+              - img [ref=e23]
+              - text: 5mm ～ 9mm
+            - listitem [ref=e24]:
+              - img [ref=e25]
+              - text: 1mm ～ 4mm
+            - listitem [ref=e26]:
+              - img [ref=e27]
+              - text: 無降雨
+            - listitem [ref=e28]:
+              - img [ref=e29]
+              - text: 欠測/無効/休止/保守中
+        - generic [ref=e30]:
+          - generic [ref=e31]: 水位［指定観測所］
+          - list [ref=e32]:
+            - listitem [ref=e33]:
+              - img [ref=e34]
+              - text: 氾濫危険水位超過
+            - listitem [ref=e35]:
+              - img [ref=e36]
+              - text: 避難判断水位超過
+            - listitem [ref=e37]:
+              - img [ref=e38]
+              - text: 氾濫注意水位超過
+            - listitem [ref=e39]:
+              - img [ref=e40]
+              - text: 水防団待機水位超過
+            - listitem [ref=e41]:
+              - img [ref=e42]
+              - text: 通常
+            - listitem [ref=e43]:
+              - img [ref=e44]
+              - text: 欠測/無効/休止/保守中
+        - generic [ref=e45]:
+          - generic [ref=e46]:
+            - text: ※アイコン中の矢印は前回
+            - text: 観測値からの変動状況を
+            - text: 表しています
+          - list [ref=e47]:
+            - listitem [ref=e48]:
+              - img [ref=e49]
+              - text: 上昇
+            - listitem [ref=e50]:
+              - img [ref=e51]
+              - text: 変化なし
+            - listitem [ref=e52]:
+              - img [ref=e53]
+              - text: 下降
+    - generic [ref=e55]:
+      - generic [ref=e57]: モバイルサイト
+      - paragraph [ref=e58]: 雨量・水位観測情報はスマートフォンサイトまたは携帯サイトでもご覧になれます。
+      - generic [ref=e59]:
+        - generic [ref=e60]:
+          - link "スマートフォンサイトQRコード" [ref=e61] [cursor=pointer]:
+            - /url: http://doboku-bousai.pref.niigata.jp/kasen_s/
+            - img "スマートフォンサイトQRコード" [ref=e62]
+          - generic [ref=e63]:
+            - generic [ref=e64]: スマートフォンサイト
+            - link "http://doboku-bousai.pref.niigata.jp/" [ref=e65] [cursor=pointer]:
+              - /url: http://doboku-bousai.pref.niigata.jp/kasen_s/
+            - link "kasen_s/" [ref=e66] [cursor=pointer]:
+              - /url: http://doboku-bousai.pref.niigata.jp/kasen_s/
+        - generic [ref=e67]:
+          - link "フィーチャーフォンサイトQRコード" [ref=e68] [cursor=pointer]:
+            - /url: http://doboku-bousai.pref.niigata.jp/kasen_m/
+            - img "フィーチャーフォンサイトQRコード" [ref=e69]
+          - generic [ref=e70]:
+            - generic [ref=e71]: 従来型携帯サイト
+            - link "http://doboku-bousai.pref.niigata.jp/" [ref=e72] [cursor=pointer]:
+              - /url: http://doboku-bousai.pref.niigata.jp/kasen_m/
+            - link "kasen_m/" [ref=e73] [cursor=pointer]:
+              - /url: http://doboku-bousai.pref.niigata.jp/kasen_m/
+  - generic [ref=e74]:
+    - generic [ref=e75]:
+      - generic [ref=e76]: 観測日時：2026年05月25日 11時50分
+      - link "更新" [ref=e77] [cursor=pointer]:
+        - /url: "#"
+    - iframe [ref=e79]:
+      - generic [active] [ref=f14e1]:
+        - generic [ref=f14e2]:
+          - generic [ref=f14e3]:
+            - generic [ref=f14e4]: ■気象警報・注意報
+            - generic [ref=f14e5]: ※パネルをクリックすると全県の発表状況が表示されます。
+            - link "詳細" [ref=f14e6] [cursor=pointer]:
+              - /url: javascript:changeWeatherURL();
+          - table [ref=f14e7]:
+            - rowgroup [ref=f14e8]:
+              - row "地域 発表情報" [ref=f14e9]:
+                - columnheader "地域" [ref=f14e10]
+                - columnheader "発表情報" [ref=f14e11]
+            - rowgroup [ref=f14e12]:
+              - row "下越 大雨 洪水 雷 融雪 その他" [ref=f14e13]:
+                - cell "下越" [ref=f14e14] [cursor=pointer]
+                - cell "大雨 洪水 雷 融雪 その他" [ref=f14e15] [cursor=pointer]:
+                  - generic [ref=f14e16]: 大雨
+                  - generic [ref=f14e17]: 洪水
+                  - generic [ref=f14e18]: 雷
+                  - generic [ref=f14e19]: 融雪
+                  - generic [ref=f14e20]: その他
+              - row "中越 大雨 洪水 雷 融雪 その他" [ref=f14e21]:
+                - cell "中越" [ref=f14e22] [cursor=pointer]
+                - cell "大雨 洪水 雷 融雪 その他" [ref=f14e23] [cursor=pointer]:
+                  - generic [ref=f14e24]: 大雨
+                  - generic [ref=f14e25]: 洪水
+                  - generic [ref=f14e26]: 雷
+                  - generic [ref=f14e27]: 融雪
+                  - generic [ref=f14e28]: その他
+              - row "上越 大雨 洪水 雷 融雪 その他" [ref=f14e29]:
+                - cell "上越" [ref=f14e30] [cursor=pointer]
+                - cell "大雨 洪水 雷 融雪 その他" [ref=f14e31] [cursor=pointer]:
+                  - generic [ref=f14e32]: 大雨
+                  - generic [ref=f14e33]: 洪水
+                  - generic [ref=f14e34]: 雷
+                  - generic [ref=f14e35]: 融雪
+                  - generic [ref=f14e36]: その他
+              - row "佐渡 大雨 洪水 雷 融雪 その他" [ref=f14e37]:
+                - cell "佐渡" [ref=f14e38] [cursor=pointer]
+                - cell "大雨 洪水 雷 融雪 その他" [ref=f14e39] [cursor=pointer]:
+                  - generic [ref=f14e40]: 大雨
+                  - generic [ref=f14e41]: 洪水
+                  - generic [ref=f14e42]: 雷
+                  - generic [ref=f14e43]: 融雪
+                  - generic [ref=f14e44]: その他
+        - generic [ref=f14e45]:
+          - generic [ref=f14e46]:
+            - generic [ref=f14e47]: ■雨量情報
+            - generic [ref=f14e48]: ※パネルをクリックすると選択地域の現況表が表示されます。
+            - link "全県現況表" [ref=f14e49] [cursor=pointer]:
+              - /url: javascript:changeURL(1);
+          - table [ref=f14e50]:
+            - rowgroup [ref=f14e51]:
+              - row "地域 時間雨量 基準値超過 累計雨量 基準値超過" [ref=f14e52]:
+                - columnheader "地域" [ref=f14e53]
+                - columnheader "時間雨量 基準値超過" [ref=f14e54]
+                - columnheader "累計雨量 基準値超過" [ref=f14e55]
+              - row "40mm以上 20mm以上 140mm以上 70mm以上" [ref=f14e56]:
+                - columnheader "40mm以上" [ref=f14e57]
+                - columnheader "20mm以上" [ref=f14e58]
+                - columnheader "140mm以上" [ref=f14e59]
+                - columnheader "70mm以上" [ref=f14e60]
+            - rowgroup [ref=f14e61]:
+              - row "下越 なし なし なし なし" [ref=f14e62]:
+                - cell "下越" [ref=f14e63] [cursor=pointer]
+                - cell "なし" [ref=f14e64] [cursor=pointer]:
+                  - generic [ref=f14e65]: なし
+                - cell "なし" [ref=f14e66] [cursor=pointer]:
+                  - generic [ref=f14e67]: なし
+                - cell "なし" [ref=f14e68] [cursor=pointer]:
+                  - generic [ref=f14e69]: なし
+                - cell "なし" [ref=f14e70] [cursor=pointer]:
+                  - generic [ref=f14e71]: なし
+              - row "中越 なし なし なし なし" [ref=f14e72]:
+                - cell "中越" [ref=f14e73] [cursor=pointer]
+                - cell "なし" [ref=f14e74] [cursor=pointer]:
+                  - generic [ref=f14e75]: なし
+                - cell "なし" [ref=f14e76] [cursor=pointer]:
+                  - generic [ref=f14e77]: なし
+                - cell "なし" [ref=f14e78] [cursor=pointer]:
+                  - generic [ref=f14e79]: なし
+                - cell "なし" [ref=f14e80] [cursor=pointer]:
+                  - generic [ref=f14e81]: なし
+              - row "上越 なし なし なし なし" [ref=f14e82]:
+                - cell "上越" [ref=f14e83] [cursor=pointer]
+                - cell "なし" [ref=f14e84] [cursor=pointer]:
+                  - generic [ref=f14e85]: なし
+                - cell "なし" [ref=f14e86] [cursor=pointer]:
+                  - generic [ref=f14e87]: なし
+                - cell "なし" [ref=f14e88] [cursor=pointer]:
+                  - generic [ref=f14e89]: なし
+                - cell "なし" [ref=f14e90] [cursor=pointer]:
+                  - generic [ref=f14e91]: なし
+              - row "佐渡 なし なし なし なし" [ref=f14e92]:
+                - cell "佐渡" [ref=f14e93] [cursor=pointer]
+                - cell "なし" [ref=f14e94] [cursor=pointer]:
+                  - generic [ref=f14e95]: なし
+                - cell "なし" [ref=f14e96] [cursor=pointer]:
+                  - generic [ref=f14e97]: なし
+                - cell "なし" [ref=f14e98] [cursor=pointer]:
+                  - generic [ref=f14e99]: なし
+                - cell "なし" [ref=f14e100] [cursor=pointer]:
+                  - generic [ref=f14e101]: なし
+        - generic [ref=f14e102]:
+          - generic [ref=f14e103]:
+            - generic [ref=f14e104]: ■水位情報
+            - generic [ref=f14e105]: ※パネルをクリックすると選択地域の現況表が表示されます。
+            - link "全県現況表" [ref=f14e106] [cursor=pointer]:
+              - /url: javascript:changeURL(2);
+          - table [ref=f14e107]:
+            - rowgroup [ref=f14e108]:
+              - row "地域 水位基準値超過" [ref=f14e109]:
+                - columnheader "地域" [ref=f14e110]
+                - columnheader "水位基準値超過" [ref=f14e111]
+              - row "氾濫危険水位 避難判断水位 氾濫注意水位 水防団待機水位" [ref=f14e112]:
+                - columnheader "氾濫危険水位" [ref=f14e113]
+                - columnheader "避難判断水位" [ref=f14e114]
+                - columnheader "氾濫注意水位" [ref=f14e115]
+                - columnheader "水防団待機水位" [ref=f14e116]
+            - rowgroup [ref=f14e117]:
+              - row "下越 なし なし なし なし" [ref=f14e118]:
+                - cell "下越" [ref=f14e119] [cursor=pointer]
+                - cell "なし" [ref=f14e120] [cursor=pointer]:
+                  - generic [ref=f14e121]: なし
+                - cell "なし" [ref=f14e122] [cursor=pointer]:
+                  - generic [ref=f14e123]: なし
+                - cell "なし" [ref=f14e124] [cursor=pointer]:
+                  - generic [ref=f14e125]: なし
+                - cell "なし" [ref=f14e126] [cursor=pointer]:
+                  - generic [ref=f14e127]: なし
+              - row "中越 なし なし なし なし" [ref=f14e128]:
+                - cell "中越" [ref=f14e129] [cursor=pointer]
+                - cell "なし" [ref=f14e130] [cursor=pointer]:
+                  - generic [ref=f14e131]: なし
+                - cell "なし" [ref=f14e132] [cursor=pointer]:
+                  - generic [ref=f14e133]: なし
+                - cell "なし" [ref=f14e134] [cursor=pointer]:
+                  - generic [ref=f14e135]: なし
+                - cell "なし" [ref=f14e136] [cursor=pointer]:
+                  - generic [ref=f14e137]: なし
+              - row "上越 なし なし なし なし" [ref=f14e138]:
+                - cell "上越" [ref=f14e139] [cursor=pointer]
+                - cell "なし" [ref=f14e140] [cursor=pointer]:
+                  - generic [ref=f14e141]: なし
+                - cell "なし" [ref=f14e142] [cursor=pointer]:
+                  - generic [ref=f14e143]: なし
+                - cell "なし" [ref=f14e144] [cursor=pointer]:
+                  - generic [ref=f14e145]: なし
+                - cell "なし" [ref=f14e146] [cursor=pointer]:
+                  - generic [ref=f14e147]: なし
+              - row "佐渡 なし なし なし なし" [ref=f14e148]:
+                - cell "佐渡" [ref=f14e149] [cursor=pointer]
+                - cell "なし" [ref=f14e150] [cursor=pointer]:
+                  - generic [ref=f14e151]: なし
+                - cell "なし" [ref=f14e152] [cursor=pointer]:
+                  - generic [ref=f14e153]: なし
+                - cell "なし" [ref=f14e154] [cursor=pointer]:
+                  - generic [ref=f14e155]: なし
+                - cell "なし" [ref=f14e156] [cursor=pointer]:
+                  - generic [ref=f14e157]: なし
+    - generic [ref=e80]:
+      - generic [ref=e81]:
+        - generic [ref=e82]: お知らせ
+        - generic [ref=e83]: ※クリックすると詳細が表示されます
+      - iframe [ref=e84]:
+        - table [ref=f15e2]:
+          - rowgroup [ref=f15e3]:
+            - row "2026.05.19 【冬期閉開局について】" [ref=f15e4] [cursor=pointer]:
+              - cell "2026.05.19" [ref=f15e5]
+              - cell "【冬期閉開局について】" [ref=f15e6]:
+                - generic [ref=f15e7]: 【冬期閉開局について】
+            - row "2024.12.18 水位局のデータ停止について" [ref=f15e8] [cursor=pointer]:
+              - cell "2024.12.18" [ref=f15e9]
+              - cell "水位局のデータ停止について" [ref=f15e10]:
+                - generic [ref=f15e11]: 水位局のデータ停止について
+            - row "2024.05.30 ダム情報の奥三面ダムの流入量・全放流量について" [ref=f15e12] [cursor=pointer]:
+              - cell "2024.05.30" [ref=f15e13]
+              - cell "ダム情報の奥三面ダムの流入量・全放流量について" [ref=f15e14]:
+                - generic [ref=f15e15]: ダム情報の奥三面ダムの流入量・全放流量について
+            - row "2024.05.28 水害リスクライン等のリンク先" [ref=f15e16] [cursor=pointer]:
+              - cell "2024.05.28" [ref=f15e17]
+              - cell "水害リスクライン等のリンク先" [ref=f15e18]:
+                - generic [ref=f15e19]: 水害リスクライン等のリンク先
+            - row "2023.08.16 ダム情報の貯水率の表示について" [ref=f15e20] [cursor=pointer]:
+              - cell "2023.08.16" [ref=f15e21]
+              - cell "ダム情報の貯水率の表示について" [ref=f15e22]:
+                - generic [ref=f15e23]: ダム情報の貯水率の表示について
+            - row "2023.06.21 【ブラウザの自動翻訳機能に伴う誤表記への対応について】" [ref=f15e24] [cursor=pointer]:
+              - cell "2023.06.21" [ref=f15e25]
+              - cell "【ブラウザの自動翻訳機能に伴う誤表記への対応について】" [ref=f15e26]:
+                - generic [ref=f15e27]: 【ブラウザの自動翻訳機能に伴う誤表記への対応について】
+            - row "2020.07.28 【アクセス集中時の対応について】" [ref=f15e28] [cursor=pointer]:
+              - cell "2020.07.28" [ref=f15e29]
+              - cell "【アクセス集中時の対応について】" [ref=f15e30]:
+                - generic [ref=f15e31]: 【アクセス集中時の対応について】
+    - generic [ref=e85]:
+      - generic [ref=e87]: 本サイトのご意見・問い合せ先
+      - generic [ref=e88]: 新潟県土木部河川管理課
+      - generic [ref=e89]: 〒950-8570 新潟市中央区新光町４番地１
+      - generic [ref=e90]:
+        - text: 電話：025-280-5414 電子メール：
+        - link "ngt080050@pref.niigata.lg.jp" [ref=e91] [cursor=pointer]:
+          - /url: mailto:ngt080050@pref.niigata.lg.jp

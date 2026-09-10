@@ -1,0 +1,598 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - list [ref=e4]:
+        - listitem [ref=e5]:
+          - link "本文へ" [ref=e6] [cursor=pointer]:
+            - /url: "#main"
+        - listitem [ref=e7]:
+          - link "English" [ref=e8] [cursor=pointer]:
+            - /url: english/index.html
+      - heading "独立行政法人 水資源機構" [level=1] [ref=e10]:
+        - link "独立行政法人 水資源機構" [ref=e11] [cursor=pointer]:
+          - /url: index.html
+          - img "独立行政法人 水資源機構" [ref=e12]
+      - generic [ref=e14]:
+        - generic [ref=e15]: 文字サイズの変更
+        - generic [ref=e16]:
+          - list:
+            - listitem [ref=e17]:
+              - generic [ref=e18] [cursor=pointer]: 小
+            - listitem [ref=e19]:
+              - generic [ref=e20] [cursor=pointer]: 標準
+            - listitem [ref=e21]:
+              - generic [ref=e22] [cursor=pointer]: 大
+  - navigation [ref=e23]:
+    - generic [ref=e24]:
+      - generic:
+        - list:
+          - listitem [ref=e25]:
+            - link "ホーム" [ref=e26] [cursor=pointer]:
+              - /url: index.html
+            - list:
+              - listitem:
+                - link "記者発表" [ref=e27] [cursor=pointer]:
+                  - /url: kisya/index.html
+              - listitem:
+                - link "財務・IR情報" [ref=e28] [cursor=pointer]:
+                  - /url: zaimu/index.html
+              - listitem:
+                - link "情報公開・個人情報保護" [ref=e29] [cursor=pointer]:
+                  - /url: jyohokokai/index.html
+              - listitem
+          - listitem [ref=e30]:
+            - link "水資源機構について" [ref=e31] [cursor=pointer]:
+              - /url: outline/index.html
+            - list:
+              - listitem:
+                - link "理事長挨拶" [ref=e32] [cursor=pointer]:
+                  - /url: outline/aisatu/index.html
+              - listitem:
+                - link "経営理念[経営方針／CIメッセージ]" [ref=e33] [cursor=pointer]:
+                  - /url: outline/rinen/index.html
+              - listitem:
+                - link "中期目標・計画等" [ref=e34] [cursor=pointer]:
+                  - /url: outline/tyuki/index.html
+              - listitem:
+                - link "コンプライアンスへの取組" [ref=e35] [cursor=pointer]:
+                  - /url: outline/compliance/index.html
+          - listitem [ref=e36]:
+            - link "水源情報" [ref=e37] [cursor=pointer]:
+              - /url: suigen/index.html
+            - list:
+              - listitem:
+                - link "リアルタイム水源情報（水源・水位・雨量等）" [ref=e38] [cursor=pointer]:
+                  - /url: suigen/realtime/index.html
+              - listitem:
+                - link "各水系別の速報値（平日更新）" [ref=e39] [cursor=pointer]:
+                  - /url: suigen/sokuhou/index.html
+              - listitem:
+                - link "全水系の確定値（10日毎更新）" [ref=e40] [cursor=pointer]:
+                  - /url: suigen/junpo/index.html
+              - listitem:
+                - link "渇水情報" [ref=e41] [cursor=pointer]:
+                  - /url: suigen/kassui/index.html
+          - listitem [ref=e42]:
+            - link "防災関連情報" [ref=e43] [cursor=pointer]:
+              - /url: bousai/index.html
+            - list:
+              - listitem:
+                - link "防災操作による効果" [ref=e44] [cursor=pointer]:
+                  - /url: bousai/bousaisousa/index.html
+              - listitem
+          - listitem [ref=e45]:
+            - link "様々な取組" [ref=e46] [cursor=pointer]:
+              - /url: torikumi/index.html
+            - list:
+              - listitem:
+                - link "寄附金募集" [ref=e47] [cursor=pointer]:
+                  - /url: torikumi/kifu/index.html
+              - listitem:
+                - link "インフラツーリズム" [ref=e48] [cursor=pointer]:
+                  - /url: torikumi/tourism/index.html
+              - listitem:
+                - link "海外インフラ展開法に係る取組" [ref=e49] [cursor=pointer]:
+                  - /url: torikumi/kaigai/index.html
+              - listitem:
+                - link "水の日・水の週間" [ref=e50] [cursor=pointer]:
+                  - /url: torikumi/waterweek/index.html
+          - listitem [ref=e51]:
+            - link "入札・契約情報" [ref=e52] [cursor=pointer]:
+              - /url: keiyaku/index.html
+          - listitem [ref=e53]:
+            - link "事業所のご案内" [ref=e54] [cursor=pointer]:
+              - /url: jigyosyo/index.html
+            - list:
+              - listitem:
+                - link "水資源機構の事業所一覧" [ref=e55] [cursor=pointer]:
+                  - /url: jigyosyo/index.html#01
+              - listitem:
+                - link "本社へのアクセス" [ref=e56] [cursor=pointer]:
+                  - /url: jigyosyo/index.html#access
+          - listitem [ref=e57]:
+            - link "採用情報" [ref=e58] [cursor=pointer]:
+              - /url: recruit/infotop.html
+            - list:
+              - listitem:
+                - link "採用情報" [ref=e59] [cursor=pointer]:
+                  - /url: recruit/infotop.html
+              - listitem:
+                - link "経験者採用" [ref=e60] [cursor=pointer]:
+                  - /url: recruit/info/keikensya/index.html
+              - listitem:
+                - link "カムバック採用" [ref=e61] [cursor=pointer]:
+                  - /url: recruit/info/comeback/index.html
+              - listitem:
+                - link "特定任期付・任期付採用" [ref=e62] [cursor=pointer]:
+                  - /url: recruit/info/tokutei/tokutei.html
+  - main [ref=e63]:
+    - generic [ref=e64]:
+      - generic [ref=e65]:
+        - generic [ref=e66]:
+          - link "インフラツーリズム":
+            - /url: torikumi/tourism/
+            - generic:
+              - img "インフラツーリズム"
+        - generic [ref=e67]:
+          - link "ダムの防災操作":
+            - /url: torikumi/yakudachi/movie/index.html#bousai
+            - generic:
+              - img "ダムの防災操作"
+        - generic [ref=e68]:
+          - link "水資源機構英語版ホームページ":
+            - /url: english/
+            - generic:
+              - img "水資源機構英語版ホームページ"
+        - link "寄附金募集" [ref=e70] [cursor=pointer]:
+          - /url: torikumi/kifu/index.html
+          - img "寄附金募集" [ref=e72]
+        - link "職員採用情報" [ref=e74] [cursor=pointer]:
+          - /url: recruit/infotop.html
+          - img "職員採用情報" [ref=e76]
+        - link "環境創造に向けた取組" [ref=e78] [cursor=pointer]:
+          - /url: torikumi/kankyo/index.html
+          - img "環境創造に向けた取組" [ref=e80]
+        - link "インターンシップ受付中！" [ref=e82] [cursor=pointer]:
+          - /url: recruit/event/event02/index.html
+          - img "インターンシップ受付中！" [ref=e84]
+        - link "ONLY WE CAN CREATE" [ref=e86] [cursor=pointer]:
+          - /url: gijutsuannai/index.html
+          - img "ONLY WE CAN CREATE" [ref=e88]
+        - link "可搬式浄水装置" [ref=e90] [cursor=pointer]:
+          - /url: torikumi/support/support.html
+          - img "可搬式浄水装置" [ref=e92]
+        - generic [ref=e93]:
+          - link "キッズコンテンツ":
+            - /url: kids/
+            - generic:
+              - img "キッズコンテンツ"
+        - generic [ref=e94]:
+          - link "インフラツーリズム":
+            - /url: torikumi/tourism/
+            - generic:
+              - img "インフラツーリズム"
+        - generic [ref=e95]:
+          - link "ダムの防災操作":
+            - /url: torikumi/yakudachi/movie/index.html#bousai
+            - generic:
+              - img "ダムの防災操作"
+        - generic [ref=e96]:
+          - link "水資源機構英語版ホームページ":
+            - /url: english/
+            - generic:
+              - img "水資源機構英語版ホームページ"
+        - link "寄附金募集" [ref=e98] [cursor=pointer]:
+          - /url: torikumi/kifu/index.html
+          - img "寄附金募集" [ref=e100]
+        - link "職員採用情報" [ref=e102] [cursor=pointer]:
+          - /url: recruit/infotop.html
+          - img "職員採用情報" [ref=e104]
+        - link "環境創造に向けた取組" [ref=e106] [cursor=pointer]:
+          - /url: torikumi/kankyo/index.html
+          - img "環境創造に向けた取組" [ref=e108]
+      - paragraph [ref=e132] [cursor=pointer]
+    - generic [ref=e133]:
+      - generic [ref=e134]:
+        - heading "機構からのお知らせ" [level=2] [ref=e135]
+        - iframe [ref=e137]:
+          - generic [active] [ref=f9e1]:
+            - text: 「水」は毎日の暮らしや社会経済活動に欠かすことができない大切な資源です。
+            - text: 水資源機構は、水源地域や施設が所在する地域の方々のご理解ご協力をいただき、ダムや水路等の施設により
+            - text: 用水を必要とする地域の方々へ大切な水を安定的にお届けできるよう努めています。
+      - generic [ref=e138]:
+        - heading "新着情報・記者発表" [level=2] [ref=e139]
+        - list [ref=e140]:
+          - listitem [ref=e141]:
+            - link "すべてのお知らせ" [ref=e142] [cursor=pointer]:
+              - /url: .tab1
+          - listitem [ref=e143]:
+            - link "新着情報" [ref=e144] [cursor=pointer]:
+              - /url: .tab2
+          - listitem [ref=e145]:
+            - link "記者発表" [ref=e146] [cursor=pointer]:
+              - /url: .tab3
+        - list [ref=e147]:
+          - listitem [ref=e148]:
+            - generic [ref=e149]:
+              - definition [ref=e150]:
+                - generic [ref=e151]: お知らせ
+              - definition [ref=e152]:
+                - link "2027年度新卒採用（第２クール）のエントリー受付を開始しました" [ref=e153] [cursor=pointer]:
+                  - /url: recruit/index.html
+            - generic [ref=e154]:
+              - definition [ref=e155]:
+                - generic [ref=e156]: お知らせ
+              - definition [ref=e157]:
+                - link "2026年度インターンシップ（二次募集）を開始しました" [ref=e158] [cursor=pointer]:
+                  - /url: recruit/event/event02/index.html
+            - generic [ref=e159]:
+              - term [ref=e160]: 令和8年6月19日
+              - definition [ref=e161]:
+                - generic [ref=e162]: 記者発表
+              - definition [ref=e163]:
+                - link "霞ヶ浦開発管理開始30年の広報について" [ref=e164] [cursor=pointer]:
+                  - /url: kisya/pdf/2026/06/20260619_tonekaryu.pdf
+                - text: 利根川下流総合管理所
+            - generic [ref=e165]:
+              - term [ref=e166]: 令和8年6月19日
+              - definition [ref=e167]:
+                - generic [ref=e168]: 記者発表
+              - definition [ref=e169]:
+                - link "第10回長良川河口堰の更なる弾力的な運用に関するモニタリング部会の開催" [ref=e170] [cursor=pointer]:
+                  - /url: kisya/pdf/2026/06/20260619_chubu.pdf
+                - text: 中部支社
+            - generic [ref=e171]:
+              - term [ref=e172]: 令和8年6月18日
+              - definition [ref=e173]:
+                - generic [ref=e174]: 記者発表
+              - definition [ref=e175]:
+                - link "下久保ダム・神水ダム防災操作説明会を開催" [ref=e176] [cursor=pointer]:
+                  - /url: kisya/pdf/2026/06/20260618_tonejyou.pdf
+                - text: 利根川上流総合管理所
+            - generic [ref=e177]:
+              - term [ref=e178]: 令和8年6月17日
+              - definition [ref=e179]:
+                - generic [ref=e180]: 記者発表
+              - definition [ref=e181]:
+                - link "もっと知ろう！矢木沢ダムのおさかなのこと" [ref=e182] [cursor=pointer]:
+                  - /url: kisya/pdf/2026/06/20260617_tonejyou.pdf
+                - text: 利根川上流総合管理所
+            - generic [ref=e183]:
+              - term [ref=e184]: 令和8年6月17日
+              - definition [ref=e185]:
+                - generic [ref=e186]: 記者発表
+              - definition [ref=e187]:
+                - link "二瀬ダム・浦山ダム・滝沢ダムの防災操作等説明会を開催します" [ref=e188] [cursor=pointer]:
+                  - /url: kisya/pdf/2026/06/20260617_arakawa.pdf
+                - text: 荒川ダム総合管理所
+            - generic [ref=e189]:
+              - term [ref=e190]: 令和8年6月16日
+              - definition [ref=e191]:
+                - generic [ref=e192]: 新着情報
+              - definition [ref=e193]:
+                - link "令和８年度に発行する水資源債券に係る受託会社及び引受主幹事会社を募集致します。" [ref=e194] [cursor=pointer]:
+                  - /url: zaimu/index.html#jyutaku
+        - list [ref=e195]:
+          - listitem [ref=e196]:
+            - link " 新着情報 一覧へ" [ref=e197] [cursor=pointer]:
+              - /url: news/
+          - listitem [ref=e198]:
+            - link " 記者発表 一覧へ" [ref=e199] [cursor=pointer]:
+              - /url: kisya/
+      - generic [ref=e200]:
+        - list [ref=e201]:
+          - listitem [ref=e202]:
+            - link "支社局･事務所 を探す" [ref=e203] [cursor=pointer]:
+              - /url: .tab4
+              - text: 支社局･事務所
+              - generic [ref=e204]: を探す
+          - listitem [ref=e205]:
+            - link "ダムカード を探す" [ref=e206] [cursor=pointer]:
+              - /url: .tab5
+              - text: ダムカード
+              - generic [ref=e207]: を探す
+          - listitem [ref=e208]:
+            - link "水の恵みカード を探す" [ref=e209] [cursor=pointer]:
+              - /url: .tab6
+              - text: 水の恵みカード
+              - generic [ref=e210]: を探す
+        - list [ref=e211]:
+          - listitem [ref=e212]:
+            - generic [ref=e213]: 水系をクリックしてお探しの支社局・事務所を選択して下さい。
+            - generic [ref=e214]:
+              - link "全国の支社・事務所 一覧へ" [ref=e215] [cursor=pointer]:
+                - /url: jigyosyo/
+              - text: 
+            - link "筑後川水系" [ref=e216] [cursor=pointer]:
+              - /url: "#"
+            - link "吉野川水系" [ref=e217] [cursor=pointer]:
+              - /url: "#"
+            - link "淀川水系" [ref=e218] [cursor=pointer]:
+              - /url: "#"
+            - link "木曽川水系・豊川水系" [ref=e219] [cursor=pointer]:
+              - /url: "#"
+            - link "利根川水系・荒川水系" [ref=e220] [cursor=pointer]:
+              - /url: "#"
+          - text:           
+      - generic [ref=e221]:
+        - heading "PICK UP コンテンツ" [level=2] [ref=e222]
+        - toolbar [ref=e223]:
+          - button "Previous" [ref=e224] [cursor=pointer]
+          - listbox [ref=e226]:
+            - paragraph [ref=e228]: 水資源機構の新たな放流動画「水紀行」をお届けします。あなたはいくつわかりますか？
+            - paragraph [ref=e230]: 水資源機構が管理する施設の放流動画です。全ての施設名が分かれば、あなたもダムマニアかも!?
+            - paragraph [ref=e232]: 水資源機構はダテじゃない！？動画やクイズ、ペーパークラフトなどで、一緒に楽しく学ぼう！
+            - option "採用情報 水資源機構で一緒に働きませんか？採用＆インターンシップ情報を掲載しています。" [ref=e233]:
+              - link "採用情報":
+                - /url: recruit/infotop.html
+                - img "採用情報"
+              - paragraph [ref=e234]: 水資源機構で一緒に働きませんか？採用＆インターンシップ情報を掲載しています。
+            - option "インターンシップ受付中!! インターンシップ受付中!!" [ref=e235]:
+              - link "インターンシップ受付中!!":
+                - /url: recruit/event/event02/index.html
+                - img "インターンシップ受付中!!"
+              - paragraph [ref=e236]: インターンシップ受付中!!
+            - option "バーチャルダム見学 水資源機構が管理する施設のバーチャル見学動画をYouTubeに公開しています。" [ref=e237]:
+              - link "バーチャルダム見学":
+                - /url: torikumi/yakudachi/movie/index.html#virtual
+                - img "バーチャルダム見学"
+              - paragraph [ref=e238]: 水資源機構が管理する施設のバーチャル見学動画をYouTubeに公開しています。
+            - option [ref=e239]:
+              - paragraph [ref=e240]: 水資源機構の新たな放流動画「水紀行」をお届けします。あなたはいくつわかりますか？
+            - option [ref=e241]:
+              - paragraph [ref=e242]: 水資源機構が管理する施設の放流動画です。全ての施設名が分かれば、あなたもダムマニアかも!?
+            - option [ref=e243]:
+              - paragraph [ref=e244]: 水資源機構はダテじゃない！？動画やクイズ、ペーパークラフトなどで、一緒に楽しく学ぼう！
+            - paragraph [ref=e246]: 水資源機構で一緒に働きませんか？採用＆インターンシップ情報を掲載しています。
+            - paragraph [ref=e248]: インターンシップ受付中!!
+            - paragraph [ref=e250]: 水資源機構が管理する施設のバーチャル見学動画をYouTubeに公開しています。
+          - button "Next" [ref=e251] [cursor=pointer]
+          - tablist [ref=e252]:
+            - listitem [ref=e253] [cursor=pointer]:
+              - button "• 1" [ref=e254]
+            - listitem [ref=e255] [cursor=pointer]:
+              - button [ref=e256]: • 2
+            - listitem [ref=e257] [cursor=pointer]:
+              - button [ref=e258]: • 3
+            - listitem [ref=e259] [cursor=pointer]:
+              - button [ref=e260]: • 4
+            - listitem [ref=e261] [cursor=pointer]:
+              - button [ref=e262]: • 5
+            - listitem [ref=e263] [cursor=pointer]:
+              - button [ref=e264]: • 6
+      - generic [ref=e266]:
+        - generic [ref=e267]:
+          - heading "採用関連のご案内" [level=3] [ref=e268]
+          - list [ref=e269]:
+            - listitem [ref=e270]:
+              - link " 採用情報" [ref=e271] [cursor=pointer]:
+                - /url: recruit/infotop.html
+            - listitem [ref=e272]:
+              - link " インターンシップ" [ref=e273] [cursor=pointer]:
+                - /url: recruit/event/event02/index.html
+        - generic [ref=e274]:
+          - heading "財務IR情報・情報公開等" [level=3] [ref=e275]
+          - list [ref=e276]:
+            - listitem [ref=e277]:
+              - link " 財務・IR情報" [ref=e278] [cursor=pointer]:
+                - /url: zaimu/
+            - listitem [ref=e279]:
+              - link " 情報公開・個人情報保護" [ref=e280] [cursor=pointer]:
+                - /url: jyohokokai/
+        - generic [ref=e281]:
+          - heading "水資源機構の公式SNS" [level=3] [ref=e282]
+          - list [ref=e283]:
+            - listitem [ref=e284]:
+              - link " X" [ref=e285] [cursor=pointer]:
+                - /url: https://x.com/jwa_pr
+                - text: 
+                - generic [ref=e286]: 
+                - text: X
+            - listitem [ref=e287]:
+              - link " facebook" [ref=e288] [cursor=pointer]:
+                - /url: https://www.facebook.com/jwaPR
+                - text: 
+                - generic [ref=e289]: 
+                - text: facebook
+            - listitem [ref=e290]:
+              - link " instagram" [ref=e291] [cursor=pointer]:
+                - /url: https://www.instagram.com/jwa_pr/?hl=ja
+                - text: 
+                - generic [ref=e292]: 
+                - text: instagram
+    - generic [ref=e294]:
+      - heading "YouTube" [level=2] [ref=e295]:
+        - generic [ref=e296]: 
+        - text: YouTube
+      - link " YouTubeチャンネル" [ref=e297] [cursor=pointer]:
+        - /url: https://www.youtube.com/c/jwaPR
+      - generic [ref=e298]:
+        - generic [ref=e299]:
+          - iframe [ref=e301]:
+            
+          - paragraph [ref=e302]: 水資源機構紹介動画
+        - generic [ref=e303]:
+          - iframe [ref=e305]:
+            - generic [active] [ref=f11e1]:
+              - generic "YouTube Video Player" [ref=f11e3]
+              - generic [ref=f11e5]:
+                - generic:
+                  - generic:
+                    - button "Play video" [ref=f11e10] [cursor=pointer]
+                    - button "Hide player controls" [ref=f11e12] [cursor=pointer]
+                    - generic [ref=f11e14]:
+                      - generic [ref=f11e19]:
+                        - generic [ref=f11e20]:
+                          - link "霞ヶ浦開発30年の歩み｜地域を支える水の物語" [ref=f11e21] [cursor=pointer]:
+                            - /url: https://www.youtube.com/watch?v=mZWi5c0udAg
+                          - link "水資源機構" [ref=f11e22] [cursor=pointer]:
+                            - /url: /channel/UCeSdkk0dy5sL_bLDK_ZI9mg
+                            - generic [ref=f11e23]: 水資源機構
+                        - generic [ref=f11e24]:
+                          - button [ref=f11e25] [cursor=pointer]
+                          - generic [ref=f11e27]:
+                            - generic: 水資源機構
+                            - generic: 2.54K subscribers
+                      - generic [ref=f11e28]:
+                        - button "Copy link" [ref=f11e31] [cursor=pointer]:
+                          - generic [ref=f11e35]:
+                            - img
+                        - link "Watch on YouTube" [ref=f11e42] [cursor=pointer]:
+                          - /url: https://www.youtube.com/watch?v=mZWi5c0udAg
+                          - generic [ref=f11e45]:
+                            - text: Watch on
+                            - img [ref=f11e47]:
+                              - generic [ref=f11e49]:
+                                - img
+          - paragraph [ref=e306]: 霞ヶ浦開発30年の歩み｜地域を支える水の物語
+        - generic [ref=e307]:
+          - iframe [ref=e309]:
+            
+          - paragraph [ref=e310]: ドキュメンタリー 利根導水路管理業務に密着
+    - generic [ref=e312]:
+      - generic [ref=e313]:
+        - heading "刊行物" [level=3] [ref=e314]
+        - paragraph [ref=e315]: 機構が発行している広報誌・年報・パンフレットなどをご案内します。
+      - link " 刊行物 一覧へ" [ref=e316] [cursor=pointer]:
+        - /url: pamphlet/
+      - generic [ref=e317]:
+        - figure [ref=e318]:
+          - link "広報誌「水とともに」" [ref=e319] [cursor=pointer]:
+            - /url: pamphlet/kouhoushi/index.html
+            - img "広報誌「水とともに」" [ref=e320]
+          - link "広報誌「水とともに」" [ref=e321] [cursor=pointer]:
+            - /url: pamphlet/kouhoushi/index.html
+            - generic [ref=e322]: 広報誌「水とともに」
+        - figure [ref=e323]:
+          - link "環境報告書" [ref=e324] [cursor=pointer]:
+            - /url: torikumi/kankyo/houkoku/index.html
+            - img "環境報告書" [ref=e325]
+          - link "環境報告書" [ref=e326] [cursor=pointer]:
+            - /url: torikumi/kankyo/houkoku/
+            - generic [ref=e327]: 環境報告書
+        - figure [ref=e328]:
+          - link "業務概要本編（事業のあらまし）" [ref=e329] [cursor=pointer]:
+            - /url: pamphlet/gaiyo/index.html
+            - img "業務概要本編（事業のあらまし）" [ref=e330]
+          - link "業務概要本編（事業のあらまし）" [ref=e331] [cursor=pointer]:
+            - /url: pamphlet/gaiyo/
+            - generic [ref=e332]: 業務概要本編（事業のあらまし）
+        - figure [ref=e333]:
+          - link "業務概要資料編（2025年度版）" [ref=e334] [cursor=pointer]:
+            - /url: pamphlet/gaiyo/index.html#gaiyo
+            - img "業務概要資料編（2025年度版）" [ref=e335]
+          - link "業務概要資料編（2026年度版）" [ref=e336] [cursor=pointer]:
+            - /url: pamphlet/gaiyo/
+            - generic [ref=e337]: 業務概要資料編（2026年度版）
+    - generic [ref=e339]:
+      - heading "よく使われる項目" [level=2] [ref=e340]
+      - generic [ref=e341]:
+        - generic [ref=e342]:
+          - generic [ref=e343]:
+            - term [ref=e344]: 水資源機構について
+            - definition [ref=e345]:
+              - list [ref=e346]:
+                - listitem [ref=e347]:
+                  - link "経営理念 [経営方針／CIメッセージ]" [ref=e348] [cursor=pointer]:
+                    - /url: outline/rinen/
+                - listitem [ref=e349]:
+                  - link "中期目標・中期計画" [ref=e350] [cursor=pointer]:
+                    - /url: outline/tyuki/
+              - link " 「水資源機構について」詳しく見る" [ref=e351] [cursor=pointer]:
+                - /url: outline/
+          - generic [ref=e352]:
+            - term [ref=e353]: 防災関連情報
+            - definition [ref=e354]:
+              - list [ref=e355]:
+                - listitem [ref=e356]:
+                  - link "防災操作による効果" [ref=e357] [cursor=pointer]:
+                    - /url: bousai/bousaisousa/
+              - link " 「防災関連情報」をさらに詳しく" [ref=e358] [cursor=pointer]:
+                - /url: bousai/
+        - generic [ref=e359]:
+          - generic [ref=e360]:
+            - term [ref=e361]: 入札・契約情報
+            - definition [ref=e362]:
+              - list [ref=e363]:
+                - listitem [ref=e364]:
+                  - link "電子入札導入について" [ref=e365] [cursor=pointer]:
+                    - /url: keiyaku/densinyusatsu/
+                - listitem [ref=e366]:
+                  - link "入札情報サービス" [ref=e367] [cursor=pointer]:
+                    - /url: https://water.efftis.jp/juchusya-water/PPI/PPI_P/
+                - listitem [ref=e368]:
+                  - link "電子入札ポータルサイト" [ref=e369] [cursor=pointer]:
+                    - /url: https://water.efftis.jp/juchusya-water/portal/
+                - listitem [ref=e370]:
+                  - link "有資格業者登録" [ref=e371] [cursor=pointer]:
+                    - /url: keiyaku/sanka/index0708.html
+                - listitem [ref=e372]:
+                  - link "メールマガジン" [ref=e373] [cursor=pointer]:
+                    - /url: https://www.kk-liaison.co.jp/mailmg_wtr/c_index.php
+              - link " 「入札・契約情報」をさらに詳しく" [ref=e374] [cursor=pointer]:
+                - /url: keiyaku/
+          - generic [ref=e375]:
+            - term [ref=e376]: 水資源機構について
+            - definition [ref=e377]:
+              - list [ref=e378]:
+                - listitem [ref=e379]:
+                  - link "リアルタイム水源情報" [ref=e380] [cursor=pointer]:
+                    - /url: suigen/realtime/
+                - listitem [ref=e381]:
+                  - link "各水系別の速報値（平日更新）" [ref=e382] [cursor=pointer]:
+                    - /url: suigen/sokuhou/
+                - listitem [ref=e383]:
+                  - link "全水系の確定値（10日毎更新）" [ref=e384] [cursor=pointer]:
+                    - /url: suigen/junpo/
+              - link " 「水源情報」をさらに詳しく" [ref=e385] [cursor=pointer]:
+                - /url: suigen/
+          - generic [ref=e386]:
+            - term [ref=e387]: 様々な取組
+            - definition [ref=e388]:
+              - list [ref=e389]:
+                - listitem [ref=e390]:
+                  - link "寄附金募集" [ref=e391] [cursor=pointer]:
+                    - /url: torikumi/kifu/
+                - listitem [ref=e392]:
+                  - link "優良工事・業務表彰" [ref=e393] [cursor=pointer]:
+                    - /url: torikumi/yuryoukouji/
+              - link " 「様々な取組」をさらに詳しく" [ref=e394] [cursor=pointer]:
+                - /url: torikumi/
+    - text:                                                                                                                                                                                                                                                
+  - link "ページトップへ" [ref=e396] [cursor=pointer]:
+    - /url: "#top"
+    - paragraph [ref=e397]: ページトップへ
+  - contentinfo [ref=e399]:
+    - generic [ref=e401]:
+      - list [ref=e402]:
+        - listitem [ref=e403]:
+          - link "本社へのアクセス" [ref=e404] [cursor=pointer]:
+            - /url: jigyosyo/index.html#03
+        - listitem [ref=e405]:
+          - link "サイトマップ" [ref=e406] [cursor=pointer]:
+            - /url: sitemap/index.html
+        - listitem [ref=e407]:
+          - link "ご意見等" [ref=e408] [cursor=pointer]:
+            - /url: /honsya/honsya/mail/mail.html
+        - listitem [ref=e409]:
+          - link "著作権・リンク等について" [ref=e410] [cursor=pointer]:
+            - /url: policy/copyright/index.html
+        - listitem [ref=e411]:
+          - link "プライバシーポリシー" [ref=e412] [cursor=pointer]:
+            - /url: policy/index.html
+        - listitem [ref=e413]:
+          - link "Xガイドライン" [ref=e414] [cursor=pointer]:
+            - /url: policy/sns/guideline_tw.pdf
+          - text: (PDFファイル 189KB）
+        - listitem [ref=e415]:
+          - link "Facebook及びYouTubeガイドライン" [ref=e416] [cursor=pointer]:
+            - /url: policy/sns/guideline_fb_yt.pdf
+          - text: (PDFファイル 183KB）
+        - listitem [ref=e417]:
+          - link "Instagramガイドライン" [ref=e418] [cursor=pointer]:
+            - /url: policy/sns/guideline_ig.pdf
+          - text: (PDFファイル 110KB）
+        - listitem [ref=e419]:
+          - link "関連リンク集" [ref=e420] [cursor=pointer]:
+            - /url: links/index.html
+      - generic [ref=e421]: 法人番号(6030005001745) 独立行政法人水資源機構 〒330-6008 埼玉県さいたま市中央区新都心11番地2 TEL：048-600-6500(代表)

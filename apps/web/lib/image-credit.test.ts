@@ -8,19 +8,20 @@ describe('imageCredit', () => {
     expect(imageCredit('')).toBeNull();
   });
 
-  test('Damnet wp-content thumbnail → ダム便覧 credit with damnet ID link', () => {
-    const c = imageCredit(
+  // ダム便覧 photos were dropped 2026-09-10. Their /media-policy/ grants no
+  // blanket reuse: each photo carries its own 使用条件, and where none is
+  // stated the policy says to ask the association. Copyright also sits with
+  // the individual contributor, not the association. Returning null keeps a
+  // stale row from ever rendering an uncredited — or unlicensed — photo.
+  test.each([
+    [
+      'with a dam id',
       'https://dambinran.damnet.or.jp/wp-content/uploads/2026/02/0699DC0100AO1L.jpg',
-    );
-    expect(c?.text).toBe('© ダム便覧');
-    expect(c?.href).toContain('/dams/japan/0699/');
-    expect(c?.license).toContain('撮影者');
-  });
-
-  test('Damnet URL without 4-digit prefix falls back to root', () => {
-    const c = imageCredit('https://dambinran.damnet.or.jp/wp-content/uploads/2026/02/no-id.jpg');
-    expect(c?.text).toBe('© ダム便覧');
-    expect(c?.href).toBe('https://dambinran.damnet.or.jp/');
+    ],
+    ['without a dam id', 'https://dambinran.damnet.or.jp/wp-content/uploads/2026/02/no-id.jpg'],
+    ['on the bare host', 'https://damnet.or.jp/some/photo.jpg'],
+  ])('Damnet photo %s → no credit (we no longer display them)', (_label, url) => {
+    expect(imageCredit(url)).toBeNull();
   });
 
   test('Wikimedia commons thumbnail → resolves to the Commons file page', () => {

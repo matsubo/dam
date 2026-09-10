@@ -1,0 +1,347 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - heading "最上川ダム統合管理事務所" [level=1] [ref=e5]:
+        - link "最上川ダム統合管理事務所" [ref=e6] [cursor=pointer]:
+          - /url: http://www.thr.mlit.go.jp/mogami/index.html
+          - img "最上川ダム統合管理事務所" [ref=e7]
+      - generic [ref=e8]:
+        - paragraph [ref=e9]:
+          - link "がんばろう東北" [ref=e10] [cursor=pointer]:
+            - /url: http://www.thr.mlit.go.jp/
+            - img "がんばろう東北" [ref=e11]
+        - list [ref=e12]:
+          - listitem [ref=e13]:
+            - link "ダム・河川関連用語集" [ref=e14] [cursor=pointer]:
+              - /url: http://www.thr.mlit.go.jp/mogami/glossary/index.html
+              - img "ダム・河川関連用語集" [ref=e15]
+          - listitem [ref=e16]:
+            - link "アクセスマップ" [ref=e17] [cursor=pointer]:
+              - /url: http://www.thr.mlit.go.jp/mogami/about/administrative-office.html
+              - img "アクセスマップ" [ref=e18]
+          - listitem [ref=e19]:
+            - link "サイトマップ" [ref=e20] [cursor=pointer]:
+              - /url: http://www.thr.mlit.go.jp/mogami/sitemap/index.html
+              - img "サイトマップ" [ref=e21]
+          - listitem [ref=e22]:
+            - link "関連リンク" [ref=e23] [cursor=pointer]:
+              - /url: http://www.thr.mlit.go.jp/mogami/link/government-relations.html
+              - img "関連リンク" [ref=e24]
+        - generic [ref=e25]:
+          - img "文字サイズ" [ref=e26]
+          - generic [ref=e27]:
+            - term [ref=e28]:
+              - link "文字サイズ 小" [ref=e29] [cursor=pointer]:
+                - /url: "#small"
+                - img "文字サイズ 小" [ref=e30]
+            - term [ref=e31]:
+              - link "文字サイズ 中" [ref=e32] [cursor=pointer]:
+                - /url: "#middle"
+                - img "文字サイズ 中" [ref=e33]
+            - term [ref=e34]:
+              - link "文字サイズ 大" [ref=e35] [cursor=pointer]:
+                - /url: "#large"
+                - img "文字サイズ 大" [ref=e36]
+    - list [ref=e38]:
+      - listitem [ref=e39]:
+        - link "事務所概要" [ref=e40] [cursor=pointer]:
+          - /url: http://www.thr.mlit.go.jp/mogami/about/about.html
+          - img "事務所概要" [ref=e41]
+      - listitem [ref=e42]:
+        - link "寒河江ダムの概要" [ref=e43] [cursor=pointer]:
+          - /url: http://www.thr.mlit.go.jp/mogami/sagae-info/overview.html
+          - img "寒河江ダムの概要" [ref=e44]
+      - listitem [ref=e45]:
+        - link "\u001d白川ダムの概要" [ref=e46] [cursor=pointer]:
+          - /url: http://www.thr.mlit.go.jp/mogami/shirakawa-info/overview.html
+          - img "\u001d白川ダムの概要" [ref=e47]
+      - listitem [ref=e48]:
+        - link "\u001d長井ダムの概要" [ref=e49] [cursor=pointer]:
+          - /url: http://www.thr.mlit.go.jp/mogami/nagai-info/overview.html
+          - img "\u001d長井ダムの概要" [ref=e50]
+      - listitem [ref=e51]:
+        - link "お問い合わせ" [ref=e52] [cursor=pointer]:
+          - /url: http://www.thr.mlit.go.jp/mogami/contact/index.html
+          - img "お問い合わせ" [ref=e53]
+    - generic [ref=e54]:
+      - paragraph [ref=e55]:
+        - link "ホーム" [ref=e56] [cursor=pointer]:
+          - /url: http://www.thr.mlit.go.jp/mogami/index.html
+        - text: »
+        - link "寒河江ダムLIVE情報" [ref=e57] [cursor=pointer]:
+          - /url: telemetry.html
+        - text: » ダム流入・放流量
+      - generic [ref=e58]:
+        - textbox [ref=e59]
+        - button "Submit" [ref=e60] [cursor=pointer]: 検索
+  - generic [ref=e61]:
+    - generic [ref=e63]:
+      - heading "寒河江ダムLIVE情報" [level=2] [ref=e64]:
+        - img "寒河江ダムLIVE情報" [ref=e65]
+      - heading "ダム流入・放流量" [level=2] [ref=e66]
+      - generic [ref=e67]:
+        - list [ref=e68]:
+          - listitem [ref=e69]:
+            - link "テレメータ（流域平均雨量・水位）・カメラ" [ref=e70] [cursor=pointer]:
+              - /url: telemetry.html
+          - listitem [ref=e71]:
+            - link "ダム流入・放流量" [ref=e72] [cursor=pointer]:
+              - /url: dam-inflow-water-discharge.html
+        - list [ref=e73]:
+          - listitem [ref=e74]:
+            - link "白川ダムLIVE情報" [ref=e75] [cursor=pointer]:
+              - /url: ../shirakawa-live/dam-inflow-water-discharge.html
+          - listitem [ref=e76]: ｜
+          - listitem [ref=e77]:
+            - link "長井ダムLIVE情報" [ref=e78] [cursor=pointer]:
+              - /url: ../nagai-live/dam-inflow-water-discharge.html
+        - generic [ref=e80]:
+          - generic [ref=e81]:
+            - paragraph [ref=e82]:
+              - img "ダム流入・放流量" [ref=e83]
+            - generic:
+              - table [ref=e84]:
+                - rowgroup [ref=e85]:
+                  - row "30.73 m3/s" [ref=e86]:
+                    - cell "30.73 m3/s" [ref=e87]
+                  - row [ref=e88]:
+                    - cell [ref=e89]:
+                      - paragraph [ref=e90]:
+                        - img [ref=e91]
+              - table [ref=e92]:
+                - rowgroup [ref=e93]:
+                  - row:
+                    - cell [ref=e94]
+                  - 'row "現在の水位 : 387.62 ｍ 貯水量 : 56,976,000 m3" [ref=e95]':
+                    - 'cell "現在の水位 : 387.62 ｍ" [ref=e96]':
+                      - generic [ref=e97]: "現在の水位 : 387.62 ｍ"
+                    - 'cell "貯水量 : 56,976,000 m3" [ref=e98]':
+                      - generic [ref=e99]: "貯水量 : 56,976,000 m3"
+                  - 'row "06月24日08時 現在 貯水率 : 60.10 % (有効貯水量)" [ref=e100]':
+                    - cell "06月24日08時 現在" [ref=e101]
+                    - 'cell "貯水率 : 60.10 % (有効貯水量)" [ref=e102]':
+                      - generic [ref=e103]: "貯水率 : 60.10 %"
+                      - text: (有効貯水量)
+                  - 'row "貯水率 : 99.74% (利水容量)" [ref=e104]':
+                    - cell [ref=e105]
+                    - cell [ref=e106]
+                    - 'cell "貯水率 : 99.74% (利水容量)" [ref=e107]':
+                      - generic [ref=e108]: "貯水率 : 99.74%"
+                      - text: (利水容量)
+              - table [ref=e109]:
+                - rowgroup [ref=e110]:
+                  - row "36.25 m3/s" [ref=e111]:
+                    - cell "36.25 m3/s" [ref=e112]
+                  - row "ダム放流量 1.26 m3/s" [ref=e113]:
+                    - cell "ダム放流量 1.26 m3/s" [ref=e114]:
+                      - generic [ref=e115]: ダム放流量 1.26 m3/s
+                  - row "発電など 34.99 m3/s" [ref=e116]:
+                    - cell "発電など 34.99 m3/s" [ref=e117]:
+                      - generic [ref=e118]: 発電など 34.99 m3/s
+                  - row [ref=e119]:
+                    - cell [ref=e120]:
+                      - paragraph [ref=e121]:
+                        - img [ref=e122]
+            - table [ref=e123]:
+              - rowgroup [ref=e124]:
+                - row "日付 2026/06/24 05:00 2026/06/24 06:00 2026/06/24 07:00 2026/06/24 08:00" [ref=e125]:
+                  - rowheader "日付" [ref=e126]
+                  - cell "2026/06/24 05:00" [ref=e127]:
+                    - text: 2026/06/24
+                    - text: 05:00
+                  - cell "2026/06/24 06:00" [ref=e128]:
+                    - text: 2026/06/24
+                    - text: 06:00
+                  - cell "2026/06/24 07:00" [ref=e129]:
+                    - text: 2026/06/24
+                    - text: 07:00
+                  - cell "2026/06/24 08:00" [ref=e130]:
+                    - text: 2026/06/24
+                    - text: 08:00
+                - row "水位 387.64m図 387.64m図 387.63m図 387.62m図" [ref=e131]:
+                  - rowheader "水位" [ref=e132]
+                  - cell "387.64m図" [ref=e133]:
+                    - text: 387.64m
+                    - img "図" [ref=e134]
+                  - cell "387.64m図" [ref=e135]:
+                    - text: 387.64m
+                    - img "図" [ref=e136]
+                  - cell "387.63m図" [ref=e137]:
+                    - text: 387.63m
+                    - img "図" [ref=e138]
+                  - cell "387.62m図" [ref=e139]:
+                    - text: 387.62m
+                    - img "図" [ref=e140]
+                - row "流入量 31.32m³/s 38.43m³/s 31.31m³/s 30.73m³/s" [ref=e141]:
+                  - rowheader "流入量" [ref=e142]
+                  - cell "31.32m³/s" [ref=e143]
+                  - cell "38.43m³/s" [ref=e144]
+                  - cell "31.31m³/s" [ref=e145]
+                  - cell "30.73m³/s" [ref=e146]
+                - row "全放流量 38.54m³/s 38.48m³/s 38.34m³/s 36.25m³/s" [ref=e147]:
+                  - rowheader "全放流量" [ref=e148]
+                  - cell "38.54m³/s" [ref=e149]
+                  - cell "38.48m³/s" [ref=e150]
+                  - cell "38.34m³/s" [ref=e151]
+                  - cell "36.25m³/s" [ref=e152]
+            - paragraph:
+              - link "グラフで見る" [ref=e153] [cursor=pointer]:
+                - /url: ryu_sagae.html
+            - paragraph [ref=e154]: ※矢印は前回数値と比較しています。
+          - table [ref=e155]:
+            - rowgroup [ref=e156]:
+              - row "日付 水位 ダム流入量 全放流量" [ref=e157]:
+                - columnheader "日付" [ref=e158]
+                - columnheader "水位" [ref=e159]
+                - columnheader "ダム流入量" [ref=e160]
+                - columnheader "全放流量" [ref=e161]
+              - row "2026/06/24 08:00 387.62m 30.73m³/s 36.25m³/s" [ref=e162]:
+                - cell "2026/06/24 08:00" [ref=e163]
+                - cell "387.62m" [ref=e164]
+                - cell "30.73m³/s" [ref=e165]
+                - cell "36.25m³/s" [ref=e166]
+              - row "2026/06/24 07:00 387.63m 31.31m³/s 38.34m³/s" [ref=e167]:
+                - cell "2026/06/24 07:00" [ref=e168]
+                - cell "387.63m" [ref=e169]
+                - cell "31.31m³/s" [ref=e170]
+                - cell "38.34m³/s" [ref=e171]
+              - row "2026/06/24 06:00 387.64m 38.43m³/s 38.48m³/s" [ref=e172]:
+                - cell "2026/06/24 06:00" [ref=e173]
+                - cell "387.64m" [ref=e174]
+                - cell "38.43m³/s" [ref=e175]
+                - cell "38.48m³/s" [ref=e176]
+              - row "2026/06/24 05:00 387.64m 31.32m³/s 38.54m³/s" [ref=e177]:
+                - cell "2026/06/24 05:00" [ref=e178]
+                - cell "387.64m" [ref=e179]
+                - cell "31.32m³/s" [ref=e180]
+                - cell "38.54m³/s" [ref=e181]
+              - row "2026/06/24 04:00 387.65m 38.48m³/s 38.39m³/s" [ref=e182]:
+                - cell "2026/06/24 04:00" [ref=e183]
+                - cell "387.65m" [ref=e184]
+                - cell "38.48m³/s" [ref=e185]
+                - cell "38.39m³/s" [ref=e186]
+              - row "2026/06/24 03:00 387.65m 38.45m³/s 38.49m³/s" [ref=e187]:
+                - cell "2026/06/24 03:00" [ref=e188]
+                - cell "387.65m" [ref=e189]
+                - cell "38.45m³/s" [ref=e190]
+                - cell "38.49m³/s" [ref=e191]
+              - row "2026/06/24 02:00 387.65m 33.41m³/s 38.52m³/s" [ref=e192]:
+                - cell "2026/06/24 02:00" [ref=e193]
+                - cell "387.65m" [ref=e194]
+                - cell "33.41m³/s" [ref=e195]
+                - cell "38.52m³/s" [ref=e196]
+              - row "2026/06/24 01:00 387.66m 40.95m³/s 48.34m³/s" [ref=e197]:
+                - cell "2026/06/24 01:00" [ref=e198]
+                - cell "387.66m" [ref=e199]
+                - cell "40.95m³/s" [ref=e200]
+                - cell "48.34m³/s" [ref=e201]
+              - row "2026/06/24 00:00 387.67m 38.34m³/s 59.30m³/s" [ref=e202]:
+                - cell "2026/06/24 00:00" [ref=e203]
+                - cell "387.67m" [ref=e204]
+                - cell "38.34m³/s" [ref=e205]
+                - cell "59.30m³/s" [ref=e206]
+              - row "2026/06/23 23:00 387.70m 41.02m³/s 59.60m³/s" [ref=e207]:
+                - cell "2026/06/23 23:00" [ref=e208]
+                - cell "387.70m" [ref=e209]
+                - cell "41.02m³/s" [ref=e210]
+                - cell "59.60m³/s" [ref=e211]
+              - row "2026/06/23 22:00 387.73m 38.28m³/s 59.36m³/s" [ref=e212]:
+                - cell "2026/06/23 22:00" [ref=e213]
+                - cell "387.73m" [ref=e214]
+                - cell "38.28m³/s" [ref=e215]
+                - cell "59.36m³/s" [ref=e216]
+              - row "2026/06/23 21:00 387.76m 43.97m³/s 59.52m³/s" [ref=e217]:
+                - cell "2026/06/23 21:00" [ref=e218]
+                - cell "387.76m" [ref=e219]
+                - cell "43.97m³/s" [ref=e220]
+                - cell "59.52m³/s" [ref=e221]
+              - row "2026/06/23 20:00 387.78m 39.70m³/s 59.52m³/s" [ref=e222]:
+                - cell "2026/06/23 20:00" [ref=e223]
+                - cell "387.78m" [ref=e224]
+                - cell "39.70m³/s" [ref=e225]
+                - cell "59.52m³/s" [ref=e226]
+              - row "2026/06/23 19:00 387.81m 45.41m³/s 59.54m³/s" [ref=e227]:
+                - cell "2026/06/23 19:00" [ref=e228]
+                - cell "387.81m" [ref=e229]
+                - cell "45.41m³/s" [ref=e230]
+                - cell "59.54m³/s" [ref=e231]
+              - row "2026/06/23 18:00 387.83m 45.41m³/s 59.65m³/s" [ref=e232]:
+                - cell "2026/06/23 18:00" [ref=e233]
+                - cell "387.83m" [ref=e234]
+                - cell "45.41m³/s" [ref=e235]
+                - cell "59.65m³/s" [ref=e236]
+              - row "2026/06/23 17:00 387.85m 52.54m³/s 59.57m³/s" [ref=e237]:
+                - cell "2026/06/23 17:00" [ref=e238]
+                - cell "387.85m" [ref=e239]
+                - cell "52.54m³/s" [ref=e240]
+                - cell "59.57m³/s" [ref=e241]
+              - row "2026/06/23 16:00 387.86m 45.51m³/s 59.57m³/s" [ref=e242]:
+                - cell "2026/06/23 16:00" [ref=e243]
+                - cell "387.86m" [ref=e244]
+                - cell "45.51m³/s" [ref=e245]
+                - cell "59.57m³/s" [ref=e246]
+              - row "2026/06/23 15:00 387.88m 52.59m³/s 59.60m³/s" [ref=e247]:
+                - cell "2026/06/23 15:00" [ref=e248]
+                - cell "387.88m" [ref=e249]
+                - cell "52.59m³/s" [ref=e250]
+                - cell "59.60m³/s" [ref=e251]
+              - row "2026/06/23 14:00 387.89m 49.04m³/s 59.70m³/s" [ref=e252]:
+                - cell "2026/06/23 14:00" [ref=e253]
+                - cell "387.89m" [ref=e254]
+                - cell "49.04m³/s" [ref=e255]
+                - cell "59.70m³/s" [ref=e256]
+              - row "2026/06/23 13:00 387.90m 50.32m³/s 59.62m³/s" [ref=e257]:
+                - cell "2026/06/23 13:00" [ref=e258]
+                - cell "387.90m" [ref=e259]
+                - cell "50.32m³/s" [ref=e260]
+                - cell "59.62m³/s" [ref=e261]
+              - row "2026/06/23 12:00 387.92m 49.65m³/s 64.08m³/s" [ref=e262]:
+                - cell "2026/06/23 12:00" [ref=e263]
+                - cell "387.92m" [ref=e264]
+                - cell "49.65m³/s" [ref=e265]
+                - cell "64.08m³/s" [ref=e266]
+              - row "2026/06/23 11:00 387.94m 48.88m³/s 63.85m³/s" [ref=e267]:
+                - cell "2026/06/23 11:00" [ref=e268]
+                - cell "387.94m" [ref=e269]
+                - cell "48.88m³/s" [ref=e270]
+                - cell "63.85m³/s" [ref=e271]
+              - row "2026/06/23 10:00 387.96m 50.30m³/s 63.62m³/s" [ref=e272]:
+                - cell "2026/06/23 10:00" [ref=e273]
+                - cell "387.96m" [ref=e274]
+                - cell "50.30m³/s" [ref=e275]
+                - cell "63.62m³/s" [ref=e276]
+              - row "2026/06/23 09:00 387.98m 52.15m³/s 63.78m³/s" [ref=e277]:
+                - cell "2026/06/23 09:00" [ref=e278]
+                - cell "387.98m" [ref=e279]
+                - cell "52.15m³/s" [ref=e280]
+                - cell "63.78m³/s" [ref=e281]
+              - row "2026/06/23 08:00 388.00m 50.42m³/s 69.38m³/s" [ref=e282]:
+                - cell "2026/06/23 08:00" [ref=e283]
+                - cell "388.00m" [ref=e284]
+                - cell "50.42m³/s" [ref=e285]
+                - cell "69.38m³/s" [ref=e286]
+    - generic [ref=e287]:
+      - paragraph [ref=e288]:
+        - link "ダム・河川用語集" [ref=e289] [cursor=pointer]:
+          - /url: http://www.thr.mlit.go.jp/mogami/glossary/index.html
+        - text: "|"
+        - link "アクセスマップ" [ref=e290] [cursor=pointer]:
+          - /url: http://www.thr.mlit.go.jp/mogami/about/administrative-office.html
+        - text: "|"
+        - link "サイトマップ" [ref=e291] [cursor=pointer]:
+          - /url: http://www.thr.mlit.go.jp/mogami/sitemap/index.html
+        - text: "|"
+        - link "関連リンク集" [ref=e292] [cursor=pointer]:
+          - /url: http://www.thr.mlit.go.jp/mogami/link/government-relations.html
+        - text: "|"
+        - link "プライバシーポリシー" [ref=e293] [cursor=pointer]:
+          - /url: http://www.thr.mlit.go.jp/mogami/privacy/index.html
+      - paragraph [ref=e294]:
+        - link "このページのトップに戻る" [ref=e295] [cursor=pointer]:
+          - /url: "#header"
+          - img "このページのトップに戻る" [ref=e296]
+      - paragraph [ref=e297]:
+        - link "ホームに戻る" [ref=e298] [cursor=pointer]:
+          - /url: http://www.thr.mlit.go.jp/mogami/index.html
+          - img "ホームに戻る" [ref=e299]
+      - generic [ref=e300]: 最上川ダム統合管理事務所｜山形県西村山郡西川町大字砂子関158 TEL:0237-75-2311 / FAX:0237-75-2048
