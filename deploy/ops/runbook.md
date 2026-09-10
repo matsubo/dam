@@ -8,10 +8,22 @@ config in [`deploy/backup/`](../backup/). Read this before paging anyone.
 
 ---
 
+## 0. Topology (since 2026-09-11, #30)
+
+Production is four Coolify resources, not one compose stack: `dam-web`
+(Next.js, rolling updates), `dam-worker` (graphile-worker), `dam-db`
+(TimescaleDB, image pinned by digest) and `dam-minio` (raw-snapshot bucket).
+Layout, env vars, rolling-update rules and rollback are in
+`deploy/coolify/README.md`. Where this runbook says "the `app` container" read
+`dam-web`; "the `worker` service" read `dam-worker`; "the `db` container" read
+`dam-db`; "the `minio` service" read `dam-minio`. Each is its own Coolify
+resource with its own terminal, logs and Stop/Start buttons. The former compose
+file is kept at `deploy/coolify/docker-compose.legacy.yaml` for reference.
+
 ## 1. First-time bring-up
 
 Assumes a fresh Coolify resource has been created from
-`deploy/coolify/docker-compose.coolify.yml` and all required env vars are set
+the four resources described in `deploy/coolify/README.md` exist and all required env vars are set
 (see [`deploy/coolify/README.md`](../coolify/README.md)).
 
 ```sh
@@ -40,7 +52,7 @@ The worker starts automatically when Coolify deploys the stack; nothing to do.
 
 The worker has no HTTP surface; the only ways to control it are:
 
-- **Stop:** Coolify UI → resource → `worker` service → "Stop". This is safe; in
+- **Stop:** Coolify UI → `dam-worker` → "Stop". This is safe; in
   flight jobs are picked up on the next start because graphile-worker stores
   its queue in Postgres.
 - **Start:** same UI → "Start".
@@ -143,7 +155,7 @@ Restore objective: RTO 1h, RPO 1h (matches the diff-backup cadence).
 
 1. Find the latest tag at https://hub.docker.com/r/minio/minio/tags (use a
    pinned `RELEASE.YYYY-MM-DDTHH-MM-SSZ` tag — never `latest`).
-2. Edit `deploy/coolify/docker-compose.coolify.yml` and bump the `minio.image`.
+2. Coolify UI → `dam-minio` → edit the compose (`minio.image`) and restart.
 3. Open a PR. After merge, Coolify auto-deploys.
 4. The first start after a major bump may run an internal data migration; tail
    the `minio` logs in Coolify until you see `API: ... :9000`.

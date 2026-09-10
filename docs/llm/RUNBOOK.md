@@ -186,14 +186,18 @@ SELECT COUNT(*) FROM dams;
 
 ## Deploy
 
-Coolify pulls from main, runs `Dockerfile.web` for app and `Dockerfile.worker`
-for the worker. Compose file is `docker-compose.yaml` at the repo root.
+Coolify pulls from main and builds two separate applications: `dam-web`
+(`deploy/coolify/Dockerfile.web`, rolling updates) and `dam-worker`
+(`deploy/coolify/Dockerfile.worker`). Postgres (`dam-db`) and MinIO
+(`dam-minio`) are their own Coolify resources and are not touched by a
+push. Layout and env vars: `deploy/coolify/README.md`. The former single
+compose stack is kept at `deploy/coolify/docker-compose.legacy.yaml`.
 
 Required Coolify secrets:
 
 ```
-DATABASE_URL              postgres://dam:CHANGEME@db:5432/dam
-S3_ENDPOINT               http://minio:9000
+DATABASE_URL              postgres://dam:CHANGEME@<dam-db uuid>:5432/dam
+S3_ENDPOINT               http://minio-<dam-minio uuid>:9000
 S3_ACCESS_KEY             CHANGEME
 S3_SECRET_KEY             CHANGEME
 S3_BUCKET                 dam-raw
