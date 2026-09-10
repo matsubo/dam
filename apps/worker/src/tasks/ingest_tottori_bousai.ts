@@ -102,9 +102,16 @@ export function parseTottoriItems(items: TottoriBousaiItem[]): ParsedRow[] {
       it.damEffectiveStorageQuantitiesFlg,
     );
     const storage = storageThouM3 != null ? storageThouM3 * 1000 : null;
+    // Prefer 利水容量貯水率: it is the rate the manager publishes, against the
+    // current-season 利水容量. 有効容量貯水率 divides by the full 有効貯水容量
+    // and understates flood-control dams — the inversion issue #19 found in
+    // kasenbosai. tottori-bousai is trusted_rate_basis (migration 0040), so the
+    // stored rate is also back-solved into the denominator the API reports.
+    // Today every dam reports the 利水 column as null/flg=2, so this is a
+    // no-op until 鳥取県 starts publishing it.
     const ratePct =
-      gated(it.storageRateEffectiveCapacity, it.storageRateEffectiveCapacityFlg) ??
-      gated(it.storageRateWaterUseCapacity, it.storageRateWaterUseCapacityFlg);
+      gated(it.storageRateWaterUseCapacity, it.storageRateWaterUseCapacityFlg) ??
+      gated(it.storageRateEffectiveCapacity, it.storageRateEffectiveCapacityFlg);
 
     if (level == null && inflow == null && outflow == null && storage == null && ratePct == null) {
       continue;
