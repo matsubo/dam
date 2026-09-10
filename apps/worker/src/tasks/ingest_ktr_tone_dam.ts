@@ -28,6 +28,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const DATA_URL =
@@ -196,14 +197,21 @@ interface DamMatch {
   damId: bigint;
 }
 
-async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
+/**
+ * Match every dam in DAM_CONFIG, not just the ones the current fetch
+ * returned. DAM_CONFIG *is* the feed's published catalogue (minus the 5ダム /
+ * 9ダム aggregates), so walking it keeps `source_universe` complete on a run
+ * where a dam reports 休止中 and gets dropped during parsing; the match
+ * depends only on the configured name and prefectures, never on the values.
+ */
+async function matchMaster(log: (s: string) => void): Promise<DamMatch[]> {
   const out: DamMatch[] = [];
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing.
+  const universe: UniverseRow[] = [];
 
-  for (const r of rows) {
-    const cfg = DAM_CONFIG.find((d) => d.name === r.toneName);
-    if (!cfg) continue;
-
-    const stem = normalizeName(r.toneName);
+  for (const cfg of DAM_CONFIG) {
+    const stem = normalizeName(cfg.name);
     if (!stem) continue;
 
     const masters = await sql<{ id: bigint; name: string }[]>`
@@ -214,7 +222,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     for (const m of masters) {
       const mStem = normalizeName(m.name);
       let rank: number;
-      if (m.name === r.toneName) rank = 0;
+      if (m.name === cfg.name) rank = 0;
       else if (mStem === stem) rank = 1;
       else if (m.name === `${stem}ダム`) rank = 2;
       else if (mStem.startsWith(stem)) rank = 3;
@@ -225,13 +233,22 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
       }
     }
 
+    // officeCD/observationCD is the feed's own station id.
+    universe.push({
+      externalId: damKey(cfg.officeCD, cfg.observationCD),
+      name: cfg.name,
+      prefCode: cfg.prefCodes[0] ?? null,
+      resolvedDamId: best?.id ?? null,
+    });
+
     if (!best) {
-      log(`${SOURCE_ID}: no master match for "${r.toneName}" (prefs: ${cfg.prefCodes.join(',')})`);
+      log(`${SOURCE_ID}: no master match for "${cfg.name}" (prefs: ${cfg.prefCodes.join(',')})`);
       continue;
     }
-    out.push({ toneName: r.toneName, damId: best.id });
+    out.push({ toneName: cfg.name, damId: best.id });
   }
 
+  await recordUniverse(SOURCE_ID, universe);
   return out;
 }
 
@@ -261,7 +278,7 @@ const task: Task = async (_payload, helpers) => {
   const rows = parseToneDamJson(json);
   log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
 
-  const matches = await matchMaster(rows, log);
+  const matches = await matchMaster(log);
   const damByName = new Map(matches.map((m) => [m.toneName, m.damId]));
 
   const inputs = [] as Parameters<typeof upsertObservations>[0];

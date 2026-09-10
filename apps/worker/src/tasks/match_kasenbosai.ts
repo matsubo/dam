@@ -26,6 +26,7 @@
 import { PREFECTURES } from '@dam/core/prefectures';
 import { normalizeJaName } from '@dam/core/similarity';
 import { sql } from '@dam/db/client';
+import { recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 import {
   MATCH_THRESHOLD,
@@ -375,8 +376,23 @@ const task: Task = async (rawPayload, helpers) => {
       needsReview += 1;
     }
   }
+  // Persist the catalogue as kasenbosai's published universe — every station,
+  // not just the ones that matched. A station with no master dam nearby used
+  // to vanish into the `unmatched` counter (writeMatchReview only fires when
+  // there were candidates), which is exactly the "they publish it, we don't
+  // have the dam" case /coverage needs in order to say anything honest.
+  const universeRows = scored.map(({ dam: d, match: m }) => ({
+    externalId: d.obsFcd,
+    name: d.obsNm,
+    lat: d.lat,
+    lng: d.lon,
+    resolvedDamId: m.damId != null && winners.has(m) ? m.damId : null,
+  }));
+  await recordUniverse('kasenbosai', universeRows);
+  const unresolved = universeRows.filter((r) => r.resolvedDamId == null).length;
+
   log(
-    `match:kasenbosai done — fetched=${cat.length} newly-matched=${matched} already-set=${alreadySet} unmatched=${unmatched} contested=${contested} needs-review=${needsReview}`,
+    `match:kasenbosai done — fetched=${cat.length} newly-matched=${matched} already-set=${alreadySet} unmatched=${unmatched} contested=${contested} needs-review=${needsReview} universe-recorded=${universeRows.length} unresolved=${unresolved}`,
   );
 };
 

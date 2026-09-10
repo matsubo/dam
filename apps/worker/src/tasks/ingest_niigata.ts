@@ -26,6 +26,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const BASE_URL = process.env.NIIGATA_DAM_BASE ?? 'http://doboku-bousai.pref.niigata.jp/kasen';
@@ -184,10 +185,21 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out: DamMatch[] = [];
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing. The
+  // 防災Web table carries no station id, so the published name keyed by
+  // prefecture is the stable identity.
+  const universe: UniverseRow[] = [];
   for (const r of rows) {
     const stem = normalizeName(r.niigataName);
     if (!stem) continue;
     const damId = chooseMaster(stem, masters);
+    universe.push({
+      externalId: r.niigataName,
+      name: r.niigataName,
+      prefCode: PREF_CODE,
+      resolvedDamId: damId,
+    });
     if (!damId) {
       log(`${SOURCE_ID}: no master match for ${r.niigataName}`);
       continue;
@@ -201,6 +213,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
         AND COALESCE(external_ids->>${SOURCE_ID}, '') <> ${r.niigataName}
     `;
   }
+  await recordUniverse(SOURCE_ID, universe);
   return out;
 }
 

@@ -19,6 +19,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const BASE_URL =
@@ -84,6 +85,19 @@ async function findDamId(log: (s: string) => void): Promise<bigint | null> {
       END, id
     LIMIT 1
   `;
+  // The one dam this source publishes, matched or not — recorded so /coverage
+  // can say "they publish it, we failed to link it" instead of guessing. The
+  // endpoint exposes metric keys rather than a station id, so the published
+  // name keyed by prefecture is the stable identity.
+  const universe: UniverseRow[] = [
+    {
+      externalId: '竜門ダム',
+      name: '竜門ダム',
+      prefCode: PREF_CODE,
+      resolvedDamId: rows[0]?.id ?? null,
+    },
+  ];
+  await recordUniverse(SOURCE_ID, universe);
   if (!rows[0]) {
     log(`${SOURCE_ID}: no master match for 竜門ダム (pref ${PREF_CODE})`);
     return null;
@@ -119,6 +133,11 @@ const task: Task = async (_payload, helpers) => {
       fetchKey('dam_chosuiritsu', ua),
     ]);
 
+  // Resolved before the value checks below: the provider publishes this dam
+  // whether or not this run's fetch carried usable numbers, and skipping the
+  // lookup would leave the source recorded as never scanned.
+  const damId = await findDamId(log);
+
   const observedAt = parseRyumonTimestamp(timeStr);
   if (!observedAt) {
     log(`${SOURCE_ID}: failed to parse time: "${timeStr}"`);
@@ -144,7 +163,6 @@ const task: Task = async (_payload, helpers) => {
     return;
   }
 
-  const damId = await findDamId(log);
   if (!damId) return;
 
   const written = await upsertObservations([

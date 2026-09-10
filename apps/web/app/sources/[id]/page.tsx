@@ -131,7 +131,7 @@ export default async function SourceDetailPage({ params }: PageProps) {
 
       {detail ? (
         <dl className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-8">
-          <Field label="上流">{detail.upstream}</Field>
+          <Field label="提供元">{detail.upstream}</Field>
           <Field label="ライセンス">{detail.license}</Field>
           <Field label="取得頻度">{detail.cadence}</Field>
           <Field label="最新観測">

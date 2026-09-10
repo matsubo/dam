@@ -23,6 +23,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const BASE_URL =
@@ -216,6 +217,26 @@ async function findDamId(
   return best.id;
 }
 
+/** Resolve every dam this office publishes, keyed by its 観測所 id. */
+async function matchMaster(log: (s: string) => void): Promise<Map<string, bigint>> {
+  const matches = new Map<string, bigint>();
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing.
+  const universe: UniverseRow[] = [];
+  for (const cfg of DAM_CONFIG) {
+    const damId = await findDamId(cfg.name, cfg.prefCode, log);
+    universe.push({
+      externalId: cfg.obsId,
+      name: cfg.name,
+      prefCode: cfg.prefCode,
+      resolvedDamId: damId,
+    });
+    if (damId) matches.set(cfg.obsId, damId);
+  }
+  await recordUniverse(SOURCE_ID, universe);
+  return matches;
+}
+
 // --- task --------------------------------------------------------------------
 
 const task: Task = async (_payload, helpers) => {
@@ -226,6 +247,9 @@ const task: Task = async (_payload, helpers) => {
     process.env.HTTP_USER_AGENT ??
     'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
 
+  // Resolved before the fetches so a failing page still leaves a scan on record.
+  const damByObs = await matchMaster(log);
+
   const inputs = [] as Parameters<typeof upsertObservations>[0];
 
   for (const cfg of DAM_CONFIG) {
@@ -233,7 +257,7 @@ const task: Task = async (_payload, helpers) => {
     if (!row) continue;
     log(`${SOURCE_ID}: ${cfg.name} parsed at ${row.observedAt.toISOString()}`);
 
-    const damId = await findDamId(cfg.name, cfg.prefCode, log);
+    const damId = damByObs.get(cfg.obsId);
     if (!damId) continue;
 
     inputs.push({

@@ -16,6 +16,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const CSV_URL =
@@ -157,11 +158,24 @@ const task: Task = async (_payload, helpers) => {
     return;
   }
   const text = await r.text();
+  // What this source publishes, matched or not — recorded so /coverage can say
+  // "they publish it, we failed to link it" instead of guessing. Built from the
+  // CSV rather than from `DAMS`, because the CSV is the published list and
+  // `DAMS` is only the subset we have configured: a dam 北陸地整 adds shows up
+  // here as an unmatched row instead of vanishing. Keyed by name so a repeated
+  // row can't break the upsert.
+  const universe = new Map<string, UniverseRow>();
   const inputs = [] as Parameters<typeof upsertObservations>[0];
   for (const raw of text.split(/\r?\n/)) {
     const p = parseHrrLine(raw);
     if (!p) continue;
     const damId = matches.get(p.name);
+    universe.set(p.name, {
+      externalId: p.name,
+      name: p.name,
+      prefCode: DAMS[p.name]?.prefCode ?? null,
+      resolvedDamId: damId ?? null,
+    });
     if (!damId) continue;
     if (p.waterLevelM == null && p.inflowM3s == null && p.outflowM3s == null) continue;
     inputs.push({
@@ -178,6 +192,7 @@ const task: Task = async (_payload, helpers) => {
       qualityFlag: 0,
     });
   }
+  await recordUniverse(SOURCE_ID, [...universe.values()]);
   const written = await upsertObservations(inputs);
   log(`${SOURCE_ID} done: matched=${matches.size} parsed=${inputs.length} written=${written}`);
 };

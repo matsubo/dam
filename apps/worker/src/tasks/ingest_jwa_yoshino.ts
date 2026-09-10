@@ -18,6 +18,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const PAGE_URL =
@@ -151,6 +152,9 @@ async function ensureSourcePriority(): Promise<void> {
 
 async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
   const matches: DamMatch[] = [];
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing.
+  const universe: UniverseRow[] = [];
   for (const m of NAME_MAP) {
     const rows = await sql<{ id: bigint; name: string }[]>`
       SELECT id, name FROM dams
@@ -167,6 +171,15 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
       LIMIT 1
     `;
     const r = rows[0];
+    universe.push({
+      externalId: m.yoshinoName,
+      name: m.yoshinoName,
+      // A multi-code entry is a LIKE-narrowing hint, not an attribution — its
+      // first code is sometimes the wrong prefecture (新宮 is 愛媛, not 徳島),
+      // and pref_code is COALESCE-sticky once written.
+      prefCode: m.prefCodes.length === 1 ? (m.prefCodes[0] ?? null) : null,
+      resolvedDamId: r?.id ?? null,
+    });
     if (!r) {
       log(`jwa-yoshino: no master match for "${m.yoshinoName}" (${m.masterName})`);
       continue;
@@ -180,6 +193,7 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
         AND COALESCE(external_ids->>'jwa-yoshino', '') <> ${m.yoshinoName}
     `;
   }
+  await recordUniverse('jwa-yoshino', universe);
   return matches;
 }
 

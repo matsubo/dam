@@ -39,8 +39,12 @@ const BODY = `# Dam Data Japan
 - \`/api/v1/dams\` — paginated list, filter by pref / watershed / manager
 - \`/api/v1/dams/{slug}\` — single dam record (HAL+JSON with _links)
 - \`/api/v1/dams/{slug}/observations\` — time series (\`interval=hourly|daily|monthly\`)
+- \`/api/v1/observations\` — cross-dam measured-value feed for a \`from\`/\`to\`
+  window, keyset-paginated (measured values only)
 - \`/api/v1/watersheds/{slug}\` — watershed aggregate
 - \`/api/v1/watersheds/{slug}/observations\` — watershed-summed series
+- \`/api/v1/coverage\` — per-dam triage: is a dam's data published by some
+  provider and we're failing to ingest it, or does nobody publish it
 
 ## Data sources
 

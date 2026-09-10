@@ -25,6 +25,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const BASE_URL = process.env.NAGANO_KASEN_URL ?? 'https://www.sabo-nagano.jp/dyn/json/dat/pc';
@@ -182,16 +183,24 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out: DamMatch[] = [];
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing. The
+  // published list is the whole STATION_MAP, not this run's rows: the feed
+  // keeps a station's slot on an hour when it reports no usable value, and a
+  // station that never reports is exactly the case /coverage must not read as
+  // "nobody publishes it". Only stations that did report become matches.
+  const universe: UniverseRow[] = [];
+  const reported = new Set(rows.map((r) => r.naganoName));
 
-  for (const r of rows) {
-    const stem = normalizeName(r.naganoName);
+  for (const [stationId, naganoName] of Object.entries(STATION_MAP)) {
+    const stem = normalizeName(naganoName);
     if (!stem) continue;
 
     let best: { id: bigint; rank: number } | null = null;
     for (const m of masters) {
       const mStem = normalizeName(m.name);
       let rank: number;
-      if (m.name === r.naganoName) rank = 0;
+      if (m.name === naganoName) rank = 0;
       else if (mStem === stem) rank = 1;
       else if (m.name === `${stem}ダム`) rank = 2;
       else if (mStem.startsWith(stem)) rank = 3;
@@ -202,13 +211,21 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
       }
     }
 
+    universe.push({
+      externalId: stationId,
+      name: naganoName,
+      prefCode: PREF_CODE,
+      resolvedDamId: best?.id ?? null,
+    });
+
     if (!best) {
-      log(`${SOURCE_ID}: no master match for "${r.naganoName}"`);
+      log(`${SOURCE_ID}: no master match for "${naganoName}"`);
       continue;
     }
-    out.push({ naganoName: r.naganoName, damId: best.id });
+    if (reported.has(naganoName)) out.push({ naganoName, damId: best.id });
   }
 
+  await recordUniverse(SOURCE_ID, universe);
   return out;
 }
 

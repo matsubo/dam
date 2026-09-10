@@ -105,7 +105,7 @@ export async function GET(): Promise<NextResponse> {
   const gapsByPref = await sql<{ pref: string; uncovered: number; total: number }[]>`
     WITH covered AS (
       SELECT DISTINCT dam_id FROM observations
-      WHERE observed_at > NOW() - INTERVAL '30 days' AND source_id <> 'synthetic'
+      WHERE observed_at > NOW() - INTERVAL '30 days'
     )
     SELECT
       d.pref_code::text AS pref,
@@ -121,7 +121,7 @@ export async function GET(): Promise<NextResponse> {
   const gapsByManager = await sql<{ manager: string; uncovered: number }[]>`
     WITH covered AS (
       SELECT DISTINCT dam_id FROM observations
-      WHERE observed_at > NOW() - INTERVAL '30 days' AND source_id <> 'synthetic'
+      WHERE observed_at > NOW() - INTERVAL '30 days'
     )
     SELECT
       COALESCE(d.manager, '(不明)')::text AS manager,
@@ -208,8 +208,7 @@ export async function GET(): Promise<NextResponse> {
     with_ndi: 0,
     with_kasenbosai: 0,
   };
-  const synthSeen = obsBySource.some((r) => r.src === 'synthetic');
-  const realSeen = obsBySource.some((r) => r.src !== 'synthetic' && r.rows > 0);
+  const realSeen = obsBySource.some((r) => r.rows > 0);
 
   return NextResponse.json(
     {
@@ -231,7 +230,6 @@ export async function GET(): Promise<NextResponse> {
       obs_daily_health: obsDaily[0] ?? null,
       coverage_gaps: { by_prefecture: gapsByPref, by_manager: gapsByManager },
       data_realness: {
-        only_synthetic_seen: synthSeen && !realSeen,
         any_real_observation_in_30d: realSeen,
       },
       _links: {

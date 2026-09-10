@@ -23,6 +23,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const BASE_URL =
@@ -236,6 +237,32 @@ interface DamMatch {
   damId: bigint;
 }
 
+/**
+ * Pick the best master dam for a published name: an exact raw-name hit beats a
+ * stem hit beats a prefix/substring hit, ties going to the lower id.
+ */
+function chooseMaster(
+  rawName: string,
+  stem: string,
+  masters: { id: bigint; name: string }[],
+): bigint | null {
+  let best: { id: bigint; rank: number } | null = null;
+  for (const m of masters) {
+    const mStem = normalizeName(m.name);
+    let rank: number;
+    if (m.name === rawName) rank = 0;
+    else if (mStem === stem) rank = 1;
+    else if (m.name === `${stem}ダム`) rank = 2;
+    else if (mStem.startsWith(stem)) rank = 3;
+    else if (mStem.includes(stem)) rank = 4;
+    else continue;
+    if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
+      best = { id: m.id, rank };
+    }
+  }
+  return best?.id ?? null;
+}
+
 async function matchMaster(
   readings: EhimeReading[],
   log: (s: string) => void,
@@ -257,22 +284,9 @@ async function matchMaster(
 
     const stem = normalizeName(r.damName);
     if (!stem) continue;
-    let best: { id: bigint; rank: number } | null = null;
-    for (const m of masters) {
-      const mStem = normalizeName(m.name);
-      let rank: number;
-      if (m.name === r.damName) rank = 0;
-      else if (mStem === stem) rank = 1;
-      else if (m.name === `${stem}ダム`) rank = 2;
-      else if (mStem.startsWith(stem)) rank = 3;
-      else if (mStem.includes(stem)) rank = 4;
-      else continue;
-      if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-        best = { id: m.id, rank };
-      }
-    }
+    const damId = chooseMaster(r.damName, stem, masters);
 
-    if (!best) {
+    if (!damId) {
       log(`${SOURCE_ID}: no master match for "${r.damName}" (${r.myMenuId})`);
       continue;
     }
@@ -281,11 +295,30 @@ async function matchMaster(
       UPDATE dams
       SET external_ids = COALESCE(external_ids, '{}'::jsonb)
                        || jsonb_build_object(${SOURCE_ID}::text, ${r.myMenuId}::text)
-      WHERE id = ${best.id}
+      WHERE id = ${damId}
         AND COALESCE(external_ids->>${SOURCE_ID}, '') <> ${r.myMenuId}
     `;
-    out.push({ myMenuId: r.myMenuId, damId: best.id });
+    out.push({ myMenuId: r.myMenuId, damId });
   }
+
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing. Built
+  // from the DAMS catalogue rather than from `readings`: the 12 pages are
+  // fetched through Promise.allSettled, so one timing out drops that dam from
+  // readings entirely, and recording only what came back would eventually have
+  // /coverage claim nobody publishes it.
+  const matchedByMenuId = new Map(out.map((m) => [m.myMenuId, m.damId]));
+  const universe: UniverseRow[] = DAMS.map(({ myMenuId, name }) => ({
+    externalId: myMenuId,
+    name,
+    prefCode: PREF_CODE,
+    // This run's match when the page came back; otherwise resolve the
+    // catalogue name, and let recordUniverse's COALESCE keep an already
+    // stored link if that finds nothing.
+    resolvedDamId:
+      matchedByMenuId.get(myMenuId) ?? chooseMaster(name, normalizeName(name), masters),
+  }));
+  await recordUniverse(SOURCE_ID, universe);
 
   return out;
 }

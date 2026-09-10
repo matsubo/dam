@@ -19,6 +19,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const BASE_URL = process.env.TNDAM_HYOGO_URL ?? 'http://tndam.pref.hyogo.lg.jp/dam/DamData.jsp';
@@ -165,12 +166,21 @@ async function matchMaster(
     SELECT id, name, external_ids FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out: DamMatch[] = [];
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing.
+  const universe: UniverseRow[] = [];
 
   for (const r of readings) {
     const psnoKey = String(r.psno);
 
     const byExtId = masters.find((m) => m.external_ids?.[SOURCE_ID] === psnoKey);
     if (byExtId) {
+      universe.push({
+        externalId: psnoKey,
+        name: r.damName,
+        prefCode: PREF_CODE,
+        resolvedDamId: byExtId.id,
+      });
       out.push({ psno: r.psno, damId: byExtId.id });
       continue;
     }
@@ -191,6 +201,12 @@ async function matchMaster(
       }
     }
 
+    universe.push({
+      externalId: psnoKey,
+      name: r.damName,
+      prefCode: PREF_CODE,
+      resolvedDamId: best?.id ?? null,
+    });
     if (!best) {
       log(`${SOURCE_ID}: no master match for "${r.damName}" (PSNO=${r.psno})`);
       continue;
@@ -206,6 +222,24 @@ async function matchMaster(
     out.push({ psno: r.psno, damId: best.id });
   }
 
+  // The 6 DamData.jsp pages are the published catalogue, so record all of
+  // them — a dam whose page is offline ("0000/00/00", currently PSNO 2 and 4)
+  // parses to nothing but is still published, and must read as "published,
+  // unlinked" rather than "nobody publishes it". Resolution falls back to the
+  // external_ids stamp, which every dam matched on an earlier run carries.
+  const seen = new Set(readings.map((r) => r.psno));
+  for (const d of DAMS) {
+    if (seen.has(d.psno)) continue;
+    const psnoKey = String(d.psno);
+    universe.push({
+      externalId: psnoKey,
+      name: d.name,
+      prefCode: PREF_CODE,
+      resolvedDamId: masters.find((m) => m.external_ids?.[SOURCE_ID] === psnoKey)?.id ?? null,
+    });
+  }
+
+  await recordUniverse(SOURCE_ID, universe);
   return out;
 }
 
