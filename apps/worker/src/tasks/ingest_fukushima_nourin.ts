@@ -21,6 +21,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const PAGE_URL =
@@ -91,15 +92,24 @@ const NAME_RE = /(ダム|調整池|溜池|池|沼)$/;
 
 export function parseFukushimaNourinHtml(html: string): {
   reportDate: Date | null;
+  /** Rows with a usable 貯水率 — what we store. */
   rows: ParsedRow[];
+  /**
+   * Every dam the page lists, whether or not its rate was usable. This is the
+   * source's universe: 鉄山 / 坂下 (調査対象外) and 鴻の巣 (落水) are published
+   * by 福島県, so /coverage must not read them as published by nobody.
+   */
+  published: string[];
 } {
   const reportDate = parseNourinReportDate(html);
   const rows: ParsedRow[] = [];
+  const published: string[] = [];
 
   for (const cells of tableRows(html)) {
     if (cells.length < 4) continue;
     const name = cells[0] ?? '';
     if (!NAME_RE.test(name)) continue;
+    published.push(name);
 
     const pct = parsePercent(cells[3] ?? '');
     if (pct === null) continue;
@@ -111,7 +121,7 @@ export function parseFukushimaNourinHtml(html: string): {
     rows.push({ fukushimaName: name, storageRate: pct / 100 });
   }
 
-  return { reportDate, rows };
+  return { reportDate, rows, published };
 }
 
 // --- name matching ----------------------------------------------------------
@@ -200,7 +210,7 @@ const task: Task = async (_payload, helpers) => {
     return;
   }
 
-  const { reportDate, rows } = parseFukushimaNourinHtml(await r.text());
+  const { reportDate, rows, published } = parseFukushimaNourinHtml(await r.text());
   if (!reportDate) {
     log(`${SOURCE_ID}: no survey date in the page; aborting`);
     return;
@@ -210,6 +220,19 @@ const task: Task = async (_payload, helpers) => {
   const masters = await sql<{ id: bigint; name: string }[]>`
     SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
+
+  // What 福島県 publishes, matched or not, built from the page's whole dam list
+  // rather than the rows that carried a rate — a dam that is 調査対象外 this
+  // season is still published, and must not be read as published by nobody.
+  // The page gives no station ids, so the printed name is the external id and
+  // prefCode keeps it distinct from a same-named dam elsewhere.
+  const universe: UniverseRow[] = published.map((name) => ({
+    externalId: name,
+    name,
+    prefCode: PREF_CODE,
+    resolvedDamId: chooseMaster(name, masters),
+  }));
+  await recordUniverse(SOURCE_ID, universe);
 
   const inputs = [] as Parameters<typeof upsertObservations>[0];
   let unmatched = 0;

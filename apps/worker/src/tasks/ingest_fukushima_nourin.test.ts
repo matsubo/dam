@@ -85,6 +85,19 @@ describe('parseFukushimaNourinHtml', () => {
     for (const r of rows) expect(r.storageRate).toBeGreaterThan(0);
   });
 
+  test('reports every published dam row, unusable rate included', async () => {
+    // The universe is what 福島県 publishes, not what we could store: 鉄山 /
+    // 坂下 / 鴻の巣 are on the page, so /coverage must not read them as
+    // "nobody publishes this dam".
+    const { published, rows } = parseFukushimaNourinHtml(await fixtureHtml());
+    expect(published.length).toBe(29);
+    expect(published).toContain('鉄山ダム');
+    expect(published).toContain('坂下ダム');
+    expect(published).toContain('鴻の巣ダム');
+    expect(published).not.toContain('県平均');
+    expect(rows.length).toBe(26);
+  });
+
   test('skips the 県平均 summary row and the footnote row', async () => {
     const { rows } = parseFukushimaNourinHtml(await fixtureHtml());
     const names = rows.map((r) => r.fukushimaName);
