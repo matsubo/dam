@@ -17,6 +17,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const PAGE_URL =
@@ -104,6 +105,11 @@ interface DamMatch {
 
 async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
   const out: DamMatch[] = [];
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing. Keyed by
+  // name: one dam can appear in both the 水道用 and 工業用水 tables, and
+  // recordUniverse must see each published dam exactly once.
+  const universe = new Map<string, UniverseRow>();
   for (const r of rows) {
     const stem = normalizeName(r.pageName);
     if (!stem) continue;
@@ -119,6 +125,12 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
       LIMIT 1
     `;
     const r0 = cands[0];
+    universe.set(r.pageName, {
+      externalId: r.pageName,
+      name: r.pageName,
+      prefCode: PREF_CODE,
+      resolvedDamId: r0?.id ?? null,
+    });
     if (!r0) {
       log(`${SOURCE_ID}: no master match for ${r.pageName}`);
       continue;
@@ -132,6 +144,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
         AND COALESCE(external_ids->>${SOURCE_ID}, '') <> ${r.pageName}
     `;
   }
+  await recordUniverse(SOURCE_ID, [...universe.values()]);
   return out;
 }
 

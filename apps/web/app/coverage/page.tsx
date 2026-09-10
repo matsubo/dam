@@ -1,10 +1,23 @@
 // Coverage dashboard — tracks progress toward 100% real-observation
-// coverage across every master dam. The public-facing roadmap is /roadmap;
-// phase breakdown lives in the private issue tracker. Do not link the issue
-// tracker from rendered output — the repo is private, so visitors get a 404.
+// coverage across every master dam. See GitHub issue #1 for the roadmap;
+// sub-issues #2-#16 break it down by phase.
+//
+// Two metrics live here and they are NOT interchangeable: 実測 counts any
+// observation (a level-only feed counts), 貯水率取得 counts the dams we can
+// actually render a 貯水率 for. Both come from repo/coverage.ts, which the
+// home page shares.
+//
+// Do not link the issue tracker from rendered output — the repo is private,
+// so visitors get a 404. The public-facing roadmap is /roadmap.
 
 import { PREFECTURES } from '@dam/core/prefectures';
 import { sql } from '@dam/db/client';
+import {
+  coverageHeadline,
+  realtimeCoveragePct,
+  storageRateCoveragePct,
+} from '@dam/db/repo/coverage';
+import { coverageSummary } from '@dam/db/repo/source_universe';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
@@ -15,18 +28,11 @@ export const revalidate = 900;
 
 export const metadata: Metadata = {
   title: 'カバレッジ',
-  description: '全国 2,749 ダムに対する実測データ取得カバレッジ。ソース別・都道府県別の進捗。',
+  description: '全国のダムに対する実測データ取得カバレッジ。ソース別・都道府県別の進捗。',
   alternates: { canonical: '/coverage' },
 };
 
 const PREF_NAME = new Map(PREFECTURES.map((p) => [p.code, p.name]));
-
-interface Headline {
-  damTotal: bigint;
-  damsRealtime30d: bigint;
-  damsHistorical: bigint;
-  damsAnyEver: bigint;
-}
 
 interface SourceRow {
   sourceId: string;
@@ -43,17 +49,7 @@ interface PrefRow {
 
 async function loadCoverage() {
   const [headline, sources, prefs] = await Promise.all([
-    sql<Headline[]>`
-      SELECT
-        (SELECT COUNT(*) FROM dams)::BIGINT AS "damTotal",
-        (SELECT COUNT(DISTINCT dam_id) FROM observations
-         WHERE observed_at > NOW() - INTERVAL '30 days'
-           AND source_id <> 'synthetic')::BIGINT AS "damsRealtime30d",
-        (SELECT COUNT(DISTINCT dam_id) FROM observations
-         WHERE source_id <> 'synthetic')::BIGINT AS "damsHistorical",
-        (SELECT COUNT(DISTINCT dam_id) FROM observations
-         WHERE source_id <> 'synthetic')::BIGINT AS "damsAnyEver"
-    `,
+    coverageHeadline(),
     sql<SourceRow[]>`
       SELECT
         source_id AS "sourceId",
@@ -90,9 +86,7 @@ async function loadCoverage() {
       ORDER BY p.pref_code
     `,
   ]);
-  const h = headline[0];
-  if (!h) throw new Error('headline query returned no rows');
-  return { headline: h, sources, prefs };
+  return { headline, sources, prefs };
 }
 
 function pct(n: bigint, d: bigint): number {
@@ -124,11 +118,75 @@ function CoverageBar({ value }: { value: number }) {
   );
 }
 
+function HeadlineCard({
+  label,
+  pct,
+  value,
+  total,
+  note,
+}: {
+  label: string;
+  pct: number;
+  value: number;
+  total: number;
+  note: string;
+}) {
+  return (
+    <div className="bg-white border border-outline-variant rounded-xl p-5">
+      <div className="text-xs uppercase tracking-wider text-on-surface-variant mb-1">{label}</div>
+      <div className="text-3xl font-display font-semibold tabular-nums">{pct.toFixed(2)}%</div>
+      <div className="text-xs text-on-surface-variant mt-1">
+        {value.toLocaleString()} / {total.toLocaleString()} 基
+      </div>
+      <div className="mt-3">
+        <CoverageBar value={pct} />
+      </div>
+      <div className="text-xs text-on-surface-variant mt-3 leading-snug">{note}</div>
+    </div>
+  );
+}
+
+function TriageCard({
+  label,
+  value,
+  total,
+  tone,
+  note,
+}: {
+  label: string;
+  value: number;
+  total: number;
+  tone: 'ok' | 'action' | 'pending' | 'none';
+  note: string;
+}) {
+  const accent = {
+    ok: 'text-emerald-700',
+    action: 'text-orange-700',
+    pending: 'text-slate-500',
+    none: 'text-red-700',
+  }[tone];
+  const share = total > 0 ? (100 * value) / total : 0;
+  return (
+    <div className="bg-white border border-outline-variant rounded-xl p-4">
+      <div className="text-xs text-on-surface-variant mb-1">{label}</div>
+      <div className={`text-2xl font-display font-semibold tabular-nums ${accent}`}>
+        {value.toLocaleString()}
+      </div>
+      <div className="text-xs text-on-surface-variant tabular-nums">{share.toFixed(1)}%</div>
+      <div className="text-xs text-on-surface-variant mt-2 leading-snug">{note}</div>
+    </div>
+  );
+}
+
 export default async function CoveragePage() {
-  const { headline, sources, prefs } = await loadCoverage();
+  const [{ headline, sources, prefs }, triage] = await Promise.all([
+    loadCoverage(),
+    coverageSummary(),
+  ]);
   const total = headline.damTotal;
-  const rtPct = pct(headline.damsRealtime30d, total);
-  const histPct = pct(headline.damsHistorical, total);
+  const rtPct = realtimeCoveragePct(headline) ?? 0;
+  const ratePct = storageRateCoveragePct(headline) ?? 0;
+  const histPct = total > 0 ? (100 * headline.historicalDamCount) / total : 0;
   const sortedPrefs = [...prefs].sort(
     (a, b) => pct(a.damsCovered, a.damTotal) - pct(b.damsCovered, b.damTotal),
   );
@@ -139,6 +197,8 @@ export default async function CoveragePage() {
       <h1 className="text-2xl font-semibold mb-2">カバレッジ</h1>
       <p className="text-sm text-on-surface-variant mb-6">
         全国 <strong>{Number(total).toLocaleString()}</strong> ダムに対する実測データ取得状況。
+        「実測」は水位・雨量だけでも 1 基と数え、「貯水率取得」は貯水率を表示できるダムに限った、
+        より厳しい指標です（分母も河川管理ダムに限定）。数字が食い違って見えるのはこの定義差によるものです。
         今後の方針は{' '}
         <Link className="text-primary hover:underline" href="/roadmap">
           ロードマップ
@@ -161,36 +221,82 @@ export default async function CoveragePage() {
         </Link>
       </div>
 
-      <section className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
-        <div className="bg-white border border-outline-variant rounded-xl p-5">
-          <div className="text-xs uppercase tracking-wider text-on-surface-variant mb-1">
-            実測 (直近 30 日)
-          </div>
-          <div className="text-3xl font-display font-semibold tabular-nums">
-            {rtPct.toFixed(2)}%
-          </div>
-          <div className="text-xs text-on-surface-variant mt-1">
-            {Number(headline.damsRealtime30d).toLocaleString()} / {Number(total).toLocaleString()}{' '}
-            基
-          </div>
-          <div className="mt-3">
-            <CoverageBar value={rtPct} />
-          </div>
+      <section className="mb-10">
+        <h2 className="text-lg font-semibold mb-1">未取得ダムの内訳</h2>
+        <p className="text-sm text-on-surface-variant mb-4">
+          「取れていない」を、こちらの不具合で直せるものと、そもそもデータ提供元が無いものに分けます。
+          各データ提供元が公開しているダム一覧を記録し、マスタと突き合わせて判定しています。
+        </p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <TriageCard
+            label="取得済み"
+            value={triage.covered}
+            total={Number(total)}
+            tone="ok"
+            note="直近 30 日に観測値あり"
+          />
+          <TriageCard
+            label="公開されているが未取得"
+            value={triage.publishedNotIngested}
+            total={Number(total)}
+            tone="action"
+            note="提供元が公開済み・紐付けも済み。取り込み側の不具合"
+          />
+          <TriageCard
+            label="未調査"
+            value={triage.unknown}
+            total={Number(total)}
+            tone="pending"
+            note={`公開一覧が未記録の提供元が ${triage.sourcesPendingScan} 件残っている`}
+          />
+          <TriageCard
+            label="提供元なし"
+            value={triage.notPublished}
+            total={Number(total)}
+            tone="none"
+            note="全提供元の公開一覧に現れなかった"
+          />
         </div>
-        <div className="bg-white border border-outline-variant rounded-xl p-5">
-          <div className="text-xs uppercase tracking-wider text-on-surface-variant mb-1">
-            歴史データ含む (mudam 等)
-          </div>
-          <div className="text-3xl font-display font-semibold tabular-nums">
-            {histPct.toFixed(2)}%
-          </div>
-          <div className="text-xs text-on-surface-variant mt-1">
-            {Number(headline.damsHistorical).toLocaleString()} / {Number(total).toLocaleString()} 基
-          </div>
-          <div className="mt-3">
-            <CoverageBar value={histPct} />
-          </div>
-        </div>
+        {triage.sourcesPendingScan > 0 ? (
+          <p className="text-xs text-on-surface-variant mt-3 leading-relaxed">
+            <strong>判定は途中です。</strong> 公開一覧を記録済みのデータ提供元はまだ一部で、残り{' '}
+            {triage.sourcesPendingScan} 件が未記録です。そのため大半のダムは「未調査」に入り、
+            「提供元なし」は全提供元を記録し終えるまで確定しません。 提供元は公開しているのに
+            マスタと紐付いていない観測所は現在 {triage.unmatchedStations.toLocaleString()}{' '}
+            件で、これが手を付けられる作業対象です。
+          </p>
+        ) : null}
+        {triage.sourcesNotEnumerable > 0 ? (
+          <p className="text-xs text-on-surface-variant mt-2 leading-relaxed">
+            また、公開一覧を列挙できない提供元が {triage.sourcesNotEnumerable}{' '}
+            件あります（洪水時のみダムを掲載する県のポータルなど）。判定ゲートからは除外しているため、
+            その担当地域の「提供元なし」には保留が残ります。
+          </p>
+        ) : null}
+      </section>
+
+      <section className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
+        <HeadlineCard
+          label="実測 (直近 30 日)"
+          pct={rtPct}
+          value={headline.realtimeDamCount}
+          total={total}
+          note="何らかの観測値が届いているダム。水位・雨量だけの提供元も含みます。"
+        />
+        <HeadlineCard
+          label="貯水率取得 (直近 30 日)"
+          pct={ratePct}
+          value={headline.storageRateRiverDamCount}
+          total={headline.riverDamCount}
+          note="貯水率を表示できるダム。分母は河川管理ダム (堤高 15 m 以上)。トップページと同じ指標です。"
+        />
+        <HeadlineCard
+          label="歴史データ含む (mudam 等)"
+          pct={histPct}
+          value={headline.historicalDamCount}
+          total={total}
+          note="過去に一度でも実測が届いたダム。現在も更新中とは限りません。"
+        />
       </section>
 
       <section className="mb-10">

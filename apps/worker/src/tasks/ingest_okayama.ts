@@ -29,6 +29,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const BASE_URL = process.env.OKAYAMA_DAM_URL ?? 'https://www.bousai.pref.okayama.jp';
@@ -187,10 +188,19 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out: DamMatch[] = [];
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing.
+  const universe: UniverseRow[] = [];
   for (const r of rows) {
     const stem = normalizeName(r.observatoryName);
     if (!stem) continue;
     const damId = chooseMaster(stem, masters);
+    universe.push({
+      externalId: r.observatoryId,
+      name: r.observatoryName,
+      prefCode: PREF_CODE,
+      resolvedDamId: damId,
+    });
     if (!damId) {
       log(`${SOURCE_ID}: no master match for ${r.observatoryName} (${r.observatoryId})`);
       continue;
@@ -204,6 +214,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
         AND COALESCE(external_ids->>${SOURCE_ID}, '') <> ${r.observatoryId}
     `;
   }
+  await recordUniverse(SOURCE_ID, universe);
   return out;
 }
 

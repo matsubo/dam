@@ -28,6 +28,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const DATA_URL =
@@ -149,10 +150,21 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out: DamMatch[] = [];
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing. Every
+  // typeId=3 facility belongs here: the feed lists a dam whether or not this
+  // snapshot carried 貯水量/貯水率 for it.
+  const universe: UniverseRow[] = [];
   for (const r of rows) {
     const stem = normalizeName(r.facilityNm);
     if (!stem) continue;
     const damId = chooseMaster(stem, masters);
+    universe.push({
+      externalId: r.facilityId,
+      name: r.facilityNm,
+      prefCode: PREF_CODE,
+      resolvedDamId: damId,
+    });
     if (!damId) {
       log(`${SOURCE_ID}: no master match for ${r.facilityNm} (${r.facilityId})`);
       continue;
@@ -166,6 +178,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
         AND COALESCE(external_ids->>${SOURCE_ID}, '') <> ${r.facilityId}
     `;
   }
+  await recordUniverse(SOURCE_ID, universe);
   return out;
 }
 

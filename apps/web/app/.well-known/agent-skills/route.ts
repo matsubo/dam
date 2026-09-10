@@ -73,6 +73,49 @@ const SKILLS: Skill[] = [
     example_url: `${SITE_URL}/api/v1/dams/doushi-14/observations?from=2026-01-01T00:00:00Z&to=2026-05-01T00:00:00Z&interval=daily`,
   },
   {
+    id: 'list_observations',
+    name: 'List observations across all dams',
+    description:
+      'Cross-dam feed of raw hourly measurements for a time window, ordered by (observed_at, dam_id, source_id) and keyset-paginated. Built for sync/ingest clients that want every dam at once rather than one series at a time. Returns measured values only.',
+    endpoint: `${SITE_URL}/api/v1/observations`,
+    method: 'GET',
+    inputs: [
+      { name: 'from', in: 'query', required: true, description: 'ISO 8601 start timestamp' },
+      {
+        name: 'to',
+        in: 'query',
+        required: true,
+        description: 'ISO 8601 end timestamp (exclusive)',
+      },
+      {
+        name: 'cursor',
+        in: 'query',
+        description: 'Opaque pagination cursor — follow _links.next rather than building it',
+      },
+      { name: 'pageSize', in: 'query', description: '1-1000, default 100' },
+    ],
+    output_format: 'application/hal+json',
+    example_url: `${SITE_URL}/api/v1/observations?from=2026-05-01T00:00:00Z&to=2026-05-02T00:00:00Z`,
+  },
+  {
+    id: 'get_coverage_triage',
+    name: 'Explain why a dam has no data',
+    description:
+      "Per-dam triage of observation coverage. Separates 'a data provider publishes this dam and we are failing to ingest it' (actionable) from 'no provider publishes it'. IMPORTANT: while summary.sourcesPendingScan > 0 the triage is incomplete — dams report 'unknown' and 'not_published' is not yet a claim that nobody publishes them.",
+    endpoint: `${SITE_URL}/api/v1/coverage`,
+    method: 'GET',
+    inputs: [
+      {
+        name: 'status',
+        in: 'query',
+        description: "'covered' | 'published_not_ingested' | 'unknown' | 'not_published'",
+      },
+      { name: 'pref', in: 'query', description: 'JIS prefecture code (01-47)' },
+    ],
+    output_format: 'application/hal+json',
+    example_url: `${SITE_URL}/api/v1/coverage?status=published_not_ingested`,
+  },
+  {
     id: 'list_watersheds',
     name: 'List watersheds',
     description:

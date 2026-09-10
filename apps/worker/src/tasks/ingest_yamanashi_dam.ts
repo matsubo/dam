@@ -24,6 +24,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const BASE_URL =
@@ -144,6 +145,28 @@ interface DamMatch {
   damId: bigint;
 }
 
+/** Best master dam for a dam name, or null when nothing ranks. */
+function chooseMaster(name: string, masters: { id: bigint; name: string }[]): bigint | null {
+  const stem = normalizeName(name);
+  if (!stem) return null;
+
+  let best: { id: bigint; rank: number } | null = null;
+  for (const m of masters) {
+    const mStem = normalizeName(m.name);
+    let rank: number;
+    if (m.name === name) rank = 0;
+    else if (mStem === stem) rank = 1;
+    else if (m.name === `${stem}ダム`) rank = 2;
+    else if (mStem.startsWith(stem)) rank = 3;
+    else if (mStem.includes(stem)) rank = 4;
+    else continue;
+    if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
+      best = { id: m.id, rank };
+    }
+  }
+  return best?.id ?? null;
+}
+
 async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
   const masters = await sql<{ id: bigint; name: string }[]>`
     SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
@@ -151,30 +174,28 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
   const out: DamMatch[] = [];
 
   for (const r of rows) {
-    const stem = normalizeName(r.yamanashiName);
-    if (!stem) continue;
-
-    let best: { id: bigint; rank: number } | null = null;
-    for (const m of masters) {
-      const mStem = normalizeName(m.name);
-      let rank: number;
-      if (m.name === r.yamanashiName) rank = 0;
-      else if (mStem === stem) rank = 1;
-      else if (m.name === `${stem}ダム`) rank = 2;
-      else if (mStem.startsWith(stem)) rank = 3;
-      else if (mStem.includes(stem)) rank = 4;
-      else continue;
-      if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-        best = { id: m.id, rank };
-      }
-    }
-
-    if (!best) {
+    const damId = chooseMaster(r.yamanashiName, masters);
+    if (!damId) {
       log(`${SOURCE_ID}: no master match for "${r.yamanashiName}"`);
       continue;
     }
-    out.push({ yamanashiName: r.yamanashiName, damId: best.id });
+    out.push({ yamanashiName: r.yamanashiName, damId });
   }
+
+  // What this source publishes, matched or not — taken from the dam catalogue
+  // rather than this run's parsed rows, so a dam whose page failed to load
+  // still counts as published instead of reading as 提供元なし.
+  const universe: UniverseRow[] = [];
+  for (const d of DAMS) {
+    const damId = chooseMaster(d.name, masters);
+    universe.push({
+      externalId: d.code,
+      name: d.name,
+      prefCode: PREF_CODE,
+      resolvedDamId: damId,
+    });
+  }
+  await recordUniverse(SOURCE_ID, universe);
 
   return out;
 }

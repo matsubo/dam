@@ -24,6 +24,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const BASE_URL =
@@ -164,38 +165,67 @@ interface DamMatch {
   damId: bigint;
 }
 
+/**
+ * Best master dam for a name as this source publishes it: an exact raw-name
+ * hit beats stem equality, which beats the `〜ダム` spelling, a prefix, then a
+ * substring; ties go to the lowest master id. Extracted verbatim from the
+ * match loop so the catalogue can be resolved without re-implementing it.
+ */
+function chooseMaster(
+  publishedName: string,
+  masters: { id: bigint; name: string }[],
+): bigint | null {
+  const stem = normalizeName(publishedName);
+  if (!stem) return null;
+
+  let best: { id: bigint; rank: number } | null = null;
+  for (const m of masters) {
+    const mStem = normalizeName(m.name);
+    let rank: number;
+    if (m.name === publishedName) rank = 0;
+    else if (mStem === stem) rank = 1;
+    else if (m.name === `${stem}ダム`) rank = 2;
+    else if (mStem.startsWith(stem)) rank = 3;
+    else if (mStem.includes(stem)) rank = 4;
+    else continue;
+    if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
+      best = { id: m.id, rank };
+    }
+  }
+  return best?.id ?? null;
+}
+
 async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
   const masters = await sql<{ id: bigint; name: string }[]>`
     SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out: DamMatch[] = [];
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing. Built
+  // from STATION_MAP, the provider's whole catalogue, rather than from the
+  // rows that parsed this run: a station that has never reported would
+  // otherwise stay invisible and, once the scan gate closes, be reported as
+  // published by nobody. Keyed by the JSON station id the feed itself uses.
+  const universe: UniverseRow[] = Object.entries(STATION_MAP).map(([stationId, name]) => ({
+    externalId: stationId,
+    name,
+    prefCode: PREF_CODE,
+    resolvedDamId: chooseMaster(name, masters),
+  }));
 
   for (const r of rows) {
     const stem = normalizeName(r.fukushimaName);
     if (!stem) continue;
 
-    let best: { id: bigint; rank: number } | null = null;
-    for (const m of masters) {
-      const mStem = normalizeName(m.name);
-      let rank: number;
-      if (m.name === r.fukushimaName) rank = 0;
-      else if (mStem === stem) rank = 1;
-      else if (m.name === `${stem}ダム`) rank = 2;
-      else if (mStem.startsWith(stem)) rank = 3;
-      else if (mStem.includes(stem)) rank = 4;
-      else continue;
-      if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-        best = { id: m.id, rank };
-      }
-    }
-
-    if (!best) {
+    const damId = chooseMaster(r.fukushimaName, masters);
+    if (!damId) {
       log(`${SOURCE_ID}: no master match for "${r.fukushimaName}"`);
       continue;
     }
-    out.push({ fukushimaName: r.fukushimaName, damId: best.id });
+    out.push({ fukushimaName: r.fukushimaName, damId });
   }
 
+  await recordUniverse(SOURCE_ID, universe);
   return out;
 }
 

@@ -8,6 +8,7 @@ import {
   storageChange,
 } from '@dam/db/repo/dams';
 import { damSeasonalNorm } from '@dam/db/repo/seasonal';
+import { classifyOneDam } from '@dam/db/repo/source_universe';
 import { aggregateWatershed, findWatershedBySlug } from '@dam/db/repo/watersheds';
 import { ExternalLink } from 'lucide-react';
 import type { Metadata } from 'next';
@@ -65,7 +66,7 @@ export default async function DamDetail({ params }: PageProps) {
   const d = await findDamBySlug(slug);
   if (!d) notFound();
   const dn = damDisplayName(d.name);
-  const [latest, change, nearby, watershed, watershedDams, norm] = await Promise.all([
+  const [latest, change, nearby, watershed, watershedDams, norm, triage] = await Promise.all([
     latestObservation(d.id),
     storageChange(d.id),
     nearbyDams(d.id, 20_000, 6),
@@ -74,6 +75,9 @@ export default async function DamDetail({ params }: PageProps) {
       ? listDams({ watershedSlug: d.watershedSlug, pageSize: 12 })
       : Promise.resolve({ items: [], nextCursor: null }),
     damSeasonalNorm(d.id),
+    // Only consulted when there is nothing to show — answers "why is this
+    // dam empty?" instead of leaving the reader to guess.
+    classifyOneDam(d.id),
   ]);
   const watershedAgg = watershed ? await aggregateWatershed(watershed.id) : null;
   const otherInWatershed = watershedDams.items.filter((w) => w.id !== d.id).slice(0, 6);
@@ -183,7 +187,7 @@ export default async function DamDetail({ params }: PageProps) {
       <section className="border border-gray-200 rounded p-4 mb-8">
         <header className="flex items-baseline justify-between mb-3">
           <h2 className="text-lg font-semibold">最新観測値</h2>
-          {latest && latest.sourceId !== 'synthetic' && (
+          {latest && (
             <span className="text-sm text-muted inline-flex items-baseline gap-1.5">
               <span>{fmtDate(latest.observedAt)}</span>
               <SourceBadge sourceId={latest.sourceId} />
@@ -191,21 +195,7 @@ export default async function DamDetail({ params }: PageProps) {
             </span>
           )}
         </header>
-        {/* When the only available observation is synthetic, we suppress
-            the "latest value" block entirely. A synthetic observed_at
-            looks deceptively like a stale crawl ("最新観測値: 5/5") even
-            though it's just the seed timestamp. The chart below still
-            renders synthetic for shape. */}
-        {latest && latest.sourceId === 'synthetic' ? (
-          <p className="text-sm text-on-surface-variant">
-            このダムには実観測値の上流フィードが未接続です。下のグラフは推定値 (synthetic seed) を
-            表示しています。実測ソースとの紐付けは
-            <Link href="/sources" className="text-primary hover:underline mx-1">
-              データソース
-            </Link>
-            を参照。
-          </p>
-        ) : latest ? (
+        {latest ? (
           (() => {
             // Denominator policy: 利水容量 only — never mislabel a
             // total-capacity ratio as 貯水率. Prefer
@@ -296,11 +286,9 @@ export default async function DamDetail({ params }: PageProps) {
                     ) : null}
                   </dl>
                 </div>
-                {/* Drought callout — only when (a) the rate is below the
-                    same threshold the homepage drought banner uses, and
-                    (b) the source isn't 'synthetic' (we don't want to
-                    raise a drought alarm based on placeholder data). */}
-                {rate != null && rate < 0.4 && latest.sourceId !== 'synthetic' ? (
+                {/* Drought callout — only when the rate is below the same
+                    threshold the homepage drought banner uses. */}
+                {rate != null && rate < 0.4 ? (
                   <div
                     className={`mt-4 rounded-lg p-3 border ${
                       rate < 0.2
@@ -331,7 +319,10 @@ export default async function DamDetail({ params }: PageProps) {
             );
           })()
         ) : (
-          <p className="text-muted">まだ観測値がありません。</p>
+          <NoDataReason
+            status={triage?.status ?? 'unknown'}
+            publishedBy={triage?.publishedBy ?? []}
+          />
         )}
       </section>
 
@@ -607,5 +598,59 @@ function DamSpecs({ d }: { d: DamSpecData }) {
         {d.redevelopmentStatus ? <Pair label="再開発" value={d.redevelopmentStatus} /> : null}
       </dl>
     </section>
+  );
+}
+
+/**
+ * Why this dam has no reading. The distinction that matters to a reader is
+ * "nobody publishes this" versus "somebody does and we haven't got it yet" —
+ * and, crucially, "we haven't checked yet", which must never be dressed up
+ * as the first.
+ */
+function NoDataReason({ status, publishedBy }: { status: string; publishedBy: string[] }) {
+  if (status === 'published_not_ingested') {
+    return (
+      <div className="text-sm">
+        <p className="text-muted mb-1">まだ観測値がありません。</p>
+        <p className="text-on-surface-variant">
+          このダムのデータは{' '}
+          {publishedBy.map((s, i) => (
+            <span key={s}>
+              {i > 0 ? '、' : ''}
+              <Link className="text-primary hover:underline" href={`/sources/${s}`}>
+                {s}
+              </Link>
+            </span>
+          ))}{' '}
+          が公開しています。取り込み側の問題なので、こちらで対応します。
+        </p>
+      </div>
+    );
+  }
+  if (status === 'not_published') {
+    return (
+      <div className="text-sm">
+        <p className="text-muted mb-1">まだ観測値がありません。</p>
+        <p className="text-on-surface-variant">
+          現時点で、このダムの貯水量を公開しているデータ提供元が見つかっていません。
+          <Link className="text-primary hover:underline mx-1" href="/coverage">
+            カバレッジ
+          </Link>
+          に全体の内訳があります。
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="text-sm">
+      <p className="text-muted mb-1">まだ観測値がありません。</p>
+      <p className="text-on-surface-variant">
+        データを公開している提供元があるかどうかは調査中です (
+        <Link className="text-primary hover:underline" href="/coverage">
+          カバレッジ
+        </Link>
+        )。
+      </p>
+    </div>
   );
 }

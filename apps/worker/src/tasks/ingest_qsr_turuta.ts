@@ -21,6 +21,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const DATA_URL =
@@ -28,6 +29,8 @@ const DATA_URL =
 
 const PREF_CODE = '46';
 const SOURCE_ID = 'qsr-turuta-dam';
+/** The only dam this office publishes; the feed carries no station id. */
+const DAM_NAME = '鶴田ダム';
 
 // --- types ------------------------------------------------------------------
 
@@ -139,7 +142,7 @@ function normalizeName(s: string): string {
 }
 
 async function findDamId(log: (s: string) => void): Promise<bigint | null> {
-  const targetName = '鶴田ダム';
+  const targetName = DAM_NAME;
   const stem = normalizeName(targetName);
 
   const masters = await sql<{ id: bigint; name: string }[]>`
@@ -174,6 +177,15 @@ const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
   await ensureSourcePriority();
 
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing. Resolved
+  // before the fetch so a bad response still leaves a scan on record.
+  const damId = await findDamId(log);
+  await recordUniverse(SOURCE_ID, [
+    { externalId: DAM_NAME, name: DAM_NAME, prefCode: PREF_CODE, resolvedDamId: damId },
+  ]);
+  if (!damId) return;
+
   const r = await fetch(DATA_URL, {
     headers: {
       'user-agent':
@@ -197,9 +209,6 @@ const task: Task = async (_payload, helpers) => {
     return;
   }
   log(`${SOURCE_ID}: parsed row at ${row.observedAt.toISOString()}`);
-
-  const damId = await findDamId(log);
-  if (!damId) return;
 
   const written = await upsertObservations([
     {

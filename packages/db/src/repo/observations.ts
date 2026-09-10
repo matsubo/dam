@@ -61,20 +61,15 @@ export interface FindSeriesOptions {
   from: Date;
   to: Date;
   bucket: 'hourly' | 'daily' | 'monthly';
-  preferredSource?: string | null;
   /**
-   * Exclude rows with `source_id = 'synthetic'` (the placeholder seed used
-   * for dams without an upstream feed). Useful for API consumers who only
-   * want measured data. Hourly bucket only — the daily/monthly continuous
-   * aggregates collapse all sources and can't be filtered after the fact
-   * without re-aggregating raw observations.
+   * Restrict to one source. Null returns every source that has rows in the
+   * window, which is what the API's `all_sources=1` asks for.
    */
-  excludeSynthetic?: boolean;
+  preferredSource?: string | null;
 }
 
 async function findSeriesHourly(opts: FindSeriesOptions): Promise<SeriesPoint[]> {
   const preferred = opts.preferredSource ?? null;
-  const excludeSynthetic = opts.excludeSynthetic === true;
   return sql<SeriesPoint[]>`
     SELECT observed_at AS "observedAt",
            storage_volume_m3 AS "storageVolumeM3",
@@ -88,7 +83,7 @@ async function findSeriesHourly(opts: FindSeriesOptions): Promise<SeriesPoint[]>
       AND observed_at >= ${opts.from}
       AND observed_at <  ${opts.to}
       AND (${preferred}::text IS NULL OR source_id = ${preferred})
-      AND (NOT ${excludeSynthetic}::boolean OR source_id <> 'synthetic')
+      AND source_id <> 'synthetic'
     ORDER BY observed_at
   `;
 }
@@ -145,12 +140,12 @@ export interface FindWatershedSeriesOptions {
   to: Date;
   bucket: 'hourly' | 'daily' | 'monthly';
   /**
-   * Hourly bucket only — drops `source_id = 'synthetic'` rows from the
-   * per-dam input before bucketing, and skips per-dam source preference so
-   * every remaining real source surfaces. The watershed aggregate then
-   * reflects only dams whose values are actually measured.
+   * Hourly bucket only — skips the per-dam source preference so every source
+   * with rows in the window surfaces, rather than one pick per dam. This is
+   * what the API's `all_sources=1` asks for; it used to be spelled
+   * `exclude_synthetic`, back when the seed rows it also dropped existed.
    */
-  excludeSynthetic?: boolean;
+  allSources?: boolean;
 }
 
 /**
@@ -170,7 +165,7 @@ const HOURLY_LOOKBACK_MS = 48 * 60 * 60 * 1000;
 // hour) collapsed to whichever dams had already posted. Gapfill + locf carry
 // each dam's last known value forward so every bucket sums the same cohort.
 async function findWatershedSeriesHourly(opts: FindWatershedSeriesOptions): Promise<SeriesPoint[]> {
-  const excludeSynthetic = opts.excludeSynthetic === true;
+  const allSources = opts.allSources === true;
   const scanFrom = new Date(opts.from.valueOf() - HOURLY_LOOKBACK_MS);
   return sql<SeriesPoint[]>`
     WITH ds AS (SELECT id FROM dams WHERE watershed_id = ${opts.watershedId}),
@@ -180,10 +175,10 @@ async function findWatershedSeriesHourly(opts: FindWatershedSeriesOptions): Prom
     -- emptied the 1-week chart for most watersheds. Same fix as
     -- preferredSourceForDam() at the dam level, just resolved per dam in SQL.
     --
-    -- Best first: real data over synthetic seed rows, then sources that carry
-    -- a volume in this window (high-priority feeds can have their volumes
-    -- NULLed as phantoms), then source_priorities rank. Unranked sources are
-    -- kept as a last resort so a dam on an unlisted feed still counts.
+    -- Best first: sources that carry a volume in this window (high-priority
+    -- feeds can have their volumes NULLed as phantoms), then source_priorities
+    -- rank. Unranked sources are kept as a last resort so a dam on an unlisted
+    -- feed still counts.
     pref AS (
       SELECT DISTINCT ON (o.dam_id) o.dam_id, o.source_id
       FROM observations o
@@ -191,8 +186,8 @@ async function findWatershedSeriesHourly(opts: FindWatershedSeriesOptions): Prom
       LEFT JOIN source_priorities sp ON sp.source_id = o.source_id AND sp.active
       WHERE o.observed_at >= ${scanFrom}
         AND o.observed_at <  ${opts.to}
+        AND o.source_id <> 'synthetic'
       ORDER BY o.dam_id,
-               (o.source_id = 'synthetic'),
                (o.storage_volume_m3 IS NULL),
                (sp.priority IS NULL),
                sp.priority DESC NULLS LAST
@@ -211,8 +206,8 @@ async function findWatershedSeriesHourly(opts: FindWatershedSeriesOptions): Prom
       LEFT JOIN pref ON pref.dam_id = o.dam_id
       WHERE o.observed_at >= ${scanFrom}
         AND o.observed_at <  ${opts.to}
-        AND (${excludeSynthetic}::boolean OR o.source_id = pref.source_id)
-        AND (NOT ${excludeSynthetic}::boolean OR o.source_id <> 'synthetic')
+        AND (${allSources}::boolean OR o.source_id = pref.source_id)
+        AND o.source_id <> 'synthetic'
       GROUP BY bucket, o.dam_id
     )
     SELECT bucket AS "observedAt",
@@ -269,4 +264,112 @@ export async function findWatershedSeries(
   if (opts.bucket === 'hourly') return findWatershedSeriesHourly(opts);
   if (opts.bucket === 'daily') return findWatershedSeriesDaily(opts);
   return findWatershedSeriesMonthly(opts);
+}
+
+/**
+ * Keyset position in the cross-dam feed. The observations PK is
+ * `(dam_id, observed_at, source_id)`, so a single scalar cursor cannot
+ * address a row — the feed pages on the full tuple instead.
+ */
+export interface ObservationCursor {
+  observedAt: Date;
+  damId: bigint;
+  sourceId: string;
+}
+
+/**
+ * One raw observation with its dam attached. NUMERIC columns are cast to
+ * TEXT in the query, so the values are decimal strings — never rounded
+ * through a JS float on the way out.
+ */
+export interface ObservationRow {
+  observedAt: Date;
+  damId: bigint;
+  damSlug: string;
+  damName: string;
+  sourceId: string;
+  storageVolumeM3: string | null;
+  storageRate: string | null;
+  inflowM3s: string | null;
+  outflowM3s: string | null;
+  waterLevelM: string | null;
+  rainfallMm: string | null;
+  qualityFlag: number;
+}
+
+export interface FindObservationsPageOptions {
+  from: Date;
+  /** Exclusive, matching findSeries(). */
+  to: Date;
+  pageSize: number;
+  /** Position from the previous page; null starts at `from`. */
+  after?: ObservationCursor | null;
+}
+
+export interface ObservationsPage {
+  items: ObservationRow[];
+  nextCursor: ObservationCursor | null;
+}
+
+/**
+ * Cross-dam raw observation feed, ordered by `(observed_at, dam_id, source_id)`
+ * and paged on that same tuple.
+ *
+ * Like every other read path here it drops `source_id = 'synthetic'`: prod
+ * holds no such rows (verified 2026-09-09) and the seeder only runs behind an
+ * explicit BOOTSTRAP_SEED_SYNTHETIC=1, but the predicate keeps a deliberate
+ * local seed from leaking into a feed whose contract is "measured values".
+ *
+ * Paging cost, measured against compressed chunks (0014 compresses anything
+ * older than 30 days, `segmentby = dam_id`): ChunkAppend stops at the first
+ * chunk that satisfies the LIMIT, and segment min/max metadata prunes batches
+ * inside it — so a page costs O(rows from the cursor to the end of the current
+ * 14-day chunk), NOT O(window width). Decompression dominates that cost, which
+ * makes a large `pageSize` strictly cheaper per row when draining history.
+ */
+export async function findObservationsPage(
+  opts: FindObservationsPageOptions,
+): Promise<ObservationsPage> {
+  const limit = Math.max(1, Math.min(1000, opts.pageSize));
+  const after = opts.after ?? null;
+  // Advancing the lower bound to the cursor's timestamp keeps TimescaleDB's
+  // chunk exclusion in play: a row-constructor comparison alone doesn't prune
+  // the 14-day chunks already behind us.
+  const from = after !== null && after.observedAt > opts.from ? after.observedAt : opts.from;
+  const afterAt = after?.observedAt ?? null;
+  const afterDamId = after?.damId ?? null;
+  const afterSourceId = after?.sourceId ?? null;
+
+  const rows = await sql<ObservationRow[]>`
+    SELECT o.observed_at            AS "observedAt",
+           o.dam_id                 AS "damId",
+           d.slug                   AS "damSlug",
+           d.name                   AS "damName",
+           o.source_id              AS "sourceId",
+           o.storage_volume_m3::TEXT AS "storageVolumeM3",
+           o.storage_rate::TEXT      AS "storageRate",
+           o.inflow_m3s::TEXT        AS "inflowM3s",
+           o.outflow_m3s::TEXT       AS "outflowM3s",
+           o.water_level_m::TEXT     AS "waterLevelM",
+           o.rainfall_mm::TEXT       AS "rainfallMm",
+           o.quality_flag           AS "qualityFlag"
+    FROM observations o
+    JOIN dams d ON d.id = o.dam_id
+    WHERE o.observed_at >= ${from}
+      AND o.observed_at <  ${opts.to}
+      AND o.source_id <> 'synthetic'
+      AND (${afterAt}::timestamptz IS NULL
+           OR (o.observed_at, o.dam_id, o.source_id)
+              > (${afterAt}::timestamptz, ${afterDamId}::bigint, ${afterSourceId}::text))
+    ORDER BY o.observed_at, o.dam_id, o.source_id
+    LIMIT ${limit + 1}
+  `;
+
+  const items = rows.slice(0, limit);
+  const last = items[items.length - 1];
+  const nextCursor =
+    rows.length > limit && last
+      ? { observedAt: last.observedAt, damId: last.damId, sourceId: last.sourceId }
+      : null;
+  return { items, nextCursor };
 }

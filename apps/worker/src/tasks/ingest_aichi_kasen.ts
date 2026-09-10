@@ -13,6 +13,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const DATA_URL = process.env.AICHI_KASEN_DAM_URL ?? 'https://www.kasen-aichi.jp/DamHis_10_0_1.html';
@@ -176,6 +177,32 @@ interface DamMatch {
   damId: bigint;
 }
 
+/**
+ * Pick the best master dam for a published name: an exact raw-name hit beats a
+ * stem hit beats a prefix/substring hit, ties going to the lower id.
+ */
+function chooseMaster(
+  rawName: string,
+  stem: string,
+  masters: { id: bigint; name: string }[],
+): bigint | null {
+  let best: { id: bigint; rank: number } | null = null;
+  for (const m of masters) {
+    const mStem = normalizeName(m.name);
+    let rank: number;
+    if (m.name === rawName) rank = 0;
+    else if (mStem === stem) rank = 1;
+    else if (m.name === `${stem}ダム`) rank = 2;
+    else if (mStem.startsWith(stem)) rank = 3;
+    else if (mStem.includes(stem)) rank = 4;
+    else continue;
+    if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
+      best = { id: m.id, rank };
+    }
+  }
+  return best?.id ?? null;
+}
+
 async function matchMaster(names: string[], log: (s: string) => void): Promise<DamMatch[]> {
   const masters = await sql<{ id: bigint; name: string }[]>`
     SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
@@ -186,27 +213,27 @@ async function matchMaster(names: string[], log: (s: string) => void): Promise<D
     const stem = normalizeName(damName);
     if (!stem) continue;
 
-    let best: { id: bigint; rank: number } | null = null;
-    for (const m of masters) {
-      const mStem = normalizeName(m.name);
-      let rank: number;
-      if (m.name === damName) rank = 0;
-      else if (mStem === stem) rank = 1;
-      else if (m.name === `${stem}ダム`) rank = 2;
-      else if (mStem.startsWith(stem)) rank = 3;
-      else if (mStem.includes(stem)) rank = 4;
-      else continue;
-      if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-        best = { id: m.id, rank };
-      }
-    }
-
-    if (!best) {
+    const damId = chooseMaster(damName, stem, masters);
+    if (!damId) {
       log(`${SOURCE_ID}: no master match for "${damName}"`);
       continue;
     }
-    out.push({ damName, damId: best.id });
+    out.push({ damName, damId });
   }
+
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing. Built
+  // from DAM_NAMES, the fixed column pair the page always carries, rather
+  // than from `names`: a dam sitting at 欠測 for the whole window parses to
+  // no rows at all, and recording only the parsed subset would eventually
+  // have /coverage claim nobody publishes it.
+  const universe: UniverseRow[] = DAM_NAMES.map((damName) => ({
+    externalId: damName,
+    name: damName,
+    prefCode: PREF_CODE,
+    resolvedDamId: chooseMaster(damName, normalizeName(damName), masters),
+  }));
+  await recordUniverse(SOURCE_ID, universe);
 
   return out;
 }

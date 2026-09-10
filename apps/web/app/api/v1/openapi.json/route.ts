@@ -103,20 +103,34 @@ const components = {
         '`json` (HAL+JSON, 既定) または `csv`。CSV は `Content-Disposition: attachment` で返却。',
       schema: { type: 'string', enum: ['json', 'csv'], default: 'json' },
     },
-    ExcludeSynthetic: {
+    AllSources: {
       in: 'query',
-      name: 'exclude_synthetic',
+      name: 'all_sources',
       required: false,
       description:
-        '`1` / `true` を指定すると、シード値 (`source_id = "synthetic"`) を除外し、複数の実測ソース (例: `tokyo-waterworks` + `jwa-junpo`) を同時に返します。`hourly` バケット時のみ有効。',
+        '`1` / `true` を指定すると、優先度最上位の 1 ソースだけでなく、そのウィンドウに値を持つ全ソース (例: `tokyo-waterworks` + `jwa-junpo`) を返します。`hourly` バケット時のみ有効。',
       schema: { type: 'string', enum: ['0', '1', 'true', 'false'] },
+    },
+    ObservationCursor: {
+      in: 'query',
+      name: 'cursor',
+      description:
+        'ページング用カーソル。前のレスポンスの `_links.next` (または `Link: rel="next"` ヘッダ) から取得します。`(observed_at, dam_id, source_id)` を base64url で符号化した不透明値で、クライアントが組み立てるものではありません。',
+      required: false,
+      schema: { type: 'string', example: 'MjA5OS0wMi0wMVQwMDowMDowMC4wMDBafDg4NTJ8a2FzZW5ib3NhaQ' },
+    },
+    ObservationPageSize: {
+      in: 'query',
+      name: 'pageSize',
+      description: '1 ページあたりの件数 (1〜1000, 既定 100)',
+      required: false,
+      schema: { type: 'integer', minimum: 1, maximum: 1000, default: 100 },
     },
     RealDataOnly: {
       in: 'query',
       name: 'real',
       required: false,
-      description:
-        '`1` / `true` を指定すると、直近 30 日に非 synthetic 観測値があるダムのみを返します。',
+      description: '`1` / `true` を指定すると、直近 30 日に実測値があるダムのみを返します。',
       schema: { type: 'string', enum: ['0', '1', 'true', 'false'] },
     },
     SourceFilter: {
@@ -364,7 +378,7 @@ const components = {
             dataRealness: {
               type: 'object',
               description:
-                '実測データの有無。`hasRealDataLast30d` が true の場合、直近 30 日に `synthetic` 以外のソースからの観測値あり。',
+                '実測データの有無。`hasRealDataLast30d` が true の場合、直近 30 日に上流ソースからの観測値あり。',
               required: ['hasRealDataLast30d', 'realSourceId'],
               properties: {
                 hasRealDataLast30d: { type: 'boolean', example: true },
@@ -372,7 +386,7 @@ const components = {
                   type: 'string',
                   nullable: true,
                   description:
-                    '直近 30 日で最新の非 synthetic 観測値の source_id (`tokyo-waterworks`, `jwa-junpo`, 等)。',
+                    '直近 30 日で最新の観測値の source_id (`tokyo-waterworks`, `jwa-junpo`, 等)。',
                   example: 'tokyo-waterworks',
                 },
               },
@@ -435,6 +449,118 @@ const components = {
           properties: { _links: { $ref: '#/components/schemas/HalLinks' } },
         },
       ],
+    },
+
+    FeedObservation: {
+      type: 'object',
+      description:
+        'ダム横断フィードの 1 行。`observations` ハイパーテーブルの生の行に、ダムの識別子とリンクを添えたもの。集計バケットは通りません。',
+      required: ['damId', 'damSlug', 'observedAt', 'sourceId', 'qualityFlag'],
+      allOf: [
+        {
+          type: 'object',
+          properties: {
+            damId: {
+              type: 'string',
+              description: 'ダムの内部 ID (bigint を文字列化)',
+              example: '7163',
+            },
+            damSlug: { type: 'string', example: 'doushi-14' },
+            damName: { type: 'string', example: '道志' },
+          },
+        },
+        { $ref: '#/components/schemas/Observation' },
+        {
+          type: 'object',
+          properties: {
+            // Item-level links, so HalLinks (which requires `self`) doesn't fit:
+            // the item is not itself an addressable resource, it points at its dam.
+            _links: {
+              type: 'object',
+              required: ['dam'],
+              additionalProperties: { $ref: '#/components/schemas/HalLink' },
+              properties: {
+                dam: { $ref: '#/components/schemas/HalLink' },
+                observations: { $ref: '#/components/schemas/HalLink' },
+              },
+            },
+          },
+        },
+      ],
+    },
+
+    CoverageItem: {
+      type: 'object',
+      description: 'ダム 1 基のカバレッジ判定。',
+      required: ['damId', 'slug', 'name', 'status'],
+      properties: {
+        damId: { type: 'string', example: '7163' },
+        slug: { type: 'string', example: 'doushi-14' },
+        name: { type: 'string', example: '道志' },
+        prefCode: { type: 'string', nullable: true, example: '14' },
+        status: {
+          type: 'string',
+          enum: ['covered', 'published_not_ingested', 'unknown', 'not_published'],
+          description:
+            '`covered` 取得済み / `published_not_ingested` 提供元は公開・紐付けも済みだが観測値が入っていない (取り込み側の不具合) / `unknown` 未調査 / `not_published` 全提供元の公開一覧に現れなかった',
+          example: 'published_not_ingested',
+        },
+        publishedBy: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'このダムを公開一覧に載せているデータ提供元の source_id。',
+          example: ['okayama-bousai'],
+        },
+        _links: { $ref: '#/components/schemas/HalLinks' },
+      },
+    },
+
+    CoverageResponse: {
+      type: 'object',
+      required: ['summary', 'items', 'count', '_links'],
+      properties: {
+        summary: {
+          type: 'object',
+          properties: {
+            covered: { type: 'integer' },
+            publishedNotIngested: { type: 'integer' },
+            unknown: { type: 'integer' },
+            notPublished: { type: 'integer' },
+            unmatchedStations: {
+              type: 'integer',
+              description: '提供元は公開しているのにマスタと紐付いていない観測所の数。',
+            },
+            sourcesPendingScan: {
+              type: 'integer',
+              description:
+                'まだ公開一覧を記録していないデータ提供元の数。**これが 0 より大きい間、`notPublished` は「どこも公開していない」ことの証明にならない** — 単にまだ調べていないだけ。',
+            },
+            sourcesNotEnumerable: {
+              type: 'integer',
+              description:
+                '公開一覧を列挙できない提供元の数 (例: 洪水時のみダムを掲載する県のポータル)。判定ゲートからは除外しているため、その担当地域の `notPublished` には保留が残る。',
+            },
+          },
+        },
+        statusMeanings: {
+          type: 'object',
+          additionalProperties: { type: 'string' },
+          description: '各 status の意味 (日本語)。',
+        },
+        items: { type: 'array', items: { $ref: '#/components/schemas/CoverageItem' } },
+        count: { type: 'integer' },
+        _links: { $ref: '#/components/schemas/HalLinks' },
+      },
+    },
+
+    ObservationFeedResponse: {
+      type: 'object',
+      required: ['items', 'count', '_links'],
+      properties: {
+        items: { type: 'array', items: { $ref: '#/components/schemas/FeedObservation' } },
+        count: { type: 'integer', description: 'このページの件数', example: 100 },
+        _links: { $ref: '#/components/schemas/HalLinks' },
+      },
     },
 
     ObservationsResponse: {
@@ -724,6 +850,105 @@ const paths = {
     },
   },
 
+  '/api/v1/coverage': {
+    get: {
+      summary: 'ダム別カバレッジ判定',
+      tags: ['dams'],
+      description:
+        '「観測値が無い」理由をダム単位で切り分けます。データ提供元が公開しているダム一覧を記録し、マスタと突き合わせた結果を返します。\n\n**重要:** `summary.sourcesPendingScan` が 0 より大きい間は判定が未完了です。公開一覧をまだ記録していない提供元が残っているため、`not_published` (提供元なし) は確定しません。その状態のダムは `unknown` (未調査) になります。「未調査」を「提供なし」と読み替えないでください。',
+      parameters: [
+        {
+          in: 'query',
+          name: 'status',
+          required: false,
+          description: '判定でフィルタ。',
+          schema: {
+            type: 'string',
+            enum: ['covered', 'published_not_ingested', 'unknown', 'not_published'],
+          },
+        },
+        { $ref: '#/components/parameters/PrefCode' },
+      ],
+      responses: {
+        '200': {
+          description: 'OK',
+          content: {
+            'application/hal+json': {
+              schema: { $ref: '#/components/schemas/CoverageResponse' },
+            },
+          },
+        },
+        ...ERR_RESPONSES,
+      },
+    },
+  },
+
+  '/api/v1/observations': {
+    get: {
+      summary: 'ダム横断の計測値フィード',
+      tags: ['observations'],
+      description:
+        '全ダムの生の観測値 (1 時間粒度) を `from`〜`to` のウィンドウで返します。ダムを指定せずに取り込みたい同期クライアント向け。`(observed_at, dam_id, source_id)` 昇順で、keyset カーソルによりページングします。返すのは実測値のみです。単一ダムの時系列やグラフ用途、集計バケット (`daily` / `monthly`)、CSV が必要な場合は `/api/v1/dams/{slug}/observations` を使ってください。\n\n30 日より古いデータは TimescaleDB の圧縮チャンクに載るため、1 ページの取得コストは `pageSize` ではなく「カーソル位置から現在の 14 日チャンク末尾まで」の行数に比例します (それより後のチャンクは走査されません)。過去データを大量に取り込む場合は `pageSize` を大きく (1000) 取るほど総コストが下がります。',
+      parameters: [
+        { $ref: '#/components/parameters/From' },
+        { $ref: '#/components/parameters/To' },
+        { $ref: '#/components/parameters/ObservationCursor' },
+        { $ref: '#/components/parameters/ObservationPageSize' },
+      ],
+      responses: {
+        '200': {
+          description: 'OK',
+          headers: {
+            Link: {
+              description: 'RFC 5988 ページネーション (`rel="next"`)。最終ページでは付きません。',
+              schema: { type: 'string' },
+            },
+          },
+          content: {
+            'application/hal+json': {
+              schema: { $ref: '#/components/schemas/ObservationFeedResponse' },
+              example: {
+                items: [
+                  {
+                    damId: '7163',
+                    damSlug: 'doushi-14',
+                    damName: '道志',
+                    observedAt: '2026-05-01T00:00:00.000Z',
+                    sourceId: 'kasenbosai',
+                    storageVolumeM3: '590432.10',
+                    storageRate: '0.9580',
+                    inflowM3s: '0.755',
+                    outflowM3s: '0.652',
+                    waterLevelM: null,
+                    rainfallMm: null,
+                    qualityFlag: 0,
+                    _links: {
+                      dam: { href: '/api/v1/dams/doushi-14' },
+                      observations: {
+                        href: '/api/v1/dams/doushi-14/observations{?from,to,interval}',
+                        templated: true,
+                      },
+                    },
+                  },
+                ],
+                count: 100,
+                _links: {
+                  self: {
+                    href: '/api/v1/observations?from=2026-05-01T00:00:00Z&to=2026-05-02T00:00:00Z',
+                  },
+                  next: {
+                    href: '/api/v1/observations?from=2026-05-01T00:00:00Z&to=2026-05-02T00:00:00Z&cursor=MjAyNi0wNS0wMVQwMDowMDowMC4wMDBafDcxNjN8a2FzZW5ib3NhaQ',
+                  },
+                },
+              },
+            },
+          },
+        },
+        ...ERR_RESPONSES,
+      },
+    },
+  },
+
   '/api/v1/dams/{slug}/observations': {
     get: {
       summary: 'ダムの貯水量履歴 (時系列)',
@@ -736,7 +961,7 @@ const paths = {
         { $ref: '#/components/parameters/To' },
         { $ref: '#/components/parameters/Interval' },
         { $ref: '#/components/parameters/Format' },
-        { $ref: '#/components/parameters/ExcludeSynthetic' },
+        { $ref: '#/components/parameters/AllSources' },
       ],
       responses: {
         '200': {
@@ -883,7 +1108,7 @@ const paths = {
         { $ref: '#/components/parameters/To' },
         { $ref: '#/components/parameters/Interval' },
         { $ref: '#/components/parameters/Format' },
-        { $ref: '#/components/parameters/ExcludeSynthetic' },
+        { $ref: '#/components/parameters/AllSources' },
       ],
       responses: {
         '200': {

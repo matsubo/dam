@@ -6,6 +6,8 @@
  *
  * - one watershed whose boundary covers central Tokyo (the point api.spec
  *   probes), with one of the migrated dams attached;
+ * - one dam with a 利水容量 and a fresh 貯水量 observation, so 全国貯水率 and
+ *   the coverage tiles have something to render;
  * - 利根川 (一級, 830303) and 堤川 (二級, 020036) under their master codes,
  *   each with one migrated dam attached, so watershed-kind.spec can check the
  *   河川法 classification on a fresh database. Migration 0041 only UPDATEs
@@ -85,6 +87,28 @@ try {
       WHERE slug = ${w.damSlug} AND watershed_id IS NULL
     `;
   }
+
+  // One observed dam so the rate/coverage paths render a real number instead
+  // of '—'. coverage-consistency.spec compares those numbers across pages.
+  // Hour-truncated timestamp keeps the insert idempotent within a run while
+  // staying inside the 7-day freshness window.
+  await sql`
+    UPDATE dams SET active_capacity_m3 = 1000000
+    WHERE slug = 'amagase-26' AND active_capacity_m3 IS NULL
+  `;
+  await sql`
+    INSERT INTO observations (observed_at, dam_id, source_id, storage_volume_m3)
+    SELECT date_trunc('hour', NOW()), id, 'e2e-fixture', 400000
+    FROM dams WHERE slug = 'amagase-26'
+    ON CONFLICT (dam_id, observed_at, source_id) DO NOTHING
+  `;
+  // A second rate-able dam with NO observation. 全国貯水率 must ignore its
+  // capacity entirely: with it in the denominator the rate halves, which is
+  // exactly the bug coverage-consistency.spec guards against.
+  await sql`
+    UPDATE dams SET active_capacity_m3 = 1000000
+    WHERE slug = 'kechi-42' AND active_capacity_m3 IS NULL
+  `;
 } finally {
   await sql.end();
 }

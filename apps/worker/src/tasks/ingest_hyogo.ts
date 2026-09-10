@@ -14,6 +14,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const CSV_URL =
@@ -126,10 +127,21 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out: DamMatch[] = [];
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing. Keyed by
+  // 観測所名 (the CSV's 局番号 never reaches ParsedRow) so a repeated station
+  // can't break the upsert.
+  const universe = new Map<string, UniverseRow>();
   for (const r of rows) {
     const stem = normalizeName(r.hyogoName);
     if (!stem) continue;
     const damId = chooseMaster(stem, masters);
+    universe.set(r.hyogoName, {
+      externalId: r.hyogoName,
+      name: r.hyogoName,
+      prefCode: PREF_CODE,
+      resolvedDamId: damId,
+    });
     if (!damId) {
       log(`${SOURCE_ID}: no master match for ${r.hyogoName}`);
       continue;
@@ -143,6 +155,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
         AND COALESCE(external_ids->>${SOURCE_ID}, '') <> ${r.hyogoName}
     `;
   }
+  await recordUniverse(SOURCE_ID, [...universe.values()]);
   return out;
 }
 

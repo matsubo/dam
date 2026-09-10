@@ -26,6 +26,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import { unzipSync } from 'fflate';
 import type { Task } from 'graphile-worker';
 
@@ -246,6 +247,11 @@ const task: Task = async (payload, helpers) => {
   log(`${SOURCE_ID}: found ${resources.length} ZIP resources`);
 
   let totalWritten = 0;
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing. Keyed by
+  // name because every monthly ZIP repeats the same handful of dams, and
+  // recordUniverse must see each one exactly once.
+  const universe = new Map<string, UniverseRow>();
 
   for (const res of resources) {
     const year = extractYearFromResourceName(res.name);
@@ -294,6 +300,14 @@ const task: Task = async (payload, helpers) => {
     }
 
     const damIdByName = await resolveDamIds([...allDamNames], log);
+    for (const damName of allDamNames) {
+      universe.set(damName, {
+        externalId: damName,
+        name: damName,
+        prefCode: PREF_CODE,
+        resolvedDamId: damIdByName.get(damName) ?? null,
+      });
+    }
 
     // Upsert in batches
     const inputs = [] as Parameters<typeof upsertObservations>[0];
@@ -325,6 +339,8 @@ const task: Task = async (payload, helpers) => {
 
     log(`${SOURCE_ID}: ${res.name} — parsed=${allRows.length} written≈${inputs.length}`);
   }
+
+  await recordUniverse(SOURCE_ID, [...universe.values()]);
 
   log(`${SOURCE_ID} backfill done: total written≈${totalWritten}`);
 };

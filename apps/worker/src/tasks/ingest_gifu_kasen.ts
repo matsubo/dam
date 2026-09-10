@@ -15,6 +15,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const DATA_URL = process.env.GIFU_KASEN_DAM_URL ?? 'https://www.kasen.pref.gifu.lg.jp/h/Dam.html';
@@ -119,6 +120,10 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     SELECT id, name FROM dams ORDER BY id
   `;
   const out: DamMatch[] = [];
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing. Keyed by
+  // name so a page that repeats a section can't break the upsert.
+  const universe = new Map<string, UniverseRow>();
 
   for (const r of rows) {
     const stem = normalizeName(r.gifuName);
@@ -139,6 +144,16 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
       }
     }
 
+    // The page publishes no station id, so the name is the key. `prefCode`
+    // stays null on purpose: this list spans 岐阜/愛知/長野 (矢作・牧尾・味噌川),
+    // so no single code would be true for it — and the names are distinct.
+    universe.set(r.gifuName, {
+      externalId: r.gifuName,
+      name: r.gifuName,
+      prefCode: null,
+      resolvedDamId: best?.id ?? null,
+    });
+
     if (!best) {
       log(`${SOURCE_ID}: no master match for "${r.gifuName}"`);
       continue;
@@ -147,6 +162,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     out.push({ gifuName: r.gifuName, damId: best.id });
   }
 
+  await recordUniverse(SOURCE_ID, [...universe.values()]);
   return out;
 }
 

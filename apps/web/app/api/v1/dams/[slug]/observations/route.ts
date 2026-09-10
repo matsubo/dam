@@ -13,11 +13,11 @@ const Query = z.object({
   interval: z.enum(['hourly', 'daily', 'monthly']),
   format: z.enum(['json', 'csv']).optional(),
   /**
-   * '1' / 'true' excludes synthetic-seed rows (hourly bucket only — daily
-   * and monthly continuous aggregates collapse all sources and would need
-   * a separate raw-observation rollup to filter cleanly).
+   * '1' / 'true' returns every source that has rows in the window instead of
+   * the single highest-priority one. Hourly bucket only — the daily/monthly
+   * continuous aggregates already collapse all sources into 'aggregate'.
    */
-  exclude_synthetic: z.enum(['0', '1', 'true', 'false']).optional(),
+  all_sources: z.enum(['0', '1', 'true', 'false']).optional(),
 });
 
 function toCsv(slug: string, series: SeriesPoint[]): string {
@@ -61,7 +61,7 @@ export async function GET(
       to: url.searchParams.get('to'),
       interval: url.searchParams.get('interval'),
       format: url.searchParams.get('format') ?? undefined,
-      exclude_synthetic: url.searchParams.get('exclude_synthetic') ?? undefined,
+      all_sources: url.searchParams.get('all_sources') ?? undefined,
     });
     if (!parsed.success) throw new HttpError(400, 'Invalid query');
     const from = new Date(parsed.data.from);
@@ -74,16 +74,15 @@ export async function GET(
     const dam = damRows[0];
     if (!dam) throw new HttpError(404, 'Dam not found');
 
-    const excludeSynthetic =
-      parsed.data.exclude_synthetic === '1' || parsed.data.exclude_synthetic === 'true';
+    const allSources = parsed.data.all_sources === '1' || parsed.data.all_sources === 'true';
     // The default hourly path picks the highest-priority source that
     // actually has observations FOR THIS DAM in the window, so the chart
     // shows a single coherent series. Falling back to a global pick (the
     // earlier behaviour) caused empty hourly graphs for any dam whose data
-    // lived under a non-top-priority source. exclude_synthetic explicitly
-    // wants every non-synthetic point — bypass the source filter then.
+    // lived under a non-top-priority source. all_sources=1 asks for every
+    // source at once (e.g. tokyo-waterworks + jwa-junpo) — skip the pick.
     const preferred =
-      parsed.data.interval === 'hourly' && !excludeSynthetic
+      parsed.data.interval === 'hourly' && !allSources
         ? await preferredSourceForDam(dam.id, from, to)
         : null;
     const series = await findSeries({
@@ -92,7 +91,6 @@ export async function GET(
       to,
       bucket: parsed.data.interval,
       preferredSource: preferred,
-      excludeSynthetic,
     });
 
     if (parsed.data.format === 'csv') {
