@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { parseKasenbosaiObsValue, parseKasenbosaiTimestamp } from './ingest_kasenbosai_v2.ts';
+import {
+  type ParsedKasenbosaiObs,
+  parseKasenbosaiObsValue,
+  parseKasenbosaiTimestamp,
+  rateIfConsistent,
+} from './ingest_kasenbosai_v2.ts';
 
 describe('parseKasenbosaiTimestamp', () => {
   test('JST → UTC', () => {
@@ -139,5 +144,84 @@ describe('parseKasenbosaiObsValue quality codes', () => {
 
   test('unparseable obsTime → null', () => {
     expect(parseKasenbosaiObsValue({ storCap: 1, obsTime: 'garbage' })).toBeNull();
+  });
+});
+
+describe('phantom 利水/有効 rate rejection', () => {
+  function parsed(ov: Parameters<typeof parseKasenbosaiObsValue>[0]): ParsedKasenbosaiObs {
+    const p = parseKasenbosaiObsValue(ov);
+    if (!p) throw new Error('expected the fixture to parse');
+    return p;
+  }
+
+  // 合角ダム and 有間ダム publish storPcntEff = 100 with Ccd=0 (i.e. flagged
+  // valid) even though their reservoirs are less than half full — 合角 held
+  // 4,135 千m³ against a 9,250 千m³ 有効貯水容量 on 2026-09-10, a real 44.7 %.
+  // Because storPcntIrr is flagged invalid (Ccd=160) the parser falls back to
+  // that phantom, and every downstream 貯水率 read 100 %.
+  const KAKKAKU = {
+    storCap: 4135,
+    storCapCcd: 0,
+    storPcntIrr: 0,
+    storPcntIrrCcd: 160,
+    storPcntEff: 100,
+    storPcntEffCcd: 0,
+    storLvl: 316.67,
+    allSink: null,
+    allSinkCcd: 0,
+    allDisch: null,
+    allDischCcd: 0,
+    obsTime: '2026/09/10 08:50',
+  };
+  // 浦山ダム on the same day: storPcntEff = 61.7 matches 34,572 / 56,000
+  // exactly, so its Eff figure is trustworthy.
+  const URAYAMA = {
+    storCap: 34572,
+    storCapCcd: 0,
+    storPcntIrr: 100,
+    storPcntIrrCcd: 0,
+    storPcntEff: 61.7,
+    storPcntEffCcd: 0,
+    storLvl: 373.67,
+    allSink: null,
+    allSinkCcd: 0,
+    allDisch: null,
+    allDischCcd: 0,
+    obsTime: '2026/09/10 09:00',
+  };
+
+  test('parser reports which capacity basis the rate came from', () => {
+    expect(parsed(KAKKAKU).rateBasis).toBe('eff');
+    expect(parsed(URAYAMA).rateBasis).toBe('irr');
+  });
+
+  test('an Eff rate contradicting the dam 有効貯水容量 is dropped', () => {
+    const kakkaku = parsed(KAKKAKU);
+    // 4,135,000 / 9,250,000 = 44.7 %, so a published 100 % is impossible.
+    expect(rateIfConsistent(kakkaku, 9_250_000)).toBeNull();
+    // Volume itself is fine — only the rate is a phantom.
+    expect(kakkaku.storageVolumeM3).toBe(4_135_000);
+  });
+
+  test('an Eff rate that matches the dam 有効貯水容量 is kept', () => {
+    // 二瀬ダム: storPcntEff 2.9 against 604,000 / 21,100,000 = 2.86 %.
+    const futase = parsed({
+      ...KAKKAKU,
+      storCap: 604,
+      storPcntEff: 2.9,
+      obsTime: '2026/09/10 09:00',
+    });
+    expect(rateIfConsistent(futase, 21_100_000)).toBeCloseTo(0.029, 5);
+  });
+
+  test('an Irr rate is never validated against 有効貯水容量', () => {
+    // 浦山 is at 100 % of its seasonal 利水容量 while holding only 61.7 % of
+    // 有効貯水容量. That gap is the whole point of 利水容量貯水率 (#17/#19), so
+    // the check must not touch it.
+    expect(rateIfConsistent(parsed(URAYAMA), 56_000_000)).toBe(1);
+  });
+
+  test('no capacity known → rate passes through unchanged', () => {
+    expect(rateIfConsistent(parsed(KAKKAKU), null)).toBe(1);
   });
 });

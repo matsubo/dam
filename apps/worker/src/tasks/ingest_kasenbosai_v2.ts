@@ -59,6 +59,8 @@ interface ApiResponse {
 interface DamTarget {
   damId: bigint;
   obsFcd: string;
+  /** 有効貯水容量, used to sanity-check a published 'eff' rate. */
+  effectiveCapacityM3: number | null;
 }
 
 function userAgent(): string {
@@ -111,9 +113,47 @@ export interface ParsedKasenbosaiObs {
   observedAt: Date;
   storageVolumeM3: number | null;
   storageRate: number | null;
+  /**
+   * Which denominator `storageRate` was published against: 利水容量 ('irr') or
+   * 有効貯水容量 ('eff'), null when no rate survived the quality codes. Only
+   * 'eff' can be checked against the master, since 利水容量 is seasonal and the
+   * static master value doesn't track it — see #17.
+   */
+  rateBasis: 'irr' | 'eff' | null;
   inflowM3s: number | null;
   outflowM3s: number | null;
   waterLevelM: number | null;
+}
+
+/** An 'eff' rate may disagree with volume/有効貯水容量 by this much and still stand. */
+const EFF_RATE_TOLERANCE = 0.15;
+
+/**
+ * Drop a published 有効貯水容量 rate that its own volume contradicts.
+ *
+ * 合角ダム and 有間ダム flag storPcntIrr invalid (Ccd=160) and then publish
+ * storPcntEff = 100 with Ccd=0 while sitting under half full — 合角 held
+ * 4,135 千m³ against a 9,250 千m³ 有効貯水容量, a real 44.7 %. Ccd says the value
+ * is good, so nothing upstream catches it and every 貯水率 on the site read
+ * 100 %. Same family as the Ccd=160 phantom zeros migrations 0038/0039 cleaned
+ * up, just in the rate field rather than the volume field.
+ *
+ * Checking against the dam's own 有効貯水容量 rather than testing for `=== 100`
+ * keeps a genuinely full reservoir intact. 'irr' rates are returned untouched:
+ * a dam at 100 % of its 洪水期 利水容量 legitimately holds far less than its
+ * 有効貯水容量 (浦山 was 100 % Irr at 61.7 % Eff), and those rates may exceed
+ * 100 % while the flood pool fills.
+ */
+export function rateIfConsistent(
+  parsed: ParsedKasenbosaiObs,
+  effectiveCapacityM3: number | null | undefined,
+): number | null {
+  const { storageRate, storageVolumeM3, rateBasis } = parsed;
+  if (storageRate == null || rateBasis !== 'eff') return storageRate;
+  if (!effectiveCapacityM3 || effectiveCapacityM3 <= 0) return storageRate;
+  if (storageVolumeM3 == null) return storageRate;
+  const implied = storageVolumeM3 / effectiveCapacityM3;
+  return Math.abs(implied - storageRate) > EFF_RATE_TOLERANCE ? null : storageRate;
 }
 
 export function parseKasenbosaiObsValue(ov: ApiObsValue): ParsedKasenbosaiObs | null {
@@ -129,10 +169,13 @@ export function parseKasenbosaiObsValue(ov: ApiObsValue): ParsedKasenbosaiObs | 
   // (美利河ダム: Irr 92.3% vs Eff 13.5% on the same reading). Fall back to
   // storPcntEff only when 利水 is missing. Convert % → fraction. No clamp:
   // 利水 rates legitimately exceed 100% while the flood pool fills.
-  const ratePct =
-    validOrNull(ov.storPcntIrr, ov.storPcntIrrCcd) ??
-    validOrNull(ov.storPcntEff, ov.storPcntEffCcd);
+  const irrPct = validOrNull(ov.storPcntIrr, ov.storPcntIrrCcd);
+  const effPct = irrPct == null ? validOrNull(ov.storPcntEff, ov.storPcntEffCcd) : null;
+  const ratePct = irrPct ?? effPct;
   const storageRate = ratePct != null ? ratePct / 100 : null;
+  // Which denominator the rate came from — rateIfConsistent() can only check
+  // the 'eff' ones against the master.
+  const rateBasis: 'irr' | 'eff' | null = irrPct != null ? 'irr' : effPct != null ? 'eff' : null;
   // A storCap of exactly 0 with no corroborating rate is kasenbosai's
   // "this dam doesn't publish volume" placeholder (e.g. 大峠ダム — reports
   // level + flow but storCap=0/Ccd=0 while both rate fields are missing),
@@ -144,6 +187,7 @@ export function parseKasenbosaiObsValue(ov: ApiObsValue): ParsedKasenbosaiObs | 
     observedAt,
     storageVolumeM3,
     storageRate,
+    rateBasis,
     inflowM3s: validOrNull(ov.allSink, ov.allSinkCcd),
     outflowM3s: validOrNull(ov.allDisch, ov.allDischCcd),
     waterLevelM: validOrNull(ov.storLvl, ov.storLvlCcd),
@@ -164,14 +208,19 @@ async function ensureSourcePriority(): Promise<void> {
 }
 
 async function loadTargets(): Promise<DamTarget[]> {
-  const rows = await sql<{ id: bigint; obs_fcd: string }[]>`
-    SELECT id, external_ids->>'kasenbosai' AS obs_fcd
+  const rows = await sql<{ id: bigint; obs_fcd: string; effective_capacity_m3: string | null }[]>`
+    SELECT id, external_ids->>'kasenbosai' AS obs_fcd,
+           effective_capacity_m3::TEXT AS effective_capacity_m3
     FROM dams
     WHERE external_ids ? 'kasenbosai'
       AND external_ids->>'kasenbosai' ~ '^[0-9]{13}$'
     ORDER BY id
   `;
-  return rows.map((r) => ({ damId: r.id, obsFcd: r.obs_fcd }));
+  return rows.map((r) => ({
+    damId: r.id,
+    obsFcd: r.obs_fcd,
+    effectiveCapacityM3: r.effective_capacity_m3 == null ? null : Number(r.effective_capacity_m3),
+  }));
 }
 
 async function fetchOne(
@@ -199,8 +248,10 @@ async function fetchOne(
   if (!ov) return null;
   const parsed = parseKasenbosaiObsValue(ov);
   if (!parsed) return null;
+  const { rateBasis: _rateBasis, ...obs } = parsed;
   return {
-    ...parsed,
+    ...obs,
+    storageRate: rateIfConsistent(parsed, target.effectiveCapacityM3),
     damId: target.damId,
     sourceId: SOURCE_ID,
     rainfallMm: null,
