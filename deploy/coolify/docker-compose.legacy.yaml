@@ -1,18 +1,20 @@
-# Production compose file for Coolify.
+# LEGACY single-resource stack (kept for reference and rollback only).
 #
-# This stack is intentionally self-hosting: db + minio are defined here so the
-# whole project can be deployed as a single Coolify "Docker Compose" resource.
-# If you prefer to use Coolify-managed Postgres / S3 instead, delete the `db`
-# and `minio` services and point DATABASE_URL / S3_ENDPOINT at the managed
-# resources via the Coolify environment editor.
+# Until 2026-09-11 production ran this file as ONE Coolify "Docker Compose"
+# resource (frd6so0qmtknwe7kogjyalkw). Coolify cannot roll-update compose
+# resources, so every push removed app+worker+db+minio and took the site down
+# for ~70 s (#30). Production now runs four Coolify resources — see README.md
+# in this directory. Nothing deploys this file any more.
+#
+# Rollback: the old resource still exists (stopped, auto-deploy off) with its
+# original volumes frd6so0qmtknwe7kogjyalkw_db-data / _minio-data. Point its
+# "Docker Compose Location" at this file and start it.
 #
 # Required Coolify-managed environment variables (set in the UI, NOT here):
 #   - POSTGRES_PASSWORD
 #   - S3_ACCESS_KEY / S3_SECRET_KEY
 #   - API_KEY_PEPPER          (32+ random bytes, used by bin/api_key.ts)
 #   - KASENBOSAI_USER_AGENT   (contact email per upstream's TOS)
-#   - PGBACKREST_S3_BUCKET / PGBACKREST_S3_KEY / PGBACKREST_S3_SECRET
-#     (only needed if pgbackrest sidecar is enabled — see deploy/backup/)
 #
 # Optional:
 #   - NEXT_PUBLIC_SITE_URL    (canonical URL, used by sitemap.ts / robots.ts)

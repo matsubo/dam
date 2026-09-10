@@ -57,7 +57,7 @@ export interface StackGroup {
 
 /**
  * The stack, read off apps/*&#47;package.json, packages/*&#47;package.json and
- * docker-compose.yaml. Keep the versions verbatim — a contributor sizing up
+ * deploy/coolify/docker-compose.legacy.yaml. Keep the versions verbatim — a contributor sizing up
  * the work needs to know it's Next 15 / React 19, not "recent Next".
  */
 export const STACK: StackGroup[] = [
