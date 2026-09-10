@@ -6,7 +6,7 @@
 // file (an empty ads.txt tells buyers *nobody* may sell, which is worse than
 // none at all).
 //
-// The publisher id is the same `ca-pub-…` value the <AdSlot /> component uses;
+// The publisher id is the same `ca-pub-…` value the AdSense components use;
 // ads.txt wants it without the `ca-` prefix.
 
 export const dynamic = 'force-static';

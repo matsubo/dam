@@ -1,7 +1,6 @@
 import { CircleCheck, CircleDashed, CircleDot } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { AdSlot } from '../../components/adsense.tsx';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
 import { APP_STAGE, APP_VERSION } from '../../lib/version.ts';
 
@@ -148,9 +147,6 @@ export default function RoadmapPage() {
         </a>{' '}
         にて。
       </p>
-      {/* /roadmap is hand-written prose — it reads no dam or watershed row, so
-          it is one of the few routes cleared for ads. See lib/ad-eligibility.ts. */}
-      <AdSlot className="mt-10" />
     </div>
   );
 }

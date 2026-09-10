@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { AdSlot } from '../../components/adsense.tsx';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
 import { EntityIcon } from '../../components/entity-icon.tsx';
 
@@ -295,9 +294,6 @@ export default function GlossaryPage() {
         </a>
         。
       </p>
-      {/* /glossary is hand-written prose — it reads no dam or watershed row, so
-          it is one of the few routes cleared for ads. See lib/ad-eligibility.ts. */}
-      <AdSlot className="mt-10" />
     </div>
   );
 }
