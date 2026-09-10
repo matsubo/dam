@@ -1,0 +1,515 @@
+- generic [ref=e2]:
+  - table [ref=e4]:
+    - rowgroup [ref=e5]:
+      - row "かがわ防災Webポータル 文字サイズ 小 中 大 Language 更新" [ref=e6]:
+        - cell
+        - cell "かがわ防災Webポータル" [ref=e7]
+        - cell "文字サイズ 小 中 大" [ref=e8]:
+          - generic [ref=e9]:
+            - text: 文字サイズ
+            - generic [ref=e10]:
+              - generic [ref=e11] [cursor=pointer]: 小
+              - generic [ref=e12] [cursor=pointer]: 中
+              - generic [ref=e13] [cursor=pointer]: 大
+        - cell "Language" [ref=e14]:
+          - combobox [ref=e15]:
+            - option "Language" [selected]
+            - option "日本語"
+            - option "English"
+            - option "简体中文"
+            - option "繁体中文"
+            - option "한국"
+            - option "Tiếng Việt"
+            - option "español"
+            - option "bahasa Indonesia"
+            - option "Tagalog"
+            - option "português"
+        - cell "更新" [ref=e16]:
+          - generic [ref=e17] [cursor=pointer]: 更新
+  - list [ref=e193]:
+    - listitem [ref=e194]:
+      - link "気象情報" [ref=e195] [cursor=pointer]:
+        - /url: "#"
+    - listitem [ref=e196]:
+      - link "河川・砂防情報" [ref=e197] [cursor=pointer]:
+        - /url: "#"
+    - listitem [ref=e198]:
+      - link "道路規制情報" [ref=e199] [cursor=pointer]:
+        - /url: "#"
+    - listitem [ref=e200]:
+      - link "交通情報" [ref=e201] [cursor=pointer]:
+        - /url: "#"
+    - listitem [ref=e202]:
+      - link "ライフライン" [ref=e203] [cursor=pointer]:
+        - /url: "#"
+    - listitem [ref=e204]:
+      - link "操作マニュアル" [ref=e205] [cursor=pointer]:
+        - /url: "#"
+  - generic [ref=e18]:
+    - generic [ref=e20]:
+      - generic [ref=e21] [cursor=pointer]: 緊急情報
+      - generic [ref=e23] [cursor=pointer]: お知らせ情報
+      - generic [ref=e206]: 現在発表中の情報はありません。
+    - generic [ref=e24]:
+      - table [ref=e25]:
+        - rowgroup [ref=e26]:
+          - row "防災情報" [ref=e27]:
+            - cell "防災情報" [ref=e28]:
+              - generic [ref=e29]: 防災情報
+            - cell [ref=e30]
+      - generic [ref=e31]: ※防災情報の項目を選択すると、その情報の表示・非表示を切り替えることができます。
+      - table [ref=e32]:
+        - rowgroup [ref=e33]:
+          - row "避難情報 発令状況 避難所等 開設状況 気象警報 ・注意報 地震・津波 直近最大震度 (3日以内) 雨量情報 時間雨量 水位情報 ダム情報 潮位情報 ハザードマップ 土砂災害警戒区域(指定) その他 Map + − Open this area in Google Maps (opens a new window) Map data ©2026 Google Terms (opens in new tab) Report a map error 現在地 凡例 県・市町選択" [ref=e106]:
+            - cell "避難情報 発令状況 避難所等 開設状況 気象警報 ・注意報 地震・津波 直近最大震度 (3日以内) 雨量情報 時間雨量 水位情報 ダム情報 潮位情報 ハザードマップ 土砂災害警戒区域(指定) その他" [ref=e107]:
+              - generic [ref=e36]:
+                - generic [ref=e38] [cursor=pointer]:
+                  - text: 避難情報
+                  - text: 発令状況
+                - generic [ref=e42] [cursor=pointer]:
+                  - text: 避難所等
+                  - text: 開設状況
+                - generic [ref=e46] [cursor=pointer]:
+                  - text: 気象警報
+                  - text: ・注意報
+                - generic [ref=e48] [cursor=pointer]: 地震・津波
+                - generic [ref=e50] [cursor=pointer]:
+                  - text: 直近最大震度
+                  - text: (3日以内)
+                - generic [ref=e52] [cursor=pointer]:
+                  - text: 雨量情報
+                  - combobox [ref=e53]:
+                    - option "時間雨量" [selected]
+                    - option "累計雨量"
+                    - option "10分雨量"
+                - generic [ref=e55] [cursor=pointer]: 水位情報
+                - generic [ref=e57] [cursor=pointer]: ダム情報
+                - generic [ref=e59] [cursor=pointer]: 潮位情報
+                - generic [ref=e61] [cursor=pointer]:
+                  - text: ハザードマップ
+                  - combobox [ref=e62]:
+                    - option "土砂災害警戒区域(指定)" [selected]
+                    - option "土砂災害警戒区域(公表)"
+                    - option "土砂災害の発生するおそれのある箇所"
+                    - option "山地災害危険地区"
+                    - option "津波浸水想定(最大クラスの津波)"
+                    - option "津波浸水想定(発生頻度の高い津波)"
+                    - option "浸水深30cm到達時間予測図(最大クラスの津波)"
+                    - option "高潮浸水想定区域"
+                    - option "高潮浸水継続時間"
+                    - option "震度分布図(最大クラスの地震)"
+                    - option "震度分布図(発生頻度の高い地震)"
+                    - option "震度分布図(中央構造線)"
+                    - option "震度分布図(長尾断層)"
+                    - option "液状化危険度予測図(最大クラスの地震)"
+                    - option "液状化危険度予測図(発生頻度の高い地震)"
+                    - option "液状化危険度予測図(中央構造線)"
+                    - option "液状化危険度予測図(長尾断層)"
+                    - option "東讃ブロック" [disabled]
+                    - option "古川水系"
+                    - option "小海川水系"
+                    - option "足谷川水系"
+                    - option "古川水系"
+                    - option "与田川水系"
+                    - option "番屋川水系"
+                    - option "弁天川水系"
+                    - option "大橋川水系"
+                    - option "玉浦川水系"
+                    - option "滝川水系"
+                    - option "鴨部川水系"
+                    - option "田尻川水系"
+                    - option "大山川水系"
+                    - option "東代川水系"
+                    - option "西代川水系"
+                    - option "梶川水系"
+                    - option "梅川水系"
+                    - option "津田川水系"
+                    - option "吉野川水系"
+                    - option "大谷川水系"
+                    - option "坂本川水系"
+                    - option "菜切川水系"
+                    - option "馬宿川水系"
+                    - option "中川水系"
+                    - option "湊川水系"
+                    - option "高松ブロック" [disabled]
+                    - option "本津川水系"
+                    - option "住吉川水系"
+                    - option "亀水川水系"
+                    - option "新川水系"
+                    - option "詰田川水系"
+                    - option "摺鉢谷川水系"
+                    - option "下井手川水系"
+                    - option "長者川水系"
+                    - option "牟礼川水系"
+                    - option "相引川水系"
+                    - option "香東川水系"
+                    - option "中讃ブロック" [disabled]
+                    - option "弘田川水系"
+                    - option "桜川水系"
+                    - option "土器川水系(一級河川)"
+                    - option "玉川水系"
+                    - option "野田川水系"
+                    - option "青海川水系"
+                    - option "西汐入川水系"
+                    - option "大束川水系"
+                    - option "綾川水系"
+                    - option "金倉川水系"
+                    - option "西讃ブロック" [disabled]
+                    - option "瀬入川水系"
+                    - option "一の谷川水系"
+                    - option "柞田川水系"
+                    - option "苧扱川水系"
+                    - option "唐井手川水系"
+                    - option "白坂川水系"
+                    - option "吉田川水系"
+                    - option "四方堂川水系"
+                    - option "高瀬川水系"
+                    - option "田井川水系"
+                    - option "江尻川水系"
+                    - option "天王川水系"
+                    - option "財田川水系"
+                    - option "小豆ブロック" [disabled]
+                    - option "別当川水系"
+                    - option "伝法川水系"
+                    - option "角田川水系"
+                    - option "池田大川水系"
+                    - option "競川水系"
+                    - option "春田川水系"
+                    - option "明神川水系"
+                    - option "片城川水系"
+                    - option "木庄川水系"
+                    - option "安田大川水系"
+                    - option "向条川水系"
+                    - option "城石川水系"
+                    - option "伊豆川水系"
+                    - option "東川水系"
+                    - option "桂川水系"
+                    - option "橘川水系"
+                    - option "皇踏川水系"
+                    - option "小瀬桂川水系"
+                    - option "春日川水系"
+                    - option "新川・春日川・吉田川"
+                    - option "本津川"
+                    - option "大束川"
+                    - option "金倉川"
+                    - option "高瀬川"
+                    - option "財田川"
+                    - option "弘田川"
+                    - option "柞田川・前田川・粟井川"
+                    - option "綾川・田万川"
+                    - option "津田川・栴檀川"
+                    - option "鴨部川"
+                    - option "湊川・馬宿川・千足川"
+                    - option "与田川・様松川"
+                    - option "新川・春日川・吉田川"
+                    - option "本津川"
+                    - option "大束川"
+                    - option "金倉川"
+                    - option "高瀬川"
+                    - option "財田川"
+                    - option "弘田川"
+                    - option "柞田川・前田川・粟井川"
+                    - option "香東川・内場・椛川"
+                    - option "綾川・田万川"
+                    - option "津田川・栴檀川"
+                    - option "鴨部川"
+                    - option "湊川・馬宿川・千足川"
+                    - option "与田川・様松川"
+                    - option "伝法川・殿川・吉田川"
+                    - option "新川・春日川・吉田川"
+                    - option "本津川"
+                    - option "大束川"
+                    - option "金倉川"
+                    - option "高瀬川"
+                    - option "財田川"
+                    - option "弘田川"
+                    - option "柞田川・前田川・粟井川"
+                    - option "香東川・内場・椛川"
+                    - option "綾川・田万川"
+                    - option "津田川・栴檀川"
+                    - option "鴨部川"
+                    - option "湊川・馬宿川・千足川"
+                    - option "与田川・様松川"
+                    - option "伝法川・殿川・吉田川"
+                    - option "別当川・安田大川"
+                    - option "新川・春日川・吉田川"
+                    - option "本津川"
+                    - option "大束川"
+                    - option "金倉川"
+                    - option "高瀬川"
+                    - option "財田川"
+                    - option "柞田川・前田川・粟井川"
+                    - option "香東川・内場・椛川"
+                    - option "綾川・田万川"
+                    - option "津田川・栴檀川"
+                    - option "鴨部川"
+                    - option "湊川・馬宿川・千足川"
+                    - option "与田川・様松川"
+                    - option "伝法川・殿川・吉田川"
+                    - option "全ての市町"
+                    - option "高松市"
+                    - option "直島町"
+                    - option "土庄町"
+                    - option "小豆島町"
+                    - option "さぬき市"
+                    - option "東かがわ市"
+                    - option "三木町"
+                    - option "丸亀市"
+                    - option "坂出市"
+                    - option "善通寺市"
+                    - option "宇多津町"
+                    - option "綾川町"
+                    - option "琴平町"
+                    - option "多度津町"
+                    - option "まんのう町"
+                    - option "観音寺市"
+                    - option "三豊市"
+                - generic [ref=e64] [cursor=pointer]: その他
+            - cell "Map + − Open this area in Google Maps (opens a new window) Map data ©2026 Google Terms (opens in new tab) Report a map error 現在地 凡例 県・市町選択" [ref=e108]:
+              - generic [ref=e66]:
+                - generic [ref=e68]:
+                  - region "Map" [ref=e69]
+                  - generic [ref=e70]:
+                    - iframe [ref=e74]:
+                      
+                    - generic [ref=e76]:
+                      - generic:
+                        - generic [ref=e78]:
+                          - button "+" [ref=e79]
+                          - button "−" [ref=e80]
+                        - generic [ref=e81]:
+                          - list
+                        - button [ref=e83]:
+                          - img [ref=e169]
+                    - link "Open this area in Google Maps (opens a new window)" [ref=e171] [cursor=pointer]:
+                      - /url: https://maps.google.com/maps?ll=34.2875,133.947&z=9&t=m&hl=en-US&gl=US&mapclient=apiv3
+                      - img "Google" [ref=e173]
+                    - generic [ref=e174]:
+                      - generic [ref=e179]: Map data ©2026 Google
+                      - link "Terms (opens in new tab)" [ref=e184] [cursor=pointer]:
+                        - /url: https://www.google.com/intl/en-US_US/help/terms_maps.html
+                        - text: Terms
+                      - link "Report a map error" [ref=e189] [cursor=pointer]:
+                        - /url: https://www.google.com/maps/@34.2875,133.947,9z/data=!10m1!1e1!12b1?source=apiv3&rapsrc=apiv3
+                - generic [ref=e84]: 現在地
+                - generic [ref=e85] [cursor=pointer]:
+                  - table [ref=e86]:
+                    - rowgroup [ref=e87]:
+                      - row "凡例" [ref=e88]:
+                        - columnheader "凡例" [ref=e190]
+                  - table
+                - combobox [ref=e90]:
+                  - option "県・市町選択" [selected]
+                  - option "香川県"
+                  - option "高松市"
+                  - option "丸亀市"
+                  - option "坂出市"
+                  - option "善通寺市"
+                  - option "観音寺市"
+                  - option "さぬき市"
+                  - option "東かがわ市"
+                  - option "三豊市"
+                  - option "土庄町"
+                  - option "小豆島町"
+                  - option "三木町"
+                  - option "直島町"
+                  - option "宇多津町"
+                  - option "綾川町"
+                  - option "琴平町"
+                  - option "多度津町"
+                  - option "まんのう町"
+    - generic [ref=e91]:
+      - generic [ref=e92]: 情報一覧
+      - generic [ref=e93]:
+        - generic [ref=e94] [cursor=pointer]: 気象情報等
+        - generic [ref=e102] [cursor=pointer]: 避難情報
+        - generic [ref=e103] [cursor=pointer]: 避難所
+        - generic [ref=e104] [cursor=pointer]: ダム情報
+        - table [ref=e294]:
+          - rowgroup [ref=e295]:
+            - row "ダム名 貯水位(m) 平常時最高水位(m) 異常洪水時防災操作開始水位(m) 貯水量(千m3) 貯水率（利水）(%) 洪水調節空容量率(%) 流入量(m3/s) 放流量(m3/s)" [ref=e296]:
+              - columnheader "ダム名" [ref=e297]
+              - columnheader "貯水位(m)" [ref=e298]
+              - columnheader "平常時最高水位(m)" [ref=e299]
+              - columnheader "異常洪水時防災操作開始水位(m)" [ref=e300]
+              - columnheader "貯水量(千m3)" [ref=e301]
+              - columnheader "貯水率（利水）(%)" [ref=e302]
+              - columnheader "洪水調節空容量率(%)" [ref=e303]
+              - columnheader "流入量(m3/s)" [ref=e304]
+              - columnheader "放流量(m3/s)" [ref=e305]
+          - rowgroup [ref=e306]:
+            - row "千足ダム 127.40 129.00 － 916 84.0 100.0 0.00 0.52" [ref=e307]:
+              - cell "千足ダム" [ref=e308]
+              - cell "127.40" [ref=e309]
+              - cell "129.00" [ref=e310]
+              - cell "－" [ref=e311]
+              - cell "916" [ref=e312]
+              - cell "84.0" [ref=e313]
+              - cell "100.0" [ref=e314]
+              - cell "0.00" [ref=e315]
+              - cell "0.52" [ref=e316]
+            - row "五名ダム 143.74 146.00 144.90 458 71.5 0.0 0.49 0.30" [ref=e317]:
+              - cell "五名ダム" [ref=e318]
+              - cell "143.74" [ref=e319]
+              - cell "146.00" [ref=e320]
+              - cell "144.90" [ref=e321]
+              - cell "458" [ref=e322]
+              - cell "71.5" [ref=e323]
+              - cell "0.0" [ref=e324]
+              - cell "0.49" [ref=e325]
+              - cell "0.30" [ref=e326]
+            - row "大内ダム 61.12 62.20 62.50 773 84.6 100.0 0.17 0.42" [ref=e327]:
+              - cell "大内ダム" [ref=e328]
+              - cell "61.12" [ref=e329]
+              - cell "62.20" [ref=e330]
+              - cell "62.50" [ref=e331]
+              - cell "773" [ref=e332]
+              - cell "84.6" [ref=e333]
+              - cell "100.0" [ref=e334]
+              - cell "0.17" [ref=e335]
+              - cell "0.42" [ref=e336]
+            - row "大川ダム 115.40 118.70 120.60 390 60.0 100.0 0.03 0.03" [ref=e337]:
+              - cell "大川ダム" [ref=e338]
+              - cell "115.40" [ref=e339]
+              - cell "118.70" [ref=e340]
+              - cell "120.60" [ref=e341]
+              - cell "390" [ref=e342]
+              - cell "60.0" [ref=e343]
+              - cell "100.0" [ref=e344]
+              - cell "0.03" [ref=e345]
+              - cell "0.03" [ref=e346]
+            - row "門入ダム 94.15 100.20 － 1,302 55.8 100.0 0.22 0.01" [ref=e347]:
+              - cell "門入ダム" [ref=e348]
+              - cell "94.15" [ref=e349]
+              - cell "100.20" [ref=e350]
+              - cell "－" [ref=e351]
+              - cell "1,302" [ref=e352]
+              - cell "55.8" [ref=e353]
+              - cell "100.0" [ref=e354]
+              - cell "0.22" [ref=e355]
+              - cell "0.01" [ref=e356]
+            - row "前山ダム 134.75 137.00 141.10 1,104 78.8 100.0 0.80 0.81" [ref=e357]:
+              - cell "前山ダム" [ref=e358]
+              - cell "134.75" [ref=e359]
+              - cell "137.00" [ref=e360]
+              - cell "141.10" [ref=e361]
+              - cell "1,104" [ref=e362]
+              - cell "78.8" [ref=e363]
+              - cell "100.0" [ref=e364]
+              - cell "0.80" [ref=e365]
+              - cell "0.81" [ref=e366]
+            - row "内場ダム 257.95 258.50 259.10 7,147 96.5 100.0 1.33 2.08" [ref=e367]:
+              - cell "内場ダム" [ref=e368]
+              - cell "257.95" [ref=e369]
+              - cell "258.50" [ref=e370]
+              - cell "259.10" [ref=e371]
+              - cell "7,147" [ref=e372]
+              - cell "96.5" [ref=e373]
+              - cell "100.0" [ref=e374]
+              - cell "1.33" [ref=e375]
+              - cell "2.08" [ref=e376]
+            - row "椛川ダム（試験湛水） 355.72 352.00 － 8,701 100.0 57.6 0.46 0.03" [ref=e377]:
+              - cell "椛川ダム（試験湛水）" [ref=e378]
+              - cell "355.72" [ref=e379]
+              - cell "352.00" [ref=e380]
+              - cell "－" [ref=e381]
+              - cell "8,701" [ref=e382]
+              - cell "100.0" [ref=e383]
+              - cell "57.6" [ref=e384]
+              - cell "0.46" [ref=e385]
+              - cell "0.03" [ref=e386]
+            - row "殿川ダム 160.37 164.00 163.70 449 65.3 100.0 2.62 2.86" [ref=e387]:
+              - cell "殿川ダム" [ref=e388]
+              - cell "160.37" [ref=e389]
+              - cell "164.00" [ref=e390]
+              - cell "163.70" [ref=e391]
+              - cell "449" [ref=e392]
+              - cell "65.3" [ref=e393]
+              - cell "100.0" [ref=e394]
+              - cell "2.62" [ref=e395]
+              - cell "2.86" [ref=e396]
+            - row "内海ダム 70.15 70.00 － 352 100.0 97.1 0.74 0.71" [ref=e397]:
+              - cell "内海ダム" [ref=e398]
+              - cell "70.15" [ref=e399]
+              - cell "70.00" [ref=e400]
+              - cell "－" [ref=e401]
+              - cell "352" [ref=e402]
+              - cell "100.0" [ref=e403]
+              - cell "97.1" [ref=e404]
+              - cell "0.74" [ref=e405]
+              - cell "0.71" [ref=e406]
+            - row "粟地ダム 66.17 66.30 － 571 98.2 100.0 0.13 0.16" [ref=e407]:
+              - cell "粟地ダム" [ref=e408]
+              - cell "66.17" [ref=e409]
+              - cell "66.30" [ref=e410]
+              - cell "－" [ref=e411]
+              - cell "571" [ref=e412]
+              - cell "98.2" [ref=e413]
+              - cell "100.0" [ref=e414]
+              - cell "0.13" [ref=e415]
+              - cell "0.16" [ref=e416]
+            - row "吉田ダム 107.95 109.50 － 1,429 90.6 100.0 1.41 0.16" [ref=e417]:
+              - cell "吉田ダム" [ref=e418]
+              - cell "107.95" [ref=e419]
+              - cell "109.50" [ref=e420]
+              - cell "－" [ref=e421]
+              - cell "1,429" [ref=e422]
+              - cell "90.6" [ref=e423]
+              - cell "100.0" [ref=e424]
+              - cell "1.41" [ref=e425]
+              - cell "0.16" [ref=e426]
+            - row "長柄ダム 123.18 123.50 123.30 3,701 97.4 100.0 1.41 1.13" [ref=e427]:
+              - cell "長柄ダム" [ref=e428]
+              - cell "123.18" [ref=e429]
+              - cell "123.50" [ref=e430]
+              - cell "123.30" [ref=e431]
+              - cell "3,701" [ref=e432]
+              - cell "97.4" [ref=e433]
+              - cell "100.0" [ref=e434]
+              - cell "1.41" [ref=e435]
+              - cell "1.13" [ref=e436]
+            - row "田万ダム 174.26 174.10 － 408 100.0 99.2 0.20 0.20" [ref=e437]:
+              - cell "田万ダム" [ref=e438]
+              - cell "174.26" [ref=e439]
+              - cell "174.10" [ref=e440]
+              - cell "－" [ref=e441]
+              - cell "408" [ref=e442]
+              - cell "100.0" [ref=e443]
+              - cell "99.2" [ref=e444]
+              - cell "0.20" [ref=e445]
+              - cell "0.20" [ref=e446]
+            - row "五郷ダム 189.00 189.50 190.50 1,781 96.3 100.0 0.75 0.48" [ref=e447]:
+              - cell "五郷ダム" [ref=e448]
+              - cell "189.00" [ref=e449]
+              - cell "189.50" [ref=e450]
+              - cell "190.50" [ref=e451]
+              - cell "1,781" [ref=e452]
+              - cell "96.3" [ref=e453]
+              - cell "100.0" [ref=e454]
+              - cell "0.75" [ref=e455]
+              - cell "0.48" [ref=e456]
+            - row "粟井ダム 210.13 210.00 － 304 100.0 98.6 0.53 0.49" [ref=e457]:
+              - cell "粟井ダム" [ref=e458]
+              - cell "210.13" [ref=e459]
+              - cell "210.00" [ref=e460]
+              - cell "－" [ref=e461]
+              - cell "304" [ref=e462]
+              - cell "100.0" [ref=e463]
+              - cell "98.6" [ref=e464]
+              - cell "0.53" [ref=e465]
+              - cell "0.49" [ref=e466]
+            - row "府中ダム 30.85 32.00 － 7,186 83.6 0.0 6.43 5.33" [ref=e467]:
+              - cell "府中ダム" [ref=e468]
+              - cell "30.85" [ref=e469]
+              - cell "32.00" [ref=e470]
+              - cell "－" [ref=e471]
+              - cell "7,186" [ref=e472]
+              - cell "83.6" [ref=e473]
+              - cell "0.0" [ref=e474]
+              - cell "6.43" [ref=e475]
+              - cell "5.33" [ref=e476]
+  - paragraph [ref=e477]:
+    - link "ページの先頭へ戻る" [ref=e478] [cursor=pointer]:
+      - /url: "#content"
+      - img "ページの先頭へ戻る" [ref=e479]
+  - generic [ref=e105]: Copyright © KAGAWA PREFECTURE. All Rights Reserved. このサイトについて

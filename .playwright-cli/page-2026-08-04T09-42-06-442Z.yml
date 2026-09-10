@@ -1,0 +1,518 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e4]:
+      - heading "群馬県水位雨量情報システム" [level=1] [ref=e5]:
+        - generic "群馬県水位雨量情報システム" [ref=e6]
+      - list [ref=e7]:
+        - listitem [ref=e8]:
+          - generic [ref=e9]: TOP
+        - listitem [ref=e10]:
+          - link "観測情報" [ref=e11] [cursor=pointer]:
+            - /url: javascript:void(0)
+        - listitem [ref=e12]:
+          - link "カメラ画像" [ref=e13] [cursor=pointer]:
+            - /url: javascript:void(0)
+      - list [ref=e14]:
+        - listitem [ref=e15]:
+          - link "用語集" [ref=e16] [cursor=pointer]:
+            - /url: javascript:void(0)
+        - listitem [ref=e17]:
+          - link "注意事項" [ref=e18] [cursor=pointer]:
+            - /url: javascript:void(0)
+        - listitem [ref=e19]:
+          - link "ヘルプ" [ref=e20] [cursor=pointer]:
+            - /url: javascript:void(0)
+    - list [ref=e22]:
+      - listitem [ref=e23]: TOP
+    - generic [ref=e24]:
+      - paragraph [ref=e25]: 緊急新着情報
+      - generic [ref=e26]: 緊急新着情報はありません。
+      - paragraph [ref=e27]: 観測日時:2026年08月04日 18時30分
+      - button "画面を更新する" [ref=e28] [cursor=pointer]
+  - generic [ref=e32]:
+    - generic [ref=e33]:
+      - generic [ref=e34]:
+        - img "地図画像" [ref=e35]
+        - generic:
+          - link "東部地域":
+            - /url: js-grp-15
+          - link "利根沼田地域":
+            - /url: js-grp-14
+          - link "吾妻地域":
+            - /url: js-grp-13
+          - link "西部地域":
+            - /url: js-grp-12
+          - link "中部地域":
+            - /url: js-grp-11
+        - generic [ref=e36]: 08月04日 18時30分
+        - list [ref=e37]:
+          - listitem [ref=e38]:
+            - generic [ref=e39] [cursor=pointer]:
+              - checkbox "雨量" [checked] [ref=e40]
+              - text: 雨量
+          - listitem [ref=e41]:
+            - generic [ref=e42] [cursor=pointer]:
+              - checkbox "水位" [checked] [ref=e43]
+              - text: 水位
+          - listitem [ref=e44]:
+            - generic [ref=e45] [cursor=pointer]:
+              - checkbox "ダム" [checked] [ref=e46]
+              - text: ダム
+        - list [ref=e47]:
+          - listitem [ref=e48]:
+            - button "10分" [ref=e49] [cursor=pointer]
+          - listitem [ref=e50]:
+            - button "時間" [ref=e51] [cursor=pointer]
+        - paragraph [ref=e52]: ※地図をクリックすると、各市町マップを表示します。
+        - img "大胡:10分雨量 0.0mm" [ref=e53] [cursor=pointer]
+        - img "富士見:10分雨量 0.0mm" [ref=e54] [cursor=pointer]
+        - img "前橋(県):10分雨量 0.0mm" [ref=e55] [cursor=pointer]
+        - img "横室(砂):10分雨量 0.0mm" [ref=e56] [cursor=pointer]
+        - img "前橋(国):10分雨量 0.0mm" [ref=e57] [cursor=pointer]
+        - img "苗ヶ島(国):10分雨量 0.0mm" [ref=e58] [cursor=pointer]
+        - img "赤城山(国):10分雨量 0.0mm" [ref=e59] [cursor=pointer]
+        - img "前橋(気):10分雨量 0.0mm" [ref=e60] [cursor=pointer]
+        - img "八斗島(国):10分雨量 0.0mm" [ref=e61] [cursor=pointer]
+        - img "東(国):10分雨量 0.0mm" [ref=e62] [cursor=pointer]
+        - img "伊勢崎(県):10分雨量 0.0mm" [ref=e63] [cursor=pointer]
+        - img "伊勢崎(気):10分雨量 0.0mm" [ref=e64] [cursor=pointer]
+        - img "北赤城(砂):10分雨量 0.0mm" [ref=e65] [cursor=pointer]
+        - img "綾戸:10分雨量 0.0mm" [ref=e66] [cursor=pointer]
+        - img "渋川(県):10分雨量 0.0mm" [ref=e67] [cursor=pointer]
+        - img "小野子(国):10分雨量 0.0mm" [ref=e68] [cursor=pointer]
+        - img "渋川(国):10分雨量 0.0mm" [ref=e69] [cursor=pointer]
+        - img "伊香保(砂):10分雨量 0.0mm" [ref=e70] [cursor=pointer]
+        - img "小野上(砂):10分雨量 0.0mm" [ref=e71] [cursor=pointer]
+        - img "横堀(砂):10分雨量 0.0mm" [ref=e72] [cursor=pointer]
+        - img "滝沢(砂):10分雨量 0.0mm" [ref=e73] [cursor=pointer]
+        - img "相馬ヶ原(国):10分雨量 0.0mm" [ref=e74] [cursor=pointer]
+        - img "上芝:10分雨量 0.0mm" [ref=e75] [cursor=pointer]
+        - img "宿横手:10分雨量 0.0mm" [ref=e76] [cursor=pointer]
+        - img "高崎(県):10分雨量 0.0mm" [ref=e77] [cursor=pointer]
+        - img "榛名(砂):10分雨量 0.0mm" [ref=e78] [cursor=pointer]
+        - img "三の倉(国):10分雨量 0.0mm" [ref=e79] [cursor=pointer]
+        - img "高崎(国):10分雨量 0.0mm" [ref=e80] [cursor=pointer]
+        - img "吉井:10分雨量 0.0mm" [ref=e81] [cursor=pointer]
+        - img "榛名山(気):10分雨量 0.0mm" [ref=e82] [cursor=pointer]
+        - img "上里見(気):10分雨量 0.0mm" [ref=e83] [cursor=pointer]
+        - img "藤岡:10分雨量 0.0mm" [ref=e84] [cursor=pointer]
+        - img "上日野(砂):10分雨量 0.0mm" [ref=e85] [cursor=pointer]
+        - img "箕輪(国):10分雨量 0.0mm" [ref=e86] [cursor=pointer]
+        - img "藤岡(気):10分雨量 0.0mm" [ref=e87] [cursor=pointer]
+        - img "塩沢ダム:10分雨量 0.0mm" [ref=e88] [cursor=pointer]
+        - img "万場(国):10分雨量 0.0mm" [ref=e89] [cursor=pointer]
+        - img "神流(気):10分雨量 0.0mm" [ref=e90] [cursor=pointer]
+        - img "妙義(砂):10分雨量 0.0mm" [ref=e91] [cursor=pointer]
+        - img "富岡(国):10分雨量 0.0mm" [ref=e92] [cursor=pointer]
+        - img "富岡(県):10分雨量 0.0mm" [ref=e93] [cursor=pointer]
+        - img "道平川ダム:10分雨量 0.0mm" [ref=e94] [cursor=pointer]
+        - img "白井平:10分雨量 0.0mm" [ref=e95] [cursor=pointer]
+        - img "中小坂(砂):10分雨量 0.0mm" [ref=e96] [cursor=pointer]
+        - img "下仁田(国):10分雨量 0.0mm" [ref=e97] [cursor=pointer]
+        - img "神津下(国):10分雨量 0.0mm" [ref=e98] [cursor=pointer]
+        - img "西野牧(気):10分雨量 0.0mm" [ref=e99] [cursor=pointer]
+        - img "甘楽(砂):10分雨量 0.0mm" [ref=e100] [cursor=pointer]
+        - img "大仁田ダム:10分雨量 0.0mm" [ref=e101] [cursor=pointer]
+        - img "星尾(砂):10分雨量 0.0mm" [ref=e102] [cursor=pointer]
+        - img "小沢(砂):10分雨量 0.0mm" [ref=e103] [cursor=pointer]
+        - img "奥の萱(国):10分雨量 0.0mm" [ref=e104] [cursor=pointer]
+        - img "坂本ダム:10分雨量 0.0mm" [ref=e105] [cursor=pointer]
+        - img "霧積ダム:10分雨量 0.0mm" [ref=e106] [cursor=pointer]
+        - img "鷺宮(砂):10分雨量 0.0mm" [ref=e107] [cursor=pointer]
+        - img "秋間(国):10分雨量 0.0mm" [ref=e108] [cursor=pointer]
+        - img "松井田(国):10分雨量 0.0mm" [ref=e109] [cursor=pointer]
+        - img "安中(県):10分雨量 0.0mm" [ref=e110] [cursor=pointer]
+        - img "楢原(道):10分雨量 0.0mm" [ref=e111] [cursor=pointer]
+        - img "黒田(道):10分雨量 0.0mm" [ref=e112] [cursor=pointer]
+        - img "西野牧(道):10分雨量 0.0mm" [ref=e113] [cursor=pointer]
+        - img "軽井沢東(道):10分雨量 0.0mm" [ref=e114] [cursor=pointer]
+        - img "四万川ダム:10分雨量 0.0mm" [ref=e115] [cursor=pointer]
+        - img "ブノウ沢:10分雨量 0.0mm" [ref=e116] [cursor=pointer]
+        - img "大道(砂):10分雨量 0.0mm" [ref=e117] [cursor=pointer]
+        - img "上沢渡(砂):10分雨量 0.0mm" [ref=e118] [cursor=pointer]
+        - img "中之条(国):10分雨量 0.0mm" [ref=e119] [cursor=pointer]
+        - img "四万(国):10分雨量 0.0mm" [ref=e120] [cursor=pointer]
+        - img "暮坂峠(国):10分雨量 0.0mm" [ref=e121] [cursor=pointer]
+        - img "野反(国):10分雨量 0.0mm" [ref=e122] [cursor=pointer]
+        - img "中之条(気):10分雨量 0.0mm" [ref=e123] [cursor=pointer]
+        - img "中之条(県):10分雨量 0.0mm" [ref=e124] [cursor=pointer]
+        - img "逢ノ峰(砂):10分雨量 0.0mm" [ref=e125] [cursor=pointer]
+        - img "草津(国):10分雨量 0.0mm" [ref=e126] [cursor=pointer]
+        - img "草津(気):10分雨量 0.0mm" [ref=e127] [cursor=pointer]
+        - img "植栗(砂):10分雨量 0.0mm" [ref=e128] [cursor=pointer]
+        - img "松谷(砂):10分雨量 0.0mm" [ref=e129] [cursor=pointer]
+        - img "本宿(国):10分雨量 0.0mm" [ref=e130] [cursor=pointer]
+        - img "広場(国):10分雨量 0.0mm" [ref=e131] [cursor=pointer]
+        - img "長野原:10分雨量 0.0mm" [ref=e132] [cursor=pointer]
+        - img "応桑(国):10分雨量 0.0mm" [ref=e133] [cursor=pointer]
+        - img "三原:10分雨量 0.0mm" [ref=e134] [cursor=pointer]
+        - img "浅間山(砂):10分雨量 0.0mm" [ref=e135] [cursor=pointer]
+        - img "ヨッコ沢(砂):10分雨量 0.0mm" [ref=e136] [cursor=pointer]
+        - img "田代(気):10分雨量 0.0mm" [ref=e137] [cursor=pointer]
+        - img "高山:10分雨量 0.0mm" [ref=e138] [cursor=pointer]
+        - img "発知(国):10分雨量 0.0mm" [ref=e139] [cursor=pointer]
+        - img "奈良(国):10分雨量 0.0mm" [ref=e140] [cursor=pointer]
+        - img "薗原(国):10分雨量 0.0mm" [ref=e141] [cursor=pointer]
+        - img "新地川(国):10分雨量 0.0mm" [ref=e142] [cursor=pointer]
+        - img "倉見川(国):10分雨量 0.0mm" [ref=e143] [cursor=pointer]
+        - img "栗原(国):10分雨量 欠測" [ref=e144] [cursor=pointer]
+        - img "沼田(国):10分雨量 0.0mm" [ref=e145] [cursor=pointer]
+        - img "沼田(気):10分雨量 0.0mm" [ref=e146] [cursor=pointer]
+        - img "沼田(県):10分雨量 0.0mm" [ref=e147] [cursor=pointer]
+        - img "月夜野(砂):10分雨量 0.0mm" [ref=e148] [cursor=pointer]
+        - img "上牧(砂):10分雨量 0.0mm" [ref=e149] [cursor=pointer]
+        - img "土合(砂):10分雨量 0.0mm" [ref=e150] [cursor=pointer]
+        - img "相俣(国):10分雨量 0.0mm" [ref=e151] [cursor=pointer]
+        - img "永井(国):10分雨量 0.0mm" [ref=e152] [cursor=pointer]
+        - img "川古(国):10分雨量 0.0mm" [ref=e153] [cursor=pointer]
+        - img "藤原(国):10分雨量 0.0mm" [ref=e154] [cursor=pointer]
+        - img "湯ノ小屋(国):10分雨量 0.0mm" [ref=e155] [cursor=pointer]
+        - img "宝川(国):10分雨量 0.0mm" [ref=e156] [cursor=pointer]
+        - img "湯原(国):10分雨量 0.0mm" [ref=e157] [cursor=pointer]
+        - img "藤原(気):10分雨量 0.0mm" [ref=e158] [cursor=pointer]
+        - img "みなかみ(気):10分雨量 0.0mm" [ref=e159] [cursor=pointer]
+        - img "戸倉(国):10分雨量 0.0mm" [ref=e160] [cursor=pointer]
+        - img "丸沼(国):10分雨量 0.0mm" [ref=e161] [cursor=pointer]
+        - img "鎌田(国):10分雨量 0.0mm" [ref=e162] [cursor=pointer]
+        - img "鳩待峠(国):10分雨量 0.0mm" [ref=e163] [cursor=pointer]
+        - img "坤六峠(国):10分雨量 0.0mm" [ref=e164] [cursor=pointer]
+        - img "片品(気):10分雨量 0.0mm" [ref=e165] [cursor=pointer]
+        - img "川場(砂):10分雨量 0.0mm" [ref=e166] [cursor=pointer]
+        - img "武尊高原(国):10分雨量 0.0mm" [ref=e167] [cursor=pointer]
+        - img "昭和(砂):10分雨量 0.0mm" [ref=e168] [cursor=pointer]
+        - img "太田:10分雨量 0.0mm" [ref=e169] [cursor=pointer]
+        - img "三ツ木:10分雨量 0.0mm" [ref=e170] [cursor=pointer]
+        - img "成塚:10分雨量 0.0mm" [ref=e171] [cursor=pointer]
+        - img "足利(国):10分雨量 0.0mm" [ref=e172] [cursor=pointer]
+        - img "桐生川ダム:10分雨量 0.0mm" [ref=e173] [cursor=pointer]
+        - img "津久原:10分雨量 0.0mm" [ref=e174] [cursor=pointer]
+        - img "菱町(砂):10分雨量 0.0mm" [ref=e175] [cursor=pointer]
+        - img "津久原(国):10分雨量 0.0mm" [ref=e176] [cursor=pointer]
+        - img "楡沢(国):10分雨量 0.0mm" [ref=e177] [cursor=pointer]
+        - img "松田(国):10分雨量 0.0mm" [ref=e178] [cursor=pointer]
+        - img "桐生(国):10分雨量 0.0mm" [ref=e179] [cursor=pointer]
+        - img "桐生(気):10分雨量 0.0mm" [ref=e180] [cursor=pointer]
+        - img "黒保根(気):10分雨量 0.0mm" [ref=e181] [cursor=pointer]
+        - img "桐生(県):10分雨量 0.0mm" [ref=e182] [cursor=pointer]
+        - img "足尾(国):10分雨量 0.0mm" [ref=e183] [cursor=pointer]
+        - img "大間々(国):10分雨量 0.0mm" [ref=e184] [cursor=pointer]
+        - img "館林(県):10分雨量 0.0mm" [ref=e185] [cursor=pointer]
+        - img "館林(気):10分雨量 0.0mm" [ref=e186] [cursor=pointer]
+        - img "小曽根(国):10分雨量 0.0mm" [ref=e187] [cursor=pointer]
+        - img "富士堰:10分雨量 0.0mm" [ref=e188] [cursor=pointer]
+        - img "藤岡(国):10分雨量 欠測" [ref=e189] [cursor=pointer]
+        - img "川俣(国):10分雨量 0.0mm" [ref=e190] [cursor=pointer]
+        - img "栗橋(国):10分雨量 0.0mm" [ref=e191] [cursor=pointer]
+        - img "草木(道):10分雨量 0.0mm" [ref=e192] [cursor=pointer]
+        - img "県庁裏:水位 -0.41m 上昇中" [ref=e193] [cursor=pointer]
+        - img "大胡:水位 1.04m" [ref=e194] [cursor=pointer]
+        - img "上泉:水位 1.63m" [ref=e195] [cursor=pointer]
+        - img "細井:水位 1.23m" [ref=e196] [cursor=pointer]
+        - img "川曲:水位 0.37m" [ref=e197] [cursor=pointer]
+        - img "元総社:水位 -0.09m" [ref=e198] [cursor=pointer]
+        - img "笂井:水位 0.31m" [ref=e199] [cursor=pointer]
+        - img "下増田:水位 0.52m" [ref=e200] [cursor=pointer]
+        - img "前橋(国):水位 1.69m 上昇中" [ref=e201] [cursor=pointer]
+        - img "下武士:水位 0.12m" [ref=e202] [cursor=pointer]
+        - img "三光:水位 0.49m" [ref=e203] [cursor=pointer]
+        - img "八幡:水位 0.49m 下降中" [ref=e204] [cursor=pointer]
+        - img "松原橋:水位 1.14m 下降中" [ref=e205] [cursor=pointer]
+        - img "大川:水位 0.32m" [ref=e206] [cursor=pointer]
+        - img "堀口:水位 0.23m" [ref=e207] [cursor=pointer]
+        - img "境保泉:水位 1.83m" [ref=e208] [cursor=pointer]
+        - img "八斗島(国):水位 -2.51m" [ref=e209] [cursor=pointer]
+        - img "上福島(国):水位 -1.29m" [ref=e210] [cursor=pointer]
+        - img "平沢橋:水位 0.11m" [ref=e211] [cursor=pointer]
+        - img "清水橋:水位 0.30m" [ref=e212] [cursor=pointer]
+        - img "半田:水位 0.05m" [ref=e213] [cursor=pointer]
+        - img "吾妻橋:水位 1.59m" [ref=e214] [cursor=pointer]
+        - img "大正橋:水位 欠測" [ref=e215] [cursor=pointer]
+        - img "村上(国):水位 0.42m" [ref=e216] [cursor=pointer]
+        - img "漆原:水位 -0.45m" [ref=e217] [cursor=pointer]
+        - img "元島名:水位 0.48m" [ref=e218] [cursor=pointer]
+        - img "井野:水位 0.37m" [ref=e219] [cursor=pointer]
+        - img "西新波:水位 0.35m" [ref=e220] [cursor=pointer]
+        - img "箕郷:水位 1.03m 下降中" [ref=e221] [cursor=pointer]
+        - img "上室田:水位 0.13m" [ref=e222] [cursor=pointer]
+        - img "染谷川:水位 0.60m" [ref=e223] [cursor=pointer]
+        - img "烏川:水位 1.54m 上昇中" [ref=e224] [cursor=pointer]
+        - img "稲荷:水位 1.56m" [ref=e225] [cursor=pointer]
+        - img "岩鼻(国):水位 -1.25m" [ref=e226] [cursor=pointer]
+        - img "高松(国):水位 0.35m" [ref=e227] [cursor=pointer]
+        - img "上里見(国):水位 -0.01m" [ref=e228] [cursor=pointer]
+        - img "山名(国):水位 1.29m" [ref=e229] [cursor=pointer]
+        - img "豊岡:水位 -0.03m" [ref=e230] [cursor=pointer]
+        - img "三波川:水位 0.76m" [ref=e231] [cursor=pointer]
+        - img "温井川:水位 0.35m" [ref=e232] [cursor=pointer]
+        - img "鬼石:水位 0.40m" [ref=e233] [cursor=pointer]
+        - img "鮎川:水位 -1.22m" [ref=e234] [cursor=pointer]
+        - img "八幡橋:水位 0.27m" [ref=e235] [cursor=pointer]
+        - img "岩崎:水位 0.16m" [ref=e236] [cursor=pointer]
+        - img "勅使河原(国):水位 2.01m" [ref=e237] [cursor=pointer]
+        - img "下高田:水位 0.50m" [ref=e238] [cursor=pointer]
+        - img "七日市:水位 1.47m" [ref=e239] [cursor=pointer]
+        - img "丹生:水位 0.23m" [ref=e240] [cursor=pointer]
+        - img "中瀬橋:水位 0.00m 下降中" [ref=e241] [cursor=pointer]
+        - img "本宿:水位 0.66m" [ref=e242] [cursor=pointer]
+        - img "東部大橋:水位 -0.07m 上昇中" [ref=e243] [cursor=pointer]
+        - img "丸岩:水位 0.06m" [ref=e244] [cursor=pointer]
+        - img "八千代:水位 0.09m" [ref=e245] [cursor=pointer]
+        - img "網掛:水位 0.36m" [ref=e246] [cursor=pointer]
+        - img "秋畑:水位 0.71m 上昇中" [ref=e247] [cursor=pointer]
+        - img "白倉:水位 0.21m 上昇中" [ref=e248] [cursor=pointer]
+        - img "大仁田:水位 0.04m" [ref=e249] [cursor=pointer]
+        - img "雨沢:水位 0.16m" [ref=e250] [cursor=pointer]
+        - img "花の木:水位 0.59m" [ref=e251] [cursor=pointer]
+        - img "自性寺:水位 -0.46m" [ref=e252] [cursor=pointer]
+        - img "国衙:水位 1.37m" [ref=e253] [cursor=pointer]
+        - img "中後閑:水位 0.63m" [ref=e254] [cursor=pointer]
+        - img "中宿:水位 0.07m" [ref=e255] [cursor=pointer]
+        - img "安中(国):水位 0.57m" [ref=e256] [cursor=pointer]
+        - img "灘田橋:水位 0.65m" [ref=e257] [cursor=pointer]
+        - img "西尾:水位 0.52m 上昇中" [ref=e258] [cursor=pointer]
+        - img "人見:水位 0.98m" [ref=e259] [cursor=pointer]
+        - img "板鼻:水位 0.37m" [ref=e260] [cursor=pointer]
+        - img "滝名田:水位 0.00m" [ref=e261] [cursor=pointer]
+        - img "霧積:水位 0.07m 下降中" [ref=e262] [cursor=pointer]
+        - img "市城:水位 0.50m" [ref=e263] [cursor=pointer]
+        - img "嘉満ヶ淵:水位 0.24m" [ref=e264] [cursor=pointer]
+        - img "山田:水位 0.23m" [ref=e265] [cursor=pointer]
+        - img "郷原:水位 3.24m" [ref=e266] [cursor=pointer]
+        - img "大戸:水位 0.63m" [ref=e267] [cursor=pointer]
+        - img "岩島(国):水位 -0.65m" [ref=e268] [cursor=pointer]
+        - img "三原:水位 1.31m" [ref=e269] [cursor=pointer]
+        - img "尻高:水位 0.45m" [ref=e270] [cursor=pointer]
+        - img "薄根橋:水位 1.27m" [ref=e271] [cursor=pointer]
+        - img "上発知:水位 1.00m" [ref=e272] [cursor=pointer]
+        - img "四釜:水位 0.77m" [ref=e273] [cursor=pointer]
+        - img "上久屋(国):水位 0.15m" [ref=e274] [cursor=pointer]
+        - img "岩本(国):水位 -0.16m" [ref=e275] [cursor=pointer]
+        - img "屋形原(国):水位 -0.15m" [ref=e276] [cursor=pointer]
+        - img "発知(国):水位 0.11m" [ref=e277] [cursor=pointer]
+        - img "千鳥(国):水位 0.28m" [ref=e278] [cursor=pointer]
+        - img "湯桧曽:水位 3.22m" [ref=e279] [cursor=pointer]
+        - img "月夜野橋:水位 3.20m" [ref=e280] [cursor=pointer]
+        - img "川古(国):水位 2.42m" [ref=e281] [cursor=pointer]
+        - img "吹路(国):水位 0.01m" [ref=e282] [cursor=pointer]
+        - img "小袖橋(国):水位 0.57m 上昇中" [ref=e283] [cursor=pointer]
+        - img "湯原(国):水位 2.40m" [ref=e284] [cursor=pointer]
+        - img "東小川:水位 -0.06m" [ref=e285] [cursor=pointer]
+        - img "越本:水位 0.34m" [ref=e286] [cursor=pointer]
+        - img "鎌田(国):水位 1.82m" [ref=e287] [cursor=pointer]
+        - img "前島:水位 0.49m" [ref=e288] [cursor=pointer]
+        - img "牛沢:水位 欠測" [ref=e289] [cursor=pointer]
+        - img "細谷:水位 0.58m" [ref=e290] [cursor=pointer]
+        - img "下田島:水位 0.38m" [ref=e291] [cursor=pointer]
+        - img "新田木崎:水位 0.43m" [ref=e292] [cursor=pointer]
+        - img "徳川橋:水位 0.55m 下降中" [ref=e293] [cursor=pointer]
+        - img "古戸(国):水位 -1.87m" [ref=e294] [cursor=pointer]
+        - img "足利(国):水位 -0.03m" [ref=e295] [cursor=pointer]
+        - img "葉鹿橋(国):水位 0.24m 上昇中" [ref=e296] [cursor=pointer]
+        - img "上久方:水位 1.12m" [ref=e297] [cursor=pointer]
+        - img "山田川:水位 0.23m" [ref=e298] [cursor=pointer]
+        - img "大堰:水位 0.37m" [ref=e299] [cursor=pointer]
+        - img "広見:水位 -0.27m" [ref=e300] [cursor=pointer]
+        - img "広見橋(国):水位 -0.27m" [ref=e301] [cursor=pointer]
+        - img "高津戸(国):水位 -0.36m" [ref=e302] [cursor=pointer]
+        - img "岩井(国):水位 -0.49m" [ref=e303] [cursor=pointer]
+        - img "大島(国):水位 -0.94m" [ref=e304] [cursor=pointer]
+        - img "早川田上(国):水位 0.59m" [ref=e305] [cursor=pointer]
+        - img "新堀橋:水位 1.22m 上昇中" [ref=e306] [cursor=pointer]
+        - img "新中野:水位 1.03m 下降中" [ref=e307] [cursor=pointer]
+        - img "西小泉:水位 1.38m" [ref=e308] [cursor=pointer]
+        - img "休泊川内(国):水位 23.28m" [ref=e309] [cursor=pointer]
+        - img "休泊川外(国):水位 23.39m" [ref=e310] [cursor=pointer]
+        - img "川俣(国):水位 -3.79m" [ref=e311] [cursor=pointer]
+        - img "藤の木橋:水位 1.04m" [ref=e312] [cursor=pointer]
+        - img "谷田川(国):水位 14.32m" [ref=e313] [cursor=pointer]
+        - img "藤岡(国):水位 -2.28m" [ref=e314] [cursor=pointer]
+        - img "古河(国):水位 -1.62m" [ref=e315] [cursor=pointer]
+        - img "栗橋(国):水位 -1.33m 下降中" [ref=e316] [cursor=pointer]
+        - img "坂本ダム:貯水位 520.59m" [ref=e317] [cursor=pointer]
+        - img "霧積ダム:貯水位 599.38m" [ref=e318] [cursor=pointer]
+        - img "塩沢ダム:貯水位 528.49m" [ref=e319] [cursor=pointer]
+        - img "道平川ダム:貯水位 459.32m" [ref=e320] [cursor=pointer]
+        - img "大仁田ダム:貯水位 679.24m" [ref=e321] [cursor=pointer]
+        - img "四万川ダム:貯水位 728.78m" [ref=e322] [cursor=pointer]
+        - img "桐生川ダム:貯水位 242.73m" [ref=e323] [cursor=pointer]
+      - generic [ref=e324]:
+        - heading "凡例" [level=6] [ref=e325]
+        - generic [ref=e326]:
+          - paragraph [ref=e327]: 雨量
+          - generic:
+            - term [ref=e328]:
+              - img "雨量赤アイコン" [ref=e329]
+            - definition [ref=e330]: 80mm以上
+            - term [ref=e331]:
+              - img "雨量オレンジアイコン" [ref=e332]
+            - definition [ref=e333]: 50mm以上
+            - term [ref=e334]:
+              - img "雨量黄色アイコン" [ref=e335]
+            - definition [ref=e336]: 20mm以上
+            - term [ref=e337]:
+              - img "雨量青アイコン" [ref=e338]
+            - definition [ref=e339]: 10mm以上
+            - term [ref=e340]:
+              - img "雨量水色アイコン" [ref=e341]
+            - definition [ref=e342]: 1mm以上
+            - term [ref=e343]:
+              - img "雨量白アイコン" [ref=e344]
+            - definition [ref=e345]: 1mm未満
+            - term [ref=e346]:
+              - img "雨量灰色アイコン" [ref=e347]
+            - definition [ref=e348]: 欠測
+        - generic [ref=e349]:
+          - paragraph [ref=e350]: 水位
+          - generic:
+            - term [ref=e351]:
+              - img "水位紫アイコン" [ref=e352]
+            - definition [ref=e353]: 計画高水位
+            - term [ref=e354]:
+              - img "水位赤アイコン" [ref=e355]
+            - definition [ref=e356]: 氾濫危険水位
+            - term [ref=e357]:
+              - img "水位オレンジアイコン" [ref=e358]
+            - definition [ref=e359]: 避難判断水位
+            - term [ref=e360]:
+              - img "水位黄色アイコン" [ref=e361]
+            - definition [ref=e362]: 氾濫注意水位
+            - term [ref=e363]:
+              - img "水位青アイコン" [ref=e364]
+            - definition [ref=e365]: 水防団待機水位
+            - term [ref=e366]:
+              - img "水位白アイコン" [ref=e367]
+            - definition [ref=e368]: 通常
+            - term [ref=e369]:
+              - img "水位欠測アイコン" [ref=e370]
+            - definition [ref=e371]: 欠測
+            - term [ref=e372]:
+              - img "水位上昇アイコン" [ref=e373]
+            - definition [ref=e374]: 上昇(変化なし)
+            - term [ref=e375]:
+              - img "水位下降中アイコン" [ref=e376]
+            - definition [ref=e377]: 下降中
+        - generic [ref=e378]:
+          - paragraph [ref=e379]: ダム
+          - generic [ref=e380]:
+            - term [ref=e381]:
+              - img "水位紫アイコン" [ref=e382]
+            - definition [ref=e383]: 異常洪水(ダム満水)
+            - term [ref=e384]:
+              - img "水位赤アイコン" [ref=e385]
+            - definition [ref=e386]: 洪水調節中
+            - term [ref=e387]:
+              - img "水位オレンジアイコン" [ref=e388]
+            - definition [ref=e389]: 洪水調節準備中
+            - term [ref=e390]:
+              - img "水位黄色アイコン" [ref=e391]
+            - definition [ref=e392]: 通常
+            - term [ref=e393]:
+              - img "水位青アイコン" [ref=e394]
+            - definition [ref=e395]: 欠測
+    - generic [ref=e396]:
+      - generic [ref=e397]:
+        - heading "雨量" [level=4] [ref=e398]
+        - paragraph [ref=e399]:
+          - text: 60分雨量・累加雨量で、基準値を超過した地点の有無を
+          - text: 表示します
+      - table [ref=e401]:
+        - rowgroup [ref=e402]:
+          - row "60分雨量 超過なし" [ref=e403]:
+            - rowheader "60分雨量" [ref=e404]
+            - cell "超過なし" [ref=e405]:
+              - generic [ref=e406]: 超過なし
+          - row "累加雨量 超過なし" [ref=e407]:
+            - rowheader "累加雨量" [ref=e408]
+            - cell "超過なし" [ref=e409]:
+              - generic [ref=e410]: 超過なし
+      - generic [ref=e411]:
+        - heading "水位" [level=4] [ref=e412]
+        - paragraph [ref=e413]: 水位で、基準値を超過した地点の有無を表示します
+      - generic [ref=e414]:
+        - table [ref=e415]:
+          - rowgroup [ref=e416]:
+            - row "計画高 超過なし" [ref=e417]:
+              - rowheader "計画高" [ref=e418]
+              - cell "超過なし" [ref=e419]:
+                - generic [ref=e420]: 超過なし
+            - row "氾濫危険 超過なし" [ref=e421]:
+              - rowheader "氾濫危険" [ref=e422]
+              - cell "超過なし" [ref=e423]:
+                - generic [ref=e424]: 超過なし
+            - row "避難判断 超過なし" [ref=e425]:
+              - rowheader "避難判断" [ref=e426]
+              - cell "超過なし" [ref=e427]:
+                - generic [ref=e428]: 超過なし
+            - row "氾濫注意 超過なし" [ref=e429]:
+              - rowheader "氾濫注意" [ref=e430]
+              - cell "超過なし" [ref=e431]:
+                - generic [ref=e432]: 超過なし
+            - row "水防団待機 超過なし" [ref=e433]:
+              - rowheader "水防団待機" [ref=e434]
+              - cell "超過なし" [ref=e435]:
+                - generic [ref=e436]: 超過なし
+        - img "現在の超過状況は「超過なし」です。" [ref=e438]
+    - generic [ref=e439]:
+      - heading "リンク先" [level=4] [ref=e440]
+      - list [ref=e442]:
+        - listitem [ref=e443]:
+          - link "群馬県の防災ページ" [ref=e444] [cursor=pointer]:
+            - /url: http://www.pref.gunma.jp/05/a5510001.html
+        - listitem [ref=e445]:
+          - link "群馬県県土整備部防災情報" [ref=e446] [cursor=pointer]:
+            - /url: http://www.kendobousai-gunma.jp/
+        - listitem [ref=e447]:
+          - link "かわみるぐんま（パソコン版）" [ref=e448] [cursor=pointer]:
+            - /url: https://suibou-gunma.jp/
+        - listitem [ref=e449]:
+          - link "かわみるぐんま（スマホ版）" [ref=e450] [cursor=pointer]:
+            - /url: https://mobile.suibou-gunma.jp/
+        - listitem [ref=e451]:
+          - link "川の防災情報（国土交通省）" [ref=e452] [cursor=pointer]:
+            - /url: http://www.river.go.jp/
+        - listitem [ref=e453]:
+          - link "川の水位情報（国土交通省）" [ref=e454] [cursor=pointer]:
+            - /url: https://k.river.go.jp/
+        - listitem [ref=e455]:
+          - link "tsulunos(YouTubeチャンネル)" [ref=e456] [cursor=pointer]:
+            - /url: https://www.youtube.com/playlist?list=PLEw1MzzXRoq--MvAXlCcrg-E1wUFBhzkF
+      - heading "モバイル" [level=4] [ref=e457]
+      - list [ref=e458]:
+        - listitem [ref=e459]:
+          - img "携帯電話サイトのQRコード" [ref=e460]
+        - listitem [ref=e461]: 携帯電話サイト
+        - listitem [ref=e462]:
+          - link "http://www.river-gunma.jp/k/" [ref=e463] [cursor=pointer]:
+            - /url: http://www.river-gunma.jp/k/
+      - list [ref=e464]:
+        - listitem [ref=e465]:
+          - img "スマートフォンサイトのQRコード" [ref=e466]
+        - listitem [ref=e467]: スマートフォンサイト
+        - listitem [ref=e468]:
+          - link "https://www.river-gunma.jp/sp/" [ref=e469] [cursor=pointer]:
+            - /url: https://www.river-gunma.jp/sp/
+    - generic [ref=e470]:
+      - heading "お知らせ" [level=4] [ref=e471]: お知らせ
+      - list [ref=e473]:
+        - listitem [ref=e474]:
+          - text: YouTubeチャンネル「tsulunos」で河川監視カメラのライブ配信を開始しました。
+          - text: （左下のリンク先を参照ください）
+          - text: 危機管理型水位計・簡易型河川監視カメラの観測情報は「かわみるぐんま」や「川の水位情報（国土交通省）」により、ご確認いただけます。
+          - text: （左下のリンク先を参照してください）
+          - text: 設備工事等の影響により、一時的にデータが欠測する場合があります。
+  - generic [ref=e475]:
+    - list [ref=e476]:
+      - listitem [ref=e477]:
+        - link "TOP" [ref=e478] [cursor=pointer]:
+          - /url: javascript:void(0)
+      - listitem [ref=e479]:
+        - link "観測情報" [ref=e480] [cursor=pointer]:
+          - /url: javascript:void(0)
+      - listitem [ref=e481]:
+        - link "カメラ画像" [ref=e482] [cursor=pointer]:
+          - /url: javascript:void(0)
+    - generic [ref=e484]:
+      - paragraph [ref=e485]: 県土整備部 河川課
+      - generic [ref=e486]:
+        - paragraph [ref=e487]: 〒371-8570 群馬県前橋市大手町1丁目1-1
+        - paragraph [ref=e488]: "TEL : 027-226-3619"

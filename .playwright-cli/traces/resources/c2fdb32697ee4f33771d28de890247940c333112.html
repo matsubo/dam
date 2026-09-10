@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+
+
+
+
+
+
+
+
+
+
+<head>
+	<title>愛媛県　河川・砂防情報</title>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+	<meta http-equiv="Pragma" content="no-cache">
+	<link rel="stylesheet" href="../servlet/css/subgamen.css" type="text/css" title="Style" />
+    <link rel="stylesheet" href="../servlet/css/import_contents.css" type="text/css" />
+    <script type="text/javascript" src="../servlet/jquery/jquery-3.6.0.min.js"></script>
+    <script type="text/javascript" src="../servlet/jquery/jquery-ui.min.js"></script>
+    <script type="text/javascript" src="../servlet/jquery/jquery.li-scroller.1.0.js"></script>
+    <script type="text/javascript" src="../servlet/const.js"></script>
+    <script type="text/javascript" src="../servlet/menuconfig.js"></script>
+    <script type="text/javascript" src="../servlet/menuparam.js"></script>
+    <script type="text/javascript" src="../servlet/js/gnav.js"></script>
+    <script type="text/javascript" src="../servlet/js/linkoff.js"></script>
+</head>
+
+<body onload="">
+	<img src="../servlet/img/systemtitle.jpg">
+
+    <div class="menuTable">
+    
+
+    
+    <div id="gMenu" class="clear">
+        <ul class="mainMenu">
+            <li class="top"><img src="../menu/publicmenu_top_on.gif"></li>
+            <li class="kisyo"><img src="../menu/publicmenu_kisyo_on.gif"></li>
+            <li class="kaseninfo"><img src="../menu/publicmenu_kaseninfo_on.gif"></li>
+            <li class="dosya"><img src="../menu/publicmenu_dosya_on.gif"></li>
+            <li class="mizu"><img src="../menu/publicmenu_mizu_on.gif"></li>
+            <li class="damu"><img src="../menu/publicmenu_damu_on.gif"></li>
+            <li class="ame"><img src="../menu/publicmenu_ame_on.gif"></li>
+            <li class="radar"><img src="../menu/publicmenu_radar_on.gif"></li>
+            <li class="excess"><img src="../menu/publicmenu_excess_on.gif"></li>
+            <li class="etc"><img src="../menu/publicmenu_etc_on.gif"></li>
+        </ul>
+    </div>
+</div>
+
+
+	<table id="subGamenName">
+ 		<tbody>
+			<tr>
+				<td class="w280">
+					<div class="ml10">画面名：<a id="gamenname" class="text16"></a></div>
+				</td>
+				<td class="w720">
+
+					
+					<div id="grpid" style="cursor:pointer;" class="grpidshow">
+						<div id="grpipdselect" class="grpipdselect"></div>
+					</div>
+
+					
+					<div id="pg" style="cursor:pointer;" class="pgshow">
+						<div id="pageswitch">
+							<span class="pageup">
+								<button id="down" class="text11" style="vertical-align: middle;">＜</button>
+							</span>
+							<label style="position: relative;top:2px;" for="">Page <span id="textbox">1</span>/<span id="pagemax">2</span></label>
+							<span class="pagedown">
+								<button id="up" class="text11" style="vertical-align: middle;">＞</button>
+							</span>
+						</div>
+					</div>
+
+					
+					<div id="ktm" style="cursor:pointer;" class="ktmshow">
+						<div id="ktmradio">
+							<input id="ktmHour" type="radio" name="ktm" value="1" checked><label class="ktm" for="ktmHour">時間</label>
+							<input id="ktm10m" type="radio" name="ktm" value="3"><label class="ktm" for="ktm10m">10分</label>
+						</div>
+					</div>
+					
+					<div id="kra" style="cursor:pointer;" class="krashow">
+						<div id="kraradio">
+							<input id="kra60Ame" type="radio" name="kra" value="5" checked><label class="kra" for="kra60Ame">警戒値(60分)</label>
+							<input id="kraRuika" type="radio" name="kra" value="13"><label class="kra" for="kraRuika">警戒値(累加)</label>
+						</div>
+					</div>
+
+				</td>
+			</tr>
+		</tbody>
+	</table>
+
+	<!-- フレーム画面 -->
+	<iframe id="ifreame" class="pt10" name="ifr" src="" style="border: none;"></iframe>
+
+</body>
+
+</html>

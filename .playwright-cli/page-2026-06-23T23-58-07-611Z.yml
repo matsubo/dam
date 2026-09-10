@@ -1,0 +1,337 @@
+- generic [ref=e2]:
+  - generic [ref=e4]:
+    - generic [ref=e6]:
+      - button "webReader メニュー" [ref=e7]:
+        - generic [ref=e8]: 
+      - button "読み上げる" [ref=e9] [cursor=pointer]:
+        - generic [ref=e11]:
+          - text: 
+          - generic [ref=e12]: 読み上げる
+          - text: 
+        - generic [ref=e13]: 
+    - link "Foreign Language" [ref=e15] [cursor=pointer]:
+      - /url: https://www.pref.hokkaido.lg.jp/foreign/translate.html
+  - banner [ref=e16]:
+    - generic [ref=e17]:
+      - generic [ref=e18]:
+        - generic [ref=e19]:
+          - link "北海道トップ" [ref=e21] [cursor=pointer]:
+            - /url: https://www.pref.hokkaido.lg.jp/
+            - generic [ref=e23]: 北海道トップ
+          - link "胆振総合振興局トップ" [ref=e25] [cursor=pointer]:
+            - /url: /
+            - generic [ref=e26]: 胆振総合振興局トップ
+        - navigation [ref=e28]:
+          - list [ref=e29]:
+            - listitem [ref=e30]:
+              - link "カテゴリから探す" [ref=e31] [cursor=pointer]:
+                - /url: /category/index.html
+                - generic [ref=e33]: カテゴリから探す
+            - listitem [ref=e34]:
+              - link "組織から探す" [ref=e35] [cursor=pointer]:
+                - /url: /soshiki/index.html
+                - generic [ref=e37]: 組織から探す
+            - listitem [ref=e38]:
+              - link "防災 情報" [ref=e39] [cursor=pointer]:
+                - /url: https://www.pref.hokkaido.lg.jp/sm/ktk/saigai-bousai.html
+                - generic [ref=e41]: 防災 情報
+      - generic [ref=e42]:
+        - generic:
+          - list
+        - generic [ref=e43]:
+          - textbox [ref=e44]
+          - button "検索" [ref=e45] [cursor=pointer]
+  - generic [ref=e48]:
+    - link "HOME" [ref=e51] [cursor=pointer]:
+      - /url: /
+    - text: ›
+    - link "建設管理部" [ref=e54] [cursor=pointer]:
+      - /url: /kk/
+    - text: ›
+    - link "室蘭建設管理部" [ref=e57] [cursor=pointer]:
+      - /url: /kk/mkk/
+    - text: ›
+    - link "mur-dogen" [ref=e60] [cursor=pointer]:
+      - /url: /kk/mkk/mur-dogen/
+    - text: ›
+    - link "kanriDam" [ref=e63] [cursor=pointer]:
+      - /url: /kk/mkk/mur-dogen/kanriDam/
+    - text: ›
+    - generic [ref=e64]: 様似ダム
+  - main [ref=e65]:
+    - generic [ref=e66]:
+      - generic [ref=e67]:
+        - heading "様似ダム" [level=1] [ref=e69]
+        - generic [ref=e70]:
+          - navigation [ref=e71]:
+            - heading "ページ内目次" [level=2] [ref=e72]
+            - list [ref=e73]:
+              - listitem [ref=e74]:
+                - link "様似ダムの概要" [ref=e75] [cursor=pointer]:
+                  - /url: "#chapter-0"
+              - listitem [ref=e76]:
+                - link "様似ダムの諸元と計画の概要" [ref=e77] [cursor=pointer]:
+                  - /url: "#chapter-1"
+          - generic [ref=e78]:
+            - article [ref=e79]:
+              - paragraph [ref=e81]:
+                - img "様似ダム全景" [ref=e82]
+              - heading "様似ダムの概要" [level=2] [ref=e84]
+              - heading "様似治水ダム建設事業" [level=3] [ref=e86]
+              - paragraph [ref=e88]: 様似川は北海道の南端襟裳岬の西方に位置し、北海道の背梁日高山脈を源として南流して太平洋に注ぐ流路延長22.3km、流域面積83.6kmの二級河川です。
+              - paragraph [ref=e90]:
+                - text: 様似ダムは様似川水系様似川の北海道様似郡様似町字新富地先に昭和50年に完成しました。
+                - text: ダムは重力式コンクリートダムであり、高さ44.0m、総貯水容量 6,200,000 m3、
+                - text: 有効貯水量 4,910,000m3で洪水調節を目的とします。
+              - heading "事業の大要" [level=3] [ref=e92]
+              - paragraph [ref=e94]:
+                - text: ダム地点の計画高水流量 580 m3/s のうち356 m3/s の洪水を調節し、ダム下流域の水害を防除します。
+                - text: 昭和54年度から58年度にかけてダム周辺の環境整備が実施され、昭和61年度から平成2年度にかけては
+                - text: 管理施設改良のため堰堤改良事業が行われました。
+                - text: また、平成5年度から平成11年度にかけては水環境改善事業により魚道を設置しました。
+              - heading "アクセスマップ" [level=3] [ref=e96]
+              - paragraph [ref=e98]:
+                - img "様似ダムアクセスマップ" [ref=e99]
+              - heading "様似ダムの諸元と計画の概要" [level=2] [ref=e101]
+              - table "ダムの諸元" [ref=e103]:
+                - caption [ref=e104]: ダムの諸元
+                - rowgroup [ref=e105]:
+                  - row
+                  - row "型式 重力式コンクリート" [ref=e106]:
+                    - cell "型式" [ref=e107]
+                    - cell "重力式コンクリート" [ref=e108]
+                  - row "堤高 44.0m" [ref=e109]:
+                    - cell "堤高" [ref=e110]
+                    - cell "44.0m" [ref=e111]
+                  - row "堤頂長 140m" [ref=e112]:
+                    - cell "堤頂長" [ref=e113]
+                    - cell "140m" [ref=e114]
+                  - row "堤体積 76,000m3" [ref=e115]:
+                    - cell "堤体積" [ref=e116]
+                    - cell "76,000m3" [ref=e117]
+                  - row "非越流部標高 71.5m" [ref=e118]:
+                    - cell "非越流部標高" [ref=e119]
+                    - cell "71.5m" [ref=e120]
+              - table "貯水池の諸元（さまに湖）" [ref=e122]:
+                - caption [ref=e123]: 貯水池の諸元（さまに湖）
+                - rowgroup [ref=e124]:
+                  - row
+                  - row "集水面積 54.9 km2" [ref=e125]:
+                    - cell "集水面積" [ref=e126]
+                    - cell "54.9 km2" [ref=e127]
+                  - row "湛水面積 0.44 km2" [ref=e128]:
+                    - cell "湛水面積" [ref=e129]
+                    - cell "0.44 km2" [ref=e130]
+                  - row "総貯水容量 6,200,000 m3" [ref=e131]:
+                    - cell "総貯水容量" [ref=e132]
+                    - cell "6,200,000 m3" [ref=e133]
+                  - row "有効貯水容量 4,910,000 m3" [ref=e134]:
+                    - cell "有効貯水容量" [ref=e135]
+                    - cell "4,910,000 m3" [ref=e136]
+                  - row "洪水調節容量 4,000,000 m3" [ref=e137]:
+                    - cell "洪水調節容量" [ref=e138]
+                    - cell "4,000,000 m3" [ref=e139]
+                  - row "不特定容量 －" [ref=e140]:
+                    - cell "不特定容量" [ref=e141]
+                    - cell "－" [ref=e142]
+              - table "放流設備" [ref=e144]:
+                - caption [ref=e145]: 放流設備
+                - rowgroup [ref=e146]:
+                  - row
+                  - row "非常用洪水吐 ローラゲート 12.80m×6.00m～2門" [ref=e147]:
+                    - cell "非常用洪水吐" [ref=e148]
+                    - cell "ローラゲート 12.80m×6.00m～2門" [ref=e149]:
+                      - text: ローラゲート
+                      - text: 12.80m×6.00m～2門
+                  - row "常用洪水吐 (非常用洪水吐と兼用)" [ref=e150]:
+                    - cell "常用洪水吐" [ref=e151]
+                    - cell "(非常用洪水吐と兼用)" [ref=e152]
+                  - row "非常用放流設備 ホロージェットバルブ φ700mm" [ref=e153]:
+                    - cell "非常用放流設備" [ref=e154]
+                    - cell "ホロージェットバルブ φ700mm" [ref=e155]:
+                      - text: ホロージェットバルブ
+                      - text: φ700mm
+              - table "計画概要（洪水調節）" [ref=e157]:
+                - caption [ref=e158]: 計画概要（洪水調節）
+                - rowgroup [ref=e159]:
+                  - row
+                  - row "調節方式 一定開度自然調節" [ref=e160]:
+                    - cell "調節方式" [ref=e161]
+                    - cell "一定開度自然調節" [ref=e162]
+                  - row "治水安全度 1/50" [ref=e163]:
+                    - cell "治水安全度" [ref=e164]
+                    - cell "1/50" [ref=e165]
+                  - row "計画降雨量 300 mm/日" [ref=e166]:
+                    - cell "計画降雨量" [ref=e167]
+                    - cell "300 mm/日" [ref=e168]
+                  - row "計画高水流量 580m 3/s → 224 m3/s" [ref=e169]:
+                    - cell "計画高水流量" [ref=e170]
+                    - cell "580m 3/s → 224 m3/s" [ref=e171]
+                  - row "設計洪水流量 820 m3/s" [ref=e172]:
+                    - cell "設計洪水流量" [ref=e173]
+                    - cell "820 m3/s" [ref=e174]
+              - table "計画概要（その他）" [ref=e176]:
+                - caption [ref=e177]: 計画概要（その他）
+                - rowgroup [ref=e178]:
+                  - row
+                  - row "設計震度 0.15" [ref=e179]:
+                    - cell "設計震度" [ref=e180]
+                    - cell "0.15" [ref=e181]
+                  - row "洪水量 175 m3/s" [ref=e182]:
+                    - cell "洪水量" [ref=e183]
+                    - cell "175 m3/s" [ref=e184]
+                  - row "工期 予備調S42 実調S43～S44 建設 S45～S50" [ref=e185]:
+                    - cell "工期" [ref=e186]
+                    - cell "予備調S42 実調S43～S44 建設 S45～S50" [ref=e187]:
+                      - text: 予備調S42
+                      - text: 実調S43～S44
+                      - text: 建設 S45～S50
+              - heading "様似ダムの運用図" [level=3] [ref=e189]
+              - heading "様似ダム標準断面図および容量配分図" [level=4] [ref=e191]
+              - paragraph [ref=e193]:
+                - img "様似ダム標準断面図および容量配分図" [ref=e194]
+              - heading "洪水調節図" [level=4] [ref=e196]
+              - paragraph [ref=e198]:
+                - img "洪水調節図" [ref=e199]
+              - heading "流量配分図（単位m3/s）" [level=4] [ref=e201]
+              - paragraph [ref=e203]:
+                - img "流量配分図（単位m3/s）" [ref=e204]
+            - generic [ref=e205]:
+              - heading "カテゴリ" [level=2] [ref=e207]
+              - list [ref=e209]:
+                - listitem [ref=e210]:
+                  - link "河川" [ref=e211] [cursor=pointer]:
+                    - /url: /category/d012/c158/
+            - generic [ref=e212]:
+              - heading "このページに関するお問い合わせ" [level=2] [ref=e213]
+              - generic [ref=e214]:
+                - paragraph [ref=e215]: 胆振総合振興局室蘭建設管理部
+                - paragraph [ref=e216]: 〒051-8558室蘭市海岸町1丁目4番1号むろらん広域センタービル
+                - generic [ref=e217]:
+                  - term [ref=e218]: "TEL :"
+                  - definition [ref=e219]:
+                    - link "0143-24-9856":
+                      - /url: tel:0143249856
+                - generic [ref=e220]:
+                  - term [ref=e221]: "FAX :"
+                  - definition [ref=e222]: 0143-22-6042
+                - link "お問い合わせフォーム" [ref=e224] [cursor=pointer]:
+                  - /url: /inquiry/?group=1366&page=39962
+            - time [ref=e226]: 最終更新日：2022年8月4日（木曜日）
+        - link "cc-by" [ref=e228] [cursor=pointer]:
+          - /url: /site-info/sitepolicy.html#chapter-3
+          - img "cc-by" [ref=e229]
+      - generic [ref=e230]:
+        - generic [ref=e231]:
+          - heading "カテゴリー" [level=2] [ref=e233]
+          - list [ref=e235]:
+            - listitem [ref=e236]:
+              - link "河川" [ref=e237] [cursor=pointer]:
+                - /url: /category/d012/c158/
+        - generic [ref=e239]:
+          - heading "室蘭建設管理部メニュー" [level=2] [ref=e241]
+          - generic [ref=e242]:
+            - list [ref=e243]:
+              - listitem [ref=e244]:
+                - link "注目情報" [ref=e245] [cursor=pointer]:
+                  - /url: /kk/mkk/a0000/
+                - list
+            - list [ref=e246]:
+              - listitem [ref=e247]:
+                - link "室蘭建設管理部について" [ref=e248] [cursor=pointer]:
+                  - /url: /kk/mkk/a0001/
+                - list [ref=e249]:
+                  - listitem [ref=e250]:
+                    - link "各課・出張所連絡先" [ref=e251] [cursor=pointer]:
+                      - /url: /kk/mkk/a0001/b0001/
+                  - listitem [ref=e252]:
+                    - link "各出張所担当エリア" [ref=e253] [cursor=pointer]:
+                      - /url: /kk/mkk/a0001/b0002/
+                  - listitem [ref=e254]:
+                    - link "門別出張所静内総合治水事務所の休止について" [ref=e255] [cursor=pointer]:
+                      - /url: /kk/mkk/a0001/b0004/
+            - list [ref=e256]:
+              - listitem [ref=e257]:
+                - link "各課からのお知らせ" [ref=e258] [cursor=pointer]:
+                  - /url: /kk/mkk/a0002/
+                - list [ref=e259]:
+                  - listitem [ref=e260]:
+                    - link "建設行政課" [ref=e261] [cursor=pointer]:
+                      - /url: /kk/mkk/a0002/b0001/
+                  - listitem [ref=e262]:
+                    - link "入札契約課" [ref=e263] [cursor=pointer]:
+                      - /url: /kk/mkk/a0002/b0003/
+                  - listitem [ref=e264]:
+                    - link "用地課" [ref=e265] [cursor=pointer]:
+                      - /url: /kk/mkk/a0002/b0004/
+                  - listitem [ref=e266]:
+                    - link "維持管理課" [ref=e267] [cursor=pointer]:
+                      - /url: /kk/mkk/a0002/b0005/
+                  - listitem [ref=e268]:
+                    - link "地域調整課・道路課・治水課・各出張所" [ref=e269] [cursor=pointer]:
+                      - /url: /kk/mkk/a0002/b0006/
+            - list [ref=e270]:
+              - listitem [ref=e271]:
+                - link "建設指導課" [ref=e272] [cursor=pointer]:
+                  - /url: /kk/mkk/a0003/
+                - list [ref=e273]:
+                  - listitem [ref=e274]:
+                    - link "土木係" [ref=e275] [cursor=pointer]:
+                      - /url: /kk/mkk/a0003/c0001/
+                  - listitem [ref=e276]:
+                    - link "建設指導課の業務" [ref=e277] [cursor=pointer]:
+                      - /url: /kk/mkk/a0003/b0001/
+                  - listitem [ref=e278]:
+                    - link "建築住宅係" [ref=e279] [cursor=pointer]:
+                      - /url: /kk/mkk/a0003/c0002/
+                  - listitem [ref=e280]:
+                    - link "主査（建築住宅）" [ref=e281] [cursor=pointer]:
+                      - /url: /kk/mkk/a0003/c0003/
+                  - listitem [ref=e282]:
+                    - link "主査（まちづくり）" [ref=e283] [cursor=pointer]:
+                      - /url: /kk/mkk/a0003/c0004/
+    - generic [ref=e284]:
+      - link "ツイート外部のサイトに移動します" [ref=e286] [cursor=pointer]:
+        - /url: https://twitter.com/share
+        - text: ツイート
+        - img "外部のサイトに移動します" [ref=e287]
+      - link "シェアする" [ref=e289] [cursor=pointer]:
+        - /url: https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Fwww.iburi.pref.hokkaido.lg.jp%2Fkk%2Fmkk%2Fmur-dogen%2FkanriDam%2Fdam-samani.html
+      - generic:
+        - iframe
+  - paragraph [ref=e290]:
+    - link "page top" [ref=e291] [cursor=pointer]:
+      - /url: "#page"
+      - generic [ref=e292]: page top
+  - contentinfo [ref=e293]:
+    - navigation [ref=e294]:
+      - generic [ref=e295]:
+        - generic [ref=e296]:
+          - paragraph [ref=e297]:
+            - link "お問合せ・相談窓口" [ref=e298] [cursor=pointer]:
+              - /url: /site-info/contact.html
+          - paragraph [ref=e299]:
+            - link "庁舎のご案内" [ref=e300] [cursor=pointer]:
+              - /url: /chosha/index.html
+        - list [ref=e301]:
+          - listitem [ref=e302]:
+            - link "サイトポリシー" [ref=e303] [cursor=pointer]:
+              - /url: /site-info/sitepolicy.html
+          - listitem [ref=e304]:
+            - link "個人情報の取扱いについて" [ref=e305] [cursor=pointer]:
+              - /url: https://www.pref.hokkaido.lg.jp/site-info/kojinjoho.html
+          - listitem [ref=e306]:
+            - link "サイトマップ" [ref=e307] [cursor=pointer]:
+              - /url: /sitemap/index.html
+          - listitem [ref=e308]:
+            - link "北海道のオープンデータの取組" [ref=e309] [cursor=pointer]:
+              - /url: https://www.pref.hokkaido.lg.jp/kz/dxs/opendata/opendata.html
+    - generic [ref=e311]:
+      - generic [ref=e312]:
+        - text: 〒051-8558 室蘭市海岸町1丁目4番1号 むろらん広域センタービル 電話番号
+        - generic [ref=e313]:
+          - link "0143-24-9900":
+            - /url: tel:0143249900
+        - text: （総合案内）
+      - generic [ref=e314]: 一般的な業務時間：8時45分から17時30分 （土日祝日および12月29日～1月3日はお休み）
+    - generic [ref=e315]: © 2021 HOKKAIDO GOVERNMENT

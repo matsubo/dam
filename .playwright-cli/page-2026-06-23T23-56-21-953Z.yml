@@ -1,0 +1,369 @@
+- generic [active] [ref=e1]:
+  - table [ref=e2]:
+    - rowgroup [ref=e3]:
+      - row "トップページへ Google サイト内を検索する" [ref=e4]:
+        - cell "トップページへ" [ref=e5]:
+          - link "トップページへ" [ref=e6] [cursor=pointer]:
+            - /url: http://www.thr.mlit.go.jp/surikami/index.html
+            - img "トップページへ" [ref=e7]
+        - cell "Google サイト内を検索する" [ref=e8]:
+          - table [ref=e9]:
+            - rowgroup [ref=e10]:
+              - row "Google サイト内を検索する" [ref=e11]:
+                - cell "Google" [ref=e12]:
+                  - link "Google" [ref=e13] [cursor=pointer]:
+                    - /url: http://www.google.co.jp/
+                    - img "Google" [ref=e14]
+                - cell [ref=e15]:
+                  - textbox [ref=e16]
+                - cell [ref=e17]
+                - cell "サイト内を検索する" [ref=e18]:
+                  - button "サイト内を検索する" [ref=e19]
+        - cell [ref=e20]
+      - row "記者発表 入札情報 アクセスマップ サイトマップ" [ref=e21]:
+        - cell [ref=e22]
+        - cell "記者発表" [ref=e23]:
+          - link "記者発表" [ref=e24] [cursor=pointer]:
+            - /url: http://www2.thr.mlit.go.jp/surikami/kisha/index.html
+            - img "記者発表" [ref=e25]
+        - cell "入札情報" [ref=e26]:
+          - link "入札情報" [ref=e27] [cursor=pointer]:
+            - /url: http://www.thr.mlit.go.jp/surikami/nyusatu/index.html
+            - img "入札情報" [ref=e28]
+        - cell "アクセスマップ" [ref=e29]:
+          - link "アクセスマップ" [ref=e30] [cursor=pointer]:
+            - /url: http://www.thr.mlit.go.jp/surikami/access/index.html
+            - img "アクセスマップ" [ref=e31]
+        - cell "サイトマップ" [ref=e32]:
+          - link "サイトマップ" [ref=e33] [cursor=pointer]:
+            - /url: http://www.thr.mlit.go.jp/surikami/sitemap/index.html
+            - img "サイトマップ" [ref=e34]
+        - cell [ref=e35]
+      - row "ホーム ダム管理所から リンク集" [ref=e36]:
+        - cell "ホーム" [ref=e37]:
+          - link "ホーム" [ref=e38] [cursor=pointer]:
+            - /url: http://www.thr.mlit.go.jp/surikami/index.html
+            - img "ホーム" [ref=e39]
+        - cell "ダム管理所から" [ref=e40]:
+          - link "ダム管理所から" [ref=e41] [cursor=pointer]:
+            - /url: http://www.thr.mlit.go.jp/surikami/dam/index.html
+            - img "ダム管理所から" [ref=e42]
+        - cell "リンク集" [ref=e43]:
+          - link "リンク集" [ref=e44] [cursor=pointer]:
+            - /url: http://www.thr.mlit.go.jp/surikami/link/index.html
+            - img "リンク集" [ref=e45]
+        - cell [ref=e46]
+      - row [ref=e47]:
+        - cell [ref=e48]
+        - cell [ref=e49]
+  - table [ref=e50]:
+    - rowgroup [ref=e51]:
+      - row "トップページ > リアルタイムデータ" [ref=e52]:
+        - cell "トップページ > リアルタイムデータ" [ref=e53]:
+          - link "トップページ" [ref=e54] [cursor=pointer]:
+            - /url: http://www.thr.mlit.go.jp/surikami/index.html
+          - text: "> リアルタイムデータ"
+      - row "｜ 摺上川ダム 流域リアルタイム情報 ｜ 流域の雨量 ｜ 流域の水位 ｜ リアルタイムカメラ ｜ 用語解説 ｜" [ref=e55]:
+        - cell "｜ 摺上川ダム 流域リアルタイム情報 ｜ 流域の雨量 ｜ 流域の水位 ｜ リアルタイムカメラ ｜ 用語解説 ｜" [ref=e56]:
+          - text: ｜
+          - link "摺上川ダム 流域リアルタイム情報" [ref=e58] [cursor=pointer]:
+            - /url: index.html
+          - text: ｜
+          - link "流域の雨量" [ref=e59] [cursor=pointer]:
+            - /url: d-ame.html
+          - text: ｜
+          - link "流域の水位" [ref=e60] [cursor=pointer]:
+            - /url: d-suii.html
+          - text: ｜
+          - link "リアルタイムカメラ" [ref=e61] [cursor=pointer]:
+            - /url: d-camera.html
+          - text: ｜
+          - link "用語解説" [ref=e62] [cursor=pointer]:
+            - /url: http://www.thr.mlit.go.jp/surikami/shiru/07.html
+          - text: ｜
+      - row "2026/06/24 08:40現在" [ref=e63]:
+        - cell "2026/06/24 08:40現在" [ref=e64]
+  - generic:
+    - table [ref=e66]:
+      - rowgroup [ref=e67]:
+        - row "流域平均時間雨量： 0mm 流域平均累加雨量： 0mm" [ref=e68]:
+          - cell "流域平均時間雨量： 0mm 流域平均累加雨量： 0mm" [ref=e69]:
+            - table [ref=e70]:
+              - rowgroup [ref=e71]:
+                - row "流域平均時間雨量： 0mm" [ref=e72]:
+                  - cell "流域平均時間雨量：" [ref=e73]
+                  - cell "0mm" [ref=e74]
+                - row "流域平均累加雨量： 0mm" [ref=e75]:
+                  - cell "流域平均累加雨量：" [ref=e76]
+                  - cell "0mm" [ref=e77]
+    - generic [ref=e78]:
+      - text: 稲子
+      - table [ref=e79]:
+        - rowgroup [ref=e80]:
+          - row "時間雨量： 0mm 累加雨量： 0mm" [ref=e81]:
+            - cell "時間雨量： 0mm 累加雨量： 0mm" [ref=e82]:
+              - table [ref=e83]:
+                - rowgroup [ref=e84]:
+                  - row "時間雨量： 0mm" [ref=e85]:
+                    - cell "時間雨量：" [ref=e86]
+                    - cell "0mm" [ref=e87]
+                  - row "累加雨量： 0mm" [ref=e88]:
+                    - cell "累加雨量：" [ref=e89]
+                    - cell "0mm" [ref=e90]
+    - generic [ref=e91]:
+      - text: 烏川
+      - table [ref=e92]:
+        - rowgroup [ref=e93]:
+          - row "時間雨量： 0mm 累加雨量： 0mm" [ref=e94]:
+            - cell "時間雨量： 0mm 累加雨量： 0mm" [ref=e95]:
+              - table [ref=e96]:
+                - rowgroup [ref=e97]:
+                  - row "時間雨量： 0mm" [ref=e98]:
+                    - cell "時間雨量：" [ref=e99]
+                    - cell "0mm" [ref=e100]
+                  - row "累加雨量： 0mm" [ref=e101]:
+                    - cell "累加雨量：" [ref=e102]
+                    - cell "0mm" [ref=e103]
+    - generic [ref=e104]:
+      - text: 摺上川ダム管理所
+      - table [ref=e105]:
+        - rowgroup [ref=e106]:
+          - row "時間雨量： 0mm 累加雨量： 0mm" [ref=e107]:
+            - cell "時間雨量： 0mm 累加雨量： 0mm" [ref=e108]:
+              - table [ref=e109]:
+                - rowgroup [ref=e110]:
+                  - row "時間雨量： 0mm" [ref=e111]:
+                    - cell "時間雨量：" [ref=e112]
+                    - cell "0mm" [ref=e113]
+                  - row "累加雨量： 0mm" [ref=e114]:
+                    - cell "累加雨量：" [ref=e115]
+                    - cell "0mm" [ref=e116]
+    - table [ref=e123]:
+      - rowgroup [ref=e124]:
+        - row "流入量 up" [ref=e125]:
+          - cell "流入量" [ref=e126]
+          - cell "up" [ref=e127]:
+            - img "up" [ref=e128]
+        - row "10.85m3/s" [ref=e129]:
+          - cell "10.85m3/s" [ref=e130]
+    - table [ref=e133]:
+      - rowgroup [ref=e134]:
+        - row "放流量 up" [ref=e135]:
+          - cell "放流量" [ref=e136]
+          - cell "up" [ref=e137]:
+            - img "up" [ref=e138]
+        - row "9.18m3/s" [ref=e139]:
+          - cell "9.18m3/s" [ref=e140]
+    - table [ref=e142]:
+      - rowgroup [ref=e143]:
+        - row "貯水位： 295.6m up" [ref=e144]:
+          - cell "貯水位： 295.6m up" [ref=e145]:
+            - table [ref=e146]:
+              - rowgroup [ref=e147]:
+                - row "貯水位： 295.6m up" [ref=e148]:
+                  - cell "貯水位：" [ref=e149]
+                  - cell "295.6m" [ref=e150]
+                  - cell "up" [ref=e151]:
+                    - img "up" [ref=e153]
+    - table [ref=e156]:
+      - rowgroup [ref=e157]:
+        - row "水位 up" [ref=e158]:
+          - cell "水位" [ref=e159]
+          - cell "up" [ref=e160]:
+            - img "up" [ref=e161]
+        - row "###m" [ref=e162]:
+          - cell "###m" [ref=e163]
+    - table [ref=e166]:
+      - rowgroup [ref=e167]:
+        - row "水位 up" [ref=e168]:
+          - cell "水位" [ref=e169]
+          - cell "up" [ref=e170]:
+            - img "up" [ref=e171]
+        - row "0.23m" [ref=e172]:
+          - cell "0.23m" [ref=e173]
+    - table [ref=e176]:
+      - rowgroup [ref=e177]:
+        - row "水位 up" [ref=e178]:
+          - cell "水位" [ref=e179]
+          - cell "up" [ref=e180]:
+            - img "up" [ref=e181]
+        - row "1.08m" [ref=e182]:
+          - cell "1.08m" [ref=e183]
+    - table [ref=e186]:
+      - rowgroup [ref=e187]:
+        - row "水位 up" [ref=e188]:
+          - cell "水位" [ref=e189]
+          - cell "up" [ref=e190]:
+            - img "up" [ref=e191]
+        - row "-0.73m" [ref=e192]:
+          - cell "-0.73m" [ref=e193]
+    - table [ref=e196]:
+      - rowgroup [ref=e197]:
+        - row "水位 up" [ref=e198]:
+          - cell "水位" [ref=e199]
+          - cell "up" [ref=e200]:
+            - img "up" [ref=e201]
+        - row "15.76m" [ref=e202]:
+          - cell "15.76m" [ref=e203]
+    - table [ref=e205]:
+      - rowgroup [ref=e206]:
+        - row "水防団待機水位 19.00m" [ref=e207]:
+          - cell "水防団待機水位 19.00m" [ref=e208]
+        - row "はん濫注意水位 20.80m" [ref=e209]:
+          - cell "はん濫注意水位 20.80m" [ref=e210]
+        - row "避難判断水位 -" [ref=e211]:
+          - cell "避難判断水位 -" [ref=e212]
+        - row "はん濫危険水位 -" [ref=e213]:
+          - cell "はん濫危険水位 -" [ref=e214]
+        - row "計画高水位 25.34m" [ref=e215]:
+          - cell "計画高水位 25.34m" [ref=e216]
+    - table [ref=e218]:
+      - rowgroup [ref=e219]:
+        - row "水防団待機水位 3.00m" [ref=e220]:
+          - cell "水防団待機水位 3.00m" [ref=e221]
+        - row "はん濫注意水位 4.00m" [ref=e222]:
+          - cell "はん濫注意水位 4.00m" [ref=e223]
+        - row "避難判断水位 4.90m" [ref=e224]:
+          - cell "避難判断水位 4.90m" [ref=e225]
+        - row "はん濫危険水位 5.20m" [ref=e226]:
+          - cell "はん濫危険水位 5.20m" [ref=e227]
+        - row "計画高水位 6.47m" [ref=e228]:
+          - cell "計画高水位 6.47m" [ref=e229]
+    - table [ref=e231]:
+      - rowgroup [ref=e232]:
+        - row "水防団待機水位 -" [ref=e233]:
+          - cell "水防団待機水位 -" [ref=e234]
+        - row "はん濫注意水位 -" [ref=e235]:
+          - cell "はん濫注意水位 -" [ref=e236]
+        - row "避難判断水位 -" [ref=e237]:
+          - cell "避難判断水位 -" [ref=e238]
+        - row "はん濫危険水位 -" [ref=e239]:
+          - cell "はん濫危険水位 -" [ref=e240]
+        - row "計画高水位 5.3m" [ref=e241]:
+          - cell "計画高水位 5.3m" [ref=e242]
+    - generic [ref=e243]: 貯水率 100%
+    - img [ref=e245]
+    - generic [ref=e246]: "### 調整中"
+  - table [ref=e247]:
+    - rowgroup [ref=e248]:
+      - row [ref=e249]:
+        - cell [ref=e250]
+  - table [ref=e252]:
+    - rowgroup [ref=e253]:
+      - row "リアルタイム画像 リアルタイム画像 リアルタイム画像 リアルタイム画像 リアルタイム画像 リアルタイム画像 リアルタイム画像 リアルタイム画像" [ref=e254]:
+        - cell "リアルタイム画像" [ref=e255]:
+          - link "リアルタイム画像" [ref=e256] [cursor=pointer]:
+            - /url: "#"
+            - img "リアルタイム画像" [ref=e257]
+        - cell "リアルタイム画像" [ref=e258]:
+          - link "リアルタイム画像" [ref=e259] [cursor=pointer]:
+            - /url: "#"
+            - img "リアルタイム画像" [ref=e260]
+        - cell "リアルタイム画像" [ref=e261]:
+          - link "リアルタイム画像" [ref=e262] [cursor=pointer]:
+            - /url: "#"
+            - img "リアルタイム画像" [ref=e263]
+        - cell "リアルタイム画像" [ref=e264]:
+          - link "リアルタイム画像" [ref=e265] [cursor=pointer]:
+            - /url: "#"
+            - img "リアルタイム画像" [ref=e266]
+        - cell "リアルタイム画像" [ref=e267]:
+          - link "リアルタイム画像" [ref=e268] [cursor=pointer]:
+            - /url: "#"
+            - img "リアルタイム画像" [ref=e269]
+        - cell "リアルタイム画像" [ref=e270]:
+          - link "リアルタイム画像" [ref=e271] [cursor=pointer]:
+            - /url: "#"
+            - img "リアルタイム画像" [ref=e272]
+        - cell "リアルタイム画像" [ref=e273]:
+          - link "リアルタイム画像" [ref=e274] [cursor=pointer]:
+            - /url: "#"
+            - img "リアルタイム画像" [ref=e275]
+        - cell "リアルタイム画像" [ref=e276]:
+          - link "リアルタイム画像" [ref=e277] [cursor=pointer]:
+            - /url: "#"
+            - img "リアルタイム画像" [ref=e278]
+      - row "滑滝 取水塔 梨平 広瀬 右岸 ダム堤体 左岸 西根下堰" [ref=e279]:
+        - cell "滑滝" [ref=e280]
+        - cell "取水塔" [ref=e281]
+        - cell "梨平" [ref=e282]
+        - cell "広瀬" [ref=e283]
+        - cell "右岸" [ref=e284]
+        - cell "ダム堤体" [ref=e285]
+        - cell "左岸" [ref=e286]
+        - cell "西根下堰" [ref=e287]
+  - table [ref=e288]:
+    - rowgroup [ref=e289]:
+      - row "960-0271 福島県福島市飯坂町茂庭字蝉狩野山25 TEL 024-596-1275 E-mail surikami@thr.mlit.go.jp" [ref=e290]:
+        - cell "960-0271 福島県福島市飯坂町茂庭字蝉狩野山25 TEL 024-596-1275 E-mail surikami@thr.mlit.go.jp" [ref=e291]:
+          - text: 960-0271 福島県福島市飯坂町茂庭字蝉狩野山25
+          - text: TEL 024-596-1275 E-mail
+          - link "surikami@thr.mlit.go.jp" [ref=e292] [cursor=pointer]:
+            - /url: mailto:surikami@thr.mlit.go.jp
+      - row "© Copyright 2006 SurikamigawaDam All Rights Reserved." [ref=e293]:
+        - cell "© Copyright 2006 SurikamigawaDam All Rights Reserved." [ref=e294]
+  - generic:
+    - link:
+      - /url: "#"
+    - link:
+      - /url: "#"
+    - link:
+      - /url: "#"
+    - link:
+      - /url: "#"
+    - link:
+      - /url: "#"
+    - link:
+      - /url: "#"
+    - link:
+      - /url: "#"
+    - link:
+      - /url: "#"
+    - link:
+      - /url: damu_-662.html
+    - link:
+      - /url: damu_-662.html
+    - link:
+      - /url: damu_-662.html
+    - link:
+      - /url: "#"
+    - link:
+      - /url: "#"
+    - link:
+      - /url: "#"
+    - link:
+      - /url: "#"
+    - link:
+      - /url: "#"
+    - link:
+      - /url: "#"
+    - link:
+      - /url: "#"
+    - link:
+      - /url: "#"
+    - link:
+      - /url: damu_-662.html
+    - link:
+      - /url: damu_-662.html
+    - link:
+      - /url: damu_-662.html
+    - link:
+      - /url: "#"
+    - link:
+      - /url: "#"
+    - link:
+      - /url: "#"
+    - link:
+      - /url: "#"
+    - link:
+      - /url: "#"
+    - link:
+      - /url: "#"
+    - link:
+      - /url: "#"
+    - link:
+      - /url: "#"
+    - link:
+      - /url: "#"
+    - link:
+      - /url: "#"
