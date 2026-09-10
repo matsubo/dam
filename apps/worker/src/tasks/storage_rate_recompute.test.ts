@@ -81,13 +81,12 @@ async function insertObservation(
 async function runRecomputeRecent(tx: typeof sql): Promise<number> {
   const result = await tx`
     UPDATE observations o
-    SET storage_rate = LEAST(1, o.storage_volume_m3 / d.active_capacity_m3)
+    SET storage_rate = derived_storage_rate(o.storage_volume_m3, d.active_capacity_m3)
     FROM dams d
     WHERE o.dam_id = d.id
       AND o.storage_rate IS NULL
       AND o.storage_volume_m3 IS NOT NULL
-      AND d.active_capacity_m3 IS NOT NULL
-      AND d.active_capacity_m3 > 0
+      AND derived_storage_rate(o.storage_volume_m3, d.active_capacity_m3) IS NOT NULL
       AND o.observed_at > NOW() - INTERVAL '72 hours'
   `;
   return result.count;
@@ -114,6 +113,7 @@ const SLUGS = [
   'sr-recompute-test-already-set',
   'sr-recompute-test-fills-recent',
   'sr-recompute-test-clamp',
+  'sr-recompute-test-over-15x',
   'sr-recompute-test-no-capacity',
 ] as const;
 
@@ -153,9 +153,10 @@ afterAll(async () => {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('storageRate:recompute task', () => {
-  // storageRate:recompute fills NULL storage_rate values by computing
-  // volume / capacity for each observation, clamped to 1.0. Observations
-  // that already have a rate are left untouched, and dams without
+  // storageRate:recompute fills NULL storage_rate values through
+  // derived_storage_rate() — volume / capacity, with no value derived above
+  // 1.5, the same definition the 0036 trigger uses (migration 0047).
+  // Observations that already have a rate are left untouched, and dams without
   // active_capacity_m3 are skipped entirely.
 
   test('skips observations that already have storage_rate set', async () => {
@@ -219,11 +220,11 @@ describe('storageRate:recompute task', () => {
     expect(rate as number).toBeCloseTo(expectedRate, 5);
   });
 
-  test('clamps storage_rate to 1.0 when volume exceeds capacity', async () => {
+  test('keeps a modest over-full rate instead of flattening it to 1.0', async () => {
     if (!dbAvailable) return;
 
     const capacity = 4_000_000;
-    const volume = 5_000_000; // over-full — rate would be 1.25 without clamping
+    const volume = 5_000_000; // over-full — 1.25
 
     // Same late-capacity ordering as above so the row reaches the batch task
     // with storage_rate still NULL (trigger 0036 would otherwise fill it).
@@ -246,9 +247,39 @@ describe('storageRate:recompute task', () => {
 
     const rate = await fetchStorageRate(sql, damId, observedAt);
     expect(rate).not.toBeNull();
-    // LEAST(1, 5M / 4M) = LEAST(1, 1.25) = 1.0
-    expect(rate as number).toBeCloseTo(1.0, 5);
-    expect(rate as number).toBeLessThanOrEqual(1.0);
+    // 利水 rates above 100 % are real while the flood pool fills; the read
+    // path is what clamps the displayed figure.
+    expect(rate as number).toBeCloseTo(1.25, 5);
+  });
+
+  test('derives nothing when the volume exceeds 1.5x the capacity', async () => {
+    if (!dbAvailable) return;
+
+    // 屈足ダム's shape. A reservoir at 342 % of its recorded 有効貯水容量 is a
+    // master-data error, and any rate derived from it is fiction — on a
+    // trusted source it used to back-solve into the reported denominator
+    // (issue #38 §2-3).
+    const capacity = 844_000;
+    const volume = 2_883_000;
+
+    const damId = await insertTestDam(sql, {
+      slug: 'sr-recompute-test-over-15x',
+      name: 'SR Recompute Test — Over 1.5x',
+      activeCapacityM3: null,
+    });
+
+    const observedAt = new Date(Date.now() - 40 * 60 * 1000);
+    await insertObservation(sql, {
+      damId,
+      observedAt,
+      storageVolumeM3: volume,
+      storageRate: null,
+    });
+
+    await sql`UPDATE dams SET active_capacity_m3 = ${capacity} WHERE id = ${damId}`;
+    await runRecomputeRecent(sql);
+
+    expect(await fetchStorageRate(sql, damId, observedAt)).toBeNull();
   });
 
   test('skips dams without active_capacity_m3', async () => {
