@@ -15,14 +15,13 @@ describe('isAdEligible — deny by default', () => {
   });
 });
 
-describe('isAdEligible — 国土数値情報由来のページは不可', () => {
+describe('isAdEligible — まだ広告を出さないページ', () => {
   // W01 feeds the dam master (location / height / capacity / completed year),
   // W05 feeds watersheds.kind, W07 feeds watersheds.boundary. All NOT NULL,
   // so every one of these routes renders NLNI-derived values.
   test.each([
     ['homepage', '/'],
     ['dam list', '/dams'],
-    ['dam detail', '/dams/sameura-39-2'],
     ['watershed list', '/watersheds'],
     ['watershed detail', '/watersheds/天竜川'],
     ['map', '/map'],
@@ -42,6 +41,39 @@ describe('isAdEligible — 国土数値情報由来のページは不可', () =>
   });
 });
 
+describe('isAdEligible — ダム詳細ページ (貯水率ページ)', () => {
+  test.each([
+    ['早明浦', '/dams/sameura-39-2'],
+    ['宇連', '/dams/ure-23'],
+    ['slug with digits and hyphens', '/dams/okutadami-15'],
+    ['percent-encoded slug', '/dams/%E5%A5%A5%E5%8F%AA%E8%A6%8B'],
+  ])('%s (%s) is eligible', (_label, path) => {
+    expect(isAdEligible(path)).toBe(true);
+  });
+
+  test('a trailing slash still matches', () => {
+    expect(isAdEligible('/dams/sameura-39-2/')).toBe(true);
+  });
+
+  test('the /dams list itself is NOT a 貯水率 page', () => {
+    expect(isAdEligible('/dams')).toBe(false);
+  });
+
+  test('nothing deeper than one slug segment matches', () => {
+    expect(isAdEligible('/dams/sameura-39-2/history')).toBe(false);
+    expect(isAdEligible('/dams/a/b/c')).toBe(false);
+  });
+
+  test('an empty slug does not match', () => {
+    expect(isAdEligible('/dams/')).toBe(false);
+  });
+
+  test('watershed and prefecture detail pages stay out', () => {
+    expect(isAdEligible('/watersheds/天竜川')).toBe(false);
+    expect(isAdEligible('/prefectures/13')).toBe(false);
+  });
+});
+
 describe('isAdEligible — allowlisted routes', () => {
   test('every allowlisted route is eligible', () => {
     for (const route of AD_ELIGIBLE_ROUTES) {
@@ -49,9 +81,8 @@ describe('isAdEligible — allowlisted routes', () => {
     }
   });
 
-  test('the allowlist never contains a dam or watershed route', () => {
+  test('the exact-match allowlist never contains a watershed route or the home page', () => {
     for (const route of AD_ELIGIBLE_ROUTES) {
-      expect(route.startsWith('/dams')).toBe(false);
       expect(route.startsWith('/watersheds')).toBe(false);
       expect(route).not.toBe('/');
     }

@@ -26,8 +26,7 @@ const CLAUSES: readonly string[] = [
    partners may use cookies or device identifiers to serve and measure
    ads, including personalised ads. Manage or disable this at
    https://adssettings.google.com — see also
-   https://policies.google.com/technologies/partner-sites . Ads are not
-   shown on pages built from 国土数値情報 data.`,
+   https://policies.google.com/technologies/partner-sites .`,
       ]
     : []),
   `**No third-party sharing** — Except as required by law, by
