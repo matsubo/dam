@@ -4,11 +4,11 @@
  * result as a SQL migration.
  */
 import {
-  type WatershedCandidate,
-  type WatershedKind,
   kindFromWatershedCode,
   normalizeWatershedName,
   pickWatershedCandidate,
+  type WatershedCandidate,
+  type WatershedKind,
 } from './watershed_kind.ts';
 
 export interface WatershedRowInput {

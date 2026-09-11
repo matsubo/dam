@@ -1,4 +1,4 @@
-import { type LinksInput, buildLinks } from '@dam/core/hateoas';
+import { buildLinks, type LinksInput } from '@dam/core/hateoas';
 import { NextResponse } from 'next/server';
 
 export function hal<T extends object>(

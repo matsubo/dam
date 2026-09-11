@@ -3,7 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "import": "bun run src/cli.ts"
@@ -12,6 +14,6 @@
     "@dam/core": "workspace:*",
     "@dam/db": "workspace:*",
     "@dam/reconciler": "workspace:*",
-    "cheerio": "^1.0.0"
+    "cheerio": "^1.2.0"
   }
 }

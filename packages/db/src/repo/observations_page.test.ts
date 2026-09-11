@@ -2,8 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { sql } from '../client.ts';
 import { upsertDamByExternalId } from './dams.ts';
 import {
-  type ObservationCursor,
   findObservationsPage,
+  type ObservationCursor,
   upsertObservations,
 } from './observations.ts';
 

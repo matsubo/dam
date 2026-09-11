@@ -1,8 +1,8 @@
 import { PREFECTURES } from '@dam/core/prefectures';
 import { sql } from '@dam/db/client';
 import {
-  type StorageTotals,
   nationalStorageTotals,
+  type StorageTotals,
   storageRate,
   storageTotalsByPref,
   storageTotalsByWatershed,

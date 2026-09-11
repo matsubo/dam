@@ -1,11 +1,7 @@
 // apps/worker/src/tasks/ingest_yamagata_bousai.test.ts
 
 import { describe, expect, test } from 'bun:test';
-import {
-  type ParsedRow,
-  parseYamagataJson,
-  parseYamagataTimestamp,
-} from './ingest_yamagata_bousai.ts';
+import { parseYamagataJson, parseYamagataTimestamp } from './ingest_yamagata_bousai.ts';
 
 describe('parseYamagataTimestamp', () => {
   test('parses JST timestamp to UTC (subtract 9h)', () => {

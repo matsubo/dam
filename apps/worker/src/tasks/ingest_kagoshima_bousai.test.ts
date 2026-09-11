@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { parseItems, parseKagoshimaTimestamp } from './ingest_kagoshima_bousai.ts';
 import type { BousaiItem } from './ingest_kagoshima_bousai.ts';
+import { parseItems, parseKagoshimaTimestamp } from './ingest_kagoshima_bousai.ts';
 
 describe('parseKagoshimaTimestamp', () => {
   test('parses YYYY/MM/DD HH:MM JST → UTC', () => {

@@ -1,11 +1,7 @@
 // apps/worker/src/tasks/ingest_ibaraki_bousai.test.ts
 
 import { describe, expect, test } from 'bun:test';
-import {
-  type ParsedRow,
-  parseIbarakiTable,
-  parseIbarakiTimestamp,
-} from './ingest_ibaraki_bousai.ts';
+import { parseIbarakiTable, parseIbarakiTimestamp } from './ingest_ibaraki_bousai.ts';
 
 // Minimal fixture builder — wraps cells in two tables (page header + data).
 function makeHtml(rows: string[]): string {

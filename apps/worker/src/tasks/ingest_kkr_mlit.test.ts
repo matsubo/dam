@@ -1,7 +1,7 @@
 // apps/worker/src/tasks/ingest_kkr_mlit.test.ts
 
 import { describe, expect, test } from 'bun:test';
-import { type ParsedRow, parseKkrDatetime, parseKkrJson } from './ingest_kkr_mlit.ts';
+import { parseKkrDatetime, parseKkrJson } from './ingest_kkr_mlit.ts';
 
 describe('parseKkrDatetime', () => {
   test('parses "YYYY-MM-DD HH:MM:SS" JST → UTC (subtract 9h)', () => {

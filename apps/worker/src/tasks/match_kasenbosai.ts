@@ -30,9 +30,9 @@ import { recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 import {
   MATCH_THRESHOLD,
-  REVIEW_THRESHOLD,
   pickBest,
   pickStationPerMaster,
+  REVIEW_THRESHOLD,
 } from './match_kasenbosai_scoring.ts';
 
 const PREFAREA_URL =

@@ -5,10 +5,10 @@ import {
   CROSS_PREF_MAX_DISTANCE_M,
   MATCH_THRESHOLD,
   type MasterBinding,
-  REVIEW_THRESHOLD,
-  type ScoreCandidate,
   pickBest,
   pickStationPerMaster,
+  REVIEW_THRESHOLD,
+  type ScoreCandidate,
   scoreCandidate,
 } from './match_kasenbosai_scoring.ts';
 

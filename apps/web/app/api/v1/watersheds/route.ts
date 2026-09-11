@@ -1,7 +1,7 @@
 import { listWatersheds } from '@dam/db/repo/watersheds';
 import { z } from 'zod';
 import { authorize, makeUnauthorized, rateLimitHeaders } from '../../../../lib/api/auth.ts';
-import { HttpError, asProblem } from '../../../../lib/api/error.ts';
+import { asProblem, HttpError } from '../../../../lib/api/error.ts';
 import { pageLinks, rfc5988Link } from '../../../../lib/api/pagination.ts';
 import { hal } from '../../../../lib/api/response.ts';
 

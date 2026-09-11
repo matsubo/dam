@@ -86,7 +86,7 @@ function userAgent(): string {
  */
 export function parseDistrictDams(html: string): MudamDam[] {
   const out: MudamDam[] = [];
-  const re = /markersInfo\.push\(\[(\d+),\s*([\d.\-]+),\s*([\d.\-]+),\s*"([^"]+)"\]\)/g;
+  const re = /markersInfo\.push\(\[(\d+),\s*([\d.-]+),\s*([\d.-]+),\s*"([^"]+)"\]\)/g;
   let m: RegExpExecArray | null;
   // biome-ignore lint/suspicious/noAssignInExpressions: idiomatic regex iteration
   while ((m = re.exec(html)) !== null) {
