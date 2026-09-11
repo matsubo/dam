@@ -302,6 +302,13 @@ export const CRONTAB = `
 # Same framework as 石川県河川総合情報システム. Cron at :34.
 34 * * * * ingest:fukushima-kasen
 
+# 福島県 農林水産部 県内の主要農業関係ダムの貯水状況 — 農業用ダム 29 基
+# (岳/藤倉/山ノ入/三ツ森/深田調整池/金沢調整池 ほか)。土木部の
+# ingest:fukushima-kasen とは対象ダムが重ならない。HTML 1 テーブル、
+# 貯水率（かんがい用水）のみ。調査日ベースで隔週更新なので、jwa-junpo と同じく
+# 日次ポーリング (報告日タイムスタンプへの冪等 UPSERT) で拾う。
+15 4 * * * ingest:fukushima-nourin
+
 # 岩手県河川情報システム — 10 県管理ダム (Gamen32Servlet, Shift_JIS, one
 # request per station). Columns: level / 貯水量(千m³) / inflow / outflow.
 # Cron at :57.
