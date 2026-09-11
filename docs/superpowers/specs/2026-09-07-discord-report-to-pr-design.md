@@ -563,10 +563,10 @@ Action and scripts:
 
 1. Create `matsubo/discord-issue-bridge` (private); scaffold; implement the
    bridge with tests; commit.
-2. Live handshake locally: `bun run src/server.ts` behind a `cloudflared`
-   tunnel, a **throwaway** Discord application pointed at the tunnel, a test
-   channel routed to a scratch repository. Confirm PING/PONG and one full
-   round-trip with attachments.
+2. ~~Live handshake locally behind a `cloudflared` tunnel with a throwaway
+   Discord application~~ — skipped (2026-09-12): the signature path is
+   covered by tests with real Ed25519 keys and the bridge image redeploys
+   quickly, so the first live check runs against the Coolify deployment.
 3. Coolify: create the app from the repository, set variables and domain,
    deploy, confirm `/healthz`.
 4. Production Discord application: set the endpoint URL (PING must pass),
