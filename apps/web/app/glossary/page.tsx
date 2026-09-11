@@ -108,7 +108,7 @@ const SECTIONS: { title: string; terms: Term[] }[] = [
         term: '貯水率',
         reading: 'ちょすいりつ',
         body: '本サイトでは「現在の貯水量 ÷ その時点で有効な容量」で計算する。分母は原則としてダム便覧の有効貯水容量だが、出典自身が季節を反映した利水容量貯水率を公表しているダムでは、その率が示す分母（洪水期の利水容量）を用いる。容量が登録されていないダムでは — と表示。100 % を超えた場合は表示上 100 % にクリップする。',
-        also: 'rate = storage_volume_m3 / 有効な容量（既定は active_capacity_m3）',
+        also: 'rate = storage_volume_m3 / effective_active_capacity_m3(…)',
       },
       {
         id: 'national-rate',

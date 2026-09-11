@@ -208,7 +208,8 @@ async function main(): Promise<void> {
       attached++;
     }
 
-    // 2. Apply attributes (only fill missing values)
+    // 2. Apply attributes. COALESCE(new, existing) means a value Damnet has
+    //    wins; only fields Damnet leaves blank keep what was there.
     const completed = intish(c.completion_year);
     const heightM = num(c.height);
     const capacity = num(c.capacity_total);

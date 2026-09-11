@@ -57,14 +57,18 @@ BEGIN
 END;
 $$;
 
--- Clear the rates the old clip already stored on trusted sources. Only exactly
--- 1.5 can be the clip: the adapters that publish their own rate either clamp to
--- 1 or (kasenbosai) store 利水 rates unclamped, and 150.0000 % to four decimals
--- is not a value a feed reports. Scoped to trusted sources so the UPDATE stays
--- small on compressed chunks (see issue #31).
+-- Clear the rates the old clip already stored on trusted sources. The full
+-- fingerprint is "exactly 1.5 AND the volume really is over 1.5x the capacity",
+-- which is the only way the old trigger could have produced it — an upstream
+-- feed that genuinely published 150.0000 % would not also satisfy the ratio
+-- test against a capacity it does not use. Scoped to trusted sources so the
+-- UPDATE stays small on compressed chunks (see issue #31).
 UPDATE observations o
 SET storage_rate = NULL
-FROM source_priorities sp
+FROM source_priorities sp, dams d
 WHERE sp.source_id = o.source_id
   AND sp.trusted_rate_basis
-  AND o.storage_rate = 1.5;
+  AND d.id = o.dam_id
+  AND o.storage_rate = 1.5
+  AND o.storage_volume_m3 IS NOT NULL
+  AND o.storage_volume_m3 / NULLIF(d.active_capacity_m3, 0) > 1.5;
