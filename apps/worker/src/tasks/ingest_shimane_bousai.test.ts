@@ -2,8 +2,8 @@ import { describe, expect, it } from 'bun:test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
-  type ParsedRow,
   normalizeName,
+  type ParsedRow,
   parseShimaneSnapshot,
   parseShimaneTimestamp,
 } from './ingest_shimane_bousai';

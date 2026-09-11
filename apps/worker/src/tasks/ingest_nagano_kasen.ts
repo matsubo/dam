@@ -25,7 +25,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
-import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
+import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const BASE_URL = process.env.NAGANO_KASEN_URL ?? 'https://www.sabo-nagano.jp/dyn/json/dat/pc';

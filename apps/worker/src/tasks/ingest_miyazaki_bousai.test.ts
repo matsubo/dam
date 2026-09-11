@@ -1,11 +1,7 @@
 // apps/worker/src/tasks/ingest_miyazaki_bousai.test.ts
 
 import { describe, expect, test } from 'bun:test';
-import {
-  type ParsedRow,
-  parseMiyazakiTable,
-  parseMiyazakiTimestamp,
-} from './ingest_miyazaki_bousai.ts';
+import { parseMiyazakiTable, parseMiyazakiTimestamp } from './ingest_miyazaki_bousai.ts';
 
 // Miyazaki table has ONE table (not two like Ibaraki): 8 columns.
 // Col 0: 河川名, Col 1: 局名(dam), Col 2: 所在地, Col 3: 状態,

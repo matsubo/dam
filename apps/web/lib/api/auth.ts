@@ -65,12 +65,12 @@ export async function authorize(req: Request): Promise<AuthResult> {
     };
   }
   const key = extractKey(req);
-  if (!key || !key.includes('_')) {
+  if (!key?.includes('_')) {
     return { ok: false, status: 401, reason: 'Missing Authorization: Bearer key' };
   }
   const prefix = key.slice(0, 8);
   const row = await lookupByPrefix(prefix);
-  if (!row || !row.active) return { ok: false, status: 401, reason: 'Invalid key' };
+  if (!row?.active) return { ok: false, status: 401, reason: 'Invalid key' };
   if (!timingSafeEqual(row.hash, hashKey(key))) {
     return { ok: false, status: 401, reason: 'Invalid key' };
   }

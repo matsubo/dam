@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { QualityFlag, detectOutlier, isPhysicallyValid } from './quality.ts';
+import { detectOutlier, isPhysicallyValid, QualityFlag } from './quality.ts';
 
 describe('isPhysicallyValid', () => {
   test('rejects negative storage rate', () => {

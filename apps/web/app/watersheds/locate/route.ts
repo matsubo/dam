@@ -9,8 +9,8 @@ import { z } from 'zod';
 export const dynamic = 'force-dynamic';
 
 const Query = z.object({
-  lat: z.string().min(1).pipe(z.coerce.number().gte(-90).lte(90)),
-  lng: z.string().min(1).pipe(z.coerce.number().gte(-180).lte(180)),
+  lat: z.string().min(1).transform(Number).pipe(z.number().gte(-90).lte(90)),
+  lng: z.string().min(1).transform(Number).pipe(z.number().gte(-180).lte(180)),
 });
 
 function redirect(location: string): Response {

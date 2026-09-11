@@ -2,7 +2,7 @@
 // implementation keeps the two in sync.
 export {
   alt,
-  size,
   contentType,
   default,
+  size,
 } from './opengraph-image.tsx';

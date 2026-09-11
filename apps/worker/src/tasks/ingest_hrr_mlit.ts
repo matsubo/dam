@@ -16,7 +16,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
-import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
+import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const CSV_URL =
@@ -98,11 +98,6 @@ async function ensureSourcePriority(): Promise<void> {
           description = EXCLUDED.description,
           active      = EXCLUDED.active
   `;
-}
-
-interface DamMatch {
-  pageName: string;
-  damId: bigint;
 }
 
 async function matchMaster(log: (s: string) => void): Promise<Map<string, bigint>> {

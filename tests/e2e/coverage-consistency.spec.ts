@@ -1,4 +1,4 @@
-import { type Page, expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 
 // The home page, /stats and /coverage each quote 全国貯水率 and カバレッジ.
 // They used to compute them independently and disagreed in production

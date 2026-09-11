@@ -12,25 +12,25 @@
     "@dam/adapters-ndi": "workspace:*",
     "@dam/core": "workspace:*",
     "@dam/db": "workspace:*",
-    "echarts": "^6.0.0",
+    "echarts": "^6.1.0",
     "echarts-for-react": "^3.0.6",
     "leaflet": "^1.9.4",
-    "lucide-react": "^1.14.0",
-    "next": "^15.0.0",
+    "lucide-react": "^1.44.0",
+    "next": "^16.3.4",
     "next-auth": "^5.0.0-beta.31",
     "react": "^19",
     "react-dom": "^19",
-    "redoc": "^2.5.2",
-    "styled-components": "^6.4.1",
-    "zod": "^3.23.0"
+    "redoc": "^2.5.4",
+    "styled-components": "^6.5.3",
+    "zod": "^4.6.2"
   },
   "devDependencies": {
-    "@types/leaflet": "^1.9.21",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/leaflet": "^1.9.22",
     "@types/node": "^25.6.0",
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "autoprefixer": "^10.5.0",
-    "postcss": "^8.5.12",
-    "tailwindcss": "^3.4"
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "postcss": "^8.5.28",
+    "tailwindcss": "^4.3.3"
   }
 }

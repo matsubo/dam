@@ -14,7 +14,9 @@ const PREF_NAME = new Map(PREFECTURES.map((p) => [p.code, p.name]));
 
 export async function generateMetadata({
   searchParams,
-}: { searchParams: Promise<{ q?: string }> }): Promise<Metadata> {
+}: {
+  searchParams: Promise<{ q?: string }>;
+}): Promise<Metadata> {
   const { q } = await searchParams;
   return {
     title: q ? `「${q}」の検索結果` : '検索',
@@ -26,7 +28,9 @@ export async function generateMetadata({
 
 export default async function SearchPage({
   searchParams,
-}: { searchParams: Promise<{ q?: string }> }) {
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
   const sp = await searchParams;
   const q = (sp.q ?? '').trim();
   const [dams, watersheds] = q

@@ -45,7 +45,7 @@ const TYPE_CODE_TO_LABEL: Record<string, string> = {
   '13': '特殊',
 };
 
-const PREF_BY_NAME = new Map(PREFECTURES.map((p) => [p.name, p.code] as const));
+const _PREF_BY_NAME = new Map(PREFECTURES.map((p) => [p.name, p.code] as const));
 
 interface RawProps {
   W01_001?: string;
