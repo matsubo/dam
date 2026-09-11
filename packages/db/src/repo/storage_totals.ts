@@ -2,7 +2,7 @@ import { sql } from '../client.ts';
 
 /**
  * 全国貯水率 (and its per-prefecture / per-watershed cuts) is computed over the
- * *observed cohort*: dams that have a 利水容量 in the master AND a storage
+ * *observed cohort*: dams that have a 有効貯水容量 in the master AND a storage
  * volume observed within the freshness window. Both the numerator (storage)
  * and the denominator (capacity) sum over that same cohort — a dam with no
  * fresh reading must not contribute capacity only, which would silently
@@ -17,7 +17,7 @@ export interface StorageTotals {
   observedDamCount: number;
   /** SUM of the latest fresh 貯水量, NULL when the cohort is empty. */
   storageM3: string | null;
-  /** SUM of 利水容量 over the same cohort, NULL when the cohort is empty. */
+  /** SUM of 有効貯水容量 over the same cohort, NULL when the cohort is empty. */
   activeCapacityM3: string | null;
 }
 

@@ -1,17 +1,17 @@
-// Which 利水容量 the displayed 貯水率 is actually divided by.
+// Which capacity the displayed 貯水率 is actually divided by.
 //
 // For sources in source_priorities.trusted_rate_basis the denominator is
 // back-solved from the source's own season-aware rate (volume / rate) and
-// can be far smaller than the static Damnet 利水容量 in 洪水期 — issue #19:
+// can be far smaller than the static ダム便覧 有効貯水容量 in 洪水期 — issue #19:
 // 美利河ダム reads 92% against a 2,159 千m³ flood-season pool while the
 // master lists 14,500 千m³. Surfacing the effective denominator keeps the
-// page's 貯水量 / 利水容量 / 貯水率 trio from looking self-contradictory.
+// page's 貯水量 / 容量 / 貯水率 trio from looking self-contradictory.
 
 export interface RateDenominator {
   /** The capacity the shown 貯水率 is divided by, in m³. */
   capacityM3: number;
-  /** True when that differs from the master's static 利水容量 by more than
-   *  DEVIATION_TOLERANCE, or when the master has no 利水容量 at all. */
+  /** True when that differs from the master's static 有効貯水容量 by more
+   *  than DEVIATION_TOLERANCE, or when the master has no capacity at all. */
   differsFromStatic: boolean;
 }
 

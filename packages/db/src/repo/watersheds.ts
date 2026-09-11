@@ -163,7 +163,7 @@ export interface WatershedAggregate {
   damCount: number;
   /** Sum of 総貯水容量 over all dams — used as a "size" indicator. */
   totalCapacityM3: string | null;
-  /** Sum of 利水容量 over the rate-able subset (informational; NOT the rate denominator). */
+  /** Sum of 有効貯水容量 over the rate-able subset (informational; NOT the rate denominator). */
   activeCapacityM3: string | null;
   /** Dams with active_capacity_m3 IS NOT NULL. */
   rateableDamCount: number;
@@ -176,7 +176,7 @@ export interface WatershedAggregate {
    */
   observedDamCount: number;
   /**
-   * Sum of 利水容量 over the observed cohort only — the rate denominator. Per
+   * Sum of each observed dam's own denominator — the rate denominator. Per
    * dam this is the static active_capacity_m3, UNLESS that dam's latest
    * observation came from a source_priorities.trusted_rate_basis source with
    * its own storage_rate, in which case it's back-solved (volume/rate) from
@@ -217,7 +217,7 @@ export interface WatershedStorageChange {
 
 /**
  * Watershed-level "latest minus N-window-ago" totals, computed only over the
- * dams in the watershed that have 利水容量 (= the same rate-able subset the
+ * dams in the watershed that have a capacity (= the same rate-able subset the
  * watershed gauge uses, so the change percentages are consistent with the
  * displayed rate).
  *
@@ -581,7 +581,7 @@ export interface DriestWatershed {
   name: string;
   kind: 'first' | 'second' | 'other';
   rate: number;
-  /** Rate-able dams that actually back this rate (fresh obs + 利水容量). */
+  /** Rate-able dams that actually back this rate (fresh obs + capacity). */
   observedDamCount: number;
 }
 

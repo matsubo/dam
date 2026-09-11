@@ -170,7 +170,6 @@ export default async function DamDetail({ params }: PageProps) {
       <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
         <Stat label="総貯水容量" value={fmtCapacityMcm(d.totalCapacityM3)} />
         <Stat label="有効貯水容量" value={fmtCapacityMcm(d.effectiveCapacityM3)} />
-        <Stat label="利水容量" value={fmtCapacityMcm(d.activeCapacityM3)} />
         <Stat label="堤高" value={d.heightM ? `${fmtN(d.heightM)} m` : '—'} />
         <Stat
           label="標高"
@@ -197,14 +196,14 @@ export default async function DamDetail({ params }: PageProps) {
         </header>
         {latest ? (
           (() => {
-            // Denominator policy: 利水容量 only — never mislabel a
-            // total-capacity ratio as 貯水率. Prefer
-            // latest.effectiveActiveCapacityM3 over the dam's static
-            // activeCapacityM3: for sources in source_priorities.trusted_rate_basis,
-            // it's back-solved from that source's own season-aware 利水容量
-            // rate (see issue #17 — 八田原ダム's static Damnet capacity omits
-            // the much smaller 洪水期 figure); otherwise it's the same static
-            // value as before.
+            // Denominator policy: never mislabel a total-capacity ratio as
+            // 貯水率. Prefer latest.effectiveActiveCapacityM3 over the dam's
+            // static activeCapacityM3: for sources in
+            // source_priorities.trusted_rate_basis it's back-solved from that
+            // source's own season-aware 利水容量 rate (see issue #17 —
+            // 八田原ダム operates under a far smaller 洪水期 pool than its
+            // 有効貯水容量); otherwise it's the static 有効貯水容量, which is
+            // all ダム便覧 publishes.
             const cap = latest.effectiveActiveCapacityM3
               ? Number(latest.effectiveActiveCapacityM3)
               : null;
@@ -231,7 +230,7 @@ export default async function DamDetail({ params }: PageProps) {
                         <div className="text-base tabular-nums">
                           {fmtCapacityMcm(denominator.capacityM3)}
                           <span className="text-xs text-muted ml-2">
-                            {`出典（${latest.sourceId}）の利水容量貯水率から逆算。洪水期の制限水位など運用上の容量を反映するため、諸元の利水容量${d.activeCapacityM3 ? `（${fmtCapacityMcm(d.activeCapacityM3)}）` : ''}とは異なります`}
+                            {`出典（${latest.sourceId}）の利水容量貯水率から逆算。洪水期の制限水位など運用上の容量を反映するため、諸元の有効貯水容量${d.activeCapacityM3 ? `（${fmtCapacityMcm(d.activeCapacityM3)}）` : ''}とは異なります`}
                           </span>
                         </div>
                       </div>
@@ -393,7 +392,7 @@ export default async function DamDetail({ params }: PageProps) {
                 ? ` · 総貯水容量 ${fmtCapacityMcm(watershedAgg.totalCapacityM3)}`
                 : ''}
               {watershedAgg?.activeCapacityM3
-                ? ` · 利水容量 ${fmtCapacityMcm(watershedAgg.activeCapacityM3)}`
+                ? ` · 有効貯水容量 ${fmtCapacityMcm(watershedAgg.activeCapacityM3)}`
                 : ''}
             </span>
           </header>
@@ -463,7 +462,7 @@ export default async function DamDetail({ params }: PageProps) {
                     </div>
                   ) : (
                     <div className="text-[11px] text-on-surface-variant">
-                      貯水率 — (利水容量 or 観測値なし)
+                      貯水率 — (有効貯水容量 or 観測値なし)
                     </div>
                   )}
                   <div className="mt-2 text-xs text-on-surface-variant">
@@ -473,7 +472,7 @@ export default async function DamDetail({ params }: PageProps) {
                     </span>
                   </div>
                   <div className="text-xs text-on-surface-variant">
-                    利水容量{' '}
+                    有効貯水容量{' '}
                     <span className="text-on-surface tabular-nums">
                       {fmtCapacityMcm(n.activeCapacityM3)}
                     </span>
