@@ -281,7 +281,7 @@ export default async function SourcesPage() {
           </li>
           <li>
             <strong>多対 1 マッチ</strong>: NDI 側に同キーが複数行ある場合 (再/元 のペアなど) は、
-            Damnet ID は最初の 1 行にだけ付与し、属性 (利水容量・諸元) はグループ全行に backfill
+            Damnet ID は最初の 1 行にだけ付与し、属性 (有効貯水容量・諸元) はグループ全行に backfill
             します (Damnet の unique 制約に違反しないため)。
           </li>
           <li>
@@ -318,14 +318,14 @@ export default async function SourcesPage() {
             ndi="道志ダム"
             damnet="道志ダム"
             normalized="どうし"
-            note="「ダム」を剥がして prefCode=14 (神奈川) と組み合わせて一致 (Damnet ID 0699)。利水容量 616 千 m³ がそのまま流入。"
+            note="「ダム」を剥がして prefCode=14 (神奈川) と組み合わせて一致 (Damnet ID 0699)。有効貯水容量 616 千 m³ がそのまま流入。"
           />
           <Example
             tag="再開発バリアント (元/再 を統合)"
             ndi="佐久間（元）／佐久間（再）"
             damnet="佐久間ダム"
             normalized="さくま"
-            note="NDI が再開発前後を別行で持つが Damnet は 1 件。両方に同じ利水容量 (221.6 百万 m³) を backfill。Damnet ID は片方だけに付与。"
+            note="NDI が再開発前後を別行で持つが Damnet は 1 件。両方に同じ有効貯水容量 (221.6 百万 m³) を backfill。Damnet ID は片方だけに付与。"
           />
           <Example
             tag="新しく作り直した dam"
@@ -360,7 +360,7 @@ export default async function SourcesPage() {
             ndi="表沢堤"
             damnet="(該当なし)"
             normalized="おもてざわ-?"
-            note="「堤」は接尾辞剥離対象外で、Damnet にも当該名なし。skippedNotFound として 利水容量 NULL のまま残る。"
+            note="「堤」は接尾辞剥離対象外で、Damnet にも当該名なし。skippedNotFound として 有効貯水容量 NULL のまま残る。"
             failed
           />
           <Example
@@ -368,7 +368,7 @@ export default async function SourcesPage() {
             ndi="鶴田（元） / 鶴田（再）"
             damnet="鶴田ダム"
             normalized="つるた"
-            note="どちらも同じ Damnet 行を参照。external_ids.damnet=0XXX は最初の 1 行にだけ付与され、もう一方は skippedConflict としてスキップ (ただし利水容量等の属性は両方に適用)。"
+            note="どちらも同じ Damnet 行を参照。external_ids.damnet=0XXX は最初の 1 行にだけ付与され、もう一方は skippedConflict としてスキップ (ただし有効貯水容量等の属性は両方に適用)。"
           />
         </div>
       </section>
@@ -465,7 +465,7 @@ export default async function SourcesPage() {
               <ColumnRow col="total_capacity_m3" desc="総貯水容量" src="NDI" rate="100 %" />
               <ColumnRow
                 col="active_capacity_m3"
-                desc="利水容量 = 貯水率の分母として採用"
+                desc="有効貯水容量 = 貯水率の既定の分母として採用"
                 src="Damnet"
                 rate={pct(c.with_active, c.total)}
               />
@@ -514,7 +514,7 @@ export default async function SourcesPage() {
       <section>
         <h2 className="text-xl font-semibold mb-3">5. 欠損データの分布</h2>
         <p className="text-sm text-on-surface-variant mb-4 max-w-3xl">
-          利水容量を例に、容量帯ごとの欠落率を示します。大規模ダムほどカバレッジが高く、 10万 m³
+          有効貯水容量を例に、容量帯ごとの欠落率を示します。大規模ダムほどカバレッジが高く、 10万 m³
           未満の小規模ダム (農業用ため池, 砂防ダム等) で Damnet 未収録が顕著です。
         </p>
         <div className="overflow-x-auto">
@@ -523,7 +523,7 @@ export default async function SourcesPage() {
               <tr>
                 <th>容量帯</th>
                 <th className="text-right">ダム数</th>
-                <th className="text-right">欠落 (利水容量)</th>
+                <th className="text-right">欠落 (有効貯水容量)</th>
                 <th className="text-right">欠落率</th>
               </tr>
             </thead>

@@ -31,9 +31,9 @@ shared key. We match by:
 2. Key = \`prefCode | normalizedName\`. Same prefecture is required to avoid
    linking same-named dams in different prefectures.
 3. When NDI has multiple rows under one key (e.g. 早明浦（元）+ 早明浦（再）),
-   the Damnet ID attaches to one row and attributes (利水容量 etc) backfill
+   the Damnet ID attaches to one row and attributes (有効貯水容量 etc) backfill
    to all rows in the group.
-4. Coverage: 87% of dams have 利水容量 after this process. The remaining
+4. Coverage: 87% of dams have 有効貯水容量 after this process. The remaining
    13% are mostly small (<100,000 m³) agricultural / sediment dams not in
    Damnet.
 

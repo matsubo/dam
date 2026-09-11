@@ -69,8 +69,8 @@ export default async function WatershedDetail({ params }: PageProps) {
 
       {(() => {
         // Rate pairs the observed cohort's storage with the SAME cohort's
-        // 利水容量 — dams without a fresh observation stay out of both sides,
-        // so missing data can't drag the watershed rate down.
+        // denominators — dams without a fresh observation stay out of both
+        // sides, so missing data can't drag the watershed rate down.
         const observedCap = agg.observedActiveCapacityM3
           ? Number(agg.observedActiveCapacityM3)
           : null;
@@ -104,11 +104,11 @@ export default async function WatershedDetail({ params }: PageProps) {
                 {...(agg.observedAt ? { sub: fmtDate(agg.observedAt) } : {})}
               />
               <Stat
-                label="利水容量"
+                label="貯水率の分母"
                 value={fmtCapacityMcm(agg.observedActiveCapacityM3)}
                 sub={
                   agg.observedDamCount > 0
-                    ? `実測${agg.observedDamCount}基の合計（貯水率の分母）`
+                    ? `実測${agg.observedDamCount}基の合計（各ダムの現在有効な容量）`
                     : '実測なし'
                 }
               />
@@ -117,10 +117,10 @@ export default async function WatershedDetail({ params }: PageProps) {
                 value={fmtPct(rate)}
                 sub={
                   agg.rateableDamCount === 0
-                    ? '利水容量データなし'
+                    ? '容量データなし'
                     : agg.observedDamCount === 0
                       ? '直近7日の実測なし'
-                      : `現在貯水量 ÷ 利水容量(実測${agg.observedDamCount}基)`
+                      : `現在貯水量 ÷ 分母(実測${agg.observedDamCount}基)`
                 }
               />
               {norm && Number(norm.normVolumeM3) > 0 ? (

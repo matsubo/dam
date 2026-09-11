@@ -12,7 +12,7 @@ export interface DamRowItem {
   prefCode: string;
   manager: string | null;
   totalCapacityM3: string | null;
-  /** 利水容量 — the 貯水率 denominator. Null when Damnet doesn't list one. */
+  /** 有効貯水容量 — the static 貯水率 denominator. Null when ダム便覧 lists none. */
   activeCapacityM3: string | null;
   watershedSlug: string | null;
   watershedName: string | null;
@@ -23,7 +23,7 @@ export interface DamRowItem {
  * surface a 貯水率 progress-bar column. Keys are dam ids stringified for
  * stable lookup (bigint → string). */
 export interface DamRateMeta {
-  /** rate ∈ [0, 1], or null when 利水容量 / 観測値 not available. */
+  /** rate ∈ [0, 1], or null when 有効貯水容量 / 観測値 not available. */
   rate: number | null;
   /** When set, the dam has a non-synthetic observation in the last 30 days.
    *  Used to render a "実測" dot next to the rate bar. */
@@ -119,7 +119,7 @@ export function DamTable({
                 </span>
               </div>
               <div className="mt-1 text-xs text-on-surface-variant flex justify-between">
-                <span>利水容量</span>
+                <span>有効貯水容量</span>
                 <span className="text-on-surface tabular-nums">
                   {fmtCapacityMcm(r.activeCapacityM3)}
                 </span>

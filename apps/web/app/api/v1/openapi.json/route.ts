@@ -265,7 +265,8 @@ const components = {
         activeCapacityM3: {
           type: 'string',
           nullable: true,
-          description: '利水容量 (m³, NUMERIC を文字列化)。諸元の静的値。',
+          description:
+            '貯水率の既定の分母 (m³, NUMERIC を文字列化)。諸元の静的値で、中身はダム便覧の**有効貯水容量**です。ダム便覧は利水容量を公表していないため、フィールド名は役割 (active = 分母) を表しており、利水容量そのものではありません。季節を反映した利水容量は `latest.effectiveActiveCapacityM3` を参照してください。',
           example: '616000.00',
         },
         location: {
@@ -315,7 +316,7 @@ const components = {
               type: 'string',
               nullable: true,
               description:
-                '利水容量。貯水率 (storage_rate) の分母として採用。Damnet 由来 (約 87% のダムで populated)。',
+                '貯水率 (storage_rate) の既定の分母。中身はダム便覧の**有効貯水容量** (約 87% のダムで populated)。ダム便覧は利水容量を公表していません。',
               example: '616000.00',
             },
             floodCapacityM3: { type: 'string', nullable: true },
@@ -408,7 +409,7 @@ const components = {
           type: 'string',
           nullable: true,
           description:
-            '上流ソース由来の貯水率 (0..1)。dam の利水容量を分母にしないため、UI では `storageVolumeM3 / activeCapacityM3` を再計算しています。',
+            '上流ソース由来の貯水率 (0..1)。分母が諸元の容量とは限らないため、UI では `storageVolumeM3 / effectiveActiveCapacityM3` を再計算しています。',
           example: '0.958',
         },
         inflowM3s: { type: 'string', nullable: true, example: '0.755' },

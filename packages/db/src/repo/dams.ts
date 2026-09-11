@@ -202,7 +202,7 @@ export interface DamListItem {
   prefCode: string;
   manager: string | null;
   totalCapacityM3: string | null;
-  /** 利水容量 — the 貯水率 denominator. Null when Damnet doesn't list one. */
+  /** 有効貯水容量 — the static 貯水率 denominator. Null when ダム便覧 lists none. */
   activeCapacityM3: string | null;
   watershedSlug: string | null;
   watershedName: string | null;
@@ -451,7 +451,7 @@ export interface LatestObservation {
   qualityFlag: number;
   sourceId: string;
   /**
-   * 利水容量 to use as the 貯水率 denominator for THIS observation: the dam's
+   * Capacity to use as the 貯水率 denominator for THIS observation: the dam's
    * static active_capacity_m3, unless this row's source_id is a
    * trusted_rate_basis source with its own storage_rate, in which case it's
    * back-solved (volume/rate) from that trusted, season-aware rate. See
@@ -715,7 +715,7 @@ export async function nearbyDams(
 
 /**
  * Latest storage rate per dam id, keyed by `id.toString()` so the result is
- * JSON-safe. rate ∈ [0, 1] when 利水容量 + 観測値 are both present, null
+ * JSON-safe. rate ∈ [0, 1] when a capacity + 観測値 are both present, null
  * otherwise. LATERAL DISTINCT-ON keeps this cheap even for ~200 ids.
  */
 export interface LatestRateAndSource {
