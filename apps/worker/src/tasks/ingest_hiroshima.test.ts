@@ -61,8 +61,59 @@ describe('parseHiroshimaItems', () => {
       listFixture.items as Parameters<typeof parseHiroshimaItems>[0],
     );
     const kose = rows.find((r) => r.observatoryName === '小瀬川ダム');
-    // fixture storageRateEffectiveCapacity: 20.9 → 0.209
-    expect(kose?.storageRate).toBeCloseTo(0.209, 3);
+    // fixture storageRateWaterUseCapacity: 60.9 → 0.609
+    expect(kose?.storageRate).toBeCloseTo(0.609, 3);
+  });
+
+  it('prefers the 利水容量 rate over the 有効容量 one', () => {
+    // 広島県 publishes both for every dam and they diverge widely — 御調ダム read
+    // 利水 100.0 / 有効 20.4 on 2026-09-11 09:00. The prefecture's own table lists
+    // the 利水 column first, and it is the season-aware figure (see #17/#19).
+    const rows = parseHiroshimaItems([
+      {
+        name: '御調ダム',
+        observatoryId: 70010,
+        managerCd: '30',
+        dataTimestamp: '2026-09-11 09:00:00',
+        damQuantitiesLevel: null,
+        damQuantitiesLevelFlg: '2',
+        damInflowQuantities: null,
+        damInflowQuantitiesFlg: '2',
+        damTotalReleaseQuantities: null,
+        damTotalReleaseQuantitiesFlg: '2',
+        damEffectiveStorageQuantities: 917,
+        damEffectiveStorageQuantitiesFlg: '0',
+        storageRateEffectiveCapacity: 20.4,
+        storageRateEffectiveCapacityFlg: '0',
+        storageRateWaterUseCapacity: 100.0,
+        storageRateWaterUseCapacityFlg: '0',
+      },
+    ] as Parameters<typeof parseHiroshimaItems>[0]);
+    expect(rows[0]?.storageRate).toBeCloseTo(1.0, 6);
+  });
+
+  it('falls back to the 有効容量 rate when 利水 is flagged invalid', () => {
+    const rows = parseHiroshimaItems([
+      {
+        name: '御調ダム',
+        observatoryId: 70010,
+        managerCd: '30',
+        dataTimestamp: '2026-09-11 09:00:00',
+        damQuantitiesLevel: null,
+        damQuantitiesLevelFlg: '2',
+        damInflowQuantities: null,
+        damInflowQuantitiesFlg: '2',
+        damTotalReleaseQuantities: null,
+        damTotalReleaseQuantitiesFlg: '2',
+        damEffectiveStorageQuantities: 917,
+        damEffectiveStorageQuantitiesFlg: '0',
+        storageRateEffectiveCapacity: 20.4,
+        storageRateEffectiveCapacityFlg: '0',
+        storageRateWaterUseCapacity: null,
+        storageRateWaterUseCapacityFlg: '2',
+      },
+    ] as Parameters<typeof parseHiroshimaItems>[0]);
+    expect(rows[0]?.storageRate).toBeCloseTo(0.204, 6);
   });
 
   it('observatoryId is stringified', () => {
