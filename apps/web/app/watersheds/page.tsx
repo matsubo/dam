@@ -97,7 +97,7 @@ export default async function WatershedsPage() {
             <span key={b.label} className="inline-flex items-center gap-1">
               <span
                 aria-hidden
-                className="w-2.5 h-2.5 rounded-sm"
+                className="w-2.5 h-2.5 rounded-xs"
                 style={{ background: band.color }}
               />
               {band.label}
