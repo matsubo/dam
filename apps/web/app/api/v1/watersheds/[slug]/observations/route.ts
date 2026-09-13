@@ -61,7 +61,7 @@ export async function GET(
       throw new HttpError(400, 'Invalid from/to');
     }
 
-    // Rate denominator = 利水容量 of the rate-able subset only (dams with
+    // Rate denominator = 有効貯水容量 of the rate-able subset only (dams with
     // a known active_capacity_m3). Excluded dams don't contribute to either
     // the numerator or denominator, keeping the watershed-level ratio honest.
     const wsRows = await sql<

@@ -202,7 +202,7 @@ export interface DamListItem {
   prefCode: string;
   manager: string | null;
   totalCapacityM3: string | null;
-  /** 利水容量 — the 貯水率 denominator. Null when Damnet doesn't list one. */
+  /** 有効貯水容量 — the static 貯水率 denominator. Null when ダム便覧 lists none. */
   activeCapacityM3: string | null;
   watershedSlug: string | null;
   watershedName: string | null;
@@ -451,7 +451,7 @@ export interface LatestObservation {
   qualityFlag: number;
   sourceId: string;
   /**
-   * 利水容量 to use as the 貯水率 denominator for THIS observation: the dam's
+   * Capacity to use as the 貯水率 denominator for THIS observation: the dam's
    * static active_capacity_m3, unless this row's source_id is a
    * trusted_rate_basis source with its own storage_rate, in which case it's
    * back-solved (volume/rate) from that trusted, season-aware rate. See
@@ -715,7 +715,7 @@ export async function nearbyDams(
 
 /**
  * Latest storage rate per dam id, keyed by `id.toString()` so the result is
- * JSON-safe. rate ∈ [0, 1] when 利水容量 + 観測値 are both present, null
+ * JSON-safe. rate ∈ [0, 1] when a capacity + 観測値 are both present, null
  * otherwise. LATERAL DISTINCT-ON keeps this cheap even for ~200 ids.
  */
 export interface LatestRateAndSource {
@@ -820,9 +820,11 @@ export interface LowStorageDam {
 
 /**
  * Dams whose latest real (non-synthetic) observation has 貯水率 below
- * `thresholdPct`. Uses `active_capacity_m3` as the denominator (matches
- * the rate semantics used elsewhere in the UI). Synthetic seeds are
- * excluded — we only want to alert on genuinely measured low storage,
+ * `thresholdPct`. Uses the same trust-aware denominator as
+ * `latestRateByDam` — dividing by the static `active_capacity_m3` here put
+ * dams on the drought list at 11 % while their own page, which honours the
+ * source's season-aware rate, showed 100 % (issue #38 §2-2). Synthetic seeds
+ * are excluded — we only want to alert on genuinely measured low storage,
  * not on the placeholder data.
  *
  * Returns at most `limit` rows ordered by rate ascending (worst first).
@@ -839,14 +841,14 @@ export async function lowStorageDams(
       d.pref_code                                    AS "prefCode",
       w.slug                                         AS "watershedSlug",
       w.name                                         AS "watershedName",
-      LEAST(1.0, latest.storage_volume_m3::FLOAT8 / d.active_capacity_m3::FLOAT8) AS rate,
+      LEAST(1.0, latest.storage_volume_m3::FLOAT8 / eff_cap.value::FLOAT8) AS rate,
       latest.storage_volume_m3::TEXT                 AS "storageVolumeM3",
       latest.observed_at::TEXT                       AS "observedAt",
       latest.source_id                               AS "sourceId"
     FROM dams d
     LEFT JOIN watersheds w ON w.id = d.watershed_id
     JOIN LATERAL (
-      SELECT o.storage_volume_m3, o.observed_at, o.source_id
+      SELECT o.storage_volume_m3, o.storage_rate, o.observed_at, o.source_id
       FROM observations o
       WHERE o.dam_id = d.id
         AND o.storage_volume_m3 IS NOT NULL
@@ -855,9 +857,16 @@ export async function lowStorageDams(
       ORDER BY o.observed_at DESC
       LIMIT 1
     ) latest ON TRUE
-    WHERE d.active_capacity_m3 IS NOT NULL
-      AND d.active_capacity_m3 > 0
-      AND (latest.storage_volume_m3::FLOAT8 / d.active_capacity_m3::FLOAT8)
+    LEFT JOIN source_priorities sp ON sp.source_id = latest.source_id
+    LEFT JOIN LATERAL (
+      SELECT effective_active_capacity_m3(
+        d.active_capacity_m3, latest.storage_volume_m3, latest.storage_rate,
+        COALESCE(sp.trusted_rate_basis, false)
+      ) AS value
+    ) eff_cap ON TRUE
+    WHERE eff_cap.value IS NOT NULL
+      AND eff_cap.value > 0
+      AND (latest.storage_volume_m3::FLOAT8 / eff_cap.value::FLOAT8)
           < ${thresholdPct / 100.0}
     ORDER BY rate ASC
     LIMIT ${limit}

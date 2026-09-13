@@ -168,7 +168,7 @@ export default async function StatsPage() {
       <h1 className="text-3xl font-semibold mb-2">マクロ統計</h1>
       <p className="text-muted mb-6">
         全国のダムに関する集計指標。貯水量・貯水率は、直近 7
-        日間に貯水量の実測があったダムだけを分子・分母の両方に用いて集計しています（実測のないダムの利水容量は分母に入れません）。取得できているダムの割合は{' '}
+        日間に貯水量の実測があったダムだけを分子・分母の両方に用いて集計しています（実測のないダムの容量は分母に入れません）。取得できているダムの割合は{' '}
         <Link className="text-primary hover:underline" href="/coverage">
           カバレッジ
         </Link>{' '}
@@ -183,9 +183,9 @@ export default async function StatsPage() {
         <Stat label="直近24時間の観測" value={fmt(headline.obsLast24h)} />
         <Stat label="全国合計貯水容量" value={fmtCapacityMcm(headline.totalCapacityM3)} />
         <Stat
-          label="全国合計利水容量"
+          label="全国合計有効貯水容量"
           value={fmtCapacityMcm(headline.activeCapacityM3)}
-          sub="利水容量データのある全ダム合計"
+          sub="有効貯水容量データのある全ダム合計"
         />
         <Stat
           label="現在の合計貯水量"
@@ -195,7 +195,7 @@ export default async function StatsPage() {
         <Stat
           label="全国貯水率"
           value={overallRate != null ? `${(overallRate * 100).toFixed(1)} %` : '—'}
-          sub={`現在貯水量 ÷ 利水容量（直近 7 日に実測のある ${fmt(s.national.observedDamCount)} 基で集計）`}
+          sub={`現在貯水量 ÷ 有効な容量（直近 7 日に実測のある ${fmt(s.national.observedDamCount)} 基で集計）`}
         />
         <Stat
           label="観測カバー期間"
@@ -217,7 +217,7 @@ export default async function StatsPage() {
             <th>都道府県</th>
             <th>ダム数</th>
             <th>総貯水容量</th>
-            <th>利水容量</th>
+            <th>有効貯水容量</th>
             <th>現在貯水量</th>
             <th>貯水率</th>
           </tr>
@@ -257,7 +257,7 @@ export default async function StatsPage() {
             <th>水系</th>
             <th>ダム数</th>
             <th>総貯水容量</th>
-            <th>利水容量</th>
+            <th>有効貯水容量</th>
             <th>現在貯水量</th>
             <th>貯水率</th>
           </tr>
@@ -294,7 +294,7 @@ export default async function StatsPage() {
             <th>容量レンジ</th>
             <th>ダム数</th>
             <th>合計総貯水容量</th>
-            <th>合計利水容量</th>
+            <th>合計有効貯水容量</th>
           </tr>
         </thead>
         <tbody>
@@ -316,7 +316,7 @@ export default async function StatsPage() {
             <th>年代</th>
             <th>ダム数</th>
             <th>合計総貯水容量</th>
-            <th>合計利水容量</th>
+            <th>合計有効貯水容量</th>
           </tr>
         </thead>
         <tbody>

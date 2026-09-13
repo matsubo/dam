@@ -57,21 +57,23 @@ describe('parseOkinawaEbCsv', () => {
     expect(yamashiro).not.toBeNull();
   });
 
-  test('倉敷ダム: storage volume = 2947000 m³, rate = 49.9%', () => {
+  test('倉敷ダム: storage volume = 2947000 m³, rate = 0.499 (fraction)', () => {
     const rows = parseOkinawaEbCsv(SAMPLE_CSV, NOW_2026);
     const kurasiki = rows.find((r) => r.csvName === '倉敷ダム');
     expect(kurasiki).not.toBeUndefined();
     // 2947 千m³ × 1000 = 2,947,000 m³
     expect(kurasiki?.storageVolumeM3).toBeCloseTo(2_947_000);
-    expect(kurasiki?.storageRate).toBeCloseTo(49.9);
+    // The CSV publishes 49.9 (percent); observations.storage_rate is a 0–1
+    // fraction, so the adapter must divide by 100. See issue #38 §2-1.
+    expect(kurasiki?.storageRate).toBeCloseTo(0.499, 5);
   });
 
-  test('山城ダム: storage volume = 859000 m³, rate = 72.2%', () => {
+  test('山城ダム: storage volume = 859000 m³, rate = 0.722 (fraction)', () => {
     const rows = parseOkinawaEbCsv(SAMPLE_CSV, NOW_2026);
     const yamashiro = rows.find((r) => r.csvName === '山城ダム');
     expect(yamashiro).not.toBeUndefined();
     expect(yamashiro?.storageVolumeM3).toBeCloseTo(859_000);
-    expect(yamashiro?.storageRate).toBeCloseTo(72.2);
+    expect(yamashiro?.storageRate).toBeCloseTo(0.722, 5);
   });
 
   test('timestamp is midnight JST of stated date', () => {

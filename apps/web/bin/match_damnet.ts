@@ -110,7 +110,7 @@ function normalizeName(s: string): string {
   // ("post-redevelopment" / "original"), e.g. 早明浦（再）vs 早明浦（元）, while
   // Damnet keeps a single row per physical dam. Strip these markers (both
   // full-width and half-width parens) so both NDI rows match the same Damnet
-  // entry and inherit its 利水容量 etc.
+  // entry and inherit its 有効貯水容量 etc.
   // 「(新)」/「（新）」 also appears for newly-built dams superseding an old one
   // and is treated the same way.
   return s
@@ -145,7 +145,7 @@ async function main(): Promise<void> {
   // 〇〇（再）+ 〇〇（元）pairs that describe the same physical dam — so the
   // map stores an array of rows. The Damnet ID can only be attached to ONE of
   // them (unique-index constraint), but we want every row in the group to
-  // inherit the master attributes (利水容量, etc).
+  // inherit the master attributes (有効貯水容量, etc).
   const allDams = await sql<DamRow[]>`
     SELECT id, slug, name, pref_code, external_ids FROM dams
   `;
@@ -208,11 +208,16 @@ async function main(): Promise<void> {
       attached++;
     }
 
-    // 2. Apply attributes (only fill missing values)
+    // 2. Apply attributes. COALESCE(new, existing) means a value Damnet has
+    //    wins; only fields Damnet leaves blank keep what was there.
     const completed = intish(c.completion_year);
     const heightM = num(c.height);
     const capacity = num(c.capacity_total);
     const capacityM3 = capacity ? capacity * 1_000 : null;
+    // ダム便覧 publishes 総貯水容量 and 有効貯水容量 only — there is no
+    // 利水容量 field. capacity_active is 有効貯水容量, which is why it lands in
+    // both effective_capacity_m3 and active_capacity_m3 below; the latter is
+    // the 貯水率 denominator and is named for the role, not the quantity.
     const active = num(c.capacity_active);
     const activeCapacityM3 = active ? active * 1_000 : null;
     const typeLabel = c.type ? (TYPE_LETTER_TO_LABEL[c.type] ?? c.type) : null;
@@ -250,7 +255,7 @@ async function main(): Promise<void> {
       redevelopmentStatus;
     if (hasAnyUpdate) {
       // Apply attributes to every row in this name-collision group so both
-      // 〇〇（再）and 〇〇（元）pick up the same 利水容量 / dimensions / etc.
+      // 〇〇（再）and 〇〇（元）pick up the same 有効貯水容量 / dimensions / etc.
       // postgres.js refuses to bind bigint[] directly, so cast via TEXT[].
       const ids = targets.map((t) => t.id.toString());
       await sql`

@@ -7,7 +7,10 @@
 //   https://dam.pref.nagasaki.jp/data/dam_m.json     → dam master (dam_cd → name)
 //   https://dam.pref.nagasaki.jp/data/all/{ym}/{ymd}/all_{ymd}_{hm}_d.json
 // Format: UTF-8 JSON. All times in JST.
-// Fields per dam: lv(m), pondage(千m³), rate(%), in(m³/s), dis(m³/s).
+// Fields per dam: lv(m), pondage(千m³), in(m³/s), dis(m³/s) and three rates —
+// rate_r (利水容量貯水率), rate_y (有効容量貯水率) and rate, which tracks
+// rate_y. 長崎県 publishes 利水容量 and 有効貯水容量 separately in dam_m.json
+// (tank_risui_d / tank_ecapa), and this site's 貯水率 is the 利水 one.
 // Priority 308, matching other prefectural sources.
 
 import { sql } from '@dam/db/client';
@@ -45,8 +48,13 @@ interface DamMaster {
 interface DamDataItem {
   dam_cd: number;
   lv: string;
-  pondage: string;
+  /** 貯水率 — the feed's headline rate, on the same basis as rate_y. */
   rate: string;
+  /** 利水容量貯水率 (%). */
+  rate_r?: string;
+  /** 有効容量貯水率 (%). */
+  rate_y?: string;
+  pondage: string;
   in: string;
   dis: string;
 }
@@ -79,7 +87,8 @@ export function parseNagasakiDatetime(ymd: string, time: string): Date | null {
 }
 
 function parseNum(s: string): number | null {
-  const clean = s.trim();
+  // Volumes ≥ 1,000 千m³ arrive with a thousands separator ("1,938").
+  const clean = s.trim().replace(/,/g, '');
   if (!clean) return null;
   const n = Number(clean);
   return Number.isFinite(n) ? n : null;
@@ -111,8 +120,13 @@ export function parseAllDamsJson(raw: AllDamsJson, masters: Map<number, string>)
       observedAt,
       waterLevelM: parseNum(item.lv),
       storageVolumeM3: pondageRaw !== null ? pondageRaw * 1_000 : null,
+      // Prefer 利水容量貯水率 (rate_r): it is the rate the manager publishes,
+      // against the current-season 利水容量. rate / rate_y divide by the full
+      // 有効貯水容量 and understate flood-control dams badly — 宮崎ダム reads
+      // 17.5 % on 有効 against 100 % on 利水. Same inversion as issue #19
+      // (kasenbosai) and commit ad2323d (cgr_mlit / kumamoto / kochi).
       storageRate: (() => {
-        const r = parseNum(item.rate);
+        const r = parseNum(item.rate_r ?? '') ?? parseNum(item.rate_y ?? '') ?? parseNum(item.rate);
         return r !== null ? r / 100 : null;
       })(),
       inflowM3s: parseNum(item.in),

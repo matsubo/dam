@@ -6,7 +6,7 @@ export const revalidate = 86400;
 export const metadata: Metadata = {
   title: '用語集',
   description:
-    'Dam Data Platform で使われる用語の定義。ダム・水系・河川・貯水量・利水容量・貯水率・観測レコードなど、サイト上での意味と計算方法を明示します。',
+    'Dam Data Platform で使われる用語の定義。ダム・水系・河川・貯水量・有効貯水容量・利水容量・貯水率・観測レコードなど、サイト上での意味と計算方法を明示します。',
   alternates: { canonical: '/glossary' },
 };
 
@@ -71,17 +71,24 @@ const SECTIONS: { title: string; terms: Term[] }[] = [
         body: 'ダム湛水面の最高水位（サーチャージ水位）まで貯められる容量の合計。死水容量・利水容量・洪水調節容量を含む、ダムの「物理的な最大容積」。単位は m³。',
       },
       {
+        id: 'effective-capacity',
+        term: '有効貯水容量',
+        reading: 'ゆうこうちょすいようりょう',
+        body: '総貯水容量から死水容量を除いた、実際に使える容量。利水容量と洪水調節容量を合わせた量にあたる。ダム便覧が公表するのはこの値までで、本サイトが諸元として持つ容量（active_capacity_m3 / API の activeCapacityM3）もこれ。貯水率の分母は原則この値。',
+        also: '英: effective capacity',
+      },
+      {
         id: 'active-capacity',
         term: '利水容量',
         reading: 'りすいようりょう',
-        body: '通常運用で利用可能な貯水容量。総貯水容量から死水容量および洪水調節容量を除いた残り。水道・かんがい・発電などの用途に充てられる。本サイトの「貯水率」の分母に用いる。',
-        also: '英: active capacity',
+        body: '有効貯水容量のうち、水道・かんがい・発電などに充てられる部分。洪水期は洪水調節容量を確保するため小さくなる。ダム便覧はこの値を公表していないため、本サイトが諸元として持っているのは有効貯水容量であり、利水容量は一部の出典（川の防災情報・県の防災サイトなど）が公表する貯水率から逆算した場合にだけ分かる。',
+        also: '英: active capacity / conservation storage',
       },
       {
         id: 'flood-control-capacity',
         term: '洪水調節容量',
         reading: 'こうずいちょうせつようりょう',
-        body: '洪水時に下流の被害を抑えるため、空けておくべき容量。利水容量とは独立にダムが確保する。',
+        body: '洪水時に下流の被害を抑えるため、空けておくべき容量。有効貯水容量のうち利水容量ではない部分にあたり、洪水期に大きく取られる。',
       },
       {
         id: 'dead-storage',
@@ -100,14 +107,14 @@ const SECTIONS: { title: string; terms: Term[] }[] = [
         id: 'storage-rate',
         term: '貯水率',
         reading: 'ちょすいりつ',
-        body: '本サイトでは「現在の貯水量 ÷ 利水容量」で計算する。利水容量を持つダムだけが対象。100 % を超えた場合は表示上 100 % にクリップする（実運用上は洪水期の制限水位等に依存し、表示の単純化のため）。利水容量が登録されていないダムでは — と表示。',
-        also: 'rate = storage_volume_m3 / active_capacity_m3',
+        body: '本サイトでは「現在の貯水量 ÷ その時点で有効な容量」で計算する。分母は原則としてダム便覧の有効貯水容量だが、出典自身が季節を反映した利水容量貯水率を公表しているダムでは、その率が示す分母（洪水期の利水容量）を用いる。容量が登録されていないダムでは — と表示。100 % を超えた場合は表示上 100 % にクリップする。',
+        also: 'rate = storage_volume_m3 / effective_active_capacity_m3(…)',
       },
       {
         id: 'national-rate',
         term: '全国貯水率',
         reading: 'ぜんこくちょすいりつ',
-        body: '利水容量を持つ全国のダム合計について、現在貯水量の合計を利水容量の合計で割った値。「利水容量の登録があるダム × 直近 7 日以内の観測値」の組のみで集計する。',
+        body: '容量が分かる全国のダム合計について、現在貯水量の合計を各ダムの分母の合計で割った値。「容量の登録があるダム × 直近 7 日以内の観測値」の組のみで集計する。',
       },
       {
         id: 'inflow-outflow',
@@ -180,7 +187,7 @@ const SECTIONS: { title: string; terms: Term[] }[] = [
       {
         id: 'rateable',
         term: 'rate-able dam',
-        body: '利水容量 (active_capacity_m3) が登録されているダム。貯水率の集計対象になる。本サイトでは現在 2,388 基（全 2,749 基中）。',
+        body: '有効貯水容量 (active_capacity_m3) が登録されているダム。貯水率の集計対象になる。本サイトでは現在 2,388 基（全 2,749 基中）。',
       },
       {
         id: 'storage-change-strip',
