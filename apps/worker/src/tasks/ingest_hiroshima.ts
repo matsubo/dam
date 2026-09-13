@@ -24,8 +24,8 @@
 //   damInflowQuantities           → inflow (m³/s)
 //   damTotalReleaseQuantities     → outflow (m³/s)
 //   damEffectiveStorageQuantities → effective storage (千m³ → × 1000 = m³)
-//   storageRateEffectiveCapacity  → % effective capacity
-//     fallback: storageRateWaterUseCapacity (利水貯水率)
+//   storageRateWaterUseCapacity   → % 利水容量 (preferred, season-aware)
+//     fallback: storageRateEffectiveCapacity (有効容量貯水率)
 //
 // Cron: hourly at :29.
 
@@ -113,9 +113,13 @@ export function parseHiroshimaItems(items: HiroshimaItem[]): ParsedRow[] {
       it.damEffectiveStorageQuantitiesFlg,
     );
     const storage = storageThouM3 != null ? storageThouM3 * 1000 : null;
+    // 利水容量貯水率 first: it is the season-aware figure the prefecture leads
+    // its own table with, and the 有効容量 one divides by the annual pool
+    // (御調ダム 2026-09-11 09:00: 利水 100.0 % vs 有効 20.4 %). Same inversion as
+    // issue #19 fixed in kasenbosai and #17 in cgr-mlit/熊本/高知.
     const ratePct =
-      gated(it.storageRateEffectiveCapacity, it.storageRateEffectiveCapacityFlg) ??
-      gated(it.storageRateWaterUseCapacity, it.storageRateWaterUseCapacityFlg);
+      gated(it.storageRateWaterUseCapacity, it.storageRateWaterUseCapacityFlg) ??
+      gated(it.storageRateEffectiveCapacity, it.storageRateEffectiveCapacityFlg);
 
     if (level == null && inflow == null && outflow == null && storage == null && ratePct == null) {
       continue;
