@@ -28,11 +28,11 @@ reset-db:
     docker compose -f docker-compose.dev.yml up -d --wait
     bun run --filter @dam/db migrate
 
-# Lint, format, typecheck, test
+# Lint, format, typecheck, test (mirrors CI; E2E runs via `just e2e`)
 check:
     bun run lint
     bun run typecheck
-    bun test
+    bun test --path-ignore-patterns 'tests/e2e/**'
 
 # Run the web app
 dev-web:
