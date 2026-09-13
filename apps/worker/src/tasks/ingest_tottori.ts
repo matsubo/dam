@@ -26,7 +26,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
-import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
+import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 // 10分データ全ダム一覧 — one request for all five dams. Only served from inside

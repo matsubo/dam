@@ -1,8 +1,9 @@
 import { sql } from '@dam/db/client';
 import { coverageHeadline } from '@dam/db/repo/coverage';
-import { type DamListItem, listDams, lowStorageDams } from '@dam/db/repo/dams';
+import { listDams, lowStorageDams } from '@dam/db/repo/dams';
 import { nationalStorageTotals, storageRate } from '@dam/db/repo/storage_totals';
 import { driestWatersheds, nationalStorageChange } from '@dam/db/repo/watersheds';
+import type { LucideIcon } from 'lucide-react';
 import {
   ArrowRight,
   BadgeCheck,
@@ -15,7 +16,6 @@ import {
   LineChart,
   Map as MapIcon,
 } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
 import type { Metadata } from 'next';
 import { unstable_cache } from 'next/cache';
 import Link from 'next/link';

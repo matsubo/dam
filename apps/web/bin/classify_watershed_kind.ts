@@ -20,7 +20,7 @@
  * Prints a JSON review report to stdout: kind counts, every name that did
  * not match the codelist, and every ambiguous name with the candidate picked.
  */
-import { readFile, readdir } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import {

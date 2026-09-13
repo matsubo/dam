@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { type Link, buildLinks } from './hateoas.ts';
+import { buildLinks, type Link } from './hateoas.ts';
 
 describe('buildLinks', () => {
   test('builds self link', () => {

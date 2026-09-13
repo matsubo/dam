@@ -1,7 +1,7 @@
 // apps/worker/src/tasks/ingest_oita_bousai.test.ts
 
 import { describe, expect, test } from 'bun:test';
-import { type ParsedRow, parseOitaTable, parseOitaTimestamp } from './ingest_oita_bousai.ts';
+import { parseOitaTable, parseOitaTimestamp } from './ingest_oita_bousai.ts';
 
 // Oita table: the data table is the FIRST table (index 0) with 10 columns:
 // Col 0: 管理者名, Col 1: 河川名, Col 2: 局名(dam, inside <a class="site">),

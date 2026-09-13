@@ -1,12 +1,26 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.0/schema.json",
-  "organizeImports": { "enabled": true },
+  "$schema": "https://biomejs.dev/schemas/2.5.13/schema.json",
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
-      "style": { "noNonNullAssertion": "error" },
-      "suspicious": { "noExplicitAny": "error" }
+      "preset": "recommended",
+      "style": {
+        "noNonNullAssertion": "error"
+      },
+      "suspicious": {
+        "noExplicitAny": "error"
+      },
+      "a11y": {
+        "useAriaPropsSupportedByRole": "warn",
+        "noNoninteractiveTabindex": "warn"
+      }
     }
   },
   "formatter": {
@@ -16,18 +30,30 @@
     "lineWidth": 100
   },
   "javascript": {
-    "formatter": { "quoteStyle": "single", "trailingCommas": "all", "semicolons": "always" }
+    "formatter": {
+      "quoteStyle": "single",
+      "trailingCommas": "all",
+      "semicolons": "always"
+    }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
   },
   "files": {
-    "ignore": [
-      "**/node_modules/**",
-      "**/.next/**",
-      "**/dist/**",
-      "**/migrations/**",
-      "**/.claude/**",
-      "**/playwright-report/**",
-      "**/test-results/**",
-      "**/.playwright-cli/**"
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/.next",
+      "!**/dist",
+      "!**/migrations",
+      "!**/tests/fixtures",
+      "!**/next-env.d.ts",
+      "!**/.claude",
+      "!**/playwright-report",
+      "!**/test-results",
+      "!**/.playwright-cli"
     ]
   }
 }

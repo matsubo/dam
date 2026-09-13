@@ -29,7 +29,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
-import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
+import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const BASE_URL = process.env.SHIMANE_BOUSAI_URL ?? 'https://www.suibou-shimane.jp';
@@ -66,10 +66,6 @@ interface StationData {
   [itemCode: string]: { dt: string; st: number };
 }
 
-interface SnapshotData {
-  [timestampOrUpdate: string]: { [stationId: string]: StationData } | string;
-}
-
 export interface ParsedRow {
   stationId: string;
   shimaneName: string;
@@ -96,7 +92,7 @@ export function parseShimaneTimestamp(s: string): Date | null {
 /** Extract numeric value if station item is valid (st == 0). */
 function getItem(station: StationData, code: string): number | null {
   const item = station[code];
-  if (!item || item.st !== 0) return null;
+  if (item?.st !== 0) return null;
   const n = Number(item.dt);
   return Number.isFinite(n) ? n : null;
 }

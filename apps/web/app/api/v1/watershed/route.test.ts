@@ -58,6 +58,16 @@ describe('GET /api/v1/watershed', () => {
     expect(body._links.nearest?.href).toBeDefined();
   });
 
+  test('returns 400 when a coordinate is not a number', async () => {
+    const res = await GET(makeReq('http://localhost/api/v1/watershed?lat=abc&lng=139.5'));
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 400 when a coordinate is out of range', async () => {
+    const res = await GET(makeReq('http://localhost/api/v1/watershed?lat=91&lng=139.5'));
+    expect(res.status).toBe(400);
+  });
+
   test('returns 400 when params missing', async () => {
     const res = await GET(makeReq('http://localhost/api/v1/watershed?lat=0'));
     expect(res.status).toBe(400);

@@ -87,7 +87,7 @@ describe('parseKagoshimaCsv', () => {
   });
 
   test('falls back to 利水 rate when 治水 is missing', () => {
-    const csv = makeCsv('川辺ダム', ['2026/1/1 0:10,14998,619,619,658,,997,']);
+    const _csv = makeCsv('川辺ダム', ['2026/1/1 0:10,14998,619,619,658,,997,']);
     // cols[6] = '997' (no 治水), cols[7] = '' (no 利水)
     // Actually let me fix: col6='997' means it IS 治水. Let me use col6='' and col7='997'
     const csv2 = makeCsv('川辺ダム', ['2026/1/1 0:10,14998,619,619,658,,,997']);

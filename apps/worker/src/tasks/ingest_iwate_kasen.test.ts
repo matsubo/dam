@@ -1,12 +1,7 @@
 // apps/worker/src/tasks/ingest_iwate_kasen.test.ts
 
 import { describe, expect, test } from 'bun:test';
-import {
-  type ParsedRow,
-  extractYear,
-  parseIwatePage,
-  parseIwateTimestamp,
-} from './ingest_iwate_kasen.ts';
+import { extractYear, parseIwatePage, parseIwateTimestamp } from './ingest_iwate_kasen.ts';
 
 // Minimal page fixture — wraps one data row in the Gamen32Servlet HTML shape.
 // commonParam sets the year; ListDate gives "MM/DD HH:MM" (no year).
@@ -17,7 +12,7 @@ function makeHtml(
 ): string {
   const datCells = vals
     .map(
-      (v, i) =>
+      (v, _i) =>
         `<td class="ListDamuData" style="background-color:#FFF">
            <div class="dat2"><span style="color:#000000">${v}</span></div>
            <div class="flg2">　</div>
