@@ -25,7 +25,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
-import { type UniverseRow, recordUniverse } from '@dam/db/repo/source_universe';
+import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const DATA_URL =
@@ -78,7 +78,7 @@ export function parseMiyagiDispDate(s: string): Date | null {
 }
 
 function parseNum(s: string): number | null {
-  const clean = s.replace(/[^\d.\-]/g, '');
+  const clean = s.replace(/[^\d.-]/g, '');
   if (!clean) return null;
   const n = Number(clean);
   return Number.isFinite(n) ? n : null;

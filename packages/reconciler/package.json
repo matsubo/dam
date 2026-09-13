@@ -3,8 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
-  "scripts": { "typecheck": "tsc --noEmit", "run": "bun run src/cli.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "run": "bun run src/cli.ts"
+  },
   "dependencies": {
     "@dam/core": "workspace:*",
     "@dam/db": "workspace:*"

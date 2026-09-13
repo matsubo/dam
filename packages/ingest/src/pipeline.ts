@@ -1,9 +1,9 @@
 import type { FetchContext, ParsedReading, SourceAdapter } from '@dam/core/source_adapter';
 import { sql } from '@dam/db/client';
 import { type ObservationInput, upsertObservations } from '@dam/db/repo/observations';
-import { markParseError, markParsed, recordRawSnapshot } from '@dam/db/repo/raw_snapshots';
+import { markParsed, markParseError, recordRawSnapshot } from '@dam/db/repo/raw_snapshots';
 import { putSnapshot, rawSnapshotKey } from '@dam/storage/snapshot_store';
-import { QualityFlag, detectOutlier, isPhysicallyValid } from './quality.ts';
+import { detectOutlier, isPhysicallyValid, QualityFlag } from './quality.ts';
 
 export interface IngestResult {
   rawSnapshots: number;

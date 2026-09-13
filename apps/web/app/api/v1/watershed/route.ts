@@ -1,14 +1,14 @@
 import { findNearestWatershed, findWatershedContaining } from '@dam/db/repo/watersheds';
 import { z } from 'zod';
 import { authorize, rateLimitHeaders } from '../../../../lib/api/auth.ts';
-import { HttpError, asProblem } from '../../../../lib/api/error.ts';
+import { asProblem, HttpError } from '../../../../lib/api/error.ts';
 import { hal } from '../../../../lib/api/response.ts';
 
 export const dynamic = 'force-dynamic';
 
 const Query = z.object({
-  lat: z.string().min(1).pipe(z.coerce.number().gte(-90).lte(90)),
-  lng: z.string().min(1).pipe(z.coerce.number().gte(-180).lte(180)),
+  lat: z.string().min(1).transform(Number).pipe(z.number().gte(-90).lte(90)),
+  lng: z.string().min(1).transform(Number).pipe(z.number().gte(-180).lte(180)),
 });
 
 export async function GET(req: Request): Promise<Response> {

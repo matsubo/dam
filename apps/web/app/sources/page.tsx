@@ -916,7 +916,11 @@ function BoxLine({
   y,
   children,
   muted,
-}: { y: number; children: React.ReactNode; muted?: boolean }) {
+}: {
+  y: number;
+  children: React.ReactNode;
+  muted?: boolean;
+}) {
   return (
     <text
       y={y}
@@ -936,7 +940,13 @@ function Edge({
   x2,
   y2,
   dashed,
-}: { x1: number; y1: number; x2: number; y2: number; dashed?: boolean }) {
+}: {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  dashed?: boolean;
+}) {
   return (
     <line
       x1={x1}

@@ -3,11 +3,15 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
-  "scripts": { "typecheck": "tsc --noEmit" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
     "@dam/core": "workspace:*",
     "@dam/db": "workspace:*",
-    "fast-xml-parser": "^4.5.0"
+    "fast-xml-parser": "^5.11.1"
   }
 }

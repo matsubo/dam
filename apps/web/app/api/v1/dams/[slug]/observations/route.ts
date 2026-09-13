@@ -1,8 +1,8 @@
 import { sql } from '@dam/db/client';
-import { type SeriesPoint, findSeries } from '@dam/db/repo/observations';
+import { findSeries, type SeriesPoint } from '@dam/db/repo/observations';
 import { preferredSourceForDam } from '@dam/db/repo/source_priorities';
 import { z } from 'zod';
-import { HttpError, asProblem } from '../../../../../../lib/api/error.ts';
+import { asProblem, HttpError } from '../../../../../../lib/api/error.ts';
 import { hal } from '../../../../../../lib/api/response.ts';
 
 export const dynamic = 'force-dynamic';
