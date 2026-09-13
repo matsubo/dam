@@ -19,8 +19,8 @@ const BODY = `# Dam Data Japan
 ## At a glance
 
 - 2,749 dams across all 47 prefectures
-- 利水容量 (active conservation capacity) populated for ~87% of dams from
-  ダム便覧. Remaining 13% are mostly small agricultural / sediment dams not
+- 有効貯水容量 (effective capacity) populated for ~87% of dams from
+  ダム便覧, which does not publish 利水容量 separately. Remaining 13% are mostly small agricultural / sediment dams not
   covered by Damnet. Other master attributes (location, total capacity,
   manager, etc.) are populated for nearly all dams from NDI.
 - Time-series at 1-hour grain with daily and monthly continuous aggregates.
@@ -69,9 +69,11 @@ Documented at: ${SITE_URL}/sources
 ## Restrictions & disclaimers
 
 - Not for life-safety or legal decisions — defer to upstream official sources.
-- Storage rate uses 利水容量 (active conservation storage) as denominator,
-  not 総貯水容量. Dams without 利水容量 in source data are excluded from
-  rate aggregations rather than mis-labelled.
+- Storage rate uses 有効貯水容量 (effective capacity) as denominator, not
+  総貯水容量 — except where the upstream feed publishes its own season-aware
+  利水容量貯水率, in which case the denominator that rate implies is used.
+  Dams with no capacity in source data are excluded from rate aggregations
+  rather than mis-labelled.
 
 ## Contributing
 

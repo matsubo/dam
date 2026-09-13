@@ -12,7 +12,7 @@
 //   Row 2: (same date), national_rate, kurasiki_rate, yamashiro_rate, total_rate
 //   Row 3: (same date), national_avg, kurasiki_avg, yamashiro_avg, total_avg
 //   Row 4: (same date), national_diff, kurasiki_diff, yamashiro_diff, total_diff
-//   All volume values are in 千m³ (1000 m³).
+//   All volume values are in 千m³ (1000 m³); row 2 rates are percentages.
 // Coverage:
 //   倉敷ダム (col 2): 県管理 — 5,900千m³ total capacity
 //   山城ダム (col 3): 企業局管理 — 1,190千m³ total capacity
@@ -110,7 +110,11 @@ export function parseOkinawaEbCsv(csv: string, now: Date = new Date()): ParsedRo
       observedAt,
       storageVolumeM3:
         volThousandsM3 !== null && !Number.isNaN(volThousandsM3) ? volThousandsM3 * 1000 : null,
-      storageRate: rate !== null && !Number.isNaN(rate) ? rate : null,
+      // CSV row 2 is a percentage (e.g. "95.1"); observations.storage_rate is
+      // a 0–1 fraction. Issue #38 §2-1: 山城ダム was published as 95.1 instead
+      // of 0.951. Same class as 0030_fix_jwa_chiba_storage_rate.sql.
+      storageRate:
+        rate !== null && !Number.isNaN(rate) ? Math.max(0, Math.min(1, rate / 100)) : null,
     });
   }
   return rows;

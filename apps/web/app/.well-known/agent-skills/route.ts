@@ -54,7 +54,7 @@ const SKILLS: Skill[] = [
     id: 'get_dam_observations',
     name: 'Get dam observation time-series',
     description:
-      'Hourly / daily / monthly storage volume, inflow, outflow, and water level for a dam. Uses 利水容量 (active capacity) as the storage_rate denominator.',
+      'Hourly / daily / monthly storage volume, inflow, outflow, and water level for a dam. Uses 有効貯水容量 (effective capacity) as the storage_rate denominator, or the season-aware 利水容量 the upstream feed implies where one is published.',
     endpoint: `${SITE_URL}/api/v1/dams/{slug}/observations`,
     method: 'GET',
     inputs: [

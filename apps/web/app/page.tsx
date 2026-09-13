@@ -47,7 +47,7 @@ interface MasterStats {
   obsTotal: bigint;
   obsLast24h: bigint;
   totalCapacityM3: string | null;
-  /** Sum of 利水容量 across the rate-able subset (informational; NOT the rate denominator). */
+  /** Sum of 有効貯水容量 across the rate-able subset (informational; NOT the rate denominator). */
   activeCapacityM3: string | null;
   rateableDamCount: bigint;
   oldestObs: Date | null;
@@ -58,7 +58,7 @@ interface HomeStats extends MasterStats {
   rateableStorageM3: string | null;
   /** Rate-able dams with a fresh (7 d) observation. Rate numerator and denominator both come from this cohort. */
   observedDamCount: number;
-  /** Sum of 利水容量 over the observed cohort only — the 全国貯水率 denominator. */
+  /** Sum of each observed dam's own denominator — the 全国貯水率 denominator. */
   observedActiveCapacityM3: string | null;
   /** Distinct dams that have at least one non-synthetic observation in the last 30 days. */
   realDamCount: number;
@@ -243,7 +243,7 @@ export default async function Home() {
       await cachedFeaturedSparklines(latest.items.map((d) => d.id.toString()).join(',')),
     ),
   );
-  // 全国貯水率: 直近7日に実測のあるダムだけで、貯水量合計 ÷ 利水容量合計。
+  // 全国貯水率: 直近7日に実測のあるダムだけで、貯水量合計 ÷ 分母合計。
   // 実測のないダムは分子にも分母にも入れない（容量だけ混ぜると率が下振れする）。
   const overallRate = storageRate({
     observedDamCount: s.observedDamCount,
@@ -515,7 +515,7 @@ export default async function Home() {
                 {overallRate != null ? `${(overallRate * 100).toFixed(1)} %` : '—'}
               </div>
               <div className="basis-full text-xs text-on-surface-variant">
-                {`現在貯水量 ÷ 利水容量（直近 7 日に実測のある ${fmt(s.observedDamCount)} 基で集計）`}
+                {`現在貯水量 ÷ 有効な容量（直近 7 日に実測のある ${fmt(s.observedDamCount)} 基で集計）`}
               </div>
             </div>
             {change.current ? (
@@ -568,9 +568,9 @@ export default async function Home() {
               sub="登録ダム合計(総容量)"
             />
             <Stat
-              label="全国合計利水容量"
+              label="全国合計有効貯水容量"
               value={fmtCapacityMcm(s.activeCapacityM3)}
-              sub="利水容量データのある全ダム合計"
+              sub="有効貯水容量データのある全ダム合計"
             />
             <Stat
               label="現在の合計貯水量"

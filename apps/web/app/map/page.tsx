@@ -35,8 +35,8 @@ async function fetchPoints(): Promise<MapPoint[]> {
       -- size encoding: total capacity (every dam has it)
       d.total_capacity_m3::FLOAT8           AS "capacityM3",
       d.active_capacity_m3::FLOAT8          AS "activeCapacityM3",
-      -- colour encoding: rate computed against 利水容量. Dams without
-      -- 利水容量 (~51%) get a NULL rate which renders as a neutral grey marker.
+      -- colour encoding: rate computed against 有効貯水容量. Dams without
+      -- one (~51%) get a NULL rate which renders as a neutral grey marker.
       CASE
         WHEN d.active_capacity_m3 IS NOT NULL AND d.active_capacity_m3 > 0
         THEN LEAST(1.0, l.storage_volume_m3::FLOAT8 / d.active_capacity_m3::FLOAT8)
@@ -66,7 +66,7 @@ export default async function MapPage() {
       <h1 className="text-2xl font-semibold mb-2">日本のダム地図</h1>
       <p className="text-sm text-muted mb-4">
         円の面積 = 総貯水容量。色 = 最新貯水率（赤=渇水 →
-        青=満水、利水容量比）。データのないダムは灰色。
+        青=満水、有効貯水容量比）。データのないダムは灰色。
       </p>
       <JapanMap points={points} />
     </div>

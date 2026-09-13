@@ -4,6 +4,7 @@ import {
   latestObservation,
   latestRateAndSourceByDam,
   latestRateByDam,
+  lowStorageDams,
   upsertDamByExternalId,
 } from './dams.ts';
 import { upsertObservations } from './observations.ts';
@@ -150,6 +151,19 @@ describe('trusted native storage_rate overrides static active_capacity_m3', () =
     const expectedCap = 2230 / 0.973 + 5700;
     const expectedRate = (2230 + 2230) / expectedCap;
     expect(m.get(watershedId.toString()) ?? Number.NaN).toBeCloseTo(expectedRate, 5);
+  });
+
+  test('lowStorageDams does not flag a dam its own source reports as full', async () => {
+    // The homepage 渇水 list is the loudest consumer of the rate. Dividing by
+    // the static capacity there while the dam page divides by the trusted
+    // denominator put 稲葉ダム on the drought list at 11.2 % while its own page
+    // said 100 % (issue #38 §2-2).
+    const rows = await lowStorageDams(50, 1000);
+    const slugs = rows.map((r) => r.slug);
+    expect(slugs).not.toContain('trust-test-a');
+    // The untrusted dam holds the same 39.1 % of its static capacity and must
+    // still be flagged.
+    expect(slugs).toContain('trust-test-b');
   });
 
   test('driestWatersheds computes rate with the same trust-adjusted denominator', async () => {

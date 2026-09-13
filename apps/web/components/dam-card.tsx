@@ -44,7 +44,7 @@ export function DamCard({
         </div>
         <p className="text-xs text-on-surface-variant">総貯水容量</p>
         <p className="text-xs text-on-surface-variant tabular-nums">
-          利水容量 {fmtCapacityMcm(d.activeCapacityM3)}
+          有効貯水容量 {fmtCapacityMcm(d.activeCapacityM3)}
         </p>
         {rate !== undefined ? (
           rate != null ? (

@@ -265,7 +265,8 @@ const components = {
         activeCapacityM3: {
           type: 'string',
           nullable: true,
-          description: '利水容量 (m³, NUMERIC を文字列化)。諸元の静的値。',
+          description:
+            '貯水率の既定の分母 (m³, NUMERIC を文字列化)。諸元の静的値で、中身はダム便覧の**有効貯水容量**です。ダム便覧は利水容量を公表していないため、フィールド名は役割 (active = 分母) を表しており、利水容量そのものではありません。季節を反映した利水容量は `latest.effectiveActiveCapacityM3` を参照してください。',
           example: '616000.00',
         },
         location: {
@@ -315,7 +316,7 @@ const components = {
               type: 'string',
               nullable: true,
               description:
-                '利水容量。貯水率 (storage_rate) の分母として採用。Damnet 由来 (約 87% のダムで populated)。',
+                '貯水率 (storage_rate) の既定の分母。中身はダム便覧の**有効貯水容量** (約 87% のダムで populated)。ダム便覧は利水容量を公表していません。',
               example: '616000.00',
             },
             floodCapacityM3: { type: 'string', nullable: true },
@@ -358,7 +359,7 @@ const components = {
                   type: 'string',
                   nullable: true,
                   description:
-                    '貯水率 (0..1、100% 超もあり得る)。`trusted_rate_basis` なソースでは出典が公表する利水容量貯水率をそのまま格納し、それ以外は貯水量 ÷ 諸元の利水容量。',
+                    '貯水率 (0..1、100% 超もあり得る)。`trusted_rate_basis` なソースでは出典が公表する利水容量貯水率をそのまま格納し、それ以外は貯水量 ÷ 諸元の利水容量。出典が 100% で頭打ちする場合は `storageVolumeM3 ÷ effectiveActiveCapacityM3` と一致しません。',
                   example: '0.9230',
                 },
                 inflowM3s: { type: 'string', nullable: true },
@@ -370,7 +371,7 @@ const components = {
                   type: 'string',
                   nullable: true,
                   description:
-                    '表示している貯水率の分母 (m³)。信頼ソースの利水容量貯水率から逆算 (貯水量 ÷ 貯水率) した季節反映値で、洪水期は諸元の `activeCapacityM3` より大幅に小さくなり得ます (issue #19)。信頼ソースでなければ `activeCapacityM3` と同じ。注意: 出典側で貯水率が 100% に頭打ちされている場合は貯水量そのものになり、実際の利水容量を上回り得ます。',
+                    '表示している貯水率の分母 (m³)。信頼ソースの利水容量貯水率から逆算 (貯水量 ÷ 貯水率) した季節反映値で、洪水期は諸元の `activeCapacityM3` より大幅に小さくなり得ます (issue #19)。信頼ソースでなければ `activeCapacityM3` と同じ。注意: (1) 出典側で貯水率が 100% に頭打ちされている場合は貯水量そのものになります。(2) 出典が (貯水量 − 下限) ÷ 容量 で率を出すダム (早明浦・岩尾内など) や、ダム便覧の容量が実態より小さいダムでは、逆算値が `activeCapacityM3` を上回ります。これは出典の率を再現するための分母であり、実容量ではありません (issue #38)。',
                   example: '2158000.00',
                 },
               },
@@ -408,7 +409,7 @@ const components = {
           type: 'string',
           nullable: true,
           description:
-            '上流ソース由来の貯水率 (0..1)。dam の利水容量を分母にしないため、UI では `storageVolumeM3 / activeCapacityM3` を再計算しています。',
+            '上流ソース由来の貯水率 (0..1)。分母が諸元の容量とは限らないため、UI では `storageVolumeM3 / effectiveActiveCapacityM3` を再計算しています。',
           example: '0.958',
         },
         inflowM3s: { type: 'string', nullable: true, example: '0.755' },

@@ -9,7 +9,7 @@ export interface MapPoint {
   lat: number;
   lng: number;
   capacityM3?: number | null;
-  /** 利水容量 — the 貯水率 denominator. */
+  /** 有効貯水容量 — the static 貯水率 denominator. */
   activeCapacityM3?: number | null;
   storageRate?: number | null;
 }
@@ -88,7 +88,7 @@ export function JapanMap({ points }: { points: MapPoint[] }) {
         })
           .bindPopup(
             `<a href="/dams/${p.slug}"><b>${p.name}</b></a><br/>` +
-              `総貯水容量: ${capTxt}<br/>利水容量: ${activeCapTxt}<br/>貯水率: ${ratePct}`,
+              `総貯水容量: ${capTxt}<br/>有効貯水容量: ${activeCapTxt}<br/>貯水率: ${ratePct}`,
           )
           .addTo(layer);
       }
