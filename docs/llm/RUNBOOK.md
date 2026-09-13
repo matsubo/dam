@@ -149,8 +149,10 @@ Either bump the source that has data, or have the synth seeder run again
 
 ### MinIO image not pullable
 
-`docker compose pull minio` may fail if the pinned tag was rotated. Pick a
-recent tag from https://hub.docker.com/r/minio/minio/tags and update
+`docker compose pull minio` may fail if the pinned tag was rotated. MinIO also
+removed its Docker Hub repositories, so the image must be pulled as
+`quay.io/minio/minio`. Pick a recent tag from
+https://quay.io/repository/minio/minio?tab=tags and update
 `docker-compose.yml`. Bucket survives the restart.
 
 ### Real upstream blocks the scraper

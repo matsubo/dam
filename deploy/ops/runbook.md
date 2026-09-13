@@ -153,8 +153,10 @@ Restore objective: RTO 1h, RPO 1h (matches the diff-backup cadence).
 
 ### 5.1 MinIO
 
-1. Find the latest tag at https://hub.docker.com/r/minio/minio/tags (use a
-   pinned `RELEASE.YYYY-MM-DDTHH-MM-SSZ` tag — never `latest`).
+1. Find the latest tag at https://quay.io/repository/minio/minio?tab=tags (use
+   a pinned `RELEASE.YYYY-MM-DDTHH-MM-SSZ` tag — never `latest`). MinIO removed
+   its Docker Hub repositories, so `minio/minio` and `minio/mc` only resolve
+   against `quay.io/` now.
 2. Coolify UI → `dam-minio` → edit the compose (`minio.image`) and restart.
 3. Open a PR. After merge, Coolify auto-deploys.
 4. The first start after a major bump may run an internal data migration; tail

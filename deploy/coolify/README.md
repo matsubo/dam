@@ -15,7 +15,7 @@ Production is **four Coolify resources** on the `coolify` Docker network
 | `dam-web` | Application, build pack **Dockerfile** | `deploy/coolify/Dockerfile.web` | Serves `dam.teraren.com` on `:3000`. Health check = the Dockerfile `HEALTHCHECK` (`/api/v1/healthz`); Coolify's own probe is **off** because the run image has neither curl nor wget. This is the resource that gets **rolling updates**. |
 | `dam-worker` | Application, build pack **Dockerfile** | `deploy/coolify/Dockerfile.worker` | graphile-worker. No domain, no health check; a deploy briefly overlaps two workers, which graphile-worker tolerates (job locks live in Postgres). |
 | `dam-db` | Database → PostgreSQL | image pinned to the `timescale/timescaledb-ha:pg16-all` **digest** that was running before the split | Data volume mounted at `/home/postgres/pgdata/data` (the image's `PGDATA`), not Coolify's default `/var/lib/postgresql`. Reachable as `postgres://dam:…@<db-uuid>:5432/dam`. |
-| `dam-minio` | Service (raw compose) | `minio/minio:RELEASE.2025-04-22T22-12-26Z` | Bucket `dam-raw`. Reachable as `http://minio-<service-uuid>:9000` ("Connect to predefined network" is on). |
+| `dam-minio` | Service (raw compose) | `quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z` | Bucket `dam-raw`. Reachable as `http://minio-<service-uuid>:9000` ("Connect to predefined network" is on). |
 
 | File | Purpose |
 | --- | --- |
