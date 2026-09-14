@@ -10,6 +10,7 @@
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { sql } from '@dam/db/client';
+import { chunkRanges, fillChunkRange, fillRecent } from './storage_rate_recompute.ts';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -75,21 +76,12 @@ async function insertObservation(
 }
 
 /**
- * Execute the same UPDATE that step 1 of storage_rate_recompute.ts runs
- * (recent window).  Returns the count of rows affected.
+ * Step 1 of the task. Calls the shipped implementation rather than a copy of
+ * its SQL — an earlier version of this file re-implemented the UPDATE, which
+ * meant the tests could not see the transaction structure that caused #31.
  */
 async function runRecomputeRecent(tx: typeof sql): Promise<number> {
-  const result = await tx`
-    UPDATE observations o
-    SET storage_rate = derived_storage_rate(o.storage_volume_m3, d.active_capacity_m3)
-    FROM dams d
-    WHERE o.dam_id = d.id
-      AND o.storage_rate IS NULL
-      AND o.storage_volume_m3 IS NOT NULL
-      AND derived_storage_rate(o.storage_volume_m3, d.active_capacity_m3) IS NOT NULL
-      AND o.observed_at > NOW() - INTERVAL '72 hours'
-  `;
-  return result.count;
+  return fillRecent(tx);
 }
 
 /** Read back storage_rate for a specific observation. */
@@ -115,6 +107,7 @@ const SLUGS = [
   'sr-recompute-test-clamp',
   'sr-recompute-test-over-15x',
   'sr-recompute-test-no-capacity',
+  'sr-recompute-test-compressed',
 ] as const;
 
 beforeAll(async () => {
@@ -280,6 +273,102 @@ describe('storageRate:recompute task', () => {
     await runRecomputeRecent(sql);
 
     expect(await fetchStorageRate(sql, damId, observedAt)).toBeNull();
+  });
+
+  // ── issue #31: the decompression limit ────────────────────────────────────
+
+  test('chunkRanges separates compressed from uncompressed chunks', async () => {
+    if (!dbAvailable) return;
+
+    const uncompressed = await chunkRanges(sql, { compressed: false });
+    const compressed = await chunkRanges(sql, { compressed: true });
+
+    // Same chunk must never appear in both lists.
+    const compressedStarts = new Set(compressed.map((c) => c.rangeStart.toISOString()));
+    for (const c of uncompressed) {
+      expect(compressedStarts.has(c.rangeStart.toISOString())).toBe(false);
+    }
+    // Ranges must be half-open and non-empty, since fillChunkRange bounds on them.
+    for (const c of [...uncompressed, ...compressed]) {
+      expect(c.rangeEnd.getTime()).toBeGreaterThan(c.rangeStart.getTime());
+    }
+  });
+
+  test('the daily sweep leaves compressed chunks alone instead of failing', async () => {
+    if (!dbAvailable) return;
+
+    // Reproduces #31: an observation old enough to sit in a compressed chunk.
+    // The task used to UPDATE all history in one transaction, hit
+    // `tuple decompression limit exceeded`, and roll back the recent fill too.
+    const capacity = 2_000_000;
+    const volume = 1_000_000;
+
+    const damId = await insertTestDam(sql, {
+      slug: 'sr-recompute-test-compressed',
+      name: 'SR Recompute Test — Compressed Chunk',
+      activeCapacityM3: null,
+    });
+
+    // 120 days back: past the 30-day compression policy from
+    // 0014_observation_indexes.sql, so this lands in a compressed chunk.
+    const oldObservedAt = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000);
+    await insertObservation(sql, {
+      damId,
+      observedAt: oldObservedAt,
+      storageVolumeM3: volume,
+      storageRate: null,
+    });
+    await sql`UPDATE dams SET active_capacity_m3 = ${capacity} WHERE id = ${damId}`;
+
+    // Compress the owning chunk ourselves rather than relying on the 30-day
+    // policy having already run: on a freshly created database it has not, and
+    // the row lands in an uncompressed chunk. Then assert the premise, because
+    // a test that quietly skips here would prove nothing.
+    const [owning] = await sql<{ qualified: string; is_compressed: boolean }[]>`
+      SELECT format('%I.%I', c.chunk_schema, c.chunk_name) AS qualified, c.is_compressed
+      FROM timescaledb_information.chunks c
+      WHERE c.hypertable_name = 'observations'
+        AND ${oldObservedAt} >= c.range_start
+        AND ${oldObservedAt} <  c.range_end
+    `;
+    expect(owning).toBeDefined();
+    if (owning && !owning.is_compressed) {
+      await sql.unsafe(`SELECT compress_chunk('${owning.qualified}')`);
+    }
+
+    const [after] = await sql<{ is_compressed: boolean }[]>`
+      SELECT c.is_compressed
+      FROM timescaledb_information.chunks c
+      WHERE c.hypertable_name = 'observations'
+        AND ${oldObservedAt} >= c.range_start
+        AND ${oldObservedAt} <  c.range_end
+    `;
+    expect(after?.is_compressed).toBe(true);
+
+    // The uncompressed sweep must not cover this row...
+    const uncompressed = await chunkRanges(sql, { compressed: false });
+    const covered = uncompressed.some(
+      (r) => oldObservedAt >= r.rangeStart && oldObservedAt < r.rangeEnd,
+    );
+    expect(covered).toBe(false);
+
+    // ...and running the entire uncompressed sweep must not throw.
+    for (const range of uncompressed) {
+      await sql.begin((tx) => fillChunkRange(tx, range));
+    }
+
+    // Still NULL: reaching it is the opt-in pass's job, not the daily one.
+    expect(await fetchStorageRate(sql, damId, oldObservedAt)).toBeNull();
+
+    // The opt-in pass does reach it, with the per-transaction cap lifted.
+    const compressed = await chunkRanges(sql, { compressed: true });
+    for (const range of compressed) {
+      await sql.begin(async (tx) => {
+        await tx`SET LOCAL timescaledb.max_tuples_decompressed_per_dml_transaction = 0`;
+        return fillChunkRange(tx, range);
+      });
+    }
+    expect(await fetchStorageRate(sql, damId, oldObservedAt)).toBeCloseTo(0.5, 5);
   });
 
   test('skips dams without active_capacity_m3', async () => {
