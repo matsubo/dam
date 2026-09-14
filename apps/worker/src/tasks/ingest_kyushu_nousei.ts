@@ -28,16 +28,18 @@
 // observations column for storing it (see below).
 //
 // The PDF's own footnote (「多目的ダムにおいては、有効貯水容量欄を利水容量と
-// し、利水容量に対する貯水率としている」) means the printed "有効貯水量" cell
-// is sometimes actually 利水容量 for multi-purpose dams; some of those dams
-// (e.g. 石場ダム) print a bare capacity number with no trailing "%" right
-// before the column where it changes — usually the 洪水期/非洪水期 boundary
-// (6/1, 6/15, 7/15, 8/1 in the R8 survey). unpdf's reading-order extraction
-// puts that bare number in the same numeric run as the real (貯水量,貯水率)
-// pairs, so `pairDateColumns` below treats any number NOT immediately
-// followed by "%" as one of these markers and drops it, rather than trying to
-// track which capacity applies when — we only need the latest column's
-// (volume, rate), not the capacity itself (see trusted_rate_basis below).
+// し、利水容量に対する貯水率としている」) means the rate column is always
+// 現貯水量 / 利水容量 (the second capacity column), never 有効貯水量 (the
+// first) — for our 12 target dams the two print the same number, but several
+// multi-purpose dams sharing the table (寺内ダム 16,000 有効 / 8,230 利水
+// etc.) do not, and validating against the wrong one fails the consistency
+// check below for no reason. Some multi-purpose FLOOD-CONTROL dams also
+// narrow their 利水容量 for 洪水期 and widen it back afterwards (日向神ダム:
+// 21,000 → 7,300 → 18,300 across the R8 survey); the PDF reprints the new
+// figure as a bare number with no trailing "%" right at the column boundary
+// where it changes, rather than adding its own column. `pairDateColumns`
+// below tracks this running value so each column's (volume, rate) is checked
+// against whatever 利水容量 actually applied that day.
 //
 // A survey date can also be missing outright: 熊本県 教良木ダム and 市房ダム
 // print "－ －" for 令和8年8月1日 per the PDF's own footnote
@@ -69,13 +71,14 @@
 //
 // trusted_rate_basis is set, verified the same way #27 was: the published
 // 貯水率 for every one of the 12 dams this issue targets is exactly
-// 現貯水量 / 有効貯水量 as the R8.9.1 PDF prints it (久保白 2,891/4,150=69.7%,
+// 現貯水量 / 利水容量 as the R8.9.1 PDF prints it (久保白 2,891/4,150=69.7%,
 // 伊佐ノ浦 1,459/1,640=89.0%, 教良木 1,064/1,371=77.6%, 石場 688/2,154=31.9%,
 // 深見 785/1,250=62.8%, 日指 1,112/4,510=24.7%, 並石 519/1,429=36.3%, 東原調整池
 // 763/910=83.8%, 竹山 936/1,937=48.3%, 西京 2,073/2,238=92.6%, 金峰
 // 1,740/2,290=76.0%, 喜界地下 1,292/1,330=97.1%) — all 12 are single-purpose
 // agricultural dams whose 有効貯水量 and 利水容量 columns print the same
-// number, so the multi-purpose-dam caveat above never applies to them.
+// number, so the multi-purpose-dam capacity caveat above never changes their
+// denominator.
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
@@ -178,28 +181,44 @@ function tokenize(tail: string): Token[] {
 interface DatePair {
   volume: number | null;
   rate: number | null;
+  /** 利水容量 in effect for this column (千m³) — see below. */
+  capacity: number;
 }
 
 /**
- * Pair up (volume, rate) for every survey-date column plus the trailing 平年
- * column, skipping the bare capacity-update markers described in the header
- * comment. See there for why a bare number is dropped and a "－ －" run
- * becomes an explicit null pair rather than being skipped.
+ * Pair up (volume, rate, capacity) for every survey-date column plus the
+ * trailing 平年 column, tracking 利水容量 as it changes mid-row.
+ *
+ * A bare number (not immediately followed by "%") is a 利水容量 update, not
+ * noise to discard: for a 洪水期/非洪水期-restricted dam (flood-control
+ * multipurpose dams such as 日向神ダム), the usable capacity really does drop
+ * for the flood season and recover afterwards, and the PDF reprints the new
+ * figure inline rather than in its own column. For most rows the bare number
+ * just repeats the same value (寺内ダム reprints "8,230" — its constant
+ * 利水容量 — three times with no change), so tracking it is a no-op there;
+ * for 日向神ダム it drops from 21,000 to 7,300 and back to 18,300 across the
+ * row, and using a single static capacity for the whole row (this adapter's
+ * first cut) mis-derived 16 of the table's 59 rows as internally
+ * inconsistent, including several with no relation to this issue's 12 target
+ * dams. A "－ －" run is an explicit missing survey (see header comment) and
+ * still advances the column position, carrying the last-known capacity
+ * forward.
  */
-function pairDateColumns(tokens: Token[]): DatePair[] {
+function pairDateColumns(tokens: Token[], initialCapacity: number): DatePair[] {
   const pairs: DatePair[] = [];
+  let capacity = initialCapacity;
   let i = 0;
   while (i < tokens.length) {
     const a = tokens[i];
     const b = tokens[i + 1];
     if (a?.kind === 'num' && b?.kind === 'pct') {
-      pairs.push({ volume: a.value, rate: b.value });
+      pairs.push({ volume: a.value, rate: b.value, capacity });
       i += 2;
     } else if (a?.kind === 'dash' && b?.kind === 'dash') {
-      pairs.push({ volume: null, rate: null });
+      pairs.push({ volume: null, rate: null, capacity });
       i += 2;
     } else if (a?.kind === 'num') {
-      // Bare 利水容量 update — printed inline with no rate of its own.
+      capacity = a.value;
       i += 1;
     } else {
       // A lone trailing 対平年比 (pct or dash): the row's date columns are done.
@@ -236,8 +255,11 @@ export function parseKyushuNouseiPdfText(text: string): {
     // 小計 (per-prefecture subtotal) and 計 (grand total) rows carry no dam
     // name and would otherwise just fail NAME_RE, but skip explicitly so a
     // future subtotal that happens to contain a real dam name in its
-    // description column can never be mistaken for one.
-    if (line.startsWith('小計') || /^計(\s|$)/.test(line)) continue;
+    // description column can never be mistaken for one. Footnote lines
+    // (「※...」) are skipped for the same reason — one of them literally
+    // reads "...熊本県の教良木ダムと市房ダムの..." and would otherwise be
+    // read as a phantom 教良木ダム row with no numeric tail.
+    if (line.startsWith('小計') || /^計(\s|$)/.test(line) || line.startsWith('※')) continue;
 
     for (const [prefName, code] of Object.entries(PREF_NAME_TO_CODE)) {
       if (line.startsWith(`${prefName} `) || line.startsWith(`${prefName}　`)) {
@@ -252,17 +274,25 @@ export function parseKyushuNouseiPdfText(text: string): {
     const tail = line.slice((nameMatch.index ?? 0) + name.length);
     const tokens = tokenize(tail);
 
-    published.push({ name, prefCode: currentPrefCode });
-
     // First two tokens: 有効貯水量, 利水容量 (千m³). Both must be real numbers
-    // for the row to be usable — no target dam ever prints these as "－".
+    // for a line to count as a real table row at all — this is also what
+    // rejects the page's title lines and the embedded chart's own "繁敷ダム"
+    // caption, which NAME_RE matches but which carry no numeric tail. The
+    // PDF's own footnote ("利水容量に対する貯水率としている") says the rate is
+    // always against 利水容量 (the second column), not 有効貯水量 — for our
+    // 12 target dams the two are the same number, but for multi-purpose dams
+    // sharing the table (寺内ダム 16,000/8,230 etc.) they differ, and using
+    // the wrong one fails the consistency check below for no reason.
     const effCapTok = tokens[0];
     const waterRightTok = tokens[1];
     if (effCapTok?.kind !== 'num' || waterRightTok?.kind !== 'num') continue;
-    const effectiveCapacity = effCapTok.value;
-    if (effectiveCapacity <= 0) continue;
+    if (waterRightTok.value <= 0) continue;
 
-    const pairs = pairDateColumns(tokens.slice(2));
+    // A real row, even if the rest of it turns out unusable below — recorded
+    // now so an unmatched or zero-rate dam still counts as published.
+    published.push({ name, prefCode: currentPrefCode });
+
+    const pairs = pairDateColumns(tokens.slice(2), waterRightTok.value);
     // The last pair is always 平年; the one before it is the current survey.
     // Fewer than 2 pairs means there is no current reading to distinguish
     // from the 平年 baseline (would only happen on a PDF with a single date
@@ -277,11 +307,10 @@ export function parseKyushuNouseiPdfText(text: string): {
     if (current.rate <= 0 || current.rate > MAX_PLAUSIBLE_PCT) continue;
 
     // The row must be internally consistent: the printed rate is
-    // 現貯水量 / (有効貯水量 column, which the PDF's own footnote says is
-    // really 利水容量 for multi-purpose dams). A row that fails this is a
-    // layout misread, not data — drop it rather than publish an unexplained
-    // number.
-    const implied = (100 * current.volume) / effectiveCapacity;
+    // 現貯水量 / 利水容量, using whatever 利水容量 is in effect for this
+    // column (see pairDateColumns). A row that fails this is a layout
+    // misread, not data — drop it rather than publish an unexplained number.
+    const implied = (100 * current.volume) / current.capacity;
     if (Math.abs(implied - current.rate) > 1.5) continue;
 
     rows.push({

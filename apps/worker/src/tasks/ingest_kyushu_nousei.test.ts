@@ -37,13 +37,16 @@ describe('parseKyushuNouseiPdfText — the real R8.9.1 PDF', () => {
     expect(parsed.reportDate?.toISOString()).toBe('2026-08-31T15:00:00.000Z');
   });
 
-  test('parses the rows whose figures are internally consistent', () => {
-    // The PDF lists 59 dams; 43 carry figures that survive the
-    // 貯水量 / 容量 identity check, and the rest stay in `published` so
-    // /coverage still reads them as published. Asserting 59 here asserted the
-    // page's dam count, not the parser's contract.
-    expect(parsed.rows.length).toBeGreaterThanOrEqual(40);
-    expect(parsed.published.length).toBeGreaterThanOrEqual(parsed.rows.length);
+  test('parses 58 of the 59 published dams', () => {
+    // The PDF lists 59 dams (matching the issue's own count). 58 carry a
+    // usable R8.9.1 reading; 日向神ダム is the one exception — it genuinely
+    // reports 0.0% that day (a multi-purpose flood-control dam mid-drawdown,
+    // not a parser miss), which the phantom-zero guard correctly drops while
+    // still recording it as published.
+    expect(parsed.published.length).toBe(59);
+    expect(parsed.rows.length).toBe(58);
+    expect(parsed.published.some((p) => p.name === '日向神ダム')).toBe(true);
+    expect(parsed.rows.some((r) => r.kyushuName === '日向神ダム')).toBe(false);
   });
 
   test('reads 石場ダム (shared with oita-nourin, #27) with the R8.9.1 value', () => {
