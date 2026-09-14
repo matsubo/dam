@@ -1,6 +1,6 @@
 // Issue #32 — the displayed 貯水率 must not change basis with the clock.
 //
-// 北海道開発局's 18 直轄ダム are written by two sources: `kasenbosai-v2` at
+// 北海道開発局's 18 直轄ダム are written by two sources: `kasenbosai` at
 // :03 (hourly, trusted_rate_basis — publishes a 利水容量 rate) and
 // `hkd-mlit-dam` at :13 (10-minute values, NOT trusted — its own published
 // 貯水率 is 有効容量-based). Picking the newest row meant hkd won from :13 to
@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { sql } from '../client.ts';
 
 const SLUG = 'display-obs-32-test';
-const TRUSTED = 'kasenbosai-v2';
+const TRUSTED = 'kasenbosai';
 const UNTRUSTED = 'hkd-mlit-dam';
 
 let damId: bigint;
@@ -22,6 +22,18 @@ async function cleanup(): Promise<void> {
   for (const r of rows) {
     await sql`DELETE FROM observations WHERE dam_id = ${r.id}`;
     await sql`DELETE FROM dams WHERE id = ${r.id}`;
+  }
+}
+
+/** Real source ids — the fixtures must not invent one and leave it behind. */
+async function assertSourcesAreReal(): Promise<void> {
+  for (const id of [TRUSTED, UNTRUSTED]) {
+    const [row] = await sql<{ n: number }[]>`
+      SELECT COUNT(*)::int AS n FROM source_priorities WHERE source_id = ${id}
+    `;
+    if ((row?.n ?? 0) === 0) {
+      throw new Error(`${id} is not a known source_id — the fixture would invent one`);
+    }
   }
 }
 
@@ -51,12 +63,15 @@ beforeAll(async () => {
   `;
   damId = rows[0]?.id as bigint;
 
-  // Both sources must exist and carry the trust flags the real ones do.
+  // Both sources must exist and carry the trust flags the real ones do. They
+  // are seeded by their adapters' ensureSourcePriority(), so on a bare test DB
+  // insert them — but only after confirming the ids are the real ones.
   await sql`
     INSERT INTO source_priorities (source_id, priority, trusted_rate_basis)
     VALUES (${TRUSTED}, 100, TRUE), (${UNTRUSTED}, 90, FALSE)
     ON CONFLICT (source_id) DO NOTHING
   `;
+  await assertSourcesAreReal();
 });
 
 afterAll(async () => {
@@ -123,5 +138,50 @@ describe('display_observation (#32)', () => {
 
     const row = await displayed();
     expect(Number(row?.storage_rate)).toBeCloseTo(0.836, 3);
+  });
+});
+
+describe('display_observation — p_require_volume', () => {
+  test('a level-only dam still yields an observation when volume is not required', async () => {
+    if (!dbAvailable) return;
+
+    // ktr-kinu, tokushima-bousai, hrr-mlit and friends write
+    // storage_volume_m3 NULL. The detail page shows their 水位/流入量/放流量,
+    // so requiring a volume would report "no data" for dams that are live.
+    await sql`DELETE FROM observations WHERE dam_id = ${damId}`;
+    await sql`
+      INSERT INTO observations (dam_id, observed_at, source_id, storage_volume_m3, water_level_m)
+      VALUES (${damId}, NOW() - INTERVAL '5 minutes', ${UNTRUSTED}, NULL, 12.34)
+      ON CONFLICT (dam_id, observed_at, source_id) DO NOTHING
+    `;
+
+    const [withVolume] = await sql`SELECT * FROM display_observation(${damId})`;
+    const [anyRow] = await sql`SELECT * FROM display_observation(${damId}, FALSE)`;
+
+    expect(withVolume).toBeUndefined();
+    expect(anyRow).toBeDefined();
+  });
+
+  test('still prefers a current trusted row over a newer level-only row', async () => {
+    if (!dbAvailable) return;
+
+    // Deliberate, and the cost of #32: the detail page is exactly where the
+    // 83.6 % → 11.4 % swing was seen, so the trust preference has to hold there
+    // too. A dam whose newest row is level-only therefore shows the trusted
+    // row's timestamp instead — up to an hour older, kasenbosai being hourly.
+    // The alternative reintroduces the swing on the page that reported it.
+    await sql`DELETE FROM observations WHERE dam_id = ${damId}`;
+    await sql`
+      INSERT INTO observations (dam_id, observed_at, source_id, storage_volume_m3, water_level_m)
+      VALUES
+        (${damId}, NOW() - INTERVAL '2 hours',  ${TRUSTED},   5000000, NULL),
+        (${damId}, NOW() - INTERVAL '5 minutes', ${UNTRUSTED}, NULL,    12.34)
+      ON CONFLICT (dam_id, observed_at, source_id) DO NOTHING
+    `;
+
+    const [row] = await sql<{ source_id: string }[]>`
+      SELECT source_id FROM display_observation(${damId}, FALSE)
+    `;
+    expect(row?.source_id).toBe(TRUSTED);
   });
 });

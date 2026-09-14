@@ -54,7 +54,11 @@ export async function GET(): Promise<NextResponse> {
   const orEmpty =
     <T>(label: string) =>
     (error: unknown): T[] => {
-      degraded.push(`${label}: ${error instanceof Error ? error.message : String(error)}`);
+      // GET is unauthenticated, so only the section name is published — a
+      // Postgres message carries schema, table and column names and SQL
+      // fragments. The detail goes to the server log.
+      console.error(`admin/jobs: ${label} failed:`, error);
+      degraded.push(label);
       return [];
     };
 

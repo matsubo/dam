@@ -477,7 +477,9 @@ export async function latestObservation(damId: bigint): Promise<LatestObservatio
         d.active_capacity_m3, o.storage_volume_m3, o.storage_rate,
         COALESCE(sp.trusted_rate_basis, false)
       )::TEXT AS "effectiveActiveCapacityM3"
-    FROM display_observation(${damId}) sel
+    -- FALSE: this path shows 水位/流入量/放流量 too, and dams fed only by
+    -- level-carrying sources have no volume at all (issue #32 review).
+    FROM display_observation(${damId}, FALSE) sel
     JOIN observations o
       ON o.dam_id = ${damId}
      AND o.observed_at = sel.observed_at
