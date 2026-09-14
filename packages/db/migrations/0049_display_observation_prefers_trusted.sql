@@ -22,18 +22,24 @@
 -- Trusting it would lock the low reading in permanently instead of only for
 -- the 50 minutes it currently wins.
 --
--- Shape matters as much as semantics here. Expressing this as one ORDER BY over
--- a computed key (trusted AND recent, then observed_at) forces a sort of the
--- dam's entire history on every call — no index can supply that ordering, and
--- on a hypertable the sort input includes compressed chunks, so it decompresses
--- everything to discard all but one row. Measured on dev: cost 612 per dam
--- against 1.8 for the old index-backed pick, and lowStorageDams runs it once
--- per dam across the whole master. It is written as two index-backed probes
--- (trusted-and-recent, then newest-overall) combined with UNION ALL instead.
+-- p_max_age is the whole performance story, and it is not optional on the paths
+-- that sweep every dam. Chunk exclusion is what keeps this cheap on a
+-- hypertable: a time bound *inside* the pick lets TimescaleDB skip all but the
+-- newest chunks, while the same bound applied to the function's result reads
+-- every dam's full history first. lowStorageDams had its 30-day guard inline
+-- before this migration, and moving it outside cost two orders of magnitude.
 --
--- The trusted-source set is an ARRAY(SELECT ...) InitPlan rather than
--- IN (SELECT ...) deliberately: as a semi-join the planner turns the probe into
--- a hash join and the sort comes back.
+-- Measured on the dev copy (6.79M observations, 2,774 dams, 143 chunks), the
+-- lowStorageDams shape over all dams:
+--
+--   bound applied after the pick   1455 ms
+--   bound passed as p_max_age        19 ms
+--
+-- A two-probe UNION ALL rewrite was tried first, on the theory that the
+-- expression ORDER BY was the problem. It is a real but secondary cost, and the
+-- rewrite measured no better than what it replaced — the set operation gives
+-- back whatever the ordered append saves. Keep the single ORDER BY; pass a
+-- bound.
 --
 -- So: prefer a trusted-basis row while one is recent enough to be current, and
 -- fall back to the newest row otherwise. kasenbosai is hourly, so the
@@ -41,9 +47,10 @@
 -- hour of freshness for a denominator that does not change under the reader.
 -- The volume comes from the same row as the rate, so the two always agree.
 
--- Two signatures would be ambiguous for a one-argument call, so the original is
+-- Earlier signatures would be ambiguous for a defaulted call, so they are
 -- dropped rather than overloaded.
 DROP FUNCTION IF EXISTS display_observation(BIGINT);
+DROP FUNCTION IF EXISTS display_observation(BIGINT, BOOLEAN);
 
 CREATE OR REPLACE FUNCTION display_observation(
   p_dam_id         BIGINT,
@@ -51,7 +58,9 @@ CREATE OR REPLACE FUNCTION display_observation(
   -- only by level-carrying sources (ktr-kinu, tokushima-bousai, hrr-mlit and
   -- friends write storage_volume_m3 NULL) would otherwise report no observation
   -- at all and lose their live 水位/流入量/放流量.
-  p_require_volume BOOLEAN DEFAULT TRUE
+  p_require_volume BOOLEAN  DEFAULT TRUE,
+  -- Pass one on any path that runs per dam across the whole master; see above.
+  p_max_age        INTERVAL DEFAULT NULL
 )
 RETURNS TABLE (
   storage_volume_m3 NUMERIC,
@@ -62,40 +71,27 @@ RETURNS TABLE (
 LANGUAGE sql
 STABLE
 AS $$
-  SELECT x.storage_volume_m3, x.storage_rate, x.source_id, x.observed_at
-  FROM (
-    (
-      -- Probe 1: the newest trusted-basis row still current.
-      SELECT o.storage_volume_m3, o.storage_rate, o.source_id, o.observed_at, 0 AS pri
-      FROM observations o
-      WHERE o.dam_id = p_dam_id
-        AND (NOT p_require_volume OR o.storage_volume_m3 IS NOT NULL)
-        AND o.source_id <> 'synthetic'
-        AND o.observed_at > NOW() - INTERVAL '24 hours'
-        AND o.source_id = ANY(ARRAY(
-          SELECT sp.source_id FROM source_priorities sp WHERE sp.trusted_rate_basis
-        ))
-      ORDER BY o.observed_at DESC
-      LIMIT 1
-    )
-    UNION ALL
-    (
-      -- Probe 2: the newest row of any source, used when probe 1 is empty.
-      SELECT o.storage_volume_m3, o.storage_rate, o.source_id, o.observed_at, 1 AS pri
-      FROM observations o
-      WHERE o.dam_id = p_dam_id
-        AND (NOT p_require_volume OR o.storage_volume_m3 IS NOT NULL)
-        AND o.source_id <> 'synthetic'
-      ORDER BY o.observed_at DESC
-      LIMIT 1
-    )
-  ) x
-  ORDER BY x.pri
+  SELECT o.storage_volume_m3, o.storage_rate, o.source_id, o.observed_at
+  FROM observations o
+  LEFT JOIN source_priorities sp ON sp.source_id = o.source_id
+  WHERE o.dam_id = p_dam_id
+    AND (NOT p_require_volume OR o.storage_volume_m3 IS NOT NULL)
+    -- 'synthetic' was retired in 0045 but old rows remain in compressed
+    -- chunks; this function is the single definition of "the row we display".
+    AND o.source_id <> 'synthetic'
+    AND (p_max_age IS NULL OR o.observed_at > NOW() - p_max_age)
+  ORDER BY
+    -- A trusted row wins, but only while it is still current; past the window
+    -- this collapses to plain recency and the newest row wins as before.
+    (COALESCE(sp.trusted_rate_basis, FALSE)
+       AND o.observed_at > NOW() - INTERVAL '24 hours') DESC,
+    o.observed_at DESC
   LIMIT 1
 $$;
 
-COMMENT ON FUNCTION display_observation(BIGINT, BOOLEAN) IS
+COMMENT ON FUNCTION display_observation(BIGINT, BOOLEAN, INTERVAL) IS
   'Observation the public read path should display for a dam: the most recent '
   'trusted_rate_basis row within 24h, else the most recent row. Keeps the rate '
   'denominator stable when several sources write the same dam (issue #32). '
-  'p_require_volume=FALSE for paths that show level-only readings.';
+  'p_require_volume=FALSE for level-only paths; pass p_max_age on any path that '
+  'runs per dam across the whole master, or chunk exclusion is lost.';
