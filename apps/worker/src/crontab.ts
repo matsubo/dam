@@ -309,6 +309,14 @@ export const CRONTAB = `
 # 日次ポーリング (報告日タイムスタンプへの冪等 UPSERT) で拾う。
 15 4 * * * ingest:fukushima-nourin
 
+# 大分県 農林水産部 農地・農村整備課「農業用ダム貯水率一覧」— 農業用ダム 21 基
+# (石山/鍋倉/久木野尾/乙見/末広/中ノ川/石場/大舞 ほか)。土木部の
+# ingest:oita-bousai とは対象ダムがほぼ重ならない。PDF 1 テーブル、
+# 有効貯水量・現貯水量・貯水率。かんがい期 (4-9月) は月2回、それ以外は月1回の
+# 調査日ベースなので、fukushima-nourin と同じく日次ポーリングで拾う
+# (調査日タイムスタンプへの冪等 UPSERT)。#27
+35 4 * * * ingest:oita-nourin
+
 # 岩手県河川情報システム — 10 県管理ダム (Gamen32Servlet, Shift_JIS, one
 # request per station). Columns: level / 貯水量(千m³) / inflow / outflow.
 # Cron at :57.
