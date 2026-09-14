@@ -3,6 +3,7 @@
 // GET  — public read-only stats (no auth required):
 //   - cron_schedule   Last execution timestamps per crontab identifier.
 //   - active_jobs     Currently-queued / in-flight jobs.
+//   - failing_jobs    Jobs with a last_error, retrying or retries-exhausted.
 //   - queue_depth     Per-task pending counts for quick queue inspection.
 //   - dam_coverage    external_id source attachment counts.
 //   - observations    Row-count + per-source breakdown (last 30d).
@@ -43,13 +44,27 @@ interface CoverageRow {
 }
 
 export async function GET(): Promise<NextResponse> {
+  // Sections that fail are reported in `degraded` rather than silently coming
+  // back empty. They used to just `.catch(() => [])`: every job query selected
+  // `task_identifier` from `_private_jobs`, which has no such column (it holds
+  // `task_id` into `_private_tasks`), so `active_or_pending_jobs` and
+  // `queue_depth_by_task` returned `[]` on every call. That is why #31's
+  // failing job was only visible in the Coolify log.
+  const degraded: string[] = [];
+  const orEmpty =
+    <T>(label: string) =>
+    (error: unknown): T[] => {
+      degraded.push(`${label}: ${error instanceof Error ? error.message : String(error)}`);
+      return [];
+    };
+
   // graphile-worker schema accessor functions (the table layout differs by
   // worker version; falling back gracefully on missing tables).
   const cron = await sql<CronEntry[]>`
     SELECT identifier::text, last_execution::text
     FROM graphile_worker._private_known_crontabs
     ORDER BY identifier
-  `.catch(() => [] as CronEntry[]);
+  `.catch(orEmpty<CronEntry>('cron_schedule'));
 
   const active = await sql<ActiveJob[]>`
     SELECT
@@ -58,10 +73,10 @@ export async function GET(): Promise<NextResponse> {
       max_attempts,
       run_at::text            AS run_at,
       last_error
-    FROM graphile_worker._private_jobs
+    FROM graphile_worker.jobs
     ORDER BY run_at
     LIMIT 20
-  `.catch(() => [] as ActiveJob[]);
+  `.catch(orEmpty<ActiveJob>('active_or_pending_jobs'));
 
   // Queue-depth breakdown — grouped counts so we can see at a glance which
   // task identifier is wedging the worker (the `active_or_pending_jobs`
@@ -76,18 +91,40 @@ export async function GET(): Promise<NextResponse> {
       COUNT(*)::int                     AS pending,
       MIN(run_at)::text                 AS oldest_run_at,
       MAX(attempts)::int                AS max_attempts_seen
-    FROM graphile_worker._private_jobs
+    FROM graphile_worker.jobs
     GROUP BY task_identifier
     ORDER BY pending DESC
   `.catch(
-    () =>
-      [] as {
-        task: string;
-        pending: number;
-        oldest_run_at: string | null;
-        max_attempts_seen: number;
-      }[],
+    orEmpty<{
+      task: string;
+      pending: number;
+      oldest_run_at: string | null;
+      max_attempts_seen: number;
+    }>('queue_depth_by_task'),
   );
+
+  // Jobs that are actually in trouble, listed separately from
+  // `active_or_pending_jobs` because that one is `ORDER BY run_at LIMIT 20` —
+  // a job retrying on a long backoff sorts to the end and falls off it. #31
+  // went unnoticed for a day for exactly that reason: `storageRate:recompute`
+  // was burning through 25 attempts and the only evidence was the Coolify log.
+  //
+  // `attempts > 0` with a `last_error` covers both the still-retrying case and
+  // the exhausted one (graphile-worker leaves a job row behind at
+  // attempts = max_attempts rather than deleting it).
+  const failing = await sql<(ActiveJob & { exhausted: boolean })[]>`
+    SELECT
+      task_identifier::text   AS task,
+      attempts,
+      max_attempts,
+      run_at::text            AS run_at,
+      last_error,
+      (attempts >= max_attempts) AS exhausted
+    FROM graphile_worker.jobs
+    WHERE attempts > 0 AND last_error IS NOT NULL
+    ORDER BY (attempts >= max_attempts) DESC, attempts DESC
+    LIMIT 50
+  `.catch(orEmpty<ActiveJob & { exhausted: boolean }>('failing_jobs'));
 
   const coverage = await sql<CoverageRow[]>`
     SELECT
@@ -215,6 +252,8 @@ export async function GET(): Promise<NextResponse> {
       generated_at: new Date().toISOString(),
       cron_schedule: cron,
       active_or_pending_jobs: active,
+      failing_jobs: failing,
+      degraded,
       queue_depth_by_task: queueDepth,
       dam_coverage: {
         ...cov,
