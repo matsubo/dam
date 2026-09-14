@@ -841,12 +841,14 @@ export async function lowStorageDams(
     FROM dams d
     LEFT JOIN watersheds w ON w.id = d.watershed_id
     JOIN LATERAL (
-      -- The 30-day guard is applied after the pick, so a dam whose displayed
-      -- row has gone stale drops out of the 渇水 list rather than silently
-      -- falling back to an older row.
+      -- The 30-day guard goes *inside* the pick: this runs once per dam across
+      -- the whole master, and outside it TimescaleDB loses chunk exclusion and
+      -- reads every dam's full history (1455 ms vs 19 ms on the dev copy). It
+      -- is also where the guard sat before display_observation existed. A dam
+      -- whose newest row is older than 30 days still drops out of the 渇水
+      -- list, because the function then returns nothing.
       SELECT storage_volume_m3, storage_rate, observed_at, source_id
-      FROM display_observation(d.id)
-      WHERE observed_at > NOW() - INTERVAL '30 days'
+      FROM display_observation(d.id, TRUE, INTERVAL '30 days')
     ) latest ON TRUE
     LEFT JOIN source_priorities sp ON sp.source_id = latest.source_id
     LEFT JOIN LATERAL (
