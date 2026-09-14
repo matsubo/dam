@@ -320,17 +320,30 @@ describe('storageRate:recompute task', () => {
     });
     await sql`UPDATE dams SET active_capacity_m3 = ${capacity} WHERE id = ${damId}`;
 
-    // Assert the premise rather than skipping on it: if this row is not in a
-    // compressed chunk the test proves nothing, and we want to know that.
-    const [owning] = await sql<{ is_compressed: boolean }[]>`
-      SELECT c.is_compressed
+    // Compress the owning chunk ourselves rather than relying on the 30-day
+    // policy having already run: on a freshly created database it has not, and
+    // the row lands in an uncompressed chunk. Then assert the premise, because
+    // a test that quietly skips here would prove nothing.
+    const [owning] = await sql<{ qualified: string; is_compressed: boolean }[]>`
+      SELECT format('%I.%I', c.chunk_schema, c.chunk_name) AS qualified, c.is_compressed
       FROM timescaledb_information.chunks c
       WHERE c.hypertable_name = 'observations'
         AND ${oldObservedAt} >= c.range_start
         AND ${oldObservedAt} <  c.range_end
     `;
     expect(owning).toBeDefined();
-    expect(owning?.is_compressed).toBe(true);
+    if (owning && !owning.is_compressed) {
+      await sql.unsafe(`SELECT compress_chunk('${owning.qualified}')`);
+    }
+
+    const [after] = await sql<{ is_compressed: boolean }[]>`
+      SELECT c.is_compressed
+      FROM timescaledb_information.chunks c
+      WHERE c.hypertable_name = 'observations'
+        AND ${oldObservedAt} >= c.range_start
+        AND ${oldObservedAt} <  c.range_end
+    `;
+    expect(after?.is_compressed).toBe(true);
 
     // The uncompressed sweep must not cover this row...
     const uncompressed = await chunkRanges(sql, { compressed: false });
