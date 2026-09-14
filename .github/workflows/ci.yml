@@ -27,8 +27,8 @@ jobs:
       S3_SECRET_KEY: minio12345
       S3_BUCKET: dam-raw
     steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with: { bun-version: latest }
       - run: bun install --frozen-lockfile
       - run: bun run lint
@@ -42,16 +42,16 @@ jobs:
         run: |
           docker run -d --name minio \
             -p 9000:9000 -e MINIO_ROOT_USER=minio -e MINIO_ROOT_PASSWORD=minio12345 \
-            minio/minio:RELEASE.2025-04-22T22-12-26Z server /data
+            quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z server /data
           # Wait until ready
-          for i in 1 2 3 4 5 6 7 8 9 10; do
+          for _ in 1 2 3 4 5 6 7 8 9 10; do
             curl -sf http://localhost:9000/minio/health/ready && break
             sleep 2
           done
           # Create bucket
           docker run --rm --network host \
             -e MC_HOST_local=http://minio:minio12345@localhost:9000 \
-            minio/mc:RELEASE.2025-04-08T15-39-49Z mb local/dam-raw || true
+            quay.io/minio/mc:RELEASE.2025-04-08T15-39-49Z mb local/dam-raw || true
       - name: Unit + integration tests
         # Skip tests/e2e/*.spec.ts — those run via bunx playwright test below.
         run: bun test --path-ignore-patterns 'tests/e2e/**'
@@ -66,7 +66,7 @@ jobs:
           CI: '1'
       - name: Upload Playwright report
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: |

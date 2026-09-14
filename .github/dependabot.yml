@@ -1,0 +1,29 @@
+version: 2
+updates:
+  # Action versions go stale silently: a deprecated action keeps working long
+  # after it stops being supported, so nothing in CI ever turns red to tell us.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
+
+  # The bun workspace. Grouped so a routine patch sweep is one PR rather than
+  # one per package, with majors split out — those need the breaking-change
+  # pass that `chore: bump all dependencies` did by hand.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
