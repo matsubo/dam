@@ -317,6 +317,12 @@ export const CRONTAB = `
 # (調査日タイムスタンプへの冪等 UPSERT)。#27
 35 4 * * * ingest:oita-nourin
 
+# 九州農政局「管内の農業用ダムの貯水状況」— 7県 59 基。地方農政局で基別
+# テーブルを定期公表しているのはここだけ。PDF、4-9月は毎月1日・15日、
+# 10-3月は毎月1日。大分の 石場/深見/日指/並石 は oita-nourin と重複するので
+# priority で解決する。#28
+55 4 * * * ingest:kyushu-nousei
+
 # 岩手県河川情報システム — 10 県管理ダム (Gamen32Servlet, Shift_JIS, one
 # request per station). Columns: level / 貯水量(千m³) / inflow / outflow.
 # Cron at :57.

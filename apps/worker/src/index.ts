@@ -47,6 +47,7 @@ import ingestKtrKinu from './tasks/ingest_ktr_kinu.ts';
 import ingestKtrTone from './tasks/ingest_ktr_tone_dam.ts';
 import ingestKumamoto from './tasks/ingest_kumamoto_bousai.ts';
 import ingestKyoto from './tasks/ingest_kyoto_bousai.ts';
+import ingestKyushuNousei from './tasks/ingest_kyushu_nousei.ts';
 import ingestMiyagi from './tasks/ingest_miyagi_kasen.ts';
 import ingestMiyazaki from './tasks/ingest_miyazaki_bousai.ts';
 import ingestNagano from './tasks/ingest_nagano_kasen.ts';
@@ -170,6 +171,7 @@ async function main(): Promise<void> {
       'ingest:fukushima-kasen': ingestFukushimaKasen,
       'ingest:fukushima-nourin': ingestFukushimaNourin,
       'ingest:oita-nourin': ingestOitaNourin,
+      'ingest:kyushu-nousei': ingestKyushuNousei,
       'ingest:gifu-kasen': ingestGifuKasen,
       'ingest:aichi-kasen': ingestAichiKasen,
       'ingest:fukui-bousai': ingestFukuiBousai,
