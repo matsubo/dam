@@ -477,13 +477,15 @@ export async function latestObservation(damId: bigint): Promise<LatestObservatio
         d.active_capacity_m3, o.storage_volume_m3, o.storage_rate,
         COALESCE(sp.trusted_rate_basis, false)
       )::TEXT AS "effectiveActiveCapacityM3"
-    FROM observations o
+    -- FALSE: this path shows 水位/流入量/放流量 too, and dams fed only by
+    -- level-carrying sources have no volume at all (issue #32 review).
+    FROM display_observation(${damId}, FALSE) sel
+    JOIN observations o
+      ON o.dam_id = ${damId}
+     AND o.observed_at = sel.observed_at
+     AND o.source_id   = sel.source_id
     JOIN dams d ON d.id = o.dam_id
     LEFT JOIN source_priorities sp ON sp.source_id = o.source_id
-    WHERE o.dam_id = ${damId}
-      AND o.source_id <> 'synthetic'
-    ORDER BY o.observed_at DESC
-    LIMIT 1
   `;
   return rows[0] ?? null;
 }
@@ -700,11 +702,8 @@ export async function nearbyDams(
     JOIN dams d2 ON d2.id <> d.id AND ST_DWithin(d.location, d2.location, ${radiusM})
     LEFT JOIN watersheds w ON w.id = d2.watershed_id
     LEFT JOIN LATERAL (
-      SELECT o.storage_volume_m3, o.storage_rate, o.source_id
-      FROM observations o
-      WHERE o.dam_id = d2.id AND o.storage_volume_m3 IS NOT NULL
-      ORDER BY o.observed_at DESC
-      LIMIT 1
+      SELECT storage_volume_m3, storage_rate, source_id
+      FROM display_observation(d2.id)
     ) latest ON TRUE
     LEFT JOIN source_priorities sp ON sp.source_id = latest.source_id
     WHERE d.id = ${damId}
@@ -743,11 +742,8 @@ export async function latestRateAndSourceByDam(
       real_src.source_id AS "realSourceId"
     FROM dams d
     LEFT JOIN LATERAL (
-      SELECT o.storage_volume_m3, o.storage_rate, o.source_id
-      FROM observations o
-      WHERE o.dam_id = d.id AND o.storage_volume_m3 IS NOT NULL
-      ORDER BY o.observed_at DESC
-      LIMIT 1
+      SELECT storage_volume_m3, storage_rate, source_id
+      FROM display_observation(d.id)
     ) latest ON TRUE
     LEFT JOIN source_priorities sp ON sp.source_id = latest.source_id
     LEFT JOIN LATERAL (
@@ -785,11 +781,8 @@ export async function latestRateByDam(damIds: bigint[]): Promise<Map<string, num
       END AS rate
     FROM dams d
     LEFT JOIN LATERAL (
-      SELECT o.storage_volume_m3, o.storage_rate, o.source_id
-      FROM observations o
-      WHERE o.dam_id = d.id AND o.storage_volume_m3 IS NOT NULL
-      ORDER BY o.observed_at DESC
-      LIMIT 1
+      SELECT storage_volume_m3, storage_rate, source_id
+      FROM display_observation(d.id)
     ) latest ON TRUE
     LEFT JOIN source_priorities sp ON sp.source_id = latest.source_id
     LEFT JOIN LATERAL (
@@ -848,14 +841,14 @@ export async function lowStorageDams(
     FROM dams d
     LEFT JOIN watersheds w ON w.id = d.watershed_id
     JOIN LATERAL (
-      SELECT o.storage_volume_m3, o.storage_rate, o.observed_at, o.source_id
-      FROM observations o
-      WHERE o.dam_id = d.id
-        AND o.storage_volume_m3 IS NOT NULL
-        AND o.source_id <> 'synthetic'
-        AND o.observed_at > NOW() - INTERVAL '30 days'
-      ORDER BY o.observed_at DESC
-      LIMIT 1
+      -- The 30-day guard goes *inside* the pick: this runs once per dam across
+      -- the whole master, and outside it TimescaleDB loses chunk exclusion and
+      -- reads every dam's full history (1455 ms vs 19 ms on the dev copy). It
+      -- is also where the guard sat before display_observation existed. A dam
+      -- whose newest row is older than 30 days still drops out of the 渇水
+      -- list, because the function then returns nothing.
+      SELECT storage_volume_m3, storage_rate, observed_at, source_id
+      FROM display_observation(d.id, TRUE, INTERVAL '30 days')
     ) latest ON TRUE
     LEFT JOIN source_priorities sp ON sp.source_id = latest.source_id
     LEFT JOIN LATERAL (

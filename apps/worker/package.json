@@ -17,6 +17,7 @@
     "@dam/ingest": "workspace:*",
     "@dam/storage": "workspace:*",
     "fflate": "^0.8.3",
-    "graphile-worker": "^0.18.0"
+    "graphile-worker": "^0.18.0",
+    "unpdf": "^1.8.1"
   }
 }
