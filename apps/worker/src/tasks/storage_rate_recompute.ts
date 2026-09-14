@@ -134,6 +134,15 @@ const task: Task = async (payload, helpers) => {
     `storageRate:recompute filled ${backfilled} rows across ${uncompressed.length} uncompressed chunks` +
       (failed > 0 ? ` (${failed} chunk(s) failed)` : ''),
   );
+  // Each chunk has already committed, so failing here loses nothing — and a
+  // task that resolves after every chunk failed is exactly the blind spot #31
+  // was: graphile-worker would never retry and `failing_jobs` would never see
+  // it.
+  if (failed > 0) {
+    throw new Error(
+      `storageRate:recompute: ${failed}/${uncompressed.length} uncompressed chunks failed`,
+    );
+  }
 
   if (!includeCompressed) return;
 
@@ -163,6 +172,11 @@ const task: Task = async (payload, helpers) => {
     `storageRate:recompute filled ${compressedFilled} rows across ${compressed.length} compressed chunks` +
       (compressedFailed > 0 ? ` (${compressedFailed} chunk(s) failed)` : ''),
   );
+  if (compressedFailed > 0) {
+    throw new Error(
+      `storageRate:recompute: ${compressedFailed}/${compressed.length} compressed chunks failed`,
+    );
+  }
 };
 
 export default task;
