@@ -121,7 +121,16 @@ export function parseOitaNourinPdfText(text: string): {
   const rows: ParsedRow[] = [];
   const published: string[] = [];
 
-  for (const rawLine of text.split(/\r?\n/)) {
+  // Everything after 「(参考) 利水貯水量」 is a reference block of 国交省管理ダム
+  // whose first capacity column is 利水貯水量, not the 有効貯水量 the main table
+  // prints. Those rows pass the consistency check on their own terms
+  // (耶馬渓 2,772/9,800 = 28.3 %), so nothing else would catch them — but
+  // storing them under trusted_rate_basis would contradict what back-solving
+  // means for this source. They are MLIT dams carried by hourly feeds anyway.
+  const referenceAt = text.search(/[（(]参考[）)]\s*利水貯水量/);
+  const body = referenceAt >= 0 ? text.slice(0, referenceAt) : text;
+
+  for (const rawLine of body.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line) continue;
 
@@ -180,11 +189,44 @@ export async function pdfToText(bytes: Uint8Array): Promise<string> {
  *
  * The filename is a CMS attachment id that changes every survey, so pinning
  * one would silently freeze the feed at whatever was current the day it was
- * written.
+ * written. Taking the *first* link is not good enough either: the page is free
+ * to list a 過去の調査 archive or a 様式 above the current survey, and because
+ * observedAt comes from inside the PDF, an older survey would be written under
+ * its own old timestamp where nothing looks wrong — the feed would simply stop
+ * moving.
+ *
+ * So the link is chosen, in order of preference:
+ *   1. the newest 令和 date in the link text (「令和8年9月15日現在の貯水率」)
+ *   2. the highest attachment id — the CMS counter is monotonic, so a newer
+ *      upload always outranks an older one
+ * Position on the page is never the deciding factor.
  */
 export function findLatestPdfUrl(html: string): string | null {
-  const m = html.match(/\/uploaded\/attachment\/\d+\.pdf/);
-  return m ? `${ORIGIN}${m[0]}` : null;
+  const links = [
+    ...html.matchAll(
+      /<a[^>]+href="([^"]*\/uploaded\/attachment\/(\d+)\.pdf)"[^>]*>([\s\S]{0,120}?)<\/a>/g,
+    ),
+  ].map((m) => ({
+    href: m[1] as string,
+    id: Number(m[2]),
+    label: (m[3] as string).replace(/<[^>]+>/g, ''),
+  }));
+
+  if (links.length === 0) {
+    // No anchor markup (or an unexpected shape) — fall back to a bare path
+    // match so a template change degrades to the old behaviour rather than
+    // dropping the feed entirely.
+    const bare = html.match(/\/uploaded\/attachment\/\d+\.pdf/);
+    return bare ? `${ORIGIN}${bare[0]}` : null;
+  }
+
+  const scored = links.map((l) => ({ ...l, date: parseOitaNourinDate(`${l.label}0:00現在`) }));
+  const dated = scored.filter((l) => l.date !== null);
+  const best = dated.length
+    ? dated.reduce((a, b) => ((b.date as Date) > (a.date as Date) ? b : a))
+    : scored.reduce((a, b) => (b.id > a.id ? b : a));
+
+  return best.href.startsWith('http') ? best.href : `${ORIGIN}${best.href}`;
 }
 
 // --- name matching ----------------------------------------------------------
@@ -325,6 +367,18 @@ const task: Task = async (_payload, helpers) => {
   log(
     `${SOURCE_ID} done: parsed=${rows.length} matched=${inputs.length} unmatched=${unmatched} written=${written}`,
   );
+
+  // A parser that silently yields nothing is the failure mode this source is
+  // most exposed to: it is line-oriented over PDF-extracted text, so a layout
+  // change (numbers before the name, two table rows merged onto one line) drops
+  // every row while the fetch still succeeds. Exiting green there would leave
+  // the feed dead and invisible — exactly how #31 hid. Throwing puts it in
+  // /api/v1/admin/jobs `failing_jobs`.
+  if (published.length > 0 && rows.length === 0) {
+    throw new Error(
+      `${SOURCE_ID}: parsed ${published.length} dam names but no usable rows from ${pdfUrl} — layout change?`,
+    );
+  }
 };
 
 export default task;
