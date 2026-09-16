@@ -34,6 +34,30 @@ const DATA_URL = process.env.KKR_MLIT_URL ?? 'https://www.kkr.mlit.go.jp/river/j
 
 const SOURCE_ID = 'kkr-mlit-dam';
 
+/** Upper sanity bound for a published 貯水率, in percent. */
+const MAX_PLAUSIBLE_PCT = 200;
+
+/**
+ * The feed publishes 貯水率 as a percent string ("89.3", and "100.0" for a full
+ * reservoir). `observations.storage_rate` is a 0..1 fraction in NUMERIC(6,4),
+ * so writing the percent straight through was wrong twice over (issue #46):
+ *
+ *   - every stored rate was 100x too large — 89.3 means 8,930 %. Same bug as
+ *     okinawa-eb in #38 §2-1, which migration 0046 had to undo.
+ *   - NUMERIC(6,4) tops out at 99.9999, so the first dam to reach 100.0 %
+ *     overflowed and failed the whole task. 一庫ダム published exactly 100.0 on
+ *     2026-09-14, and every 近畿 dam has been stale since.
+ *
+ * A reading outside 0..MAX_PLAUSIBLE_PCT is dropped rather than clipped: a
+ * clipped value is indistinguishable from a real one downstream, and 0 % would
+ * recreate the phantom-zero problem 0038/0039 had to dig out.
+ */
+export function toFraction(pct: number | null): number | null {
+  if (pct === null || !Number.isFinite(pct)) return null;
+  if (pct <= 0 || pct > MAX_PLAUSIBLE_PCT) return null;
+  return pct / 100;
+}
+
 // Map from JSON key to canonical Japanese dam name
 const KEY_TO_NAME: Record<string, string> = {
   managawa: '真名川ダム',
@@ -90,12 +114,12 @@ export function parseKkrJson(raw: unknown): ParsedRow[] {
     const entry = data.dam?.[key];
     if (!entry) continue;
     const rateStr = entry.chosuiritsu?.today?.trim() ?? '';
-    const rate = rateStr === '' ? null : Number(rateStr);
+    const pct = rateStr === '' ? null : Number(rateStr);
     rows.push({
       key,
       damName: name,
       observedAt,
-      storageRate: rate !== null && Number.isFinite(rate) ? rate : null,
+      storageRate: toFraction(pct),
     });
   }
   return rows;
