@@ -443,19 +443,25 @@ export async function aggregateWatershed(watershedId: bigint): Promise<Watershed
     ds_rateable AS (
       SELECT id, active_capacity_m3 FROM ds WHERE active_capacity_m3 IS NOT NULL
     ),
+    -- Same rule as the dam pages (#32/#45): pick by rate basis, not by clock.
+    -- A DISTINCT ON over observed_at let an untrusted 10-minute feed outrank the
+    -- hourly trusted one, so a 北海道 dam's contribution here flipped denominator
+    -- every hour while its own page no longer did. The freshness window is passed
+    -- into the function rather than filtered afterwards, or chunk exclusion is
+    -- lost — see 0049.
     latest AS (
-      SELECT DISTINCT ON (o.dam_id)
-             o.dam_id, o.observed_at, o.storage_volume_m3,
+      SELECT ds_rateable.id AS dam_id, x.observed_at, x.storage_volume_m3,
              effective_active_capacity_m3(
-               ds_rateable.active_capacity_m3, o.storage_volume_m3, o.storage_rate,
+               ds_rateable.active_capacity_m3, x.storage_volume_m3, x.storage_rate,
                COALESCE(sp.trusted_rate_basis, false)
              ) AS active_capacity_m3
-      FROM observations o
-      JOIN ds_rateable ON ds_rateable.id = o.dam_id
-      LEFT JOIN source_priorities sp ON sp.source_id = o.source_id
-      WHERE o.storage_volume_m3 IS NOT NULL
-        AND o.observed_at > NOW() - make_interval(days => ${RATE_FRESHNESS_DAYS})
-      ORDER BY o.dam_id, o.observed_at DESC
+      FROM ds_rateable
+      JOIN LATERAL (
+        SELECT * FROM display_observation(
+          ds_rateable.id, TRUE, make_interval(days => ${RATE_FRESHNESS_DAYS})
+        )
+      ) x ON TRUE
+      LEFT JOIN source_priorities sp ON sp.source_id = x.source_id
     )
     SELECT
       (SELECT COUNT(*)::INT          FROM ds)                     AS "damCount",
@@ -510,14 +516,20 @@ export async function ratesForWatersheds(
       WHERE d.watershed_id::TEXT = ANY(${ids}::TEXT[])
         AND d.active_capacity_m3 IS NOT NULL
     ),
+    -- Same rule as the dam pages (#32/#45): pick by rate basis, not by clock.
+    -- A DISTINCT ON over observed_at let an untrusted 10-minute feed outrank the
+    -- hourly trusted one, so a 北海道 dam's contribution here flipped denominator
+    -- every hour while its own page no longer did. The freshness window is passed
+    -- into the function rather than filtered afterwards, or chunk exclusion is
+    -- lost — see 0049.
     latest AS (
-      SELECT DISTINCT ON (o.dam_id)
-             o.dam_id, o.storage_volume_m3, o.storage_rate, o.source_id
-      FROM observations o
-      JOIN ds ON ds.id = o.dam_id
-      WHERE o.storage_volume_m3 IS NOT NULL
-        AND o.observed_at > NOW() - make_interval(days => ${RATE_FRESHNESS_DAYS})
-      ORDER BY o.dam_id, o.observed_at DESC
+      SELECT ds.id AS dam_id, x.storage_volume_m3, x.storage_rate, x.source_id
+      FROM ds
+      JOIN LATERAL (
+        SELECT * FROM display_observation(
+          ds.id, TRUE, make_interval(days => ${RATE_FRESHNESS_DAYS})
+        )
+      ) x ON TRUE
     ),
     per_dam AS (
       SELECT
@@ -604,13 +616,20 @@ export async function driestWatersheds(
       WHERE d.watershed_id IS NOT NULL
         AND d.active_capacity_m3 IS NOT NULL
     ),
+    -- Same rule as the dam pages (#32/#45): pick by rate basis, not by clock.
+    -- A DISTINCT ON over observed_at let an untrusted 10-minute feed outrank the
+    -- hourly trusted one, so a 北海道 dam's contribution here flipped denominator
+    -- every hour while its own page no longer did. The freshness window is passed
+    -- into the function rather than filtered afterwards, or chunk exclusion is
+    -- lost — see 0049.
     latest AS (
-      SELECT DISTINCT ON (o.dam_id) o.dam_id, o.storage_volume_m3, o.storage_rate, o.source_id
-      FROM observations o
-      JOIN ds ON ds.id = o.dam_id
-      WHERE o.storage_volume_m3 IS NOT NULL
-        AND o.observed_at > NOW() - make_interval(days => ${RATE_FRESHNESS_DAYS})
-      ORDER BY o.dam_id, o.observed_at DESC
+      SELECT ds.id AS dam_id, x.storage_volume_m3, x.storage_rate, x.source_id
+      FROM ds
+      JOIN LATERAL (
+        SELECT * FROM display_observation(
+          ds.id, TRUE, make_interval(days => ${RATE_FRESHNESS_DAYS})
+        )
+      ) x ON TRUE
     ),
     per_dam AS (
       SELECT

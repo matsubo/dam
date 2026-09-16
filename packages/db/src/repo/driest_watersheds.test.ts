@@ -109,3 +109,46 @@ describe('driestWatersheds', () => {
     expect(rows.length).toBe(1);
   });
 });
+
+describe('driestWatersheds — rate basis (#32/#45)', () => {
+  test("a watershed's rate follows the trusted row, not the newest one", async () => {
+    // The watershed pages used to pick per dam with DISTINCT ON over
+    // observed_at, so a 北海道 dam's contribution flipped denominator every hour
+    // while its own detail page no longer did. Seed the exact shape: a trusted
+    // hourly reading, then a newer untrusted one that disagrees.
+    const [dam] = await sql<{ id: bigint }[]>`
+      SELECT id FROM dams WHERE external_ids ->> 'ndi' = 'DW-H1'
+    `;
+    const damId = dam?.id as bigint;
+    await sql`
+      INSERT INTO source_priorities (source_id, priority, trusted_rate_basis)
+      VALUES ('kasenbosai', 100, TRUE), ('hkd-mlit-dam', 90, FALSE)
+      ON CONFLICT (source_id) DO NOTHING
+    `;
+    await sql`DELETE FROM observations WHERE dam_id = ${damId}`;
+    await sql`
+      INSERT INTO observations (dam_id, observed_at, source_id, storage_volume_m3, storage_rate)
+      VALUES
+        (${damId}, NOW() - INTERVAL '40 minutes', 'kasenbosai',   900, 0.9),
+        (${damId}, NOW() - INTERVAL '10 minutes', 'hkd-mlit-dam', 100, 0.1)
+      ON CONFLICT (dam_id, observed_at, source_id) DO NOTHING
+    `;
+
+    const [picked] = await sql<{ source_id: string; storage_volume_m3: string }[]>`
+      SELECT source_id, storage_volume_m3::TEXT FROM display_observation(${damId})
+    `;
+    // The watershed aggregate reads through the same function, so agreeing here
+    // is what keeps the two pages telling the same story about one dam.
+    expect(picked?.source_id).toBe('kasenbosai');
+    expect(Number(picked?.storage_volume_m3)).toBe(900);
+
+    const rows = await driestWatersheds(50, 1);
+    const high = rows.find((r) => r.slug === 'dw-high');
+    expect(high).toBeTruthy();
+    // dw-high holds three dams at 900/1000. Taking the trusted row for DW-H1
+    // gives 2,700/3,000 = 0.90; taking the newer untrusted 100 would give
+    // 1,900/3,000 = 0.63. The bound has to sit between those two to mean
+    // anything — `> 0.5` would have passed either way.
+    expect(Number(high?.rate)).toBeGreaterThan(0.85);
+  });
+});
