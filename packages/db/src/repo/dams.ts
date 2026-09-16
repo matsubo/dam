@@ -548,11 +548,12 @@ export async function storageChange(damId: bigint): Promise<StorageChange> {
     }[]
   >`
     WITH latest AS (
-      SELECT storage_volume_m3, observed_at
-      FROM observations
-      WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
-      ORDER BY observed_at DESC
-      LIMIT 1
+      -- The same row the page displays (#32/#45), not merely the newest one.
+      -- Picking independently here meant the 増減 baseline could come from one
+      -- source while the 貯水量 above it came from another, so the delta was
+      -- measured against a number the reader never sees. It also skipped the
+      -- 'synthetic' exclusion the display path has always applied.
+      SELECT storage_volume_m3, observed_at FROM display_observation(${damId})
     )
     SELECT
       (SELECT storage_volume_m3::TEXT FROM latest) AS current,
