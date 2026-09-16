@@ -172,10 +172,14 @@ describe('display_observation — p_require_volume', () => {
     // The alternative reintroduces the swing on the page that reported it.
     await sql`DELETE FROM observations WHERE dam_id = ${damId}`;
     await sql`
-      INSERT INTO observations (dam_id, observed_at, source_id, storage_volume_m3, water_level_m)
+      INSERT INTO observations
+        (dam_id, observed_at, source_id, storage_volume_m3, storage_rate, water_level_m)
       VALUES
-        (${damId}, NOW() - INTERVAL '2 hours',  ${TRUSTED},   5000000, NULL),
-        (${damId}, NOW() - INTERVAL '5 minutes', ${UNTRUSTED}, NULL,    12.34)
+        -- An explicit rate, so this exercises trust-vs-recency rather than the
+        -- derived-rate path: leaving it NULL makes the 0036 trigger fill it and
+        -- 0051 flag it, which costs the row its preference by design (#45).
+        (${damId}, NOW() - INTERVAL '2 hours',   ${TRUSTED},   5000000, 0.836, NULL),
+        (${damId}, NOW() - INTERVAL '5 minutes', ${UNTRUSTED}, NULL,    NULL,  12.34)
       ON CONFLICT (dam_id, observed_at, source_id) DO NOTHING
     `;
 
@@ -183,5 +187,80 @@ describe('display_observation — p_require_volume', () => {
       SELECT source_id FROM display_observation(${damId}, FALSE)
     `;
     expect(row?.source_id).toBe(TRUSTED);
+  });
+});
+
+describe('display_observation — derived rates (#45)', () => {
+  test('the 0036 trigger marks a rate it derived with quality_flag bit 32', async () => {
+    if (!dbAvailable) return;
+
+    // kasenbosai emits a NULL rate whenever both storPcntIrr and storPcntEff
+    // carry a quality code (0047's header). The trigger then fills it from
+    // volume / active_capacity_m3 — a 有効-based figure on a source we trust
+    // for being 利水-based.
+    await sql`DELETE FROM observations WHERE dam_id = ${damId}`;
+    await sql`
+      INSERT INTO observations (dam_id, observed_at, source_id, storage_volume_m3, storage_rate)
+      VALUES (${damId}, NOW() - INTERVAL '20 minutes', ${TRUSTED}, 1800000, NULL)
+      ON CONFLICT (dam_id, observed_at, source_id) DO NOTHING
+    `;
+
+    const [row] = await sql<{ storage_rate: string; derived: boolean }[]>`
+      SELECT storage_rate::TEXT, (quality_flag & 32) = 32 AS derived
+      FROM observations WHERE dam_id = ${damId}
+    `;
+    // 1,800,000 / 14,500,000 = 0.1241 — the 有効 denominator, not 利水.
+    expect(Number(row?.storage_rate)).toBeCloseTo(0.1241, 4);
+    expect(row?.derived).toBe(true);
+  });
+
+  test('falls back to the last native trusted reading rather than a derived one', async () => {
+    if (!dbAvailable) return;
+
+    // The #45 swing: without the marker the 20-minute-old derived row won on
+    // trust and 美利河 displayed 12.4 % instead of 83.6 % — #32's bug re-keyed
+    // from the clock to the upstream quality codes.
+    await sql`DELETE FROM observations WHERE dam_id = ${damId}`;
+    await sql`
+      INSERT INTO observations (dam_id, observed_at, source_id, storage_volume_m3, storage_rate)
+      VALUES (${damId}, NOW() - INTERVAL '2 hours', ${TRUSTED}, 1800000, 0.836)
+      ON CONFLICT (dam_id, observed_at, source_id) DO NOTHING
+    `;
+    await sql`
+      INSERT INTO observations (dam_id, observed_at, source_id, storage_volume_m3, storage_rate)
+      VALUES (${damId}, NOW() - INTERVAL '20 minutes', ${TRUSTED}, 1800000, NULL)
+      ON CONFLICT (dam_id, observed_at, source_id) DO NOTHING
+    `;
+    await sql`
+      INSERT INTO observations (dam_id, observed_at, source_id, storage_volume_m3, storage_rate)
+      VALUES (${damId}, NOW() - INTERVAL '10 minutes', ${UNTRUSTED}, 1660000, 0.114)
+      ON CONFLICT (dam_id, observed_at, source_id) DO NOTHING
+    `;
+
+    const row = await displayed();
+    expect(row?.source_id).toBe(TRUSTED);
+    expect(Number(row?.storage_rate)).toBeCloseTo(0.836, 3);
+  });
+
+  test('a derived trusted row does not outrank a newer untrusted one', async () => {
+    if (!dbAvailable) return;
+
+    // With no native reading to fall back on, the derived row competes on
+    // recency like anything else. Both are 有効-based here, so neither is
+    // better — the point is that we stop presenting one as authoritative.
+    await sql`DELETE FROM observations WHERE dam_id = ${damId}`;
+    await sql`
+      INSERT INTO observations (dam_id, observed_at, source_id, storage_volume_m3, storage_rate)
+      VALUES (${damId}, NOW() - INTERVAL '20 minutes', ${TRUSTED}, 1800000, NULL)
+      ON CONFLICT (dam_id, observed_at, source_id) DO NOTHING
+    `;
+    await sql`
+      INSERT INTO observations (dam_id, observed_at, source_id, storage_volume_m3, storage_rate)
+      VALUES (${damId}, NOW() - INTERVAL '10 minutes', ${UNTRUSTED}, 1660000, 0.114)
+      ON CONFLICT (dam_id, observed_at, source_id) DO NOTHING
+    `;
+
+    const row = await displayed();
+    expect(row?.source_id).toBe(UNTRUSTED);
   });
 });
