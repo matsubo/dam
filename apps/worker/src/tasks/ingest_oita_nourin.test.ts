@@ -97,6 +97,17 @@ describe('parseOitaNourinPdfText — the real R8.9.8 PDF', () => {
     expect(parsed.rows.find((r) => r.oitaName === '大蘇ダム')).toBeUndefined();
   });
 
+  test('excludes the 「(参考) 利水貯水量」 block of 国交省管理ダム', () => {
+    // 耶馬渓 2,772/9,800 = 28.3 % is internally consistent, so the per-row
+    // check cannot catch it — but that block's capacity column is 利水貯水量,
+    // not the 有効貯水量 the main table prints, and storing it under
+    // trusted_rate_basis would mean back-solving returns the wrong thing.
+    expect(parsed.published).not.toContain('耶馬渓ダム');
+    expect(parsed.rows.find((r) => r.oitaName === '耶馬渓ダム')).toBeUndefined();
+    // The main table is untouched.
+    expect(parsed.published).toContain('石山ダム');
+  });
+
   test('names the dams #27 expects to add', () => {
     const names = parsed.published.join(' ');
     for (const n of ['石山', '鍋倉', '久木野尾', '乙見', '末広', '中ノ川', '石場', '大舞']) {
@@ -106,9 +117,36 @@ describe('parseOitaNourinPdfText — the real R8.9.8 PDF', () => {
 });
 
 describe('findLatestPdfUrl', () => {
+  const link = (id: string, label: string) =>
+    `<p><a href="/uploaded/attachment/${id}.pdf">${label}</a></p>`;
+
   test('discovers the attachment link rather than pinning a filename', () => {
-    const html = '<p><a href="/uploaded/attachment/2276231.pdf">R8.9.8</a></p>';
+    const html = link('2276231', '令和8年9月8日現在の貯水率 [PDFファイル／63KB]');
     expect(findLatestPdfUrl(html)).toBe('https://www.pref.oita.jp/uploaded/attachment/2276231.pdf');
+  });
+
+  test('picks the newest survey, not the first link on the page', () => {
+    // The page is free to list a 過去の調査 archive above the current survey.
+    // Taking the first link would write an old survey under its own old
+    // timestamp, where nothing looks wrong — the feed just stops moving.
+    const html =
+      link('2200000', '令和8年4月1日現在の貯水率') +
+      link('2276594', '令和8年9月15日現在の貯水率') +
+      link('2276231', '令和8年9月8日現在の貯水率');
+    expect(findLatestPdfUrl(html)).toBe('https://www.pref.oita.jp/uploaded/attachment/2276594.pdf');
+  });
+
+  test('falls back to the highest attachment id when no label carries a date', () => {
+    // The CMS counter is monotonic, so a newer upload always outranks an older
+    // one even if the link text is rewritten.
+    const html = link('2276231', '貯水率一覧') + link('2276594', '最新') + link('2100000', '参考');
+    expect(findLatestPdfUrl(html)).toBe('https://www.pref.oita.jp/uploaded/attachment/2276594.pdf');
+  });
+
+  test('still finds a bare path if the anchor markup changes shape', () => {
+    expect(findLatestPdfUrl('<embed src="/uploaded/attachment/2276594.pdf">')).toBe(
+      'https://www.pref.oita.jp/uploaded/attachment/2276594.pdf',
+    );
   });
 
   test('returns null when the page links no PDF', () => {
