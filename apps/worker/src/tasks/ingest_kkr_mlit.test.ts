@@ -1,7 +1,7 @@
 // apps/worker/src/tasks/ingest_kkr_mlit.test.ts
 
 import { describe, expect, test } from 'bun:test';
-import { parseKkrDatetime, parseKkrJson } from './ingest_kkr_mlit.ts';
+import { parseKkrDatetime, parseKkrJson, toFraction } from './ingest_kkr_mlit.ts';
 
 describe('parseKkrDatetime', () => {
   test('parses "YYYY-MM-DD HH:MM:SS" JST → UTC (subtract 9h)', () => {
@@ -58,12 +58,15 @@ describe('parseKkrJson', () => {
     expect(rows[11]?.observedAt.toISOString()).toBe('2026-06-05T06:00:00.000Z');
   });
 
-  test('parses storageRate as floating-point percent', () => {
+  test('parses storageRate as a 0..1 fraction, not the published percent', () => {
+    // This test used to assert 56.4 — the published percent — and so encoded
+    // the #46 bug rather than catching it: observations.storage_rate is a
+    // fraction, so every stored rate was 100x too large.
     const rows = parseKkrJson(BASE_JSON);
     const managawa = rows.find((r) => r.damName === '真名川ダム');
-    expect(managawa?.storageRate).toBeCloseTo(56.4);
+    expect(managawa?.storageRate).toBeCloseTo(0.564, 4);
     const takayama = rows.find((r) => r.damName === '高山ダム');
-    expect(takayama?.storageRate).toBeCloseTo(30.2);
+    expect(takayama?.storageRate).toBeCloseTo(0.302, 4);
   });
 
   test('key field matches the JSON key', () => {
@@ -116,5 +119,32 @@ describe('parseKkrJson', () => {
     const rows = parseKkrJson(withMissing);
     const amagase = rows.find((r) => r.key === 'amagase');
     expect(amagase?.storageRate).toBeNull();
+  });
+});
+
+describe('toFraction (#46)', () => {
+  test('converts a published percent to a 0..1 fraction', () => {
+    // The feed publishes "89.3"; storage_rate is a fraction. Writing the
+    // percent straight through meant 8,930 % — the okinawa bug (#38 §2-1).
+    expect(toFraction(89.3)).toBeCloseTo(0.893, 6);
+    expect(toFraction(36.7)).toBeCloseTo(0.367, 6);
+  });
+
+  test('accepts a full reservoir, which used to overflow the column', () => {
+    // storage_rate is NUMERIC(6,4) — max 99.9999. 一庫ダム published exactly
+    // 100.0 on 2026-09-14 and the raw percent overflowed, failing the whole
+    // task and leaving every 近畿 dam stale.
+    expect(toFraction(100)).toBeCloseTo(1, 6);
+    expect(toFraction(104.5)).toBeCloseTo(1.045, 6);
+  });
+
+  test('drops a reading that cannot be a rate rather than clipping it', () => {
+    // Clipped values are indistinguishable from real ones downstream, and a
+    // stored 0 would recreate the phantom zeros 0038/0039 had to undo.
+    expect(toFraction(0)).toBeNull();
+    expect(toFraction(-1)).toBeNull();
+    expect(toFraction(250)).toBeNull();
+    expect(toFraction(Number.NaN)).toBeNull();
+    expect(toFraction(null)).toBeNull();
   });
 });
