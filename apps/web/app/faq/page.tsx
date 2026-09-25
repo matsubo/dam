@@ -3,6 +3,8 @@ import type { Metadata } from 'next';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
 import { FAQ } from '../../lib/faq.ts';
 
+// Reads source_priorities, so it cannot be prerendered at build time (no DB).
+export const dynamic = 'force-dynamic';
 export const revalidate = 3600;
 export const metadata: Metadata = {
   title: 'よくある質問',
