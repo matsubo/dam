@@ -39,7 +39,7 @@ same set; unused keys are harmless):
 - `API_KEY_PEPPER` — generate with `openssl rand -hex 32`
 - `ADMIN_SECRET` — bearer for `POST /api/v1/admin/jobs`
 - `KASENBOSAI_USER_AGENT`, `DAMNET_LIST_URL` — see the adapter READMEs; must include a real contact address per upstream's TOS
-- `NEXT_PUBLIC_SITE_URL` (build time), `NEXT_PUBLIC_GTM_ID`, `NEXT_PUBLIC_ADSENSE_CLIENT`
+- `NEXT_PUBLIC_SITE_URL` (build time), `NEXT_PUBLIC_GTM_ID`
 - `AUTH_SECRET`, `AUTH_URL`, `AUTH_TRUST_HOST`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`
 - `NODE_ENV=production`, `NEXT_TELEMETRY_DISABLED=1`
 - `BOOTSTRAP_UPSERT_MASTER=1`. Do **not** set `BOOTSTRAP_KICK` permanently: under

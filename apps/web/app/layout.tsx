@@ -1,7 +1,6 @@
 import { Droplets, Heart, MessageCircle } from 'lucide-react';
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
-import { AdSenseAuto } from '../components/adsense.tsx';
 import { ExtensionErrorShield } from '../components/extension-error-shield.tsx';
 import { GoogleAnalytics } from '../components/google-analytics.tsx';
 import { Gtm, GtmNoscript } from '../components/gtm.tsx';
@@ -52,7 +51,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <Gtm />
         <GtmNoscript />
         <GoogleAnalytics />
-        <AdSenseAuto />
         <ExtensionErrorShield />
         <Nav />
         {/* All hero/feature sections set their own max-width; pages that just

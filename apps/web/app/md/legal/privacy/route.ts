@@ -3,12 +3,6 @@ export const revalidate = 3600;
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dam.teraren.com';
 
-// Advertising clauses appear only on a deploy that actually serves ads, so the
-// policy never claims a data flow that isn't happening. Same env var that gates
-// the AdSense components and /ads.txt.
-const ADS_ENABLED = Boolean(process.env.NEXT_PUBLIC_ADSENSE_CLIENT);
-
-// The list is data so the advertising clause can slot in without hand-renumbering.
 const CLAUSES: readonly string[] = [
   `**Account info** — Only the email address and display name returned
    by Google OAuth are stored, used to bind API keys to a user. No
@@ -20,26 +14,17 @@ const CLAUSES: readonly string[] = [
    with cookie-based anonymous session IDs. No personally identifying
    data is collected. Opt out via the Google Analytics opt-out browser
    add-on.`,
-  ...(ADS_ENABLED
-    ? [
-        `**Advertising** — Some pages carry Google AdSense. Google and its
-   partners may use cookies or device identifiers to serve and measure
-   ads, including personalised ads. Manage or disable this at
-   https://adssettings.google.com — see also
-   https://policies.google.com/technologies/partner-sites .`,
-      ]
-    : []),
   `**No third-party sharing** — Except as required by law, by
    user consent, or in business succession.`,
   `**Self-service deletion** — At /account/keys you can revoke any API
    key or hard-delete your entire account (keys + usage logs).`,
-  `**Cookies** — Used for sign-in session${ADS_ENABLED ? ', analytics and advertising' : ' and analytics'} only.`,
+  `**Cookies** — Used for sign-in session and analytics only.`,
   '**Contact** — https://discord.gg/UbWqspWbAk (Discord). No direct email.',
 ];
 
 const BODY = `# Privacy Policy
 
-Last updated: ${ADS_ENABLED ? '2026-09-09' : '2026-05-04'}.
+Last updated: 2026-09-26.
 
 ${CLAUSES.map((clause, i) => `${i + 1}. ${clause}`).join('\n')}
 
