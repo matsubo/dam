@@ -85,6 +85,7 @@ import match from './tasks/master_match.ts';
 import refreshDamnet from './tasks/master_refresh_damnet.ts';
 import refreshNdi from './tasks/master_refresh_ndi.ts';
 import matchKasenbosai from './tasks/match_kasenbosai.ts';
+import observationsRebind from './tasks/observations_rebind.ts';
 import qualityFreshness from './tasks/quality_freshness.ts';
 import qualityRecompute from './tasks/quality_recompute.ts';
 import refreshDamElevation from './tasks/refresh_dam_elevation.ts';
@@ -190,6 +191,7 @@ async function main(): Promise<void> {
       'backfill:mudam': backfillMudam,
       'quality:recompute': qualityRecompute,
       'storageRate:recompute': storageRateRecompute,
+      'observations:rebind': observationsRebind,
       'aggregates:refresh': aggregatesRefresh,
       'quality:freshness-check': qualityFreshness,
       'images:refresh:wikipedia': refreshDamImagesWikipedia,

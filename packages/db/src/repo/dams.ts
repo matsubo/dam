@@ -152,6 +152,25 @@ export async function appendExternalId(
   `;
 }
 
+/**
+ * Record that `source`'s station `key` feeds `damId`, and take the same key off
+ * any other row. Ingest tasks used to only add the stamp, so a station that
+ * moved to a better row stayed stamped on the old one as well (#57).
+ */
+export async function bindExternalId(damId: bigint, source: string, key: string): Promise<void> {
+  await sql.begin(async (tx) => {
+    await tx`
+      UPDATE dams SET external_ids = external_ids - ${source}::text
+      WHERE external_ids->>${source} = ${key} AND id <> ${damId}
+    `;
+    await tx`
+      UPDATE dams
+      SET external_ids = COALESCE(external_ids, '{}'::jsonb) || jsonb_build_object(${source}::text, ${key}::text)
+      WHERE id = ${damId} AND COALESCE(external_ids->>${source}, '') <> ${key}
+    `;
+  });
+}
+
 export async function applyDamnetAttributes(
   damId: bigint,
   attrs: {

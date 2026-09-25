@@ -98,3 +98,13 @@ describe('chooseMaster', () => {
     expect(chooseMaster('存在しない', masters)).toBeNull();
   });
 });
+
+describe('chooseMaster tie-break (#57)', () => {
+  it('binds 曲渕 to the completed （再）, not the lower-id （元）', () => {
+    const masters = [
+      { id: 10n, name: '曲渕（元）', completedYear: 1923, stamp: null },
+      { id: 20n, name: '曲渕（再）', completedYear: 1992, stamp: null },
+    ];
+    expect(chooseMaster('曲渕', masters, '曲渕ダム')).toBe(20n);
+  });
+});
