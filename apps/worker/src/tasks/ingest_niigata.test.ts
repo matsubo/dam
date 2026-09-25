@@ -8,7 +8,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { parseNiigataTable, parseStampWithYear } from './ingest_niigata.ts';
+import { chooseMaster, parseNiigataTable, parseStampWithYear } from './ingest_niigata.ts';
 
 const FIXTURE = join(
   import.meta.dir,
@@ -72,5 +72,15 @@ describe('parseNiigataTable', () => {
 
   test('returns empty array when no dam rows present', () => {
     expect(parseNiigataTable('<table><tr><td>観測所名</td></tr></table>', new Date())).toEqual([]);
+  });
+});
+
+describe('chooseMaster (#57)', () => {
+  test('binds 笠堀 to the completed （再）, not the lower-id （元）', () => {
+    const masters = [
+      { id: 10n, name: '笠堀（元）', completedYear: 1964, stamp: null },
+      { id: 20n, name: '笠堀（再）', completedYear: 2017, stamp: null },
+    ];
+    expect(chooseMaster('笠堀', masters, '笠堀ダム')).toBe(20n);
   });
 });
