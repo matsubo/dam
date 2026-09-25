@@ -11,7 +11,6 @@ import {
   GitBranch,
   HandHeart,
   Heart,
-  Lock,
   MessageCircle,
   Scale,
   Users,
@@ -19,7 +18,7 @@ import {
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
-import { CONTRIBUTORS, DISCORD_INVITE, MAINTAINER } from '../../lib/contributors.ts';
+import { CONTRIBUTORS, DISCORD_INVITE, MAINTAINER, REPO_URL } from '../../lib/contributors.ts';
 import { fmtDateOnly, fmtN } from '../../lib/format.ts';
 import { PROJECT_STATS, STACK } from '../../lib/project-stats.ts';
 
@@ -381,16 +380,25 @@ export default async function ContributePage() {
             </div>
           </div>
           <div className="flex gap-3 bg-white border border-outline-variant rounded-xl p-4">
-            <Lock
+            <GitBranch
               className="text-on-surface-variant shrink-0 mt-0.5"
               size={18}
               aria-hidden="true"
             />
             <div className="text-sm leading-relaxed">
-              <div className="font-semibold mb-1">GitHub のプライベートリポジトリです</div>
+              <div className="font-semibold mb-1">GitHub の公開リポジトリです</div>
               <span className="text-on-surface-variant">
-                ソースコードは公開していません。参加が決まった方を collaborator として
-                招待します。ノルマや稼働時間の約束はありません。
+                データパイプラインを誰でも検証・デバッグできるよう、ソースコードを公開しています。
+                不具合や未対応のデータソースは{' '}
+                <a
+                  href={`${REPO_URL}/issues`}
+                  className="text-primary hover:underline"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  GitHub Issues
+                </a>{' '}
+                に直接書いてください。ノルマや稼働時間の約束はありません。
               </span>
             </div>
           </div>
@@ -401,11 +409,13 @@ export default async function ContributePage() {
               aria-hidden="true"
             />
             <div className="text-sm leading-relaxed">
-              <div className="font-semibold mb-1">著作権・ライセンスは運営者に帰属します</div>
+              <div className="font-semibold mb-1">ライセンスは PolyForm Shield 1.0.0 です</div>
               <span className="text-on-surface-variant">
-                コントリビューションを含め、コードの権利は基本的に運営者（{MAINTAINER.name}）
-                に帰属する形にさせてください。ここに納得できない場合は、無理に参加しないでください。
-                詳しい条件は参加前に Discord で個別にお伝えします。
+                ソースコードは読む・動かす・改変する・デバッグすることは自由ですが、このサービスと
+                競合するサービスの提供には使えません（OSI 定義のオープンソースではありません）。
+                コントリビューションは、運営者（{MAINTAINER.name}
+                ）が将来のライセンスを含め自由に利用・再ライセンスできる形で受け付けます。詳しくは
+                リポジトリの CONTRIBUTING.md を見てください。
               </span>
             </div>
           </div>
