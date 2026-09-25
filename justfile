@@ -82,8 +82,9 @@ version:
     @bun pm pkg get version | tr -d '"'
 
 # level: patch | minor | major | an explicit x.y.z. Needs a clean tree, and run
-# it on main — the tag should point at a commit on main. Nothing is pushed.
+# it on main — the tag should point at a commit on main. Nothing is pushed;
+# pushing the tag triggers the Release workflow.
 # Bump version, commit "chore: release vX.Y.Z", tag vX.Y.Z
 version-bump level:
     bun pm version {{level}} -m "chore: release v%s"
-    @v=$(just version); echo; echo "Tagged v$v locally. To publish:"; echo "  git push origin HEAD:main refs/tags/v$v"; echo "  gh release create v$v --generate-notes --verify-tag"
+    @v=$(just version); echo; echo "Tagged v$v locally. To publish (the tag push runs .github/workflows/release.yml,"; echo "which creates the GitHub Release with openapi-v$v.json attached):"; echo "  git push origin HEAD:main refs/tags/v$v"
