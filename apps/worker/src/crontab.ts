@@ -323,6 +323,13 @@ export const CRONTAB = `
 # priority で解決する。#28
 55 4 * * * ingest:kyushu-nousei
 
+# 千葉県 農林水産部 耕地課「県内農業用ダム貯水状況」— 農業用ダム 11 基
+# (金山/安房中央/勝浦/荒木根/三島/戸面原/小中/佐久間/平沢/山内、保台のみ既ライブ)。
+# HTML 1 テーブル、有効貯水量・現貯水量・貯水率。調査日ベース (掲載は数日遅れる)
+# なので、他の農林ソースと同じく日次ポーリングで調査日タイムスタンプへ冪等 UPSERT。
+# #29 の一巡調査で net-new が最大だった県。
+5 5 * * * ingest:chiba-nourin
+
 # 岩手県河川情報システム — 10 県管理ダム (Gamen32Servlet, Shift_JIS, one
 # request per station). Columns: level / 貯水量(千m³) / inflow / outflow.
 # Cron at :57.
