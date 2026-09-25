@@ -301,6 +301,7 @@ const ALLOWED_TASKS = new Set([
   'quality:freshness-check',
   'quality:recompute',
   'storageRate:recompute',
+  'observations:rebind',
   'aggregates:refresh',
   'backfill:kagoshima-bodik',
   'backfill:mudam',
