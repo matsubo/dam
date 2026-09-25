@@ -48,6 +48,15 @@ DB_HOST="${DATABASE_HOST:-${URL_HOST:-localhost}}"
 DB_PORT="${DATABASE_PORT:-${URL_PORT:-5433}}"
 
 if nc -z "$DB_HOST" "$DB_PORT" 2>/dev/null; then
+  # Never test against the dev database itself: leftover rows and another
+  # worktree's concurrent suite (same fixture IDs) both produce phantom
+  # failures. Run in a fresh per-worktree scratch database instead.
+  BASE_URL="${DB_URL:-postgres://dam:dam@${DB_HOST}:${DB_PORT}/dam}"
+  DATABASE_URL=$(bun run bin/test_db.ts "${BASE_URL}" "$(git rev-parse --show-toplevel)")
+  export DATABASE_URL
+  echo "[pre-push] scratch DB: ${DATABASE_URL##*/}"
+  bun run --filter @dam/db migrate > /dev/null
+  (cd apps/worker && bunx graphile-worker --schema-only > /dev/null)
   exec bun test apps packages
 else
   echo "[pre-push] No DB at ${DB_HOST}:${DB_PORT} — skipping integration tests"
