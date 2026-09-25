@@ -459,6 +459,14 @@ export interface LatestObservation {
    * capacity than the static Damnet figure.
    */
   effectiveActiveCapacityM3: string | null;
+  /**
+   * Whose figure the displayed 貯水率 (storageVolumeM3 ÷
+   * effectiveActiveCapacityM3) is. 'published' only when a trusted_rate_basis
+   * source supplied the rate itself; any other source, or a rate the trigger
+   * derived (quality_flag bit 32), is our volume ÷ 有効貯水容量 — 'computed'.
+   * NULL when there is no volume, so no rate is shown (issue #60).
+   */
+  storageRateOrigin: 'published' | 'computed' | null;
 }
 
 export async function latestObservation(damId: bigint): Promise<LatestObservation | null> {
@@ -476,7 +484,14 @@ export async function latestObservation(damId: bigint): Promise<LatestObservatio
       effective_active_capacity_m3(
         d.active_capacity_m3, o.storage_volume_m3, o.storage_rate,
         COALESCE(sp.trusted_rate_basis, false)
-      )::TEXT AS "effectiveActiveCapacityM3"
+      )::TEXT AS "effectiveActiveCapacityM3",
+      CASE
+        WHEN o.storage_volume_m3 IS NULL THEN NULL
+        WHEN COALESCE(sp.trusted_rate_basis, false)
+             AND o.storage_rate IS NOT NULL
+             AND (COALESCE(o.quality_flag, 0) & 32) = 0 THEN 'published'
+        ELSE 'computed'
+      END AS "storageRateOrigin"
     -- FALSE: this path shows 水位/流入量/放流量 too, and dams fed only by
     -- level-carrying sources have no volume at all (issue #32 review).
     FROM display_observation(${damId}, FALSE) sel

@@ -173,6 +173,11 @@ export default async function SourcesPage() {
         <h2 className="text-xl font-semibold mb-3">1. 使用データソース</h2>
         <p className="text-sm text-on-surface-variant mb-4">
           優先度は同一ダムで複数ソースが値を持つときに採用するソースの並びです (大きい数字が優先)。
+          表示する貯水率の決まり方は{' '}
+          <Link href="/faq#source-choice" className="text-primary hover:underline">
+            よくある質問
+          </Link>{' '}
+          にまとめています。
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
