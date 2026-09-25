@@ -77,6 +77,10 @@ E2E_BASE_URL=http://127.0.0.1:3030 bunx playwright test  # against existing dev
 # Quality gates
 bun run typecheck && bun run lint && bun run test
 
+# Versioning (root package.json `version` is the single source; see apps/web/lib/version.ts)
+just version                            # print current version
+just version-bump patch                 # bump + commit + tag vX.Y.Z locally (minor/major/x.y.z too)
+
 # API key admin
 just api-key-issue email=x@example.com label=foo
 just api-key-list
