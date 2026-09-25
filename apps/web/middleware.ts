@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server';
+import { pickCacheControl } from './lib/cache-control.ts';
 
 // Two agent-affordances applied site-wide:
 //
@@ -12,28 +13,6 @@ import { type NextRequest, NextResponse } from 'next/server';
 //    with one Accept header — no separate URL discovery needed.
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dam.teraren.com';
-
-// Cache-Control profiles. Browsers always revalidate (max-age=0); the CDN /
-// shared cache (s-maxage) absorbs traffic. SWR keeps the stale copy serving
-// while the CDN refreshes in the background. Pages are public open data
-// with no per-user content, so cookies aren't a concern; /account routes
-// get private/no-store explicitly.
-const CACHE_TIGHT = 'public, max-age=0, s-maxage=300, stale-while-revalidate=86400';
-const CACHE_LOOSE = 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800';
-const CACHE_PRIVATE = 'private, no-store';
-
-function pickCacheControl(pathname: string): string {
-  if (pathname.startsWith('/account')) return CACHE_PRIVATE;
-  if (
-    pathname === '/roadmap' ||
-    pathname === '/glossary' ||
-    pathname.startsWith('/legal/') ||
-    pathname === '/sources'
-  )
-    return CACHE_LOOSE;
-  // /, /dams, /watersheds, /map, /stats, /search, dam + watershed details
-  return CACHE_TIGHT;
-}
 
 const LINK_HEADER = [
   `<${SITE_URL}/.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json"`,
