@@ -30,6 +30,23 @@
 -- are moved by the `observations:rebind` task, not here: it has to decompress
 -- chunks, which does not belong in a boot-time migration.
 
+-- The tie-break reads dams.completed_year, and the pre-#54 matcher copied the
+-- （元）'s year onto its （再） (佐久間（再） showed 1956). master:refresh:damnet
+-- cannot undo it: a blank ダム便覧 year keeps the existing value. Clear it for
+-- the （再） rows whose ダム便覧 record has no completion year, so they read as
+-- not (yet) completed — their （元） stays the current structure.
+UPDATE dams SET completed_year = NULL
+WHERE external_ids->>'ndi' IN (VALUES
+  ('919'), -- 1136 新丸山ダム（再）
+  ('2601'), -- 2603 浦上ダム（再）
+  ('799'), -- 3082 松川ダム（再）
+  ('1081'), -- 3115 新保川ダム（再）
+  ('2128'), -- 3257 五名ダム（再）
+  ('2155'), -- 3311 長柄ダム（再）
+  ('785'), -- 3326 佐久間ダム（再）
+  ('2022') -- 3605 木屋川ダム（再）
+);
+
 CREATE TEMP TABLE station_move (source text, from_ndi text, to_ndi text);
 
 INSERT INTO station_move VALUES
