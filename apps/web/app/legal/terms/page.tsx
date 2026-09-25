@@ -85,7 +85,7 @@ export default function TermsPage() {
             GitHub
           </a>{' '}
           で PolyForm Shield License 1.0.0
-          のもとソースコード公開しています。本サービスと競合する製品・サービスの提供には利用できません。データソース部分のライセンスは原典のライセンスに従います
+          のもとでソースコードを公開しています。本サービスと競合する製品・サービスの提供には利用できません。データソース部分のライセンスは原典のライセンスに従います
           (国土数値情報: 政府標準利用規約 2.0 互換、Wikipedia: CC-BY-SA、ほか)。 本サービスの UI
           上の写真は{' '}
           <a className="text-primary hover:underline" href="/sources">
