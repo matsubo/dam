@@ -16,6 +16,7 @@
       "name": "@dam/web",
       "version": "0.0.0",
       "dependencies": {
+        "@dam/adapters-damnet": "workspace:*",
         "@dam/adapters-ndi": "workspace:*",
         "@dam/core": "workspace:*",
         "@dam/db": "workspace:*",
