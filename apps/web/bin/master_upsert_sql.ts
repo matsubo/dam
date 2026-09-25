@@ -151,15 +151,15 @@ export function buildMasterUpsertSql({
   // UPDATE matching by NDI external_id — the natural key for our master,
   // enforced by `dams_ext_ndi_uniq`. Prod wins: the seed is a snapshot of a
   // local DB, and prod's rows move on without it (master:refresh:damnet
-  // re-stamps and re-specs monthly, the slug repair renames, migrations fix
-  // data). Until #54 this was seed-wins and rolled all of that back on every
-  // deploy. Now it only adds external ids prod lacks — never `damnet`, which
-  // only the refresh may assign — and fills a blank elevation / image.
+  // re-stamps and re-specs monthly, ingest tasks bind their stations, the
+  // slug repair renames, migrations fix data). Until #54 this was seed-wins
+  // and rolled all of that back on every deploy; a snapshot's source stamps
+  // also point at rows later found wrong (#57), so external_ids are left
+  // alone too. Only a blank elevation / image is filled.
   lines.push(`-- UPDATE dams matched by external_ids->>'ndi'. Prod wins; see generator.`);
   lines.push('UPDATE public.dams d SET');
   lines.push('  elevation_m  = COALESCE(d.elevation_m, s.elevation_m),');
   lines.push('  image_url    = COALESCE(d.image_url, s.image_url),');
-  lines.push(`  external_ids = (s.external_ids - 'damnet') || d.external_ids,`);
   lines.push('  updated_at   = NOW()');
   lines.push('FROM _seed_dams s');
   lines.push(`WHERE s.external_ids ? 'ndi' AND d.external_ids->>'ndi' = s.external_ids->>'ndi';`);
@@ -179,7 +179,7 @@ export function buildMasterUpsertSql({
        s.height_m, s.total_capacity_m3, s.effective_capacity_m3, s.flood_capacity_m3, s.active_capacity_m3,
        s.completed_year, s.construction_start_year, s.purposes, s.crest_length_m, s.embankment_volume_m3,
        s.watershed_area_km2, s.reservoir_area_km2, s.left_bank_location, s.main_contractor, s.redevelopment_status,
-       s.elevation_m, s.image_url, s.location, s.external_ids - 'damnet'
+       s.elevation_m, s.image_url, s.location, jsonb_strip_nulls(jsonb_build_object('ndi', s.external_ids->>'ndi'))
      FROM _seed_dams s
      WHERE NOT EXISTS (
        SELECT 1 FROM public.dams d
