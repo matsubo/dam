@@ -5,29 +5,35 @@
   color-scheme: light;
 }
 
-body {
-  @apply bg-surface text-on-surface antialiased;
-}
+/* Element defaults live in `base` so component classes (`.btn-primary` etc.)
+   and utilities can override them. Tailwind 4 uses native cascade layers:
+   an unlayered `a { color }` beats every layered rule, whatever its
+   specificity — that made the CTA labels primary-on-primary (#66). */
+@layer base {
+  body {
+    @apply bg-surface text-on-surface antialiased;
+  }
 
-a {
-  @apply text-primary hover:underline;
-}
+  a {
+    @apply text-primary hover:underline;
+  }
 
-table {
-  @apply w-full text-sm bg-white border border-outline-variant rounded-xl overflow-hidden;
-}
-th,
-td {
-  @apply px-3 py-2 text-left;
-}
-thead {
-  @apply bg-surface-container-low text-on-surface-variant uppercase text-xs;
-}
-tbody tr {
-  @apply border-t border-outline-variant/40;
-}
-tbody tr:hover {
-  @apply bg-surface-container-low/60;
+  table {
+    @apply w-full text-sm bg-white border border-outline-variant rounded-xl overflow-hidden;
+  }
+  th,
+  td {
+    @apply px-3 py-2 text-left;
+  }
+  thead {
+    @apply bg-surface-container-low text-on-surface-variant uppercase text-xs;
+  }
+  tbody tr {
+    @apply border-t border-outline-variant/40;
+  }
+  tbody tr:hover {
+    @apply bg-surface-container-low/60;
+  }
 }
 
 @layer components {
