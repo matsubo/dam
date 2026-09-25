@@ -42,7 +42,7 @@ jobs:
         run: |
           docker run -d --name minio \
             -p 9000:9000 -e MINIO_ROOT_USER=minio -e MINIO_ROOT_PASSWORD=minio12345 \
-            quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z server /data
+            pgsty/minio:RELEASE.2026-08-04T00-00-00Z server /data
           # Wait until ready
           for _ in 1 2 3 4 5 6 7 8 9 10; do
             curl -sf http://localhost:9000/minio/health/ready && break
@@ -51,7 +51,7 @@ jobs:
           # Create bucket
           docker run --rm --network host \
             -e MC_HOST_local=http://minio:minio12345@localhost:9000 \
-            quay.io/minio/mc:RELEASE.2025-04-08T15-39-49Z mb local/dam-raw || true
+            pgsty/mc:RELEASE.2026-09-16T00-00-00Z mb local/dam-raw || true
       - name: Unit + integration tests
         # Skip tests/e2e/*.spec.ts — those run via bunx playwright test below.
         run: bun test --path-ignore-patterns 'tests/e2e/**'
