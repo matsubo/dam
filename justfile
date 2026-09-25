@@ -86,5 +86,16 @@ version:
 # pushing the tag triggers the Release workflow.
 # Bump version, commit "chore: release vX.Y.Z", tag vX.Y.Z
 version-bump level:
-    bun pm version {{level}} -m "chore: release v%s"
-    @v=$(just version); echo; echo "Tagged v$v locally. To publish (the tag push runs .github/workflows/release.yml,"; echo "which creates the GitHub Release with openapi-v$v.json attached):"; echo "  git push origin HEAD:main refs/tags/v$v"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "$(git status --porcelain)" ]; then echo "working tree not clean" >&2; exit 1; fi
+    # bun pm version only commits/tags when .git is a directory, so in a git
+    # worktree it would silently bump package.json alone — do the git part here.
+    bun pm version {{level}} --no-git-tag-version
+    v="$(bun pm pkg get version | tr -d '"')"
+    git commit -q -m "chore: release v$v" package.json
+    git tag -a "v$v" -m "v$v"
+    echo
+    echo "Tagged v$v locally. To publish (the tag push runs .github/workflows/release.yml,"
+    echo "which creates the GitHub Release with openapi-v$v.json attached):"
+    echo "  git push origin HEAD:main refs/tags/v$v"
