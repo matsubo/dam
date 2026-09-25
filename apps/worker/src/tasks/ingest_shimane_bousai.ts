@@ -19,8 +19,8 @@
 // Item codes (st==0 = valid; st==-1 = 未収集):
 //   7_10  貯水位 [EL.m]
 //   7_20  貯水量 [千m³]
-//   7_41  利水貯水率(洪水期) [%]
-//   7_42  利水貯水率(非洪水期) [%]
+//   7_41  利水貯水率(洪水期) [%]    — used 6/16〜9/30 (see FLOOD_SEASON)
+//   7_42  利水貯水率(非洪水期) [%]  — used the rest of the year
 //   7_50  流入量 [m³/s]
 //   7_70  全放流量 [m³/s]
 //
@@ -89,6 +89,18 @@ export function parseShimaneTimestamp(s: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+// 洪水期 6/16〜9/30 (JST), per 布部・八戸 — the only two stations whose 7_41 and
+// 7_42 differ; every other station publishes the same value in both. The page
+// itself states no dates; they come from the issue #56 survey, and the feed
+// agrees: on 6/6 both still held more than their 洪水期 pool (7_41 = 100.0).
+const FLOOD_SEASON = { from: '06-16', to: '09-30' } as const;
+
+/** Is the feed key "YYYY-MM-DD-HH-MM" (JST) inside 洪水期? */
+export function isFloodSeason(ts: string): boolean {
+  const monthDay = ts.slice(5, 10);
+  return monthDay >= FLOOD_SEASON.from && monthDay <= FLOOD_SEASON.to;
+}
+
 /** Extract numeric value if station item is valid (st == 0). */
 function getItem(station: StationData, code: string): number | null {
   const item = station[code];
@@ -107,6 +119,7 @@ export function parseShimaneSnapshot(data: Record<string, unknown>): ParsedRow[]
   if (!observedAt) return [];
 
   const snapshot = data[ts] as Record<string, StationData>;
+  const rateItem = isFloodSeason(ts) ? '7_41' : '7_42';
   const rows: ParsedRow[] = [];
 
   for (const { stationId, name } of STATIONS) {
@@ -116,7 +129,9 @@ export function parseShimaneSnapshot(data: Record<string, unknown>): ParsedRow[]
     const waterLevelM = getItem(st, '7_10');
     const storageThouM3 = getItem(st, '7_20');
     const storageVolM3 = storageThouM3 !== null ? storageThouM3 * 1_000 : null;
-    const ratePct = getItem(st, '7_41') ?? getItem(st, '7_42');
+    // No cross-season fallback: for 布部/八戸 the other column is a different
+    // denominator, and a wrong-basis rate is worse than none.
+    const ratePct = getItem(st, rateItem);
     const storageRate = ratePct !== null ? Math.max(0, Math.min(1, ratePct / 100)) : null;
     const inflowM3s = getItem(st, '7_50');
     const outflowM3s = getItem(st, '7_70');
