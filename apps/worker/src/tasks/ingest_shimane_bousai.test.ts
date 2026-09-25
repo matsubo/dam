@@ -67,8 +67,8 @@ describe('parseShimaneSnapshot', () => {
   it('converts storageRate % → 0-1 fraction', () => {
     const rows = parseShimaneSnapshot(loadDam60());
     const fubeRow = rows.find((r: ParsedRow) => r.shimaneName === '布部ダム');
-    // 布部ダム: 7_41=100.0% (洪水期)
-    expect(fubeRow?.storageRate).toBeCloseTo(1.0, 5);
+    // 布部ダム on 2026-06-06 (非洪水期): 7_42=58.8%
+    expect(fubeRow?.storageRate).toBeCloseTo(0.588, 5);
   });
 
   it('returns null storageRate when item is 未収集 (st == -1)', () => {
@@ -86,11 +86,51 @@ describe('parseShimaneSnapshot', () => {
     expect(hachitoRow?.outflowM3s).toBeCloseTo(9.71, 2);
   });
 
-  it('uses 7_41 (洪水期) first, falls back to 7_42 (非洪水期)', () => {
+  it('uses 7_42 (非洪水期) outside the flood season — fixture is 6/6', () => {
     const rows = parseShimaneSnapshot(loadDam60());
-    const fubeRow = rows.find((r: ParsedRow) => r.shimaneName === '布部ダム');
-    // 布部ダム: 7_41=100.0%, 7_42=58.8% → should use 7_41 = 1.0
-    expect(fubeRow?.storageRate).toBeCloseTo(1.0, 5);
+    const byName = (n: string) => rows.find((r: ParsedRow) => r.shimaneName === n);
+    // 7_41 reads a capped 100.0 for both: they still held more than their
+    // 洪水期 pool on 6/6 (布部 2,509 vs ~2,300 千m³; 八戸 5,900 vs ~5,200).
+    expect(byName('布部ダム')?.storageRate).toBeCloseTo(0.588, 5);
+    expect(byName('八戸ダム')?.storageRate).toBeCloseTo(0.291, 5);
+  });
+
+  // 布部 / 八戸 are the only stations whose 7_41 and 7_42 differ.
+  const seasonal = (ts: string) => ({
+    [ts]: {
+      '8193_7_1': {
+        '7_41': { dt: '59.4', st: 0 },
+        '7_42': { dt: '32.0', st: 0 },
+      },
+    },
+  });
+  const fubeRate = (ts: string) =>
+    parseShimaneSnapshot(seasonal(ts)).find((r: ParsedRow) => r.stationId === '8193_7_1')
+      ?.storageRate;
+
+  it.each([
+    ['2026-06-15-23-00', 0.32],
+    ['2026-06-16-00-00', 0.594],
+    ['2026-09-25-05-00', 0.594],
+    ['2026-09-30-23-00', 0.594],
+    ['2026-10-01-00-00', 0.32],
+    ['2026-01-10-12-00', 0.32],
+  ])('picks the rate for the season of %s (JST)', (ts, expected) => {
+    expect(fubeRate(ts)).toBeCloseTo(expected, 5);
+  });
+
+  it('does not fall back to the other season when the current one is 未収集', () => {
+    const snapshot = {
+      '2026-10-01-00-00': {
+        '8193_7_1': {
+          '7_41': { dt: '59.4', st: 0 },
+          '7_42': { dt: '未収集', st: -1 },
+          '7_10': { dt: '190.00', st: 0 },
+        },
+      },
+    };
+    const row = parseShimaneSnapshot(snapshot).find((r: ParsedRow) => r.stationId === '8193_7_1');
+    expect(row?.storageRate).toBeNull();
   });
 
   it('timestamp matches fixture key', () => {
@@ -108,7 +148,7 @@ describe('parseShimaneSnapshot', () => {
     const snapshot = {
       '2026-06-06-00-00': {
         '8193_7_1': {
-          '7_41': { dt: '105.0', st: 0 }, // 105% > 1 → should clamp to 1
+          '7_42': { dt: '105.0', st: 0 }, // 105% > 1 → should clamp to 1
           '7_10': { dt: '190.00', st: 0 },
         },
       },
