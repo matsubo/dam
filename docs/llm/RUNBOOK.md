@@ -27,6 +27,10 @@ psql "$DATABASE_URL" -f packages/db/migrations/0041_watersheds_kind_from_ndi.sql
 bun run apps/web/bin/classify_watershed_kind.ts --out packages/db/migrations/00NN_watersheds_kind_refresh.sql
 bun run packages/db/src/migrate.ts
 bun run apps/web/bin/generate_master_upsert.ts      # the seed rewrites kind on deploy — keep in sync
+# The seed runs on EVERY web boot. For existing dams it only adds missing
+# external ids (never damnet) and blank elevation/image — prod wins (#54).
+# It still INSERTs any dam your local DB has and prod lacks, so regenerate
+# only from a DB whose dam set matches prod.
 
 # (optional) synthetic observations so charts render
 bun run apps/web/bin/seed_synthetic_observations.ts --hourly-days 30 --years 5
