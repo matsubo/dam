@@ -183,6 +183,14 @@ function SiteFooter() {
                 </a>
               </li>
               <li>
+                <a
+                  className="text-on-surface-variant hover:text-primary transition-colors"
+                  href="/faq"
+                >
+                  よくある質問
+                </a>
+              </li>
+              <li>
                 <a className="text-primary font-semibold hover:underline" href="/contribute">
                   開発者募集
                 </a>
