@@ -29,4 +29,6 @@ export const MAINTAINER = {
   sponsorsUrl: 'https://github.com/sponsors/matsubo',
 } as const;
 
+export const REPO_URL = 'https://github.com/matsubo/dam';
+
 export const DISCORD_INVITE = 'https://discord.gg/UbWqspWbAk';

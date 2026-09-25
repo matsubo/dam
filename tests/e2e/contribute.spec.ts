@@ -11,11 +11,13 @@ test('/contribute renders the recruitment page', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1 })).toContainText('開発者募集');
 });
 
-test('/contribute states the terms: unpaid, private repo, licence', async ({ page }) => {
+test('/contribute states the terms: unpaid, public repo, licence', async ({ page }) => {
   await page.goto('/contribute');
   const body = page.locator('main');
   await expect(body).toContainText('無償');
-  await expect(body).toContainText('プライベート');
+  await expect(body).toContainText('公開リポジトリ');
+  await expect(body).toContainText('PolyForm Shield');
+  await expect(body).not.toContainText('プライベート');
 });
 
 test('/contribute links to GitHub Sponsors for donations', async ({ page }) => {
@@ -33,14 +35,18 @@ test('/contribute routes both applications and questions to Discord', async ({ p
   await expect(apply.locator('a[href^="https://discord.gg/"]').first()).toBeVisible();
 });
 
-test('no page links visitors into the private issue tracker', async ({ page }) => {
-  for (const path of ['/contribute', '/coverage', '/roadmap', '/sources', '/']) {
-    await page.goto(path);
-    await expect(
-      page.locator('a[href*="github.com/matsubo/dam"]'),
-      `${path} must not link the private repo`,
-    ).toHaveCount(0);
-  }
+test('/contribute links reporters straight to the public issue tracker', async ({ page }) => {
+  await page.goto('/contribute');
+  await expect(
+    page.locator('main a[href="https://github.com/matsubo/dam/issues"]').first(),
+  ).toBeVisible();
+});
+
+test('/legal/terms names the actual code licence', async ({ page }) => {
+  await page.goto('/legal/terms');
+  const body = page.locator('main');
+  await expect(body).toContainText('PolyForm Shield');
+  await expect(body).not.toContainText('MIT');
 });
 
 test('/contribute carries the permanent contributor credits section', async ({ page }) => {

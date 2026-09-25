@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Breadcrumbs } from '../../../components/breadcrumbs.tsx';
+import { REPO_URL } from '../../../lib/contributors.ts';
 
 export const metadata: Metadata = {
   title: '利用規約',
@@ -79,9 +80,14 @@ export default function TermsPage() {
 
       <Section n="6" title="知的財産・ライセンス">
         <p>
-          本サービスのコード自体はオープンソース (MIT)
-          として公開予定で、データソース部分のライセンスは原典のライセンスに従います (国土数値情報:
-          政府標準利用規約 2.0 互換、Wikipedia: CC-BY-SA、ほか)。 本サービスの UI 上の写真は{' '}
+          本サービスのコードは{' '}
+          <a className="text-primary hover:underline" href={REPO_URL}>
+            GitHub
+          </a>{' '}
+          で PolyForm Shield License 1.0.0
+          のもとソースコード公開しています。本サービスと競合する製品・サービスの提供には利用できません。データソース部分のライセンスは原典のライセンスに従います
+          (国土数値情報: 政府標準利用規約 2.0 互換、Wikipedia: CC-BY-SA、ほか)。 本サービスの UI
+          上の写真は{' '}
           <a className="text-primary hover:underline" href="/sources">
             データソースページ
           </a>{' '}
