@@ -54,3 +54,17 @@ The platform is built and operated by one person, and observation coverage is
 the bottleneck — see https://dam.teraren.com/contribute for what needs doing,
 the stack, and the terms. Reports of public data sources we have missed are as
 welcome as code. Donations: https://github.com/sponsors/matsubo
+
+Bug reports and missing-source reports go to
+[Issues](https://github.com/matsubo/dam/issues); see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+Source-available under the [PolyForm Shield License 1.0.0](LICENSE) — not an
+OSI open-source license. You may read, run, modify and debug this code for any
+purpose except providing a product that competes with dam.teraren.com.
+Copyright (c) 2026 Yuki Matsukura.
+
+Data from upstream sources keeps its original terms; see
+https://dam.teraren.com/sources for attribution. The project name, domain and
+logo are not licensed.
