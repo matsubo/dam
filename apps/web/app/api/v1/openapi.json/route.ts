@@ -367,6 +367,14 @@ const components = {
                 waterLevelM: { type: 'string', nullable: true },
                 rainfallMm: { type: 'string', nullable: true },
                 qualityFlag: { type: 'integer', example: 0 },
+                storageRateOrigin: {
+                  type: 'string',
+                  nullable: true,
+                  enum: ['published', 'computed'],
+                  description:
+                    '表示している貯水率 (`storageVolumeM3 ÷ effectiveActiveCapacityM3`) が誰の値か。`published` は `trusted_rate_basis` なソースが公表した貯水率そのもの。`computed` はそれ以外 (信頼ソース以外、または `qualityFlag` bit 32 = トリガーが算出した率) で、貯水量 ÷ 諸元の有効貯水容量による当サイトの計算値。貯水量がなければ null (issue #60)。',
+                  example: 'published',
+                },
                 effectiveActiveCapacityM3: {
                   type: 'string',
                   nullable: true,
@@ -418,8 +426,8 @@ const components = {
         rainfallMm: { type: 'string', nullable: true },
         qualityFlag: {
           type: 'integer',
-          description: '0=正常, 1=推定, 2=観測停止, 3=異常値',
-          enum: [0, 1, 2, 3],
+          description:
+            'ビットフィールド。0=正常, 1=欠損補間, 2=異常値, 4=線形補間, 8=ソース不一致, 16=手動レビュー, 32=貯水率は当サイトの計算値 (貯水量 ÷ 有効貯水容量、出典の公表値ではない)。',
           example: 0,
         },
         sourceId: {

@@ -224,6 +224,14 @@ export default async function DamDetail({ params }: PageProps) {
                   <dl className="grid grid-cols-2 md:grid-cols-2 gap-4 text-sm flex-1">
                     <Pair label="貯水量" value={fmtCapacityMcm(latest.storageVolumeM3)} />
                     <Pair label="貯水率" value={fmtPct(rate)} />
+                    {latest.storageRateOrigin === 'computed' && rate != null ? (
+                      <p className="col-span-2 text-xs text-muted" data-testid="rate-computed-note">
+                        {`この貯水率は出典（${latest.sourceId}）の公表値ではなく、貯水量 ÷ 有効貯水容量${cap ? `（${fmtCapacityMcm(cap)}）` : ''}で当サイトが算出した値です。`}
+                        <a href="/faq#rate-origin" className="text-primary hover:underline ml-1">
+                          詳しく
+                        </a>
+                      </p>
+                    ) : null}
                     {denominator?.differsFromStatic && rate != null ? (
                       <div className="col-span-2">
                         <div className="text-xs text-muted">貯水率の分母（現在の利水容量）</div>
