@@ -84,3 +84,23 @@ test('/llms.txt points agents at the recruitment page', async ({ request }) => {
   expect(r.status()).toBe(200);
   expect(await r.text()).toContain('/contribute');
 });
+
+test('/legal/terms states the 国土数値情報 非商用 licence, not a commercial grant', async ({
+  page,
+}) => {
+  await page.goto('/legal/terms');
+  const body = page.locator('main');
+  await expect(body).toContainText('旧国土情報利用約款');
+  await expect(body).toContainText('非商用');
+  await expect(body).not.toContainText('政府標準利用規約');
+  await expect(body).not.toContainText('商用を問わず');
+});
+
+test('the footer attribution names the NDI datasets in use and their 非商用 terms', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const footer = page.locator('footer');
+  await expect(footer).toContainText('非商用');
+  await expect(footer).not.toContainText('A21');
+});

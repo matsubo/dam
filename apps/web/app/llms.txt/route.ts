@@ -48,8 +48,8 @@ const BODY = `# Dam Data Japan
 
 ## Data sources
 
-- 国土交通省 国土数値情報 W01 / W07 / A21 — master locations, capacity,
-  watersheds (annual)
+- 国土交通省 国土数値情報 W01 / W05 / W07 — master locations, capacity,
+  watersheds (annual; 非商用 licence — non-commercial use only)
 - 一般財団法人日本ダム協会 ダム便覧 — 利水/有効貯水容量, purpose, type, photos
   (monthly)
 - 国土地理院 — elevation, basemap tiles
