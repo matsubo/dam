@@ -80,6 +80,7 @@ bun run typecheck && bun run lint && bun run test
 # Versioning (root package.json `version` is the single source; see apps/web/lib/version.ts)
 just version                            # print current version
 just version-bump patch                 # bump + commit + tag vX.Y.Z locally (minor/major/x.y.z too)
+git push origin HEAD:main refs/tags/vX.Y.Z  # release.yml publishes the GitHub Release + openapi-vX.Y.Z.json
 
 # API key admin
 just api-key-issue email=x@example.com label=foo
