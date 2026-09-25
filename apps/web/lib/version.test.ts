@@ -1,11 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { APP_VERSION } from './version.ts';
 
-// APP_VERSION is the single source of truth for the publicly-visible version
-// (footer, /roadmap, OpenAPI `info.version`), but the root package.json has to
-// carry the same number so tooling that only reads the manifest agrees with the
-// running site. Nothing derives one from the other — this test is the guard
-// that keeps the two literals from drifting apart.
+// The root package.json is the only place the version is written; version.ts
+// re-exports it. The second test fails if someone reintroduces a literal here.
 const MANIFEST = new URL('../../../package.json', import.meta.url);
 
 describe('APP_VERSION', () => {
@@ -13,8 +10,8 @@ describe('APP_VERSION', () => {
     expect(APP_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
-  test('matches the version declared in the root package.json', async () => {
+  test('is read from the root package.json', async () => {
     const manifest = await Bun.file(MANIFEST).json();
-    expect(manifest.version).toBe(APP_VERSION);
+    expect(APP_VERSION).toBe(manifest.version);
   });
 });

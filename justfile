@@ -74,3 +74,16 @@ api-key-list:
 
 api-key-revoke id="":
     bun run bin/api_key.ts revoke --id "{{id}}"
+
+# Versioning — the root package.json `version` is the single source of truth;
+# footer, /roadmap and OpenAPI `info.version` read it via apps/web/lib/version.ts.
+# Print the current version
+version:
+    @bun pm pkg get version | tr -d '"'
+
+# level: patch | minor | major | an explicit x.y.z. Needs a clean tree, and run
+# it on main — the tag should point at a commit on main. Nothing is pushed.
+# Bump version, commit "chore: release vX.Y.Z", tag vX.Y.Z
+version-bump level:
+    bun pm version {{level}} -m "chore: release v%s"
+    @v=$(just version); echo; echo "Tagged v$v locally. To publish:"; echo "  git push origin HEAD:main refs/tags/v$v"; echo "  gh release create v$v --generate-notes --verify-tag"
