@@ -153,10 +153,12 @@ Restore objective: RTO 1h, RPO 1h (matches the diff-backup cadence).
 
 ### 5.1 MinIO
 
-1. Find the latest tag at https://quay.io/repository/minio/minio?tab=tags (use
+1. Find the latest tag at https://hub.docker.com/r/pgsty/minio/tags (use
    a pinned `RELEASE.YYYY-MM-DDTHH-MM-SSZ` tag — never `latest`). MinIO removed
-   its Docker Hub repositories, so `minio/minio` and `minio/mc` only resolve
-   against `quay.io/` now.
+   its Docker Hub repositories and `quay.io/minio/*` now refuses anonymous
+   pulls (401, 2026-09-25), so CI and local dev use the community-maintained
+   fork `pgsty/minio` / `pgsty/mc`. Production `dam-minio` still runs the
+   cached `quay.io` image; it moves to `pgsty/minio` on its next bump.
 2. Coolify UI → `dam-minio` → edit the compose (`minio.image`) and restart.
 3. Open a PR. After merge, Coolify auto-deploys.
 4. The first start after a major bump may run an internal data migration; tail

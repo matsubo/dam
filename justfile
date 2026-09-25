@@ -12,7 +12,7 @@ up:
 ensure-bucket:
     docker run --rm --network dam_default \
         -e MC_HOST_local=http://${S3_ACCESS_KEY:-minio}:${S3_SECRET_KEY:-minio12345}@minio:9000 \
-        quay.io/minio/mc:RELEASE.2025-04-08T15-39-49Z \
+        pgsty/mc:RELEASE.2026-09-16T00-00-00Z \
         mb --ignore-existing local/${S3_BUCKET:-dam-raw}
 
 down:

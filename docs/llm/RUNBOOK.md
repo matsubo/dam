@@ -149,11 +149,13 @@ Either bump the source that has data, or have the synth seeder run again
 
 ### MinIO image not pullable
 
-`docker compose pull minio` may fail if the pinned tag was rotated. MinIO also
-removed its Docker Hub repositories, so the image must be pulled as
-`quay.io/minio/minio`. Pick a recent tag from
-https://quay.io/repository/minio/minio?tab=tags and update
-`docker-compose.yml`. Bucket survives the restart.
+`docker compose pull minio` may fail if the pinned tag was rotated. MinIO
+removed its Docker Hub repositories, and `quay.io/minio/*` refuses anonymous
+pulls since 2026-09 (401). Use the community-maintained fork `pgsty/minio`
+(and `pgsty/mc` for the client): pick a recent `RELEASE.*` tag from
+https://hub.docker.com/r/pgsty/minio/tags and update
+`docker-compose.dev.yml`, `justfile` and `.github/workflows/ci.yml` together.
+Bucket survives the restart.
 
 ### Real upstream blocks the scraper
 
