@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   alternates: { canonical: '/legal/terms' },
 };
 
-const LAST_UPDATED = '2026-05-04';
+const LAST_UPDATED = '2026-09-26';
 
 export default function TermsPage() {
   return (
@@ -43,8 +43,10 @@ export default function TermsPage() {
       <Section n="3" title="利用条件">
         <ul className="list-disc list-inside space-y-1">
           <li>
-            個人・商用を問わず、無償でご利用いただけます。クレジット表示の義務はありませんが、
-            データの出典として原典 (国土交通省等) の併記を推奨します。
+            非商用目的に限り、無償でご利用いただけます。ダム諸元・位置・水系区分・流域界は国土数値情報
+            (国土交通省) を加工して作成しており、同データの利用条件 (非商用)
+            に従って、商用目的での利用はできません。利用の際は「出典: 国土数値情報
+            (国土交通省)、加工: Dam Data Japan」のように出典と加工者を明示してください。
           </li>
           <li>
             API の利用には Google アカウントによる認証と発行されたキーが必要です。
@@ -86,8 +88,8 @@ export default function TermsPage() {
           </a>{' '}
           で PolyForm Shield License 1.0.0
           のもとでソースコードを公開しています。本サービスと競合する製品・サービスの提供には利用できません。データソース部分のライセンスは原典のライセンスに従います
-          (国土数値情報: 政府標準利用規約 2.0 互換、Wikipedia: CC-BY-SA、ほか)。 本サービスの UI
-          上の写真は{' '}
+          (国土数値情報 W01 / W05 / W07: 旧国土情報利用約款に準拠した「非商用」、Wikipedia:
+          CC-BY-SA、ほか)。 本サービスの UI 上の写真は{' '}
           <a className="text-primary hover:underline" href="/sources">
             データソースページ
           </a>{' '}

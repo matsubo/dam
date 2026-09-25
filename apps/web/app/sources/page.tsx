@@ -446,7 +446,7 @@ export default async function SourcesPage() {
               <ColumnRow
                 col="watershed_id"
                 desc="一級 / 二級水系 ID (FK to watersheds)"
-                src="NDI A21 + 空間結合"
+                src="NDI W01 水系名 + W07"
                 rate="100 %"
               />
               <ColumnRow

@@ -5,12 +5,12 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dam.teraren.com';
 
 const BODY = `# Terms of Use
 
-Last updated: 2026-05-04.
+Last updated: 2026-09-26.
 
 By using this site or its API you accept these terms.
 
 1. **Scope** — Dam Data Japan aggregates Japanese reservoir data from
-   public sources (国土数値情報 W01/A21, 一般財団法人日本ダム協会 ダム便覧,
+   public sources (国土数値情報 W01/W05/W07, 一般財団法人日本ダム協会 ダム便覧,
    国土地理院 地理院タイル/標高, ja.wikipedia 写真フォールバック) and
    republishes it via this website and the JSON API. Realtime observation
    values are not republished.
@@ -19,8 +19,12 @@ By using this site or its API you accept these terms.
    and completeness are not guaranteed. **Do not use for decisive
    safety / disaster / legal determinations** — always consult primary
    sources.
-3. **Free use** — Personal and commercial use is permitted at no cost.
-   Crediting the original source (e.g. 国土交通省) is recommended.
+3. **Non-commercial use only** — Free of charge for non-commercial
+   purposes. Dam attributes, locations, watershed classes and boundaries
+   are derived from 国土数値情報 W01/W05/W07 (国土交通省), licensed under
+   the 非商用 terms of the 旧国土情報利用約款, so they may not be used
+   commercially. Credit the source and the processor, e.g. "出典: 国土数値情報
+   (国土交通省)、加工: Dam Data Japan".
 4. **API keys** — Issued via Google sign-in at /account/keys. Keys are
    personal. Do not share, transfer, or publish a key. Default rate
    limits are 600 req/min and 100,000 req/day; abuse may result in key

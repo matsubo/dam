@@ -271,8 +271,8 @@ function SiteFooter() {
           <div className="eyebrow-muted mb-3">データ出典 · ライセンス</div>
           <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-xs text-on-surface-variant">
             <li>
-              <span className="font-semibold text-on-surface">国土数値情報</span> ダム諸元
-              W01・流域界 A21（出典明示で再配布可）
+              <span className="font-semibold text-on-surface">国土数値情報</span> ダム W01・河川
+              W05・流域メッシュ W07（非商用。出典・加工者を明示）
             </li>
             <li>
               <span className="font-semibold text-on-surface">一般財団法人 日本ダム協会</span>{' '}
