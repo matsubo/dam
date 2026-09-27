@@ -113,11 +113,12 @@ describe('parseYamaguchiHtml', () => {
 });
 
 describe('chooseMaster (#79)', () => {
-  test('binds 木屋川ダム to the completed （再）, not the lower-id （元）', () => {
+  test('keeps 木屋川ダム on the （元） while the （再） has no completion year', () => {
+    // 0056 clears 木屋川（再）'s copied year (NDI 2022): the 嵩上げ is not finished.
     const masters = [
       { id: 10610n, name: '木屋川（元）', completedYear: 1955 },
-      { id: 10622n, name: '木屋川（再）', completedYear: 1955 },
+      { id: 10622n, name: '木屋川（再）', completedYear: null },
     ];
-    expect(chooseMaster('木屋川ダム', masters)).toBe(10622n);
+    expect(chooseMaster('木屋川ダム', masters)).toBe(10610n);
   });
 });

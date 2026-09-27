@@ -151,8 +151,8 @@ interface DamMatch {
 
 /**
  * Best master dam for a station name, or null when nothing ranks. Equal ranks
- * go to preferMaster: 木屋川 has a （元） and a （再） row, and the completed
- * （再） is the live structure (#79).
+ * go to preferMaster: 木屋川 has a （元） and a （再） row, and the （元） stays
+ * the live structure until the （再） has a completion year (#79).
  */
 export function chooseMaster(name: string, masters: BindableMaster[]): bigint | null {
   const stem = normalizeName(name);

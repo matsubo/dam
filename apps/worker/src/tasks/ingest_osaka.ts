@@ -23,9 +23,10 @@
 // chooseMaster breaks the tie by preferring （再）over （元）since rebuilt dams
 // are the operational ones (confirmed: 狭山池（再）total_capacity_m3 = 2,800,000
 // matches the API's storageCapacity exactly). This rank deliberately comes
-// before preferMaster: 狭山池（再）'s completion year is blank in prod (its
-// master name does not match ダム便覧's 狭山池ダム（再）), and preferMaster
-// alone would then fall back to the （元） (#79).
+// before preferMaster, as a defensive hold for #79's "leave 狭山池 where it
+// is": ダム便覧 has no record matching the master name 狭山池（再）, so its
+// completion year cannot be refreshed from there, and if it were ever blank,
+// preferMaster alone would fall back to the （元）.
 //
 // Cron: hourly at :31.
 
