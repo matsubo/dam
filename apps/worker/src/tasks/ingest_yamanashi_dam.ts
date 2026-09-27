@@ -92,10 +92,15 @@ function parseNum(s: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Every dam row of the ダム状況表 (dam005.asp), stamped with the page's "現在" time. */
-export function parseYamanashiStatusHtml(html: string): ParsedRow[] {
+/**
+ * Every dam row of the ダム状況表 (dam005.asp), stamped with the page's "現在" time.
+ * If the 貯水量 column stops saying [千 m3], volumes are dropped (and `warn` is
+ * called) rather than stored at the wrong scale; the other fields are kept.
+ */
+export function parseYamanashiStatusHtml(html: string, warn: (s: string) => void): ParsedRow[] {
   const observedAt = parseYamanashiTimestamp(html);
   if (!observedAt) return [];
+  const volumeInThousands = /貯水量\s*(?:<br>)?\s*\[千\s*m3\]/i.test(html);
 
   const rows: ParsedRow[] = [];
   for (const trMatch of html.matchAll(/<tr[^>]*>(.*?)<\/tr>/gis)) {
@@ -111,7 +116,7 @@ export function parseYamanashiStatusHtml(html: string): ParsedRow[] {
     if (cells.length < 8 || !name) continue;
 
     const waterLevelM = parseNum(cells[1] ?? '');
-    const volumeThousandM3 = parseNum(cells[2] ?? '');
+    const volumeThousandM3 = volumeInThousands ? parseNum(cells[2] ?? '') : null;
     const inflowM3s = parseNum(cells[4] ?? '');
     const outflowM3s = parseNum(cells[5] ?? '');
     if (
@@ -134,9 +139,8 @@ export function parseYamanashiStatusHtml(html: string): ParsedRow[] {
     });
   }
 
-  // A unit change would silently scale every stored volume.
-  if (rows.length > 0 && !/貯水量\s*(?:<br>)?\s*\[千\s*m3\]/i.test(html)) {
-    throw new Error(`${SOURCE_ID}: 貯水量 column is no longer labelled [千 m3]`);
+  if (rows.length > 0 && !volumeInThousands) {
+    warn(`${SOURCE_ID}: 貯水量 column is no longer labelled [千 m3]; volumes dropped`);
   }
   return rows;
 }
@@ -257,7 +261,9 @@ const task: Task = async (_payload, helpers) => {
   }
 
   const rows: ParsedRow[] = [];
-  for (const r of html === null ? [] : parseYamanashiStatusHtml(html)) {
+  for (const r of html === null
+    ? []
+    : parseYamanashiStatusHtml(html, (s) => helpers.logger.warn(s))) {
     if (DAMS.some((d) => d.name === r.yamanashiName)) rows.push(r);
     else log(`${SOURCE_ID}: "${r.yamanashiName}" is not in the dam catalogue; skipped`);
   }

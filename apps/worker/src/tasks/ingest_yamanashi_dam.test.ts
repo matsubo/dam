@@ -43,8 +43,10 @@ describe('parseYamanashiTimestamp', () => {
 });
 
 describe('parseYamanashiStatusHtml', () => {
+  const warn = (): void => {};
+
   test('reads all six dams at the page timestamp', async () => {
-    const rows = parseYamanashiStatusHtml(await fixtureHtml());
+    const rows = parseYamanashiStatusHtml(await fixtureHtml(), warn);
     expect(rows.map((r) => r.yamanashiName)).toEqual([
       '大門ダム',
       '塩川ダム',
@@ -57,7 +59,7 @@ describe('parseYamanashiStatusHtml', () => {
   });
 
   test('takes 貯水量 (not 空容量) and converts 千m³ → m³', async () => {
-    const rows = parseYamanashiStatusHtml(await fixtureHtml());
+    const rows = parseYamanashiStatusHtml(await fixtureHtml(), warn);
     const daimon = rows.find((r) => r.yamanashiName === '大門ダム');
     expect(daimon).toEqual({
       yamanashiName: '大門ダム',
@@ -74,18 +76,28 @@ describe('parseYamanashiStatusHtml', () => {
 
   test('a blank cell is missing, not zero', async () => {
     const html = (await fixtureHtml()).replace('<TD>1114</TD>', '<TD>&nbsp;</TD>');
-    const daimon = parseYamanashiStatusHtml(html).find((r) => r.yamanashiName === '大門ダム');
+    const daimon = parseYamanashiStatusHtml(html, warn).find((r) => r.yamanashiName === '大門ダム');
     expect(daimon?.storageVolumeM3).toBeNull();
     expect(daimon?.waterLevelM).toBe(895.49);
   });
 
-  test('refuses a 貯水量 column no longer labelled 千 m3', async () => {
+  test('drops only the volumes when 貯水量 is no longer labelled 千 m3', async () => {
     const html = (await fixtureHtml()).replace('貯水量<BR>[千 m3]', '貯水量<BR>[万 m3]');
-    expect(() => parseYamanashiStatusHtml(html)).toThrow();
+    const warnings: string[] = [];
+    const rows = parseYamanashiStatusHtml(html, (s) => warnings.push(s));
+    expect(rows).toHaveLength(6);
+    for (const r of rows) expect(r.storageVolumeM3).toBeNull();
+    expect(rows.find((r) => r.yamanashiName === '大門ダム')).toMatchObject({
+      waterLevelM: 895.49,
+      inflowM3s: 2.31,
+      outflowM3s: 3.69,
+      rainfallMm: 0,
+    });
+    expect(warnings).toHaveLength(1);
   });
 
   test('returns no rows when the page has no timestamp', () => {
-    expect(parseYamanashiStatusHtml('<html><body><table></table></body></html>')).toEqual([]);
+    expect(parseYamanashiStatusHtml('<html><body><table></table></body></html>', warn)).toEqual([]);
   });
 });
 
