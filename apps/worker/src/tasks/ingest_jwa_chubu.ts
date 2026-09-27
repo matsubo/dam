@@ -1,13 +1,15 @@
 // apps/worker/src/tasks/ingest_jwa_chubu.ts
 //
-// 水資源機構 中部支社 — 木曽川水系 6 dams.
-// Publishes a daily-updated water-source status report:
+// 水資源機構 中部支社 — 6 dams from the daily water-source status report:
 //
-//   木曽川水系: 牧尾/阿木川/味噌川/岩屋/中里/徳山
+//   木曽川水系: 牧尾/阿木川/味噌川/岩屋/徳山
+//   三重用水:   中里 (いなべ市, 三重 — not a 長野 dam; see migration 0083)
 //
 // Source: https://www.water.go.jp/mizu/chubu/report/
-// Format: Static HTML; date "YYYY年MM月DD日"; storage units 千m³.
-//         Also provides 流入量 and 放流量 (m³/s) — richer than jwa-junpo.
+// Format: Static HTML; date "YYYY年MM月DD日"; storage units 千m³. Each dam is a
+//         block headed by <span class="dam-name">; values sit in
+//         <div class="databox">: [EL …] = 0時の貯水位, 流入量/放流量 = 前日平均,
+//         貯水量<br>&lt;午前0時&gt; and (貯水率 …) on the 利水容量 basis.
 // License: 水資源機構 published; 出典明示で再配布可.
 //
 // New coverage: 中里ダム (not in jwa-junpo).
@@ -29,7 +31,7 @@ const NAME_MAP: Array<{ chubuName: string; masterName: string; prefCodes: string
   { chubuName: '阿木川ダム', masterName: '阿木川', prefCodes: ['21'] }, // 岐阜
   { chubuName: '味噌川ダム', masterName: '味噌川', prefCodes: ['20'] },
   { chubuName: '岩屋ダム', masterName: '岩屋', prefCodes: ['21'] },
-  { chubuName: '中里ダム', masterName: '中里', prefCodes: ['20'] }, // 長野 (new)
+  { chubuName: '中里ダム', masterName: '中里', prefCodes: ['24'] }, // 三重 (三重用水)
   { chubuName: '徳山ダム', masterName: '徳山', prefCodes: ['21'] },
 ];
 
@@ -40,17 +42,6 @@ interface ParsedRow {
   waterLevelM: number | null;
   inflowM3s: number | null;
   outflowM3s: number | null;
-}
-
-function textOf(s: string): string {
-  return s
-    .replace(/<[^>]*>/g, '')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/　/g, ' ')
-    .trim();
 }
 
 function parseNum(s: string): number | null {
@@ -72,66 +63,51 @@ export function parseChubuDate(text: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/**
- * Extract a section of HTML between the dam name and the next dam name
- * (or end of string), then pull labeled values from it.
- */
-function extractDamSection(html: string, damName: string, allNames: string[]): string {
-  const start = html.indexOf(damName);
-  if (start < 0) return '';
-  let end = html.length;
-  for (const other of allNames) {
-    if (other === damName) continue;
-    const idx = html.indexOf(other, start + damName.length);
-    if (idx > start && idx < end) end = idx;
-  }
-  return html.slice(start, end);
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function extractLabeled(section: string, label: string): number | null {
-  // Match: label text ... number (with optional commas) ... unit
-  // The label and value may be separated by HTML tags and whitespace.
-  const labelIdx = section.indexOf(label);
-  if (labelIdx < 0) return null;
-  // Look up to 500 chars after the label for the first number.
-  const context = textOf(section.slice(labelIdx, labelIdx + 500));
-  const m = context.match(/([\d,]+(?:\.\d+)?)/);
+/**
+ * The block headed by <span class="dam-name…">NAME</span>, up to the next
+ * dam-name span or the end of its table. Matching the whole span keeps
+ * 中里ダム off 「(中里ダム・調整池合計)」, the 三重用水 total printed first.
+ */
+function damBlock(html: string, damName: string): string {
+  const head = new RegExp(`<span class="dam-name[^"]*">${escapeRegExp(damName)}</span>`).exec(html);
+  if (!head) return '';
+  const rest = html.slice(head.index + head[0].length);
+  const next = rest.search(/<span class="dam-name|<\/table>/);
+  return next < 0 ? rest : rest.slice(0, next);
+}
+
+/** The first <div class="databox"> value after `marker`. */
+function databoxAfter(block: string, marker: RegExp): number | null {
+  const m = marker.exec(block);
   if (!m) return null;
-  return parseNum(m[1] ?? '');
+  const box = block.slice(m.index + m[0].length).match(/<div class="databox[^"]*">([^<]*)<\/div>/);
+  return box ? parseNum(box[1] ?? '') : null;
 }
 
 export function parseChubuHtml(html: string): { reportDate: Date | null; rows: ParsedRow[] } {
   const reportDate = parseChubuDate(html);
   const rows: ParsedRow[] = [];
-  const allNames = NAME_MAP.map((m) => m.chubuName);
 
   for (const m of NAME_MAP) {
-    const section = extractDamSection(html, m.chubuName, allNames);
-    if (!section) continue;
+    const block = damBlock(html, m.chubuName);
+    if (!block) continue;
 
-    // Try labeled extraction first (most reliable).
-    let volume = extractLabeled(section, '貯水量');
-    const rate = extractLabeled(section, '貯水率');
-    const waterLevel = extractLabeled(section, '貯水位');
-    const inflow = extractLabeled(section, '流入量');
-    const outflow = extractLabeled(section, '放流量');
-
-    // Some page layouts embed 貯水量 inside a % context — fallback: find first
-    // 千m³ number after the dam name if labeled extraction failed.
-    if (volume == null) {
-      const sectionText = textOf(section);
-      const vm = sectionText.match(/([\d,]+)\s*千m/);
-      if (vm) volume = parseNum(vm[1] ?? '');
-    }
-
+    // 貯水量<br>&lt;午前0時&gt; is the storage; the 有効貯水量<br> label above
+    // it (徳山) is the capacity, and 前日貯水量との増減 the day's change.
+    const volume = databoxAfter(block, /(?<!有効)貯水量<br>/);
+    const rate = databoxAfter(block, /貯水率(?=<div)/);
     if (volume == null || rate == null) continue;
     rows.push({
       chubuName: m.chubuName,
       storageVolumeThouM3: volume,
       storageRatePct: rate,
-      waterLevelM: waterLevel,
-      inflowM3s: inflow,
-      outflowM3s: outflow,
+      waterLevelM: databoxAfter(block, /\[EL\s*/),
+      inflowM3s: databoxAfter(block, /流入量(?=<div)/),
+      outflowM3s: databoxAfter(block, /(?<!利水)放流量(?=<div)/),
     });
   }
   return { reportDate, rows };
@@ -155,7 +131,7 @@ async function ensureSourcePriority(): Promise<void> {
   `;
 }
 
-async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
+export async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
   const matches: DamMatch[] = [];
   // What this source publishes, matched or not — recorded so /coverage can
   // say "they publish it, we failed to link it" instead of guessing.

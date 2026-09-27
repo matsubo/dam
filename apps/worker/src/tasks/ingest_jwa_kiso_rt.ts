@@ -4,7 +4,7 @@
 // Updated every ~10 minutes; fetched hourly.
 //
 //   木曽川水系: 牧尾 (長野) / 味噌川 (長野) / 阿木川 (岐阜) / 岩屋 (岐阜)
-//              徳山 (岐阜) / 中里貯水池 (長野)
+//              徳山 (岐阜) / 中里貯水池 (三重, 三重用水 — いなべ市)
 //
 // Source: https://www.water.go.jp/mizu/chubu/realtime/index.html
 // Format: Static HTML with <h4>-delimited blocks; "観測時刻：YYYY年MM月DD日 HH時MM分" (JST).
@@ -31,7 +31,7 @@ const NAME_MAP: Array<{ kisoName: string; masterName: string; prefCodes: string[
   { kisoName: '阿木川ダム', masterName: '阿木川', prefCodes: ['21'] }, // 岐阜
   { kisoName: '岩屋ダム', masterName: '岩屋', prefCodes: ['21'] },
   { kisoName: '徳山ダム', masterName: '徳山', prefCodes: ['21'] },
-  { kisoName: '中里貯水池', masterName: '中里', prefCodes: ['20'] },
+  { kisoName: '中里貯水池', masterName: '中里', prefCodes: ['24'] }, // 三重 (三重用水)
 ];
 
 interface ParsedRow {
@@ -139,7 +139,7 @@ async function ensureSourcePriority(): Promise<void> {
   `;
 }
 
-async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
+export async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
   const matches: DamMatch[] = [];
   // What this source publishes, matched or not — recorded so /coverage can
   // say "they publish it, we failed to link it" instead of guessing.
