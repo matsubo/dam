@@ -60,9 +60,9 @@ export const CRONTAB = `
 # source's update.
 5 * * * * ingest:kanagawa-dam
 
-# 滋賀県土木防災 — 6 prefectural dams, hourly. Page exposes a 23-hour
-# window per fetch; cron at every hour :07 catches today's freshest
-# value + 22 hours of context for self-healing.
+# 滋賀県土木防災 (mobile pages; robots.txt disallows /dam/, allows /mobile/) —
+# 8 dams, the latest 10-minute value + six hourly rows per station. Cron at
+# every hour :07 re-upserts the six-hour window for self-healing.
 7 * * * * ingest:shiga-bousai
 
 # 鳥取県ダム諸量情報システム — 5 prefectural dams (賀祥/朝鍋/佐治川/

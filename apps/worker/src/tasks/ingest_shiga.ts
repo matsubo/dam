@@ -1,24 +1,29 @@
 // apps/worker/src/tasks/ingest_shiga.ts
 //
-// Sixth real-observation source. 滋賀県土木防災情報システム publishes
-// hourly observations per dam at clean static HTML tables. The dam list:
+// 滋賀県土木防災情報システム ダム観測情報 — hourly + latest 10-minute values.
 //
-//   id2=2 日野川, id2=3 石田川, id2=4 宇曽川, id2=5 青土,
-//   id2=6 姉川,   id2=8 永源寺 — 6 prefectural dams matched to master.
-//   (id2=1 余呉湖 and id2=7 天川 don't have master matches; skipped.
-//    野洲川 / 蔵王 / 犬上川 link out to river.go.jp — policy-blocked, also skipped.)
+// Source (Shift_JIS HTML, the site's mobile pages):
+//   https://shiga-bousai.jp/mobile/dam/dam_select.php         観測局一覧 (11 stations)
+//   https://shiga-bousai.jp/mobile/dam/dam_data.php?ID={id}   one station
+// shiga-bousai.jp/robots.txt disallows /dam/ (the desktop dam_table.php this
+// task used to read) and explicitly allows /mobile/, so only /mobile/ is read.
 //
-// Source URL per dam:
-//   http://shiga-bousai.jp/dam/dam_table.php?day=YYYY-MM-DD&time=HH:MM
-//     &id1=8&id2={N}&id3=0&id4=0&sid={SID}
+// 観測局一覧: "◆<a href="dam_data.php?ID=34191&datetime=…">青土ダム</a>" per
+// station. Published 2026-09-27: 青土 / 日野川 / 永源寺 / 野洲川 / 蔵王 / 犬上川 /
+// 宇曽川 / 姉川 / 余呉湖 / 石田川 / 天川. 余呉湖 and 天川 have no master dam;
+// 犬上川 is listed with a 0.00 placeholder and no rows.
 //
-// The page returns a 23-row hourly table (newest first) with columns:
-//   月/日, 時刻, 60分雨量, 累加雨量, 貯水位, 流入量, 放流量, 調節量,
-//   空容量(千m³), 下流水位, 上流流量
+// dam_data.php: the latest 10-minute row then six hourly rows, newest first:
+//   <p>MM/DD HH:MM<br>［貯水位］369.23<br>［流入量］1.67<br>［放流量］2.19<br>
+//      ［60分間雨量］0<br>［累加雨量］12</p>
+// Units per the page legend: 貯水位 m (EL), 流入量 / 放流量 m³/s; rainfall mm.
+// "*" 欠測 and "-" 未観測 → null. Rows carry no year: it is the reference
+// time's JST year, or the previous one for a row that would lie in the future
+// (12/31 rows read just after New Year). A row with level and both flows
+// missing is dropped rather than written empty.
 //
-// We harvest all 23 hourly rows per fetch — running the cron at :05 catches
-// the latest hour's observation plus a 22-hour rolling backfill window so
-// brief outages self-heal.
+// No 貯水量 / 貯水率 is published. Priority 308. Cron hourly at :07; each run
+// re-upserts the six-hour window so short outages self-heal.
 
 import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
@@ -27,36 +32,22 @@ import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
-const BASE_URL = process.env.SHIGA_DAM_BASE ?? 'http://shiga-bousai.jp/dam';
+const BASE_URL = process.env.SHIGA_BOUSAI_BASE ?? 'https://shiga-bousai.jp';
 
-interface DamCfg {
-  id2: number;
-  sid: number;
-  masterName: string;
-  shigaName: string;
-}
-
-const DAMS: DamCfg[] = [
-  { id2: 2, sid: 35152, shigaName: '日野川ダム', masterName: '日野川' },
-  { id2: 3, sid: 39191, shigaName: '石田川ダム', masterName: '石田川' },
-  { id2: 4, sid: 36191, shigaName: '宇曽川ダム', masterName: '宇曽川' },
-  { id2: 5, sid: 34191, shigaName: '青土ダム', masterName: '青土' },
-  { id2: 6, sid: 37191, shigaName: '姉川ダム', masterName: '姉川' },
-  { id2: 8, sid: 35691, shigaName: '永源寺ダム', masterName: '永源寺' },
-];
-
+const SOURCE_ID = 'shiga-bousai';
 const PREF_CODE = '25';
 
-/**
- * Listed by the portal but never ingested: 余呉湖 (id2=1) and 天川 (id2=7) have
- * no master dam, and 野洲川 / 蔵王 / 犬上川 link out to river.go.jp, which our
- * terms bar us from scraping. They are still part of what 滋賀県 publishes, so
- * /coverage has to see them — as stations we failed to link, not as absence.
- * Names are as spelled in this file's header, not verified against the portal.
- */
-const UNINGESTED_STATIONS: readonly string[] = ['余呉湖', '天川', '野洲川', '蔵王', '犬上川'];
+const USER_AGENT =
+  process.env.HTTP_USER_AGENT ??
+  'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
 
-interface ParsedRow {
+export interface Station {
+  id: string;
+  /** Name as the 観測局一覧 prints it — the universe key and the stamp. */
+  name: string;
+}
+
+export interface ParsedRow {
   observedAt: Date;
   waterLevelM: number | null;
   inflowM3s: number | null;
@@ -64,106 +55,60 @@ interface ParsedRow {
   rainfallMm: number | null;
 }
 
-function parseNum(s: string): number | null {
-  const t = s.replace(/[,\s　]/g, '');
-  if (!t || t === '―' || t === '-' || t === '欠測') return null;
-  const n = Number(t);
+/** Every station on the 観測局一覧, in page order. */
+export function parseShigaStationList(html: string): Station[] {
+  return [...html.matchAll(/◆<a href="dam_data\.php\?ID=(\d+)[^"]*">([^<]+)<\/a>/g)].flatMap((m) =>
+    m[1] && m[2] ? [{ id: m[1], name: m[2].trim() }] : [],
+  );
+}
+
+/** "［label］value" cell → number; "*" 欠測, "-" 未観測 and blanks → null. */
+function field(block: string, label: string): number | null {
+  const raw = block.match(new RegExp(`［${label}］([^<]*)`))?.[1]?.trim() ?? '';
+  if (raw === '') return null;
+  const n = Number(raw);
   return Number.isFinite(n) ? n : null;
 }
 
-/** Today's JST date as YYYY-MM-DD, used in the page URL. */
-function todayJstDateString(now = new Date()): string {
-  const jst = new Date(now.getTime() + 9 * 3600 * 1000);
-  const y = jst.getUTCFullYear();
-  const m = String(jst.getUTCMonth() + 1).padStart(2, '0');
-  const d = String(jst.getUTCDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
+const JST_OFFSET_MS = 9 * 3600 * 1000;
 
-function jstHourString(now = new Date()): string {
-  const jst = new Date(now.getTime() + 9 * 3600 * 1000);
-  const h = String(jst.getUTCHours()).padStart(2, '0');
-  return `${h}:50`;
-}
-
-/**
- * Parse 「05/15 22:50」-style rows into Date + the four numeric fields we
- * keep. The page uses rowspan=23 on the date cell so subsequent rows only
- * carry the 時刻 column; we propagate the date as we walk top to bottom.
- *
- * Walks <tr> children of the main hourly table. Rows that don't carry the
- * expected leading "MM/DD" or "HH:MM" pattern are skipped.
- */
-export function parseShigaDamTable(html: string, year: number): ParsedRow[] {
+export function parseShigaDamData(html: string, reference: Date): ParsedRow[] {
+  const refYear = new Date(reference.getTime() + JST_OFFSET_MS).getUTCFullYear();
   const out: ParsedRow[] = [];
-  // Cut down to the hourly-data table by anchoring on the headers. The page
-  // also includes daily summary tables which we don't want to ingest.
-  const start = html.indexOf('60分雨量');
-  if (start < 0) return out;
-  const section = html.slice(start, html.indexOf('</table>', start));
-
-  let currentMonth: number | null = null;
-  let currentDay: number | null = null;
-
-  const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/g;
-  let rowMatch: RegExpExecArray | null;
-  // biome-ignore lint/suspicious/noAssignInExpressions: idiomatic regex iteration
-  while ((rowMatch = rowRe.exec(section)) !== null) {
-    const inner = rowMatch[1] ?? '';
-    const cells: string[] = [];
-    const cellRe = /<td[^>]*>([\s\S]*?)<\/td>/g;
-    let cellMatch: RegExpExecArray | null;
-    // biome-ignore lint/suspicious/noAssignInExpressions: idiomatic regex iteration
-    while ((cellMatch = cellRe.exec(inner)) !== null) {
-      cells.push((cellMatch[1] ?? '').replace(/<[^>]*>/g, '').trim());
-    }
-    if (cells.length === 0) continue;
-
-    // First cell may be MM/DD (rowspan=23) or HH:MM directly.
-    let offset = 0;
-    const dateMatch = cells[0]?.match(/^(\d{1,2})\/(\d{1,2})$/);
-    if (dateMatch) {
-      currentMonth = Number(dateMatch[1]);
-      currentDay = Number(dateMatch[2]);
-      offset = 1;
-    }
-    if (currentMonth == null || currentDay == null) continue;
-    const timeStr = cells[offset];
-    const timeMatch = timeStr?.match(/^(\d{1,2}):(\d{2})$/);
-    if (!timeMatch) continue;
-    const hour = Number(timeMatch[1]);
-    const min = Number(timeMatch[2]);
-
-    // Build a JST Date from year + currentMonth + currentDay + hour + min,
-    // converted to UTC.
-    const observedAt = new Date(Date.UTC(year, currentMonth - 1, currentDay, hour - 9, min, 0, 0));
-
-    // Cell layout after time:
-    //   [0] 60分雨量, [1] 累加雨量, [2] 貯水位, [3] 流入量, [4] 放流量
-    const base = offset + 1;
-    const rainfall = parseNum(cells[base] ?? '');
-    const level = parseNum(cells[base + 2] ?? '');
-    const inflow = parseNum(cells[base + 3] ?? '');
-    const outflow = parseNum(cells[base + 4] ?? '');
-
-    if (level == null && inflow == null && outflow == null) continue;
-    out.push({
+  for (const m of html.matchAll(/<p>(\d{2})\/(\d{2}) (\d{2}):(\d{2})<br>([\s\S]*?)<\/p>/g)) {
+    const [, mo, dy, hh, mi, block = ''] = m;
+    const at = (year: number) =>
+      new Date(Date.UTC(year, Number(mo) - 1, Number(dy), Number(hh), Number(mi)) - JST_OFFSET_MS);
+    const thisYear = at(refYear);
+    const observedAt =
+      thisYear.getTime() > reference.getTime() + 24 * 3600 * 1000 ? at(refYear - 1) : thisYear;
+    const row = {
       observedAt,
-      waterLevelM: level,
-      inflowM3s: inflow,
-      outflowM3s: outflow,
-      rainfallMm: rainfall,
-    });
+      waterLevelM: field(block, '貯水位'),
+      inflowM3s: field(block, '流入量'),
+      outflowM3s: field(block, '放流量'),
+      rainfallMm: field(block, '60分間雨量'),
+    };
+    if (row.waterLevelM === null && row.inflowM3s === null && row.outflowM3s === null) continue;
+    out.push(row);
   }
-
   return out;
+}
+
+async function fetchShiftJis(url: string): Promise<string | null> {
+  const r = await fetch(url, {
+    headers: { 'user-agent': USER_AGENT },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (r.status !== 200) return null;
+  return new TextDecoder('shift_jis').decode(await r.arrayBuffer());
 }
 
 async function ensureSourcePriority(): Promise<void> {
   await sql`
     INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES ('shiga-bousai', 308,
-            '滋賀県土木防災情報システム — hourly, 6 dams (日野川/石田川/宇曽川/青土/姉川/永源寺)',
+    VALUES (${SOURCE_ID}, 308,
+            '滋賀県土木防災情報システム (mobile) — hourly, 8 dams (青土/日野川/永源寺/野洲川/蔵王/宇曽川/姉川/石田川)',
             true)
     ON CONFLICT (source_id) DO UPDATE
       SET priority    = EXCLUDED.priority,
@@ -172,105 +117,102 @@ async function ensureSourcePriority(): Promise<void> {
   `;
 }
 
-interface DamMatch {
-  cfg: DamCfg;
-  damId: bigint;
-}
-
-async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
-  const matches: DamMatch[] = [];
+async function matchMasters(
+  stations: Station[],
+  log: (s: string) => void,
+): Promise<Map<string, bigint>> {
+  const damById = new Map<string, bigint>();
   // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing. The
-  // portal's per-dam id2 doesn't cover the stations we never fetch, so the
-  // published name is the key for every row.
+  // say "they publish it, we failed to link it" instead of guessing.
   const universe: UniverseRow[] = [];
-  for (const c of DAMS) {
-    // A redeveloped dam's twins share the ELSE rank, so chooseRanked picks the
-    // current one; a row already stamped with the station keeps it (#79).
+  for (const s of stations) {
+    const stem = s.name.replace(/ダム$/, '');
+    // Exact name, then "…ダム", then either twin of a redeveloped dam (ranked
+    // alike so chooseRanked binds the current one). No bare substring match:
+    // 日野川 must not fall through to 日野川脇. A stamped row keeps it (#79).
     const rows = await sql<(BindableMaster & { rank: number })[]>`
       SELECT id, name, completed_year AS "completedYear",
-             external_ids->>'shiga-bousai' AS stamp,
+             external_ids->>${SOURCE_ID} AS stamp,
              CASE
-               WHEN name = ${c.masterName} THEN 0
-               WHEN name = ${`${c.masterName}ダム`} THEN 1
-               ELSE 5
+               WHEN name = ${stem} THEN 0
+               WHEN name = ${`${stem}ダム`} THEN 1
+               ELSE 2
              END AS rank
       FROM dams
       WHERE pref_code = ${PREF_CODE}
-        AND name LIKE ${`%${c.masterName}%`}
+        AND (name IN (${stem}, ${`${stem}ダム`})
+             OR name LIKE ${`${stem}（再）%`}
+             OR name LIKE ${`${stem}（元）%`}
+             OR external_ids->>${SOURCE_ID} = ${s.name})
       ORDER BY rank, id
     `;
-    const r = chooseRanked(rows, c.shigaName);
+    const r = chooseRanked(rows, s.name);
     universe.push({
-      externalId: c.shigaName,
-      name: c.shigaName,
+      externalId: s.name,
+      name: s.name,
       prefCode: PREF_CODE,
       resolvedDamId: r?.id ?? null,
     });
     if (!r) {
-      log(`shiga-bousai: no master match for ${c.shigaName} (${c.masterName})`);
+      log(`${SOURCE_ID}: no master match for ${s.name}`);
       continue;
     }
-    matches.push({ cfg: c, damId: r.id });
-    await bindExternalId(r.id, 'shiga-bousai', c.shigaName);
+    damById.set(s.id, r.id);
+    await bindExternalId(r.id, SOURCE_ID, s.name);
   }
-  for (const name of UNINGESTED_STATIONS) {
-    universe.push({ externalId: name, name, prefCode: PREF_CODE, resolvedDamId: null });
-  }
-  await recordUniverse('shiga-bousai', universe);
-  return matches;
+  await recordUniverse(SOURCE_ID, universe);
+  return damById;
 }
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
   await ensureSourcePriority();
-  const matches = await ensureExternalIds(log);
-  log(`shiga-bousai: matched ${matches.length}/${DAMS.length} master dams`);
 
-  const day = todayJstDateString();
-  const time = jstHourString();
-  const year = Number(day.slice(0, 4));
-  let totalWritten = 0;
+  const listHtml = await fetchShiftJis(`${BASE_URL}/mobile/dam/dam_select.php`);
+  if (listHtml === null) {
+    log(`${SOURCE_ID}: station list unavailable; aborting`);
+    return;
+  }
+  const stations = parseShigaStationList(listHtml);
+  const damById = await matchMasters(stations, log);
+  log(`${SOURCE_ID}: matched ${damById.size}/${stations.length} stations`);
 
-  for (const m of matches) {
-    const url = `${BASE_URL}/dam_table.php?day=${day}&time=${encodeURIComponent(time)}&interval=60&id1=8&id2=${m.cfg.id2}&id3=0&id4=0&sid=${m.cfg.sid}`;
+  let parsed = 0;
+  let written = 0;
+  for (const s of stations) {
+    const damId = damById.get(s.id);
+    if (!damId) continue;
     try {
-      const r = await fetch(url, {
-        headers: {
-          'user-agent':
-            process.env.HTTP_USER_AGENT ??
-            'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-        },
-        signal: AbortSignal.timeout(15_000),
-      });
-      if (r.status !== 200) {
-        log(`shiga-bousai: ${m.cfg.shigaName} HTTP ${r.status}; skip`);
+      const html = await fetchShiftJis(`${BASE_URL}/mobile/dam/dam_data.php?ID=${s.id}`);
+      if (html === null) {
+        log(`${SOURCE_ID}: ${s.name} unavailable; skip`);
         continue;
       }
-      const html = await r.text();
-      const rows = parseShigaDamTable(html, year);
-      const inputs = rows.map((row) => ({
-        observedAt: row.observedAt,
-        damId: m.damId,
-        sourceId: 'shiga-bousai',
-        storageVolumeM3: null,
-        storageRate: null,
-        inflowM3s: row.inflowM3s,
-        outflowM3s: row.outflowM3s,
-        waterLevelM: row.waterLevelM,
-        rainfallMm: row.rainfallMm,
-        rawSnapshotId: null,
-        qualityFlag: 0,
-      }));
-      const written = await upsertObservations(inputs);
-      totalWritten += written;
-      log(`shiga-bousai: ${m.cfg.shigaName} +${written} rows`);
+      const rows = parseShigaDamData(html, new Date());
+      parsed += rows.length;
+      const n = await upsertObservations(
+        rows.map((row) => ({
+          observedAt: row.observedAt,
+          damId,
+          sourceId: SOURCE_ID,
+          storageVolumeM3: null,
+          storageRate: null,
+          inflowM3s: row.inflowM3s,
+          outflowM3s: row.outflowM3s,
+          waterLevelM: row.waterLevelM,
+          rainfallMm: row.rainfallMm,
+          rawSnapshotId: null,
+          qualityFlag: 0,
+        })),
+      );
+      written += n;
+      log(`${SOURCE_ID}: ${s.name} +${n} rows`);
     } catch (e) {
-      log(`shiga-bousai: ${m.cfg.shigaName} ERROR ${(e as Error).message}`);
+      log(`${SOURCE_ID}: ${s.name} ERROR ${(e as Error).message}`);
     }
   }
 
-  log(`shiga-bousai done — matched=${matches.length} written=${totalWritten}`);
+  log(`${SOURCE_ID} done: parsed=${parsed} matched=${damById.size} written=${written}`);
 };
 
 export default task;
