@@ -275,8 +275,8 @@ export const CRONTAB = `
 # 水資源機構 利根川河口堰管理所 利根河口堰 情報提供 — 1 weir (茨城/千葉境).
 # 正時水位表 + 正時流量表 script files (24 h rolling); 堰上流水位 (新宿 19.0km,
 # Y.P.m) + 堰流入量 + 堰通過流量. All 24 hours re-upserted each run, so a
-# missed hour back-fills. Priority 298. Cron at :54.
-54 * * * * ingest:jwa-tonekako
+# missed hour back-fills. Priority 298. Cron at :30.
+30 * * * * ingest:jwa-tonekako
 
 # 山形県河川・砂防情報 — ~17 ダム (県管理13 + 国管理4: 長井/寒河江/白川/月山).
 # 防災Web JSON feed (dk=4, Shift_JIS), 10分更新. Level + storage (千m³) + rate +
@@ -420,8 +420,8 @@ export const CRONTAB = `
 
 # 水資源機構 琵琶湖総合管理所 堰諸量 — 琵琶湖 (master 琵琶湖開発). daminfo1_h.json,
 # 25 hourly rows: B.S.L. level (stored as T.P. = B.S.L. + 84.371 m), lake
-# 総流入量 / 総流出量. Priority 297. Cron at :54.
-54 * * * * ingest:jwa-biwako
+# 総流入量 / 総流出量. Priority 297. Cron at :58.
+58 * * * * ingest:jwa-biwako
 
 # 北九州市上下水道局 北九州市の水源状況 — 10 水源 (油木/ます渕/耶馬渓/力丸/頓田/
 # 畑/白木/道原/松ヶ江/遠賀川河口堰), 水位 + 貯水量 + 貯水率 at 09:00 JST.
@@ -486,8 +486,8 @@ export const CRONTAB = `
 
 # 国土交通省 中国地方整備局 福山河川国道事務所 — 芦田川河口堰 (芦田川水系, 広島/34).
 # mobile_ashidagawa/sekisyoryou.php, one 10分更新 snapshot: 堰上水位 + 貯水量(千m³)
-# + 流入量 + 放流量 (no rate). Priority 303. Cron at :54.
-54 * * * * ingest:cgr-ashida-seki
+# + 流入量 + 放流量 (no rate). Priority 303. Cron at :02.
+2 * * * * ingest:cgr-ashida-seki
 
 # 高知県水防情報システム ダム諸量現況表 — 11 ダム (和食/永瀬/鎌井谷/鏡/桐見/坂本/
 # 以布利川 [pref] + 早明浦/大渡/中筋川/横瀬川 [国交省]). Pre-generated static
@@ -498,8 +498,8 @@ export const CRONTAB = `
 
 # 高知県公営企業局 発電所集中監視制御Webシステム ダム水文量表 — 物部川の発電専用
 # 吉野/杉田ダム (no other feed covers them). UTF-8 HTML, last 48 hourly rows of
-# 貯水位 + 流入量 + 放流量 + 雨量; no volume or rate. Priority 308. Cron at :54.
-54 * * * * ingest:kochi-kigyo
+# 貯水位 + 流入量 + 放流量 + 雨量; no volume or rate. Priority 308. Cron at :44.
+44 * * * * ingest:kochi-kigyo
 
 # 島根県防災Web — 14 県管理ダム (布部/山佐/三瓶/波積/八戸/浜田/第二浜田/大長見/
 # 御部/益田川/笹倉/大峠/銚子/美田). Same Remix SPA framework as 広島/鳥取県防災Web;
