@@ -1,0 +1,3123 @@
+<?xml version="1.0" encoding="shift_jis"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="ja" lang="ja">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC"-//W3C//DTDHTML4.01 Transitional//EN">
+<html>
+<head>
+    <title>宮城県 河川流域情報システム</title>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta http-equiv="Pragme" content="no-cache">
+    <meta http-equiv="Content-Type" content="text/html; charset=Shift_JIS">
+    <meta name="GENERATOR" content="Mozilla/4.5 [ja] (WinNT; I) [Netscape]">
+    <link rel="stylesheet" href="./jquery/jquery-ui.css" type="text/css" type="Style">
+    <link rel="stylesheet" href="./css/import_contents.css" type="text/css" />
+    <link rel="stylesheet" href="./css/damuCurrentStatus.css" type="text/css" type="Style">
+    <script type="text/javascript" src="./jquery/jquery-1.11.2.min.js"></script>
+    <script type="text/javascript" src="./jquery/jquery-ui.min.js"></script>
+    <script type="text/javascript" src="./jquery/jquery.li-scroller.1.0.js"></script>
+    <script type="text/javascript" src="./js/linkoff.js"></script>
+    <script type="text/javascript" src="./commonCntrl.js"></script>
+
+    
+    
+
+    
+    <script type="text/javascript">
+    <!--
+        var commonParam = "dispDate:2026-09-27-21-00$duration:60$timeNumber:24$pageGroup:全県$page:1$itemPageGroup:1H$itemPage:1$stationNo:104007011$kioDispDate:null$kioPattern:1$dispEventNumber:1$station2No:0$autoType:false$riverName:null$mapClassSwich:0$lScaleMax:0$lScaleMin:0$rScaleMax:0$rScaleMin:0$lScaleMax2:0$lScaleMin2:0$rScaleMax2:0$rScaleMin2:0$ShiftWidth:0$anypage:0$freeStr:null$freeNo:1";
+    // -->
+    </script>
+</head>
+
+
+
+<body onLoad="init()">
+<div id="main">
+    
+    
+
+<div class="menuTable">
+    
+    <div id="gHeader">
+
+        <div class="logo">
+            <img class="logo01" src="./img/common/head.gif" alt="">
+        </div>
+
+    </div>
+
+    
+    
+    <script language="JavaScript">
+    var XBandRadarName = "雨量情報（国土交通省）";
+    var XBandRadarUrl  = "https://www.river.go.jp/index";
+    </script>
+
+    
+    <script type="text/javascript" src="./js/gnav.js"></script>
+
+    
+    <div id="gMenu" class="clear">
+        <ul class="mainMenu">
+            <li class="top"><img src="../menu/top_on.gif"></li>
+            <li class="gaikyouzu"><img src="../menu/kansokuichi_on.gif"></li><!-- 観測位置図 -->
+            <li class="ame"><img src="../menu/ame_on.gif"></li><!-- 雨量経過 -->
+            <li class="mizu"><img src="../menu/mizu_on.gif"></li><!-- 水位経過 -->
+            <li class="damu"><img src="../menu/damu_on.gif"></li><!-- ダム経過 -->
+            <li class="suibou"><img src="../menu/suibou_on.gif"></li><!-- 河川予警報 -->
+            <li class="kisho"><img src="../menu/kisho_on.gif"></li><!-- 気象情報 -->
+            <li class="camera"><img src="../menu/camera_on.gif"></li><!-- カメラ画像 -->
+        </ul>
+    </div>
+</div>
+
+    
+    
+    
+<script type="text/javascript" src="./jquery/jquery.ui.datepicker-ja.min.js"></script>
+
+
+
+<script type="text/javascript">
+    $(function() {
+        $.datepicker.setDefaults( $.datepicker.regional[ "ja" ] );
+        $("#datepicker").datepicker({
+            dateFormat: 'yy/mm/dd',minDate: new Date(2026, 08 - 1, 27), maxDate: new Date(2026, 09 - 1, 27), 
+            showButtonPanel: true,
+            changeMonth: false,
+            changeYear: true,
+            showOtherMonths: true,
+            autoSize: true,
+            showOn: "button",
+            buttonImage: "./img/common/calendar.png",
+            buttonImageOnly: true,
+            buttonText: "カレンダーを表示します",
+        });
+        $("#datepicker" ).datepicker();
+        $("#datepicker").datepicker("option", "showOn", "both");
+    });
+</script>
+
+
+<span id="timWinPos">
+    <form name="win1">
+        <div id="timWin">
+            <div id="timeTitleArea">
+                <div id="timeWinTitle">時刻指定</div>
+            </div>
+            <div id="timeEditArea">
+                <div id="timeCom1">表示時刻を選択し、[ＯＫ] ボタンを押してください。</div>
+                <div id="timePeriod">表示可能期間：2026/08/27 22:00 ～ 2026/09/27 21:00</div>
+                <div id="dateArea">
+                    <div id="timeImpDate">
+                        <input class="timeImpDate" type="text" id="datepicker" value="2026/09/27" readonly="readonly"/>
+                    </div>
+                    <div id="timeImpTime">
+                        <select name="stime" id="stime">
+                            
+                            
+                                
+                                <option value="00:00" >00:00</option>
+                            
+                                
+                                
+                                
+                                
+                                
+                                
+                                <option value="01:00" >01:00</option>
+                            
+                                
+                                
+                                
+                                
+                                
+                                
+                                <option value="02:00" >02:00</option>
+                            
+                                
+                                
+                                
+                                
+                                
+                                
+                                <option value="03:00" >03:00</option>
+                            
+                                
+                                
+                                
+                                
+                                
+                                
+                                <option value="04:00" >04:00</option>
+                            
+                                
+                                
+                                
+                                
+                                
+                                
+                                <option value="05:00" >05:00</option>
+                            
+                                
+                                
+                                
+                                
+                                
+                                
+                                <option value="06:00" >06:00</option>
+                            
+                                
+                                
+                                
+                                
+                                
+                                
+                                <option value="07:00" >07:00</option>
+                            
+                                
+                                
+                                
+                                
+                                
+                                
+                                <option value="08:00" >08:00</option>
+                            
+                                
+                                
+                                
+                                
+                                
+                                
+                                <option value="09:00" >09:00</option>
+                            
+                                
+                                
+                                
+                                
+                                
+                                
+                                <option value="10:00" >10:00</option>
+                            
+                                
+                                
+                                
+                                
+                                
+                                
+                                <option value="11:00" >11:00</option>
+                            
+                                
+                                
+                                
+                                
+                                
+                                
+                                <option value="12:00" >12:00</option>
+                            
+                                
+                                
+                                
+                                
+                                
+                                
+                                <option value="13:00" >13:00</option>
+                            
+                                
+                                
+                                
+                                
+                                
+                                
+                                <option value="14:00" >14:00</option>
+                            
+                                
+                                
+                                
+                                
+                                
+                                
+                                <option value="15:00" >15:00</option>
+                            
+                                
+                                
+                                
+                                
+                                
+                                
+                                <option value="16:00" >16:00</option>
+                            
+                                
+                                
+                                
+                                
+                                
+                                
+                                <option value="17:00" >17:00</option>
+                            
+                                
+                                
+                                
+                                
+                                
+                                
+                                <option value="18:00" >18:00</option>
+                            
+                                
+                                
+                                
+                                
+                                
+                                
+                                <option value="19:00" >19:00</option>
+                            
+                                
+                                
+                                
+                                
+                                
+                                
+                                <option value="20:00" >20:00</option>
+                            
+                                
+                                
+                                
+                                
+                                
+                                
+                                <option value="21:00" selected>21:00</option>
+                            
+                                
+                                
+                                
+                                
+                                
+                                
+                                <option value="22:00" >22:00</option>
+                            
+                                
+                                
+                                
+                                
+                                
+                                
+                                <option value="23:00" >23:00</option>
+                            
+                                
+                                
+                                
+                                
+                                
+                        </select>
+                    </div>
+
+                </div>
+                <div id="btnArea">
+                    
+                    <div class="timeOkBtn">
+                        <img src="./img/common/ok_off.gif" 
+                            onmousedown="this.src='./img/common/ok_on.gif'" 
+                            onmouseup="this.src='./img/common/ok_off.gif'" 
+                            onmouseout="this.src='./img/common/ok_off.gif'" 
+                            onClick="hideObj('timWin'); timeWinSet('Gamen42Servlet',
+                                'timeSet',this.form,'60')" title="観測時刻を更新します。">
+                    </div>
+                    <div class="timeClrBtn">
+                        <img src="./img/common/cancel_off.gif"
+                            onmousedown="this.src='./img/common/cancel_on.gif'" 
+                            onmouseup="this.src='./img/common/cancel_off.gif'" 
+                            onmouseout="this.src='./img/common/cancel_off.gif'" 
+                            onClick="this.src='./img/common/cancel_off.gif';hideObj('timWin')" title="">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</span>
+
+
+    
+    <div id="CenterTb">
+        
+        
+
+
+<div id="selectblock">
+    <div id="selectArea">
+        <div id="mapOuterframe">
+            <div id="mapArea">
+                
+                <span id="sltMap"><img src="./img/map/common/Zenken_s2.gif" alt="" useMap="#mapS"></span>
+            </div>
+            <div id="buttonArea">
+                
+                
+                <div style="float:left">
+                    <img src="./img/common/area/area_all_disable.gif">
+                </div>
+                
+                <div style="float:left">
+                    <img src="./img/common/area/area_Kesennuma_disable.gif">
+                </div>
+                
+                <div style="float:left">
+                    <img src="./img/common/area/area_Ishinomaki_disable.gif">
+                </div>
+                
+                <div style="float:left">
+                    <img src="./img/common/area/area_eKurihara_disable.gif">
+                </div>
+                
+                <div style="float:left">
+                    <img src="./img/common/area/area_eOosaki_disable.gif">
+                </div>
+                
+                <div style="float:left">
+                    <img src="./img/common/area/area_eSendai_disable.gif">
+                </div>
+                
+                <div style="float:left">
+                    <img src="./img/common/area/area_eSennan_disable.gif">
+                </div>
+                
+                <div style="float:left">
+                    <img src="./img/common/area/area_wKurihara_disable.gif">
+                </div>
+                
+                <div style="float:left">
+                    <img src="./img/common/area/area_wOosaki_disable.gif">
+                </div>
+                
+                <div style="float:left">
+                    <img src="./img/common/area/area_wSendai_disable.gif">
+                </div>
+                
+                <div style="float:left">
+                    <img src="./img/common/area/area_wSennan_disable.gif">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+        
+        
+
+<div id="linkblock">
+   <div id="linkArea">
+           <img src="./img/common/link_bar.gif">
+           <div id="linkTitle1">関連情報</div>
+        <div id="linkGaikyouzu" class="mt3" >
+            <div align=left style="font-size:10pt;color:#054E16;font-weight:600;">
+                <span class=ancMen1 id=ancK1 title="観測局の全局を表示します。"
+                      onClick="showWindow('/miyagi/servlet/Gamen95Servlet', '', 40, 40, 860, 600, '0',0); return false;" style="text-decoration:none"
+                      onMouseOver="cursorPoint('ancK1');colorChenge('ancK1','red');imgChenge('btnK1','./img/common/red.gif')" 
+                      onMouseOut="cursorDef('ancK1');colorChenge('ancK1','#054E16');imgChenge('btnK1','./img/common/green.gif')">
+                      <img id=btnK1 src="./img/common/green.gif" align=absMiddle>
+                      観測局一覧表，位置図
+               </span>
+           </div>
+        </div>        
+        <div id="linkYougo" class="mt3">
+            <div align=left style="font-size:10pt;color:#054E16;font-weight:600;">
+                <span class=ancMen1 id=ancK2 title="用語・凡例解説画面を表示します。"
+                      onClick="window.open('/miyagi/servlet/Gamen91Servlet',
+                                           '関係機関・リンク', 
+                                           'left=40,top=40,width=860,height=500,location=yes,toolbar=yes,scrollbars=yes,resizable=yes').focus();" style="text-decoration:none"
+                      onMouseOver="cursorPoint('ancK2');colorChenge('ancK2','red');imgChenge('btnK2','./img/common/red.gif')" 
+                      onMouseOut="cursorDef('ancK2');colorChenge('ancK2','#054E16');imgChenge('btnK2','./img/common/green.gif')">
+                      <img id=btnK2 src="./img/common/green.gif" align=absMiddle>
+                      用語・凡例解説
+               </span>
+           </div>
+        </div>
+        <img  id="linkbar2"src="./img/common/link_bar.gif">
+        <div id="linkTitle2">関連サイト</div>        
+        
+        <div id="linkDoboku" class="mt3">
+            <div align=left style="font-size:10pt;color:#054E16;font-weight:600;">
+                <span class=ancMen1 id=ancK3 title="宮城県土木部総合情報システムTOP画面へ遷移します。"
+                      onClick="window.open('/miyagi/servlet/Gamen30Servlet','_self');"   target="_blank" style="text-decoration:none"
+                      onMouseOver="cursorPoint('ancK3');colorChenge('ancK3','red');imgChenge('btnK3','./img/common/red.gif')" 
+                      onMouseOut="cursorDef('ancK3');colorChenge('ancK3','#054E16');imgChenge('btnK3','./img/common/green.gif')">
+                      <img id=btnK3 src="./img/common/green.gif" align=absMiddle>
+                      宮城県土木部<br>　&nbsp;&nbsp;総合情報システム
+               </span>
+           </div>
+        </div>
+
+        <div id="linkLink" class="mt3">
+            <div align=left style="font-size:10pt;color:#054E16;font-weight:600;">
+                <span class=ancMen1 id=ancK4 title="リンク集画面を表示します。"
+                      onClick="window.open('/miyagi/servlet/Gamen92Servlet',
+                                           '関係機関・リンク', 
+                                           'left=40,top=40,width=1118,height=760,location=yes,toolbar=yes,scrollbars=yes,resizable=yes').focus();" style="text-decoration:none"
+                      onMouseOver="cursorPoint('ancK4');colorChenge('ancK4','red');imgChenge('btnK4','./img/common/red.gif')" 
+                      onMouseOut="cursorDef('ancK4');colorChenge('ancK4','#054E16');imgChenge('btnK4','./img/common/green.gif')">
+                      <img id=btnK4 src="./img/common/green.gif" align=absMiddle>
+                      関係機関・リンク
+               </span>
+           </div>
+        </div>
+        
+   </div>
+</div>
+
+
+
+
+        
+        <div id="Opretblock">
+            <form id="frm" name="inp" action="" method="post">
+                <div id="Opretblock_base">
+                    
+                    
+
+
+<div id ="gamentitle_base">
+<div id="gamentitle" style="width:100%">ダム現況表</div>
+</div>
+
+                    
+                    
+                    <div id="opretblock01_1">
+                        
+                        
+
+
+<div id="numberpage" style="width:7%">&nbsp;</div>
+
+                        
+                        
+
+
+<div id="pageswich" style="width:214px;height:20px;">&nbsp;</div>
+
+                        
+                        
+
+
+<div id="timeobservation">観測時刻：</div>
+<div id="observationbutton">
+    <b>2026年09月27日 21時00分</b>
+</div>
+
+                    </div>
+                    
+                    <div class="partition1"></div>
+
+                    
+                    <div id="opretblock01_2">
+                        
+                        
+
+
+<div id="stationselect" style="width:175px;height:20px;">&nbsp;</div>
+
+                        
+                        
+
+
+
+<div id="dispinterval">表示間隔：</div>
+<div id="intervalbutton" style="cursor:pointer;">
+    <a>
+        
+            <img src="./img/common/interval60_on.gif">
+            <img src="./img/common/interval10_off.gif"
+                    onmouseover="this.src='./img/common/interval10_on.gif'" 
+                    onmouseout="this.src='./img/common/interval10_off.gif'" 
+                    onClick="this.src='./img/common/interval10_on.gif';chengeSelect('Gamen42Servlet','interval','10M')">
+        
+    </a>
+</div>
+
+                        
+                        
+
+
+<div id="timeswichgaikyozu">時刻切替：</div>
+<div id="timebuttongaikyozu" style="cursor:pointer;">
+    <a>
+        <img src="./img/common/timeDown_off.gif" style="left:10px;"
+                onmousedown="this.src='./img/common/timeDown_on.gif'" 
+                onmouseup="this.src='./img/common/timeDown_off.gif'" 
+                onmouseout="this.src='./img/common/timeDown_off.gif'" 
+                onClick="this.src='./img/common/timeDown_off.gif';onClick=chengeValue('Gamen42Servlet','timeDown','1')">
+        <div id="tiemUp">
+        <img src="./img/common/timeUp_off.gif"
+                onmousedown="this.src='./img/common/timeUp_on.gif'" 
+                onmouseup="this.src='./img/common/timeUp_off.gif'" 
+                onmouseout="this.src='./img/common/timeUp_off.gif'" 
+                onClick="this.src='./img/common/timeUp_off.gif';onClick=chengeValue('Gamen42Servlet','timeUp','1')">
+        </div>
+    </a>
+</div>
+
+                        
+                        
+
+
+<div id="timeset" style="cursor:pointer;">
+    <a><img src="./img/common/timewindow_off.gif"
+            onmousedown="this.src='./img/common/timewindow_on.gif'" 
+            onmouseup="this.src='./img/common/timewindow_off.gif'" 
+            onmouseout="this.src='./img/common/timewindow_off.gif'" 
+            onClick="this.src='./img/common/timewindow_on.gif';showObj('timWin')" title="表示データの観測時刻を指定出来ます">
+    </a>
+</div>
+
+                    </div>
+                    
+                    
+
+<div id="reloadblock" style="cursor:pointer;">
+        <a><img src="./img/common/reload.gif" 
+                onmousedown="this.src='./img/common/reload_click.gif'" 
+                onmouseup="this.src='./img/common/reload.gif'" 
+                onmouseout="this.src='./img/common/reload.gif'" 
+                onclick="chengeValue('Gamen42Servlet',
+                                        'timeNow','1');
+                                        this.src='./img/common/reload_click.gif';"
+                title="最新情報を表示します。"></a>
+</div>
+
+
+                    <div id="Listblock_base">
+                                        
+                        <table cols=10 id="Listblock_table">
+                            <tr>
+                                
+                                
+                                <td id="ListTitleStn" style="background-color:#DCF3CA">ダム名</td>
+                                <td class="ListTitleDate" style="background-color:#E9FAE3">管理区分</td>
+                                
+                                <td class="ListTitleDate" style="background-color:#DBE7D8">貯水位<br>(ELm)</td>
+                                <td class="ListTitleDate" style="background-color:#E9FAE3">貯水量<br>(10<sup>3</sup>m<sup>3</sup>)</td>
+                                <td class="ListTitleDate" style="background-color:#DBE7D8">空容量<br>(10<sup>3</sup>m<sup>3</sup>)</td>
+                                <td class="ListTitleDate" style="background-color:#E9FAE3">全流入量<br>(m<sup>3</sup>/s)</td>
+                                <td class="ListTitleDate" style="background-color:#DBE7D8">全放流量<br>(m<sup>3</sup>/s)</td>
+                                <td class="ListTitleDate" style="background-color:#E9FAE3">調整流量<br>(m<sup>3</sup>/s)</td>
+                                <td class="ListTitleDate" style="background-color:#DBE7D8">流域平均雨量<br>(mm)</td>
+                                <td class="ListTitleDate" style="background-color:#E9FAE3">流域平均累加雨量<br>(mm)</td>
+                                <td class="ListTitleDate" style="background-color:#DBE7D8">貯水率<BR>(利水容量)<br>(％)</td>
+                                <td class="ListTitleDate" style="background-color:#E9FAE3">貯水率<BR>(有効容量)<br>(％)</td>
+                            </tr>
+                            
+                           
+                            
+                           <tr>                            
+                                
+                                
+                            
+                                    
+                                    <td class = "ListDamuStnName" style="background-color:#F6FDF4">
+                                        <span class="nam" id=0 onMouseOut="cursorDef(0);colorChenge(0,'blue')"
+                                              onMouseOver="cursorPoint(0);colorChenge(0,'red')"
+                                              onClick="chengeGamen2('Gamen41Servlet','stationNo','104007011')">大倉ダム
+                                        </span>
+                                    </td>
+                                    
+
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                    県
+                                    </td>
+
+                                    
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">261.68</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">13120</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">11880</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">4.42</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">6.31</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">1.89</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#0066cc">14.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">87.5</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">52.5</div>
+                                        
+                                    </td>
+                                   
+                               
+                           </tr>
+                            
+                           <tr>                            
+                                
+                                
+                            
+                                    
+                                    <td class = "ListDamuStnName" style="background-color:#E9F1E7">
+                                        <span class="nam" id=1 onMouseOut="cursorDef(1);colorChenge(1,'blue')"
+                                              onMouseOver="cursorPoint(1);colorChenge(1,'red')"
+                                              onClick="chengeGamen2('Gamen41Servlet','stationNo','104007012')">樽水ダム
+                                        </span>
+                                    </td>
+                                    
+
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                    県
+                                    </td>
+
+                                    
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#787800">55.77</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">2219</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">1981</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.31</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.32</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.01</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">100.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">52.8</div>
+                                        
+                                    </td>
+                                   
+                               
+                           </tr>
+                            
+                           <tr>                            
+                                
+                                
+                            
+                                    
+                                    <td class = "ListDamuStnName" style="background-color:#F6FDF4">
+                                        <span class="nam" id=2 onMouseOut="cursorDef(2);colorChenge(2,'blue')"
+                                              onMouseOver="cursorPoint(2);colorChenge(2,'red')"
+                                              onClick="chengeGamen2('Gamen41Servlet','stationNo','104007013')">七北田ダム
+                                        </span>
+                                    </td>
+                                    
+
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                    県
+                                    </td>
+
+                                    
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">237.55</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">3865</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">4635</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">1.21</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">1.21</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.00</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">96.6</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">45.5</div>
+                                        
+                                    </td>
+                                   
+                               
+                           </tr>
+                            
+                           <tr>                            
+                                
+                                
+                            
+                                    
+                                    <td class = "ListDamuStnName" style="background-color:#E9F1E7">
+                                        <span class="nam" id=3 onMouseOut="cursorDef(3);colorChenge(3,'blue')"
+                                              onMouseOver="cursorPoint(3);colorChenge(3,'red')"
+                                              onClick="chengeGamen2('Gamen41Servlet','stationNo','104007008')">南川ダム
+                                        </span>
+                                    </td>
+                                    
+
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                    県
+                                    </td>
+
+                                    
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">93.69</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">4461</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">4739</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">1.79</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">1.78</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">-0.01</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">92.9</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">48.5</div>
+                                        
+                                    </td>
+                                   
+                               
+                           </tr>
+                            
+                           <tr>                            
+                                
+                                
+                            
+                                    
+                                    <td class = "ListDamuStnName" style="background-color:#F6FDF4">
+                                        <span class="nam" id=4 onMouseOut="cursorDef(4);colorChenge(4,'blue')"
+                                              onMouseOver="cursorPoint(4);colorChenge(4,'red')"
+                                              onClick="chengeGamen2('Gamen41Servlet','stationNo','104007010')">宮床ダム
+                                        </span>
+                                    </td>
+                                    
+
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                    県
+                                    </td>
+
+                                    
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">97.99</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">2997</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">2003</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.36</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.36</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.00</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">99.9</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">59.9</div>
+                                        
+                                    </td>
+                                   
+                               
+                           </tr>
+                            
+                           <tr>                            
+                                
+                                
+                            
+                                    
+                                    <td class = "ListDamuStnName" style="background-color:#E9F1E7">
+                                        <span class="nam" id=5 onMouseOut="cursorDef(5);colorChenge(5,'blue')"
+                                              onMouseOver="cursorPoint(5);colorChenge(5,'red')"
+                                              onClick="chengeGamen2('Gamen41Servlet','stationNo','104007014')">惣の関ダム
+                                        </span>
+                                    </td>
+                                    
+
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                    県
+                                    </td>
+
+                                    
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">27.78</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">60</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">930</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.10</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.10</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.00</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">13.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">6.1</div>
+                                        
+                                    </td>
+                                   
+                               
+                           </tr>
+                            
+                           <tr>                            
+                                
+                                
+                            
+                                    
+                                    <td class = "ListDamuStnName" style="background-color:#F6FDF4">
+                                        <span class="nam" id=6 onMouseOut="cursorDef(6);colorChenge(6,'blue')"
+                                              onMouseOver="cursorPoint(6);colorChenge(6,'red')"
+                                              onClick="chengeGamen2('Gamen41Servlet','stationNo','104007018')">川内沢ダム
+                                        </span>
+                                    </td>
+                                    
+
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                    県
+                                    </td>
+
+                                    
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">57.89</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">504</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">1005</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.10</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.10</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.00</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">88.4</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">33.4</div>
+                                        
+                                    </td>
+                                   
+                               
+                           </tr>
+                            
+                           <tr>                            
+                                
+                                
+                            
+                                    
+                                    <td class = "ListDamuStnName" style="background-color:#E9F1E7">
+                                        <span class="nam" id=7 onMouseOut="cursorDef(7);colorChenge(7,'blue')"
+                                              onMouseOver="cursorPoint(7);colorChenge(7,'red')"
+                                              onClick="chengeGamen2('Gamen41Servlet','stationNo','104007009')">漆沢ダム
+                                        </span>
+                                    </td>
+                                    
+
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                    県
+                                    </td>
+
+                                    
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">257.62</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">4701</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">11299</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">3.04</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">3.04</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.00</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">72.3</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">29.4</div>
+                                        
+                                    </td>
+                                   
+                               
+                           </tr>
+                            
+                           <tr>                            
+                                
+                                
+                            
+                                    
+                                    <td class = "ListDamuStnName" style="background-color:#F6FDF4">
+                                        <span class="nam" id=8 onMouseOut="cursorDef(8);colorChenge(8,'blue')"
+                                              onMouseOver="cursorPoint(8);colorChenge(8,'red')"
+                                              onClick="chengeGamen2('Gamen41Servlet','stationNo','104007003')">化女沼ダム
+                                        </span>
+                                    </td>
+                                    
+
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                    県
+                                    </td>
+
+                                    
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#787800">26.04</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">748</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">2132</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.11</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.11</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.00</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">100.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">26.0</div>
+                                        
+                                    </td>
+                                   
+                               
+                           </tr>
+                            
+                           <tr>                            
+                                
+                                
+                            
+                                    
+                                    <td class = "ListDamuStnName" style="background-color:#E9F1E7">
+                                        <span class="nam" id=9 onMouseOut="cursorDef(9);colorChenge(9,'blue')"
+                                              onMouseOver="cursorPoint(9);colorChenge(9,'red')"
+                                              onClick="chengeGamen2('Gamen41Servlet','stationNo','104007007')">上大沢ダム
+                                        </span>
+                                    </td>
+                                    
+
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                    県
+                                    </td>
+
+                                    
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#787800">312.02</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">78</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">262</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.07</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.05</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">-0.01</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">100.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">22.9</div>
+                                        
+                                    </td>
+                                   
+                               
+                           </tr>
+                            
+                           <tr>                            
+                                
+                                
+                            
+                                    
+                                    <td class = "ListDamuStnName" style="background-color:#F6FDF4">
+                                        <span class="nam" id=10 onMouseOut="cursorDef(10);colorChenge(10,'blue')"
+                                              onMouseOver="cursorPoint(10);colorChenge(10,'red')"
+                                              onClick="chengeGamen2('Gamen41Servlet','stationNo','104007024')">二ツ石ダム
+                                        </span>
+                                    </td>
+                                    
+
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                    県
+                                    </td>
+
+                                    
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">237.68</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">9003</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">697</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.75</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.22</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">-</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">92.8</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">92.8</div>
+                                        
+                                    </td>
+                                   
+                               
+                           </tr>
+                            
+                           <tr>                            
+                                
+                                
+                            
+                                    
+                                    <td class = "ListDamuStnName" style="background-color:#E9F1E7">
+                                        <span class="nam" id=11 onMouseOut="cursorDef(11);colorChenge(11,'blue')"
+                                              onMouseOver="cursorPoint(11);colorChenge(11,'red')"
+                                              onClick="chengeGamen2('Gamen41Servlet','stationNo','104007025')">岩堂沢ダム
+                                        </span>
+                                    </td>
+                                    
+
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                    県
+                                    </td>
+
+                                    
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">406.95</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">12663</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">337</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.37</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.12</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">-</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#0066cc">1.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">97.4</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">97.4</div>
+                                        
+                                    </td>
+                                   
+                               
+                           </tr>
+                            
+                           <tr>                            
+                                
+                                
+                            
+                                    
+                                    <td class = "ListDamuStnName" style="background-color:#F6FDF4">
+                                        <span class="nam" id=12 onMouseOut="cursorDef(12);colorChenge(12,'blue')"
+                                              onMouseOver="cursorPoint(12);colorChenge(12,'red')"
+                                              onClick="chengeGamen2('Gamen41Servlet','stationNo','104007001')">花山ダム
+                                        </span>
+                                    </td>
+                                    
+
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                    県
+                                    </td>
+
+                                    
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">117.63</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">10092</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">21908</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">5.65</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">8.48</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">2.83</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">84.1</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">31.5</div>
+                                        
+                                    </td>
+                                   
+                               
+                           </tr>
+                            
+                           <tr>                            
+                                
+                                
+                            
+                                    
+                                    <td class = "ListDamuStnName" style="background-color:#E9F1E7">
+                                        <span class="nam" id=13 onMouseOut="cursorDef(13);colorChenge(13,'blue')"
+                                              onMouseOver="cursorPoint(13);colorChenge(13,'red')"
+                                              onClick="chengeGamen2('Gamen41Servlet','stationNo','104007005')">荒砥沢ダム
+                                        </span>
+                                    </td>
+                                    
+
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                    県
+                                    </td>
+
+                                    
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">267.32</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">8027</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">4566</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">1.26</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.94</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">-0.32</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">91.9</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">67.1</div>
+                                        
+                                    </td>
+                                   
+                               
+                           </tr>
+                            
+                           <tr>                            
+                                
+                                
+                            
+                                    
+                                    <td class = "ListDamuStnName" style="background-color:#F6FDF4">
+                                        <span class="nam" id=14 onMouseOut="cursorDef(14);colorChenge(14,'blue')"
+                                              onMouseOver="cursorPoint(14);colorChenge(14,'red')"
+                                              onClick="chengeGamen2('Gamen41Servlet','stationNo','104007004')">小田ダム
+                                        </span>
+                                    </td>
+                                    
+
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                    県
+                                    </td>
+
+                                    
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">156.74</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">3563</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">4437</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.96</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.96</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">-0.01</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.1</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">79.2</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">39.5</div>
+                                        
+                                    </td>
+                                   
+                               
+                           </tr>
+                            
+                           <tr>                            
+                                
+                                
+                            
+                                    
+                                    <td class = "ListDamuStnName" style="background-color:#E9F1E7">
+                                        <span class="nam" id=15 onMouseOut="cursorDef(15);colorChenge(15,'blue')"
+                                              onMouseOver="cursorPoint(15);colorChenge(15,'red')"
+                                              onClick="chengeGamen2('Gamen41Servlet','stationNo','104007002')">栗駒ダム
+                                        </span>
+                                    </td>
+                                    
+
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                    県
+                                    </td>
+
+                                    
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">186.97</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">3522</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">10193</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">2.44</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">3.19</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.75</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">70.2</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">20.1</div>
+                                        
+                                    </td>
+                                   
+                               
+                           </tr>
+                            
+                           <tr>                            
+                                
+                                
+                            
+                                    
+                                    <td class = "ListDamuStnName" style="background-color:#F6FDF4">
+                                        <span class="nam" id=16 onMouseOut="cursorDef(16);colorChenge(16,'blue')"
+                                              onMouseOver="cursorPoint(16);colorChenge(16,'red')"
+                                              onClick="chengeGamen2('Gamen41Servlet','stationNo','104007006')">長沼ダム
+                                        </span>
+                                    </td>
+                                    
+
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                    県
+                                    </td>
+
+                                    
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#787800">8.91</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">　</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">　</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">　</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">　</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">　</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">　</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">　</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">　</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">　</div>
+                                        
+                                    </td>
+                                   
+                               
+                           </tr>
+                            
+                           <tr>                            
+                                
+                                
+                            
+                                    
+                                    <td class = "ListDamuStnName" style="background-color:#E9F1E7">
+                                        <span class="nam" id=17 onMouseOut="cursorDef(17);colorChenge(17,'blue')"
+                                              onMouseOver="cursorPoint(17);colorChenge(17,'red')"
+                                              onClick="chengeGamen2('Gamen41Servlet','stationNo','104007015')">払川ダム
+                                        </span>
+                                    </td>
+                                    
+
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                    県
+                                    </td>
+
+                                    
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#787800">120.30</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">200</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">630</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.31</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.35</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.03</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">0.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">100.0</div>
+                                        
+                                    </td>
+                                   
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                        
+                                        
+                                            <div class="dat2" style="color:#000000">24.1</div>
+                                        
+                                    </td>
+                                   
+                               
+                           </tr>
+                            
+                           <tr>                            
+                                
+                                
+                           </tr>
+                            
+                           <tr>                            
+                                
+                                
+                           </tr>
+                            
+                           <tr>                            
+                                
+                                
+                           </tr>
+                            
+                           <tr>                            
+                                
+                                
+                           </tr>
+                            
+                        </table>
+                        
+                        <table cols=10 id="Total_table">
+                            <tr>
+                                
+                                <td class="ListTotalSpace" style="background-color:#FFFFFF"></td>
+                                <td class="ListTotalTitle" style="background-color:#DCF3CA">合計</td>
+                                <td class="ListTotalDate" style="background-color:#F4F4F4"><div class="dat2">88.5</td>
+                                <td class="ListTotalDate" style="background-color:#FFFFFF"><div class="dat2">48.4</td>
+                                
+                            </tr>
+                        </table>
+                        
+                        <table cols=10 id="Listblock_table2">
+                            
+                           
+                            
+                            
+                           <tr>                            
+                                
+                                
+                           </tr>
+                            
+                            
+                           <tr>                            
+                                
+                                
+                           </tr>
+                            
+                            
+                           <tr>                            
+                                
+                                
+                           </tr>
+                            
+                            
+                           <tr>                            
+                                
+                                
+                           </tr>
+                            
+                            
+                           <tr>                            
+                                
+                                
+                           </tr>
+                            
+                            
+                           <tr>                            
+                                
+                                
+                           </tr>
+                            
+                            
+                           <tr>                            
+                                
+                                
+                           </tr>
+                            
+                            
+                           <tr>                            
+                                
+                                
+                           </tr>
+                            
+                            
+                           <tr>                            
+                                
+                                
+                           </tr>
+                            
+                            
+                           <tr>                            
+                                
+                                
+                           </tr>
+                            
+                            
+                           <tr>                            
+                                
+                                
+                           </tr>
+                            
+                            
+                           <tr>                            
+                                
+                                
+                           </tr>
+                            
+                            
+                           <tr>                            
+                                
+                                
+                           </tr>
+                            
+                            
+                           <tr>                            
+                                
+                                
+                           </tr>
+                            
+                            
+                           <tr>                            
+                                
+                                
+                           </tr>
+                            
+                            
+                           <tr>                            
+                                
+                                
+                           </tr>
+                            
+                            
+                           <tr>                            
+                                
+                                
+                           </tr>
+                            
+                            
+                           <tr>                            
+                                
+                                
+                           </tr>
+                            
+                            
+                           <tr>                            
+                                
+                                
+                                    
+                                    <td class = "ListDamuStnName" style="background-color:#E9F1E7">
+                                        <span class="nam" id=18 onMouseOut="cursorDef(18);colorChenge(18,'blue')"
+                                              onMouseOver="cursorPoint(18);colorChenge(18,'red')"
+                                              onClick="chengeGamen2('Gamen41Servlet','stationNo','104007201')">鳴子ダム
+                                        </span>
+                                    </td>
+                                    
+
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                    国
+                                    </td>
+
+                                    
+                                        
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                            <div class="dat2" style="color:#000000">240.25
+                                        
+                                    </td>
+                                   
+                                        
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                            <div class="dat2" style="color:#000000">9988
+                                        
+                                    </td>
+                                   
+                                        
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                            <div class="dat2" style="color:#000000">6012
+                                        
+                                    </td>
+                                   
+                                        
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                            <div class="dat2" style="color:#000000">10.18
+                                        
+                                    </td>
+                                   
+                                        
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                            <div class="dat2" style="color:#000000">10.01
+                                        
+                                    </td>
+                                   
+                                        
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                            <div class="dat2" style="color:#000000">-0.17
+                                        
+                                    </td>
+                                   
+                                        
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                            <div class="dat2" style="color:#000000">0.0
+                                        
+                                    </td>
+                                   
+                                        
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                            <div class="dat2" style="color:#000000">0.0
+                                        
+                                    </td>
+                                   
+                                        
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                            <div class="dat2" style="color:#000000">62.4
+                                        
+                                    </td>
+                                   
+                                        
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                            <div class="dat2" style="color:#000000">28.5
+                                        
+                                    </td>
+                                   
+                               
+                           </tr>
+                            
+                            
+                           <tr>                            
+                                
+                                
+                                    
+                                    <td class = "ListDamuStnName" style="background-color:#F6FDF4">
+                                        <span class="nam" id=19 onMouseOut="cursorDef(19);colorChenge(19,'blue')"
+                                              onMouseOver="cursorPoint(19);colorChenge(19,'red')"
+                                              onClick="chengeGamen2('Gamen41Servlet','stationNo','104007202')">釜房ダム
+                                        </span>
+                                    </td>
+                                    
+
+                                    
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                    国
+                                    </td>
+
+                                    
+                                        
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                            <div class="dat2" style="color:#000000">143.63
+                                        
+                                    </td>
+                                   
+                                        
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                            <div class="dat2" style="color:#000000">19913
+                                        
+                                    </td>
+                                   
+                                        
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                            <div class="dat2" style="color:#000000">401
+                                        
+                                    </td>
+                                   
+                                        
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                            <div class="dat2" style="color:#000000">9.76
+                                        
+                                    </td>
+                                   
+                                        
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                            <div class="dat2" style="color:#000000">21.04
+                                        
+                                    </td>
+                                   
+                                        
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                            <div class="dat2" style="color:#000000">11.28
+                                        
+                                    </td>
+                                   
+                                        
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                            <div class="dat2" style="color:#000000">0.0
+                                        
+                                    </td>
+                                   
+                                        
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                            <div class="dat2" style="color:#0066cc">8.6
+                                        
+                                    </td>
+                                   
+                                        
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                            <div class="dat2" style="color:#000000">97.5
+                                        
+                                    </td>
+                                   
+                                        
+                                    <td class = "ListDate" style="background-color:#FFFFFF">
+                                        
+                                            <div class="dat2" style="color:#000000">41.8
+                                        
+                                    </td>
+                                   
+                               
+                           </tr>
+                            
+                            
+                           <tr>                            
+                                
+                                
+                                    
+                                    <td class = "ListDamuStnName" style="background-color:#E9F1E7">
+                                        <span class="nam" id=20 onMouseOut="cursorDef(20);colorChenge(20,'blue')"
+                                              onMouseOver="cursorPoint(20);colorChenge(20,'red')"
+                                              onClick="chengeGamen2('Gamen41Servlet','stationNo','104007203')">七ヶ宿ダム
+                                        </span>
+                                    </td>
+                                    
+
+                                    
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                    国
+                                    </td>
+
+                                    
+                                        
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                            <div class="dat2" style="color:#000000">289.76
+                                        
+                                    </td>
+                                   
+                                        
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                            <div class="dat2" style="color:#000000">53651
+                                        
+                                    </td>
+                                   
+                                        
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                            <div class="dat2" style="color:#000000">45849
+                                        
+                                    </td>
+                                   
+                                        
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                            <div class="dat2" style="color:#000000">6.61
+                                        
+                                    </td>
+                                   
+                                        
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                            <div class="dat2" style="color:#000000">11.87
+                                        
+                                    </td>
+                                   
+                                        
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                            <div class="dat2" style="color:#000000">5.26
+                                        
+                                    </td>
+                                   
+                                        
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                            <div class="dat2" style="color:#000000">0.0
+                                        
+                                    </td>
+                                   
+                                        
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                            <div class="dat2" style="color:#000000">0.0
+                                        
+                                    </td>
+                                   
+                                        
+                                    <td class = "ListDate" style="background-color:#E9E9E9">
+                                        
+                                            <div class="dat2" style="color:#000000">83.2
+                                        
+                                    </td>
+                                   
+                                        
+                                    <td class = "ListDate" style="background-color:#F4F4F4">
+                                        
+                                            <div class="dat2" style="color:#000000">53.9
+                                        
+                                    </td>
+                                   
+                               
+                           </tr>
+                            
+                            
+                           <tr>                            
+                                
+                                
+                           </tr>
+                            
+                        </table>
+
+                
+                <div id="Comment_base">
+                    <div class="Comment_red">ダム名をクリックするとそれぞれのダム諸量経過表へ遷移します。</div>
+                    <div class="Comment_red">貯水率の合計は、国交省管理の七ヶ宿ダム，釜房ダム，鳴子ダム、県管理の長沼ダムを除きます。</div>
+                    <div class="Comment_red3">＊栗駒ダムの貯水率は、貯水量から957千m<sup>3</sup>（堆砂容量）を差し引いた値で計算しています。</div>
+                    <div class="Comment_red3">＊川内沢ダムは運用開始前のため、試験データが表示されることがあります。</div>
+                    <br>
+                </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+</body>
+</html>
