@@ -140,6 +140,22 @@ export function parseOkakawaPdfText(text: string): { rows: ParsedRow[]; publishe
   return { rows, published };
 }
 
+/**
+ * Throw when a fetched PDF yields no usable row. Line-oriented parsing over
+ * extracted text fails silently on a layout change — the names may still match
+ * while no row survives the rate check, or (a notice PDF, a re-typeset table)
+ * nothing matches at all — and either way the fetch is green. The PDF lists 13
+ * rows every edition, so zero is never a legitimate reading; throwing surfaces
+ * it in /api/v1/admin/jobs failing_jobs (#31).
+ */
+export function assertUsableRows(parsed: { rows: ParsedRow[]; published: string[] }): void {
+  if (parsed.rows.length === 0) {
+    throw new Error(
+      `${SOURCE_ID}: 0 usable rows from ${parsed.published.length} published names — layout change?`,
+    );
+  }
+}
+
 /** Extract the PDF's text with unpdf (no poppler in the runtime image). */
 export async function pdfToText(bytes: Uint8Array): Promise<string> {
   const pdf = await getDocumentProxy(bytes);
@@ -261,12 +277,7 @@ const task: Task = async (_payload, helpers) => {
   const written = await upsertObservations(inputs);
   log(`${SOURCE_ID} done: parsed=${rows.length} matched=${damByName.size} written=${written}`);
 
-  // Line-oriented parsing over extracted PDF text fails silently on a layout
-  // change: names still match, no row survives the rate check, and the fetch
-  // is green. Throwing surfaces it in /api/v1/admin/jobs failing_jobs (#31).
-  if (published.length > 0 && rows.length === 0) {
-    throw new Error(`${SOURCE_ID}: ${published.length} names but no usable rows — layout change?`);
-  }
+  assertUsableRows({ rows, published });
 };
 
 export default task;
