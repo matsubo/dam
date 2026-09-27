@@ -298,6 +298,29 @@ export function readingsToStore(latest: ParsedRow[], earlier: ParsedRow[]): Pars
   );
 }
 
+/**
+ * The previous hour's rows, or none. The fetch is a best-effort extra: a
+ * timeout, DNS failure or reset here must not throw past the latest table,
+ * which would cost the run its universe and every observation.
+ */
+export async function fetchEarlierRows(
+  latestHtml: string,
+  log: (s: string) => void,
+): Promise<ParsedRow[]> {
+  const url = earlierTableUrl(DATA_URL, latestHtml, 1);
+  const html = url
+    ? await fetchTable(url).catch((err: unknown) => {
+        log(`${SOURCE_ID}: previous-hour fetch failed: ${String(err)}`);
+        return null;
+      })
+    : null;
+  if (html === null) {
+    log(`${SOURCE_ID}: previous-hour table unavailable`);
+    return [];
+  }
+  return parseMiyagiTable(html);
+}
+
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
   await ensureSourcePriority();
@@ -310,10 +333,7 @@ const task: Task = async (_payload, helpers) => {
   const rows = parseMiyagiTable(html);
   log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
 
-  const earlierUrl = earlierTableUrl(DATA_URL, html, 1);
-  const earlierHtml = earlierUrl ? await fetchTable(earlierUrl) : null;
-  if (!earlierHtml) log(`${SOURCE_ID}: previous-hour table unavailable`);
-  const readings = readingsToStore(rows, earlierHtml ? parseMiyagiTable(earlierHtml) : []);
+  const readings = readingsToStore(rows, await fetchEarlierRows(html, log));
 
   const matches = await matchMaster(rows, log);
   const damByName = new Map(matches.map((m) => [m.miyagiName, m.damId]));
