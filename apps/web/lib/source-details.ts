@@ -355,6 +355,15 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '松江市の水道専用 2 ダム (千本/大谷) の日別貯水量(m³)・貯水率。当月と前月の全日を毎回取り込み。',
     label: '松江市上下水道局',
   },
+  'shimonoseki-suido': {
+    upstream:
+      '下関市上下水道局「水源状況についてお知らせします」 (city.shimonoseki.lg.jp/site/water/5617.html)',
+    license:
+      'サイト表記は「当ホームページの内容の全部または一部については、私的使用のための複製や引用等著作権法上認められた行為として、出所を明示することにより、複製・引用・転載できます。ただし、「無断転載禁止」などの注記があるものについては、それに従ってください」。本サイトは観測値 (事実) のみを出典明示で引用。',
+    cadence: '週数回 (当日 00:00 JST 値, 日中に更新; 取得は 16:46 JST)',
+    what: '下関市の水源 3 施設の貯水量(m³)・貯水率。湯の原ダムは新規カバレッジ。木屋川ダムは川の防災情報/山口県が 10 分値で提供済みのため未取込、内日貯水池は 2 ダム (内日第1/第2) の合算値のため未紐付け。',
+    label: '下関市上下水道局',
+  },
   'shimane-bousai': {
     upstream:
       '島根県水防情報システム (www.suibou-shimane.jp) — /dyn/dps/json/{YYYYMMDD}/dam60.json',

@@ -84,6 +84,7 @@ import ingestSaseboSuido from './tasks/ingest_sasebo_suido.ts';
 import ingestShiga from './tasks/ingest_shiga.ts';
 import ingestShimaneBousai from './tasks/ingest_shimane_bousai.ts';
 import ingestShimokubo from './tasks/ingest_shimokubo.ts';
+import ingestShimonosekiSuido from './tasks/ingest_shimonoseki_suido.ts';
 import ingestSkrHiji from './tasks/ingest_skr_hiji.ts';
 import ingestTndamHyogo from './tasks/ingest_tndam_hyogo.ts';
 import ingestTochigi from './tasks/ingest_tochigi.ts';
@@ -212,6 +213,7 @@ async function main(): Promise<void> {
       'ingest:kitakyushu-suido': ingestKitakyushuSuido,
       'ingest:sasebo-suido': ingestSaseboSuido,
       'ingest:matsue-suido': ingestMatsueSuido,
+      'ingest:shimonoseki-suido': ingestShimonosekiSuido,
       'ingest:mc-tottori-hydro': ingestMcTottoriHydro,
       'ingest:nagano-kigyo': ingestNaganoKigyo,
       'backfill:kagoshima-bodik': backfillKagoshima,
