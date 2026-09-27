@@ -4,14 +4,16 @@
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { sql } from '@dam/db/client';
-import { findMaster, NAME_MAP } from './ingest_tokyo_waterworks.ts';
+import { findMaster } from './ingest_tokyo_waterworks.ts';
 
-// The 多摩川 rows '村山' LIKE-matches in 東京 (pref 13), as in the master:
-// 村山下 was rebuilt (（元） 1927 → （再） 2008); 村山上 is a separate dam.
+// Shaped like the 村山・山口貯水池 entry, whose '村山' LIKE hits 村山下（元）
+// 1927, 村山上 1924 and 村山下（再） 2008 in 東京. A synthetic stem keeps the
+// real, already-stamped rows of a loaded master out of the candidates.
+const ENTRY = { tokyoName: 'テスト貯水池', masterName: 'テスト村山', prefCodes: ['13'] };
 const FIXTURES = [
-  { slug: 'test-tokyo-murayamashimo-moto', name: '村山下（元）', completedYear: 1927 },
-  { slug: 'test-tokyo-murayamakami', name: '村山上', completedYear: 1924 },
-  { slug: 'test-tokyo-murayamashimo-sai', name: '村山下（再）', completedYear: 2008 },
+  { slug: 'test-tokyo-murayamashimo-moto', name: 'テスト村山下（元）', completedYear: 1927 },
+  { slug: 'test-tokyo-murayamakami', name: 'テスト村山上', completedYear: 1924 },
+  { slug: 'test-tokyo-murayamashimo-sai', name: 'テスト村山下（再）', completedYear: 2008 },
 ];
 const ids = new Map<string, bigint>();
 
@@ -37,10 +39,8 @@ afterAll(async () => {
 });
 
 describe('findMaster (#79)', () => {
-  test('binds 村山・山口貯水池 to the completed 村山下（再）, not the lower-id （元）', async () => {
-    const entry = NAME_MAP.find((m) => m.tokyoName === '村山・山口貯水池');
-    if (!entry) throw new Error('村山・山口貯水池 missing from NAME_MAP');
-    const r = await findMaster(entry);
-    expect(r?.id).toBe(ids.get('村山下（再）'));
+  test('binds a twin-tied listing to the completed （再）, not the lower-id （元）', async () => {
+    const r = await findMaster(ENTRY);
+    expect(r?.id).toBe(ids.get('テスト村山下（再）'));
   });
 });
