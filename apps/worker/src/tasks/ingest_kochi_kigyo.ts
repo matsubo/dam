@@ -17,7 +17,9 @@
 // published. The site calls the values 瞬時値 that may differ from the
 // official record, so they are stored as published; 流入量 can be slightly
 // negative (-0.8) when the back-calculated inflow dips. Any non-numeric cell
-// is read as null.
+// is read as null, and an hour with no level, inflow or outflow for a dam is
+// dropped: the page re-serves 48 hours every run, so an outage row would
+// otherwise overwrite an hour already stored with values.
 //
 // Priority 308, the prefectural tier; no other source covers either dam.
 // Cron hourly at :54.
@@ -119,12 +121,16 @@ export function parseKochiKigyoTable(html: string): KochiKigyoTable {
     const outflow = col(/^放流量/);
     const rain = col(/^雨量/);
     for (const r of rows) {
+      const waterLevelM = cellValue(r.values[level]);
+      const inflowM3s = cellValue(r.values[inflow]);
+      const outflowM3s = cellValue(r.values[outflow]);
+      if (waterLevelM === null && inflowM3s === null && outflowM3s === null) continue;
       readings.push({
         name: dam.name,
         observedAt: r.observedAt,
-        waterLevelM: cellValue(r.values[level]),
-        inflowM3s: cellValue(r.values[inflow]),
-        outflowM3s: cellValue(r.values[outflow]),
+        waterLevelM,
+        inflowM3s,
+        outflowM3s,
         rainfallMm: cellValue(r.values[rain]),
       });
     }
