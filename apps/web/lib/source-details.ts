@@ -264,6 +264,23 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '中国地方整備局直轄 11 ダム (岡山:苫田 / 広島:土師・弥栄・八田原・温井・灰塚 / 山口:島地川 / 鳥取:菅沢・殿 / 島根:志津見・尾原) の貯水位・流入量・放流量・貯水率(有効容量)・雨量。',
     label: '中国地方整備局ダム',
   },
+  'mc-tottori-hydro': {
+    upstream: 'M&C鳥取水力発電株式会社 発電所・ダム運転情報 (mchp-k.co.jp/business/list.php)',
+    license:
+      '利用条件の記載なし (ページ表記は「Copyright © 2021 M&C TOTTORI HYDROPOWER All Right Reserved.」) — 観測値のみを出典明示で掲載',
+    cadence: '時次 (ページは毎分更新の現在値; 取得は毎時 :32)',
+    what: '鳥取県営発電の運営権者が公開する 4 ダム (茗荷谷/三朝調整池/中津/菅沢) の 10分間流入量とゲート放流量。ダム水位は EL ではない水位計の読みのため保存しない。茗荷谷・三朝・中津は本ソース唯一の観測源。',
+    label: 'M&C鳥取水力発電',
+  },
+  'nagano-kigyo': {
+    upstream:
+      '長野県企業局 ダム情報 (naganoken-kigyokyoku.jp/dam) — /json/{takato,sugadaira}_new.json',
+    license:
+      '利用条件の記載なし (ページ表記は「Copyright © Nagano Prefecture. All Rights Reserved.」) — 観測値のみを出典明示で掲載',
+    cadence: '時次 (元データは 10 分粒度・直近 4 件; 取得は毎時 :50)',
+    what: '長野県企業局管理の高遠ダム・菅平ダムの貯水位 (EL.m)・全流入量・全放流量。菅平は貯水率 (%) も公開 (貯水量は非公開)。菅平は本ソース唯一の観測源。',
+    label: '長野県企業局',
+  },
   synthetic: {
     upstream: '当サイトの内部生成 (シード値)',
     license: 'CC0 (出典明示は任意)',
