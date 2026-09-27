@@ -75,11 +75,14 @@
 -- Not moved here:
 --   長安口 kasenbosai (（再） due 2028). 佐久間, 木屋川, 新保川 and 五名: the
 --   （再） has no completion year.
---   16 kasenbosai stations stamped on both twins (千五沢, 南畑, 天ヶ瀬, 山王海,
---   帝釈川, 松原, 横山, 浜田, 牧尾, 狭山池, 美和, 美田, 花山, 萱瀬, 藤井川,
---   野洲川). Replaying match_kasenbosai's scoring on prod's rows against the
---   full 2026-09-27 catalogue puts every one on its completed （再） with an
---   exact name. bindStation then takes the key off the （元）.
+--   17 kasenbosai stations stamped on both rows of a rebuilt dam (千五沢,
+--   南畑, 天ヶ瀬, 山王海, 帝釈川, 松原, 横山, 浜田, 牧尾, 狭山池, 美和, 美田,
+--   花山, 萱瀬, 藤井川, 野洲川, and 0844900700015 on 黒谷池（元） 1838 /
+--   黒谷（再） 1839). Replaying match_kasenbosai's scoring on prod's rows
+--   against the full 2026-09-27 catalogue puts every one on its completed
+--   （再） with an exact name. bindStation then takes the key off the other
+--   row. 黒谷's names have different bases, so twinOf does not pair them,
+--   but only 黒谷（再） matches the station name exactly.
 --   長安口 mudam (（再） due 2028); 新保川, 五名 and 長柄 mudam (blank year).
 --
 -- Past observations move with the `observations:rebind` task, not here.
