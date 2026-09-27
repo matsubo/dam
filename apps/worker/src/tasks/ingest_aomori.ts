@@ -28,7 +28,9 @@
 // rate, which is volume / annual 有効 — the same figure the site would derive
 // from the static capacity, so back-solving it is an identity.
 
+import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
+import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
@@ -159,21 +161,24 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
   // say "they publish it, we failed to link it" instead of guessing.
   const universe: UniverseRow[] = [];
   for (const c of DAMS) {
-    const rows = await sql<{ id: bigint; name: string }[]>`
-      SELECT id, name FROM dams
+    // All candidates, ranked by name; chooseRanked keeps a row already
+    // stamped with this station, and lets a （元）/（再） pair tie so the
+    // current structure wins.
+    const rows = await sql<(BindableMaster & { rank: number })[]>`
+      SELECT id, name, completed_year AS "completedYear",
+             external_ids->>'aomori-dam' AS stamp,
+             CASE
+               WHEN name = ${c.masterName} THEN 0
+               WHEN name = ${`${c.masterName}ダム`} THEN 1
+               WHEN name LIKE ${`${c.masterName}（再）%`}
+                 OR name LIKE ${`${c.masterName}（元）%`} THEN 2
+               ELSE 5
+             END AS rank
+      FROM dams
       WHERE pref_code = ${PREF_CODE}
         AND name LIKE ${`%${c.masterName}%`}
-      ORDER BY
-        CASE
-          WHEN name = ${c.masterName} THEN 0
-          WHEN name = ${`${c.masterName}ダム`} THEN 1
-          WHEN name LIKE ${`${c.masterName}（再）%`} THEN 2
-          ELSE 5
-        END,
-        id
-      LIMIT 1
     `;
-    const r = rows[0];
+    const r = chooseRanked(rows, c.aomoriName);
     universe.push({
       externalId: c.aomoriName,
       name: c.aomoriName,
@@ -185,13 +190,7 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
       continue;
     }
     matches.push({ cfg: c, damId: r.id });
-    await sql`
-      UPDATE dams
-      SET external_ids = COALESCE(external_ids, '{}'::jsonb)
-                       || jsonb_build_object('aomori-dam', ${c.aomoriName}::text)
-      WHERE id = ${r.id}
-        AND COALESCE(external_ids->>'aomori-dam', '') <> ${c.aomoriName}
-    `;
+    await bindExternalId(r.id, 'aomori-dam', c.aomoriName);
   }
   await recordUniverse('aomori-dam', universe);
   return matches;
