@@ -1,8 +1,8 @@
 -- One-off (prod, after the ingest_chiba heading fix is deployed): move six
 -- weeks of chiba-suisei rows to the survey date they belong to.
 --
--- Run once, as a single transaction:
---   psql -U dam -d dam -v ON_ERROR_STOP=1 -1 -f 2026-09-28_redate_chiba_suisei.sql
+-- Run once; the file is its own transaction (BEGIN … COMMIT):
+--   psql -U dam -d dam -v ON_ERROR_STOP=1 -f 2026-09-28_redate_chiba_suisei.sql
 -- Not a migration: it rewrites 132 rows of observations, most of them in
 -- compressed chunks, which does not belong in the migrate path.
 --
@@ -38,6 +38,9 @@
 -- second run finds nothing to move. A row already present at the survey date
 -- (the fixed adapter re-reading 09-14) wins over the moved copy; the values
 -- are identical. The final SELECT reports what remains per date.
+
+BEGIN;
+SET LOCAL timescaledb.max_tuples_decompressed_per_dml_transaction = 0;
 
 CREATE TEMP TABLE chiba_suisei_lagged (stored_at, survey_at, industrial_m3) AS
 VALUES
@@ -80,3 +83,5 @@ SELECT observed_at::date AS survey_date, count(*) AS dams
 FROM observations
 WHERE source_id = 'chiba-suisei' AND observed_at >= '2026-05-25'
 GROUP BY 1 ORDER BY 1;
+
+COMMIT;
