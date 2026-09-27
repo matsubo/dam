@@ -1,7 +1,12 @@
 // apps/worker/src/tasks/ingest_iwate_kasen.test.ts
 
 import { describe, expect, test } from 'bun:test';
-import { extractYear, parseIwatePage, parseIwateTimestamp } from './ingest_iwate_kasen.ts';
+import {
+  chooseMaster,
+  extractYear,
+  parseIwatePage,
+  parseIwateTimestamp,
+} from './ingest_iwate_kasen.ts';
 
 // Minimal page fixture — wraps one data row in the Gamen32Servlet HTML shape.
 // commonParam sets the year; ListDate gives "MM/DD HH:MM" (no year).
@@ -196,5 +201,22 @@ describe('parseIwatePage', () => {
     const r = parseIwatePage('<html></html>', '綱取ダム');
     expect(r.observedAt).toBeNull();
     expect(r.waterLevelM).toBeNull();
+  });
+});
+
+describe('chooseMaster', () => {
+  // The two 岩手県 masters as the prod dams table names them (ndi 240 / 257):
+  // the server's dropdown says 「遠野第二ダム」, ダム便覧 says 「遠野第2」.
+  const masters = [
+    { id: 9262n, name: '遠野第2', completedYear: null, stamp: null },
+    { id: 9263n, name: '遠野', completedYear: null, stamp: '遠野ダム' },
+  ];
+
+  test('遠野第二ダム binds to 遠野第2, not the 遠野 master', () => {
+    expect(chooseMaster('遠野第二ダム', masters)).toBe(9262n);
+  });
+
+  test('遠野ダム still binds to 遠野', () => {
+    expect(chooseMaster('遠野ダム', masters)).toBe(9263n);
   });
 });

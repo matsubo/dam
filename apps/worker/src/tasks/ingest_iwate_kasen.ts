@@ -145,11 +145,16 @@ async function ensureSourcePriority(): Promise<void> {
   `;
 }
 
+const KANJI_DIGIT: Record<string, string> = { 一: '1', 二: '2', 三: '3', 四: '4', 五: '5' };
+
+// The server writes 「遠野第二ダム」 where ダム便覧 has 「遠野第2」, so the
+// ordinal is folded to an ASCII digit on both sides.
 function normalizeName(s: string): string {
   return s
     .replace(/[（(][^）)]*[）)]/g, '')
     .replace(/ダム$/, '')
     .replace(/貯水池$/, '')
+    .replace(/第([一二三四五])/g, (_, k: string) => `第${KANJI_DIGIT[k]}`)
     .trim();
 }
 
@@ -164,9 +169,11 @@ interface DamMatch {
  * a prefix hit beats a substring hit, ties going to the current （元）/（再）
  * twin, else the lower id (#79).
  */
-function chooseMaster(stem: string, masters: BindableMaster[], stationKey: string): bigint | null {
-  const stamped = stampedMaster(masters, stationKey);
+export function chooseMaster(stationName: string, masters: BindableMaster[]): bigint | null {
+  const stamped = stampedMaster(masters, stationName);
   if (stamped) return stamped.id;
+  const stem = normalizeName(stationName);
+  if (!stem) return null;
   let best: { m: BindableMaster; rank: number } | null = null;
   for (const m of masters) {
     const mStem = normalizeName(m.name);
@@ -191,10 +198,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
   const out: DamMatch[] = [];
 
   for (const r of rows) {
-    const stem = normalizeName(r.iwateName);
-    if (!stem) continue;
-
-    const damId = chooseMaster(stem, masters, r.iwateName);
+    const damId = chooseMaster(r.iwateName, masters);
     if (!damId) {
       log(`${SOURCE_ID}: no master match for "${r.iwateName}"`);
       continue;
@@ -213,7 +217,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     externalId: stn.stationNo,
     name: stn.name,
     prefCode: PREF_CODE,
-    resolvedDamId: chooseMaster(normalizeName(stn.name), masters, stn.name),
+    resolvedDamId: chooseMaster(stn.name, masters),
   }));
   await recordUniverse(SOURCE_ID, universe);
 
