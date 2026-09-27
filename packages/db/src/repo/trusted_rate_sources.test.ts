@@ -34,3 +34,11 @@ describe('trusted_rate_basis after issue #71', () => {
     expect(await trusted('kagoshima-kasen')).toBe(true);
   });
 });
+
+describe('trusted_rate_basis for jwa-chikugo-rt', () => {
+  // 貯水率 against the 貯水容量 pool: 寺内 volume/rate = 8,230 千m³, 大山 11,000,
+  // against annual 有効 17,030 / 18,000 (0087).
+  test('jwa-chikugo-rt publishes a purpose-pool rate and is trusted', async () => {
+    expect(await trusted('jwa-chikugo-rt')).toBe(true);
+  });
+});

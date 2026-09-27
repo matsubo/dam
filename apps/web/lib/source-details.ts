@@ -84,6 +84,23 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '筑後川水系 7 ダム (松原/下筌/大山/合所/江川/寺内/小石原川) の貯水率・貯水量。',
     label: 'JWA 筑後川',
   },
+  'jwa-chikugo-rt': {
+    upstream:
+      '水資源機構 筑後川局 水管理情報WEB (chikugo.ec-net.jp/chikugo/kyoku/pc/new/rep{EG,TR,KB,OY,CO}_I60.html)',
+    license:
+      '水資源機構 利用ルール — 出典を記載すれば複製・公衆送信・翻案・商用利用可; 数値データは著作権の対象外 (water.go.jp/honsya/honsya/policy/copyright/)',
+    cadence: '時次 (毎正時値, ~37 分に更新; 取得は毎時 :50, 直近 24 時間分を毎回 UPSERT)',
+    what: '筑後川水系 5 施設 (江川/寺内/小石原川/大山ダム, 筑後大堰) の貯水位・有効貯水量・貯水率 (利水等の貯水容量比)・流入量・総放流量・時間雨量。筑後大堰は貯水位・有効貯水量のみで新規カバレッジ; 各ダムは jwa-chikugo (日次 0 時) を時次に格上げ。',
+    label: 'JWA 筑後川 時次',
+  },
+  'jwa-fukudou': {
+    upstream: '水資源機構 筑後川局 福岡導水管理室 (water.go.jp/chikugo/fukudou/html/info02.html)',
+    license:
+      '水資源機構 利用ルール — 出典を記載すれば複製・公衆送信・翻案・商用利用可; 数値データは著作権の対象外 (water.go.jp/honsya/honsya/policy/copyright/)',
+    cadence: '日次 (平日 ~04:30 JST に当日 0 時値を掲載; 取得は毎時 :54)',
+    what: '山口調整池 (天拝湖, 福岡導水) の貯水位 (EL.m) と総貯水量。総貯水量から堆砂容量 (総 − 有効) を差し引いた有効分を保存; 公表貯水率は総貯水容量比のため保存しない。他ソースなしの新規カバレッジ。',
+    label: 'JWA 福岡導水',
+  },
   'jwa-toneara': {
     upstream: '水資源機構 関東支社 (water.go.jp/honsya/honsya/suigen/sokuhou/toneara/index.html)',
     license: '公的統計 — 出典明示で再配布可',
