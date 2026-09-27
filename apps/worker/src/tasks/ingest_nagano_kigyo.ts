@@ -37,7 +37,7 @@
 // 07-06 as of 2026-09-27 — yet it keeps writing hourly rows, and
 // preferredSourceForDam() picks the top-priority source with ANY row, so
 // below it 高遠's chart stays empty. 311 is shared only by tochigi-bodik /
-// hyogo-bodik, which never cover 長野. Alone on 菅平. Cron hourly at :50.
+// hyogo-bodik, which never cover 長野. Alone on 菅平. Cron hourly at :54.
 
 import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
