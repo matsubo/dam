@@ -74,9 +74,9 @@ describe('chooseMaster', () => {
     expect(chooseMaster('狭山池', masters)).toBe(10172n);
   });
 
-  it('keeps 狭山池（再）even though its completion year is blank (#79)', () => {
-    // Prod state: ダム便覧 lists 狭山池ダム（再）, so 狭山池（再） has no year.
-    // preferMaster alone would treat it as unfinished and pick the （元）.
+  it('keeps 狭山池（再）even if its completion year were blank (#79)', () => {
+    // Hypothetical: ダム便覧 has no record matching 狭山池（再）, so its year
+    // may be blank. preferMaster alone would then pick the （元）.
     const withYears = [
       { id: 10171n, name: '狭山池（元）', completedYear: 616 },
       { id: 10172n, name: '狭山池（再）', completedYear: null },
