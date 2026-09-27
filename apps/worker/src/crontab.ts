@@ -391,6 +391,20 @@ export const CRONTAB = `
 # 総流入量 / 総流出量. Priority 297. Cron at :54.
 54 * * * * ingest:jwa-biwako
 
+# 北九州市上下水道局 北九州市の水源状況 — 10 水源 (油木/ます渕/耶馬渓/力丸/頓田/
+# 畑/白木/道原/松ヶ江/遠賀川河口堰), 水位 + 貯水量 + 貯水率 at 09:00 JST.
+# Refreshed on weekdays around 16:00 JST; daily at 08:50 UTC (17:50 JST).
+50 8 * * * ingest:kitakyushu-suido
+
+# 佐世保市水道局 水道用貯水池の貯水状況表 — 6 ダム (山の田/菰田/川谷/相当/転石/
+# 下の原), daily PDF of the 00:00 JST readings (link discovered each run).
+# 01:54 + 07:54 UTC (10:54 / 16:54 JST) to catch a late upload.
+54 1,7 * * * ingest:sasebo-suido
+
+# 松江市上下水道局 千本ダム・大谷ダム貯水量・貯水率 — daily rows, two months
+# per page, edited on weekday late mornings. Daily at 04:58 UTC (13:58 JST).
+58 4 * * * ingest:matsue-suido
+
 # 佐賀県河川砂防情報システム ダム現況表 — 19 県管理ダム (岸川/庭木/繁昌/天ヶ瀬/
 # 平木場/伊岐佐/都川内/井手口川/竜門/有田/古木場/本部/矢筈/狩立日ノ峯/中木庭/
 # 岩屋川内/横竹/深浦/河内). Transposed Shift_JIS HTML table; 3 pages (7+7+5
