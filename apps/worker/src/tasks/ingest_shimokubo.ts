@@ -12,7 +12,9 @@
 // Upgrades jwa-toneara (daily, priority 296) → hourly for 下久保ダム.
 // Priority 297 > 296.
 
+import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
+import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
@@ -117,31 +119,28 @@ async function ensureSourcePriority(): Promise<void> {
 }
 
 async function resolveDamId(log: (s: string) => void): Promise<bigint | null> {
-  const rows = await sql<{ id: bigint; name: string }[]>`
-    SELECT id, name FROM dams
+  // Twins of a redeveloped dam tie on rank, so chooseRanked picks the current
+  // one; a row already stamped with the station keeps it (#79).
+  const rows = await sql<(BindableMaster & { rank: number })[]>`
+    SELECT id, name, completed_year AS "completedYear",
+           external_ids->>${SOURCE_ID} AS stamp,
+           CASE
+             WHEN name = '下久保ダム' THEN 0
+             WHEN name = '下久保'     THEN 1
+             ELSE 2
+           END AS rank
+    FROM dams
     WHERE pref_code = ANY(ARRAY['10', '11'])
       AND name LIKE '%下久保%'
-    ORDER BY
-      CASE
-        WHEN name = '下久保ダム' THEN 0
-        WHEN name = '下久保'     THEN 1
-        ELSE 2
-      END,
-      id
-    LIMIT 1
+    ORDER BY rank, id
   `;
-  if (!rows[0]) {
+  const dam = chooseRanked(rows, DAM_NAME);
+  if (!dam) {
     log(`${SOURCE_ID}: no master match for 下久保ダム`);
     return null;
   }
-  const { id, name } = rows[0];
-  await sql`
-    UPDATE dams
-    SET external_ids = COALESCE(external_ids, '{}'::jsonb)
-                     || jsonb_build_object(${SOURCE_ID}::text, '下久保ダム'::text)
-    WHERE id = ${id}
-      AND COALESCE(external_ids->>${SOURCE_ID}, '') <> '下久保ダム'
-  `;
+  const { id, name } = dam;
+  await bindExternalId(id, SOURCE_ID, DAM_NAME);
   log(`${SOURCE_ID}: matched "${name}" (id=${id})`);
   return id;
 }
