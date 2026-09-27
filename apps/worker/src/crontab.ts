@@ -108,9 +108,9 @@ export const CRONTAB = `
 # Cron at :14 every hour.
 14 * * * * ingest:fukui-bousai
 
-# 奈良県河川情報システム モバイル ダム現況 — 5 ダム (Shift_JIS HTML, ~10分更新).
-# 岩井川/天理/白川/初瀬/大門. 貯水位/流入量/放流量のみ (no storage).
-# Each dam is a separate table; latest row has "MM/DD HH:MM" JST timestamp.
+# 奈良県河川情報システム ダム現況表 (PC) — 5 ダム (防災Web Shift_JIS, 10分更新).
+# 岩井川/天理/白川/初瀬/大門. 貯水位/貯水容量/空容量/全流入量/放流量, no 貯水率.
+# 貯水容量 counts from the bed; stored less 堆砂容量 where the table ties to the master.
 # Cron at :18 every hour.
 18 * * * * ingest:nara-kasen
 
