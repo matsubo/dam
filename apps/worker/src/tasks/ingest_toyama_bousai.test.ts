@@ -1,7 +1,7 @@
 // apps/worker/src/tasks/ingest_toyama_bousai.test.ts
 
 import { describe, expect, test } from 'bun:test';
-import { parseToyamaPage, parseToyamaTimestamp } from './ingest_toyama_bousai.ts';
+import { chooseMaster, parseToyamaPage, parseToyamaTimestamp } from './ingest_toyama_bousai.ts';
 
 // Raw HTML with &#N; numeric entities as served by the Salesforce page.
 // 年=&#24180; 月=&#26376; 日=&#26085; 時=&#26178; 分=&#20998; （=&#65288; ）=&#65289;
@@ -120,5 +120,44 @@ describe('parseToyamaPage', () => {
   test('returns empty array when timestamp is missing', () => {
     const noTs = '<html><body><table><tbody><tr><td>foo</td></tr></tbody></table></body></html>';
     expect(parseToyamaPage(noTs)).toHaveLength(0);
+  });
+});
+
+describe('chooseMaster (#79)', () => {
+  const m = (
+    id: number,
+    name: string,
+    completedYear: number | null = null,
+    stamp: string | null = null,
+  ) => ({ id: BigInt(id), name, completedYear, stamp });
+
+  test('上市川第二ダム binds 上市川第2, not the 上市川 its stem starts with', () => {
+    const masters = [m(9596, '上市川', 1964), m(9595, '上市川第2', 1985)];
+    expect(chooseMaster('上市川第二ダム', masters)).toBe(9595n);
+    expect(chooseMaster('上市川ダム', masters)).toBe(9596n);
+  });
+
+  test('a row already stamped with the station keeps it over a better name match', () => {
+    const masters = [m(10, '室牧'), m(20, '室牧発電所', null, '室牧ダム')];
+    expect(chooseMaster('室牧ダム', masters)).toBe(20n);
+  });
+
+  test('a stamp on two rows is ambiguous, so the name decides', () => {
+    const masters = [m(10, '室牧', null, '室牧ダム'), m(20, '室牧発電所', null, '室牧ダム')];
+    expect(chooseMaster('室牧ダム', masters)).toBe(10n);
+  });
+
+  test('binds the completed （再）, not the lower-id （元）', () => {
+    const masters = [m(10, '境川（元）', 1960), m(20, '境川（再）', 1993)];
+    expect(chooseMaster('境川ダム', masters)).toBe(20n);
+  });
+
+  test('binds the （元） while the （再） has no completion year', () => {
+    const masters = [m(10, '境川（再）'), m(20, '境川（元）', 1960)];
+    expect(chooseMaster('境川ダム', masters)).toBe(20n);
+  });
+
+  test('returns null when no master name contains the stem', () => {
+    expect(chooseMaster('熊野川ダム', [m(1, '上市川')])).toBeNull();
   });
 });
