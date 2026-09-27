@@ -259,35 +259,19 @@ if [ "${kick}" = "1" ]; then
 
   # 3. Enqueue the cheap live-ingest jobs so prod gets fresh observation
   # data without waiting for the next cron tick. These are small (one HTTP
-  # fetch each) and finish in seconds.
-  run_kick_step "enqueue_ingest"  "SELECT graphile_worker.add_job('ingest:kasenbosai',     '{}'::json);"
-  run_kick_step "enqueue_tokyo"   "SELECT graphile_worker.add_job('ingest:tokyo-waterworks','{}'::json);"
-  run_kick_step "enqueue_jwa"     "SELECT graphile_worker.add_job('ingest:jwa-junpo','{}'::json);"
-  run_kick_step "enqueue_aitoyo"  "SELECT graphile_worker.add_job('ingest:aitoyo','{}'::json);"
-  run_kick_step "enqueue_jwachikugo" "SELECT graphile_worker.add_job('ingest:jwa-chikugo','{}'::json);"
-  run_kick_step "enqueue_kanagawa" "SELECT graphile_worker.add_job('ingest:kanagawa-dam','{}'::json);"
-  run_kick_step "enqueue_shiga"    "SELECT graphile_worker.add_job('ingest:shiga-bousai','{}'::json);"
-  run_kick_step "enqueue_tottori"  "SELECT graphile_worker.add_job('ingest:tottori-dam','{}'::json);"
-  run_kick_step "enqueue_aomori"   "SELECT graphile_worker.add_job('ingest:aomori-dam','{}'::json);"
-  run_kick_step "enqueue_hkd_mlit" "SELECT graphile_worker.add_job('ingest:hkd-mlit-dam','{}'::json);"
-  run_kick_step "enqueue_cgr_mlit" "SELECT graphile_worker.add_job('ingest:cgr-mlit-dam','{}'::json);"
-  run_kick_step "enqueue_ktr_kinu" "SELECT graphile_worker.add_job('ingest:ktr-kinu-dam','{}'::json);"
-  run_kick_step "enqueue_hrr_mlit" "SELECT graphile_worker.add_job('ingest:hrr-mlit-dam','{}'::json);"
-  run_kick_step "enqueue_kasenbosai_v2" "SELECT graphile_worker.add_job('ingest:kasenbosai-v2','{}'::json);"
-  run_kick_step "enqueue_chiba"        "SELECT graphile_worker.add_job('ingest:chiba-suisei','{}'::json);"
-  run_kick_step "enqueue_okayama"      "SELECT graphile_worker.add_job('ingest:okayama-bousai','{}'::json);"
-  run_kick_step "enqueue_hyogo"        "SELECT graphile_worker.add_job('ingest:hyogo-bodik','{}'::json);"
-  run_kick_step "enqueue_tochigi"      "SELECT graphile_worker.add_job('ingest:tochigi-bodik','{}'::json);"
-  run_kick_step "enqueue_hiroshima"    "SELECT graphile_worker.add_job('ingest:hiroshima-bousai','{}'::json);"
-  run_kick_step "enqueue_osaka"        "SELECT graphile_worker.add_job('ingest:osaka-bousai','{}'::json);"
-  run_kick_step "enqueue_tottori_bousai" "SELECT graphile_worker.add_job('ingest:tottori-bousai','{}'::json);"
-  run_kick_step "enqueue_fukuoka_bodik"  "SELECT graphile_worker.add_job('ingest:fukuoka-bodik','{}'::json);"
-  run_kick_step "enqueue_shimane_bousai" "SELECT graphile_worker.add_job('ingest:shimane-bousai','{}'::json);"
-  run_kick_step "enqueue_jwa_toneara"    "SELECT graphile_worker.add_job('ingest:jwa-toneara','{}'::json);"
-  run_kick_step "enqueue_jwa_chubu"      "SELECT graphile_worker.add_job('ingest:jwa-chubu','{}'::json);"
-  run_kick_step "enqueue_jwa_toyokawa"   "SELECT graphile_worker.add_job('ingest:jwa-toyokawa','{}'::json);"
-  run_kick_step "enqueue_jwa_yoshino"   "SELECT graphile_worker.add_job('ingest:jwa-yoshino','{}'::json);"
-  run_kick_step "enqueue_jwa_kiso_rt"   "SELECT graphile_worker.add_job('ingest:jwa-kiso-rt','{}'::json);"
+  # fetch each) and finish in seconds. Keyed like their cron line, so the
+  # next tick replaces a kick that is still retrying (see crontab.ts).
+  for task in \
+    ingest:kasenbosai ingest:tokyo-waterworks ingest:jwa-junpo ingest:aitoyo \
+    ingest:jwa-chikugo ingest:kanagawa-dam ingest:shiga-bousai ingest:tottori-dam \
+    ingest:aomori-dam ingest:hkd-mlit-dam ingest:cgr-mlit-dam ingest:ktr-kinu-dam \
+    ingest:hrr-mlit-dam ingest:kasenbosai-v2 ingest:chiba-suisei ingest:okayama-bousai \
+    ingest:hyogo-bodik ingest:tochigi-bodik ingest:hiroshima-bousai ingest:osaka-bousai \
+    ingest:tottori-bousai ingest:fukuoka-bodik ingest:shimane-bousai ingest:jwa-toneara \
+    ingest:jwa-chubu ingest:jwa-toyokawa ingest:jwa-yoshino ingest:jwa-kiso-rt; do
+    run_kick_step "enqueue_${task}" \
+      "SELECT graphile_worker.add_job('${task}', '{}'::json, job_key := '${task}');"
+  done
 
   # 一回限り: 川の防災情報 (kasenbosai) ダムカタログを scrape して
   # 全国 ~900 ダムの obs_fcd を master.external_ids.kasenbosai に投入。
