@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { preferMaster, stampedMaster, twinOf } from './dam_binding.ts';
+import { chooseRanked, preferMaster, stampedMaster, twinOf } from './dam_binding.ts';
 
 const m = (
   id: number,
@@ -59,5 +59,24 @@ describe('stampedMaster', () => {
   test('no stamp, or the same stamp on two rows, decides nothing', () => {
     expect(stampedMaster([m(1, '長谷'), m(2, '長谷')], '長谷ダム')).toBeNull();
     expect(stampedMaster([m(1, '長谷', null, 'k'), m(2, '長谷', null, 'k')], 'k')).toBeNull();
+  });
+});
+
+describe('chooseRanked (curated SQL candidates carrying their own name rank)', () => {
+  const r = (rank: number, ...args: Parameters<typeof m>) => ({ ...m(...args), rank });
+
+  test('the lowest rank wins outright', () => {
+    expect(chooseRanked([r(2, 1, '長谷ダム'), r(0, 2, '長谷')], 'k')?.id).toBe(2n);
+  });
+  test('twins at the same rank go to the completed （再）, not the lower id', () => {
+    const rows = [r(2, 11336, '松原（元）', 1973), r(2, 11337, '松原（再）', 1984)];
+    expect(chooseRanked(rows, 'k', 2026)?.id).toBe(11337n);
+  });
+  test('the row already stamped with the key beats a better rank', () => {
+    const rows = [r(0, 1, '長谷'), r(5, 2, '長谷川', null, 'k')];
+    expect(chooseRanked(rows, 'k')?.id).toBe(2n);
+  });
+  test('no candidates, no match', () => {
+    expect(chooseRanked([], 'k')).toBeNull();
   });
 });
