@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { BousaiItem } from './ingest_kagoshima_bousai.ts';
-import { parseItems, parseKagoshimaTimestamp } from './ingest_kagoshima_bousai.ts';
+import { chooseMaster, parseItems, parseKagoshimaTimestamp } from './ingest_kagoshima_bousai.ts';
 
 describe('parseKagoshimaTimestamp', () => {
   test('parses YYYY/MM/DD HH:MM JST → UTC', () => {
@@ -92,5 +92,25 @@ describe('parseItems', () => {
 
   test('returns empty array for empty items', () => {
     expect(parseItems([])).toHaveLength(0);
+  });
+});
+
+describe('chooseMaster (#79)', () => {
+  const m = (
+    id: number,
+    name: string,
+    completedYear: number | null = null,
+    stamp: string | null = null,
+  ) => ({ id: BigInt(id), name, completedYear, stamp });
+
+  test('keeps the row already stamped with the station number over a lower-id name hit', () => {
+    const masters = [m(10, '大和'), m(20, '大和', null, '013707002000000000')];
+    expect(chooseMaster('大和ダム', '大和', masters, '013707002000000000')).toBe(20n);
+  });
+
+  test('binds 鶴田 to the completed （再）, not the lower-id （元）', () => {
+    // Real pref-46 twin rows and completion years from the master.
+    const masters = [m(11438, '鶴田（元）', 2017), m(11453, '鶴田（再）', 2017)];
+    expect(chooseMaster('鶴田ダム', '鶴田', masters, '013707099000000000')).toBe(11453n);
   });
 });
