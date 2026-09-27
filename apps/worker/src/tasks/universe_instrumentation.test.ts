@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { sql } from '@dam/db/client';
 
 // /coverage can only say "no provider publishes this dam" once EVERY
 // observation-producing task has recorded what its provider publishes. A task
@@ -44,6 +45,32 @@ function ingestTasks(): string[] {
     .sort();
 }
 
+/** Source ids a file writes observations under. */
+function sourceIdsOf(src: string): string[] {
+  const ids = new Set<string>();
+  const konst = src.match(/SOURCE_ID\s*=\s*'([^']+)'/)?.[1];
+  if (konst) ids.add(konst);
+  for (const m of src.matchAll(/sourceId:\s*'([^']+)'/g)) if (m[1]) ids.add(m[1]);
+  return [...ids];
+}
+
+/** Source ids recorded by some task other than `exclude`. */
+function recordedSourceIds(exclude: Set<string>): Set<string> {
+  const out = new Set<string>();
+  for (const f of readdirSync(DIR).filter(
+    (f) => f.endsWith('.ts') && !f.endsWith('.test.ts') && !exclude.has(f),
+  )) {
+    const src = readFileSync(join(DIR, f), 'utf8');
+    if (!src.includes('recordUniverse(')) continue;
+    for (const m of src.matchAll(/recordUniverse\(\s*'([^']+)'/g)) if (m[1]) out.add(m[1]);
+    if (/recordUniverse\(\s*SOURCE_ID/.test(src)) {
+      const konst = src.match(/SOURCE_ID\s*=\s*'([^']+)'/)?.[1];
+      if (konst) out.add(konst);
+    }
+  }
+  return out;
+}
+
 describe('source_universe instrumentation rollout', () => {
   test('every observation-ingesting task records what its provider publishes', () => {
     const missing = ingestTasks().filter((f) => {
@@ -56,6 +83,32 @@ describe('source_universe instrumentation rollout', () => {
   test('exemptions all name a task that still exists', () => {
     const present = new Set(readdirSync(DIR));
     expect([...EXEMPT.keys()].filter((f) => !present.has(f))).toEqual([]);
+  });
+
+  test('no exempted task leaves its source holding the gate open', async () => {
+    // The EXEMPT list above and the SQL gate in `classifyDamCoverage` were
+    // never tied together, and that gap is what broke /coverage: exempting a
+    // task says nothing about its source_id, which stays in source_priorities
+    // as an active observation provider with no recorded scan — and one such
+    // row keeps EVERY dam out of `not_published` forever. `nagasaki-kasen` sat
+    // there for months on an exemption whose stated reason ("its universe comes
+    // from the matcher") was simply untrue.
+    //
+    // So check the thing that actually matters: a source a task is exempted
+    // for must either be recorded by some OTHER task, or be outside the gate
+    // (inactive, not an observation provider, not enumerable, or historical).
+    const exemptIds = [...EXEMPT.keys()].flatMap((f) =>
+      sourceIdsOf(readFileSync(join(DIR, f), 'utf8')),
+    );
+    const recorded = recordedSourceIds(new Set(EXEMPT.keys()));
+    const inGate = await sql<{ source_id: string }[]>`
+      SELECT source_id FROM source_priorities
+      WHERE source_id IN ${sql(exemptIds)}
+        AND active AND provides_observations AND universe_enumerable
+        AND NOT historical_only
+    `;
+    const offenders = inGate.map((r) => r.source_id).filter((id) => !recorded.has(id));
+    expect(offenders).toEqual([]);
   });
 
   test('no task records its universe from inside the per-row loop', () => {
