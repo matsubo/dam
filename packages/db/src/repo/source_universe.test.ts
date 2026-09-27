@@ -2,7 +2,12 @@ import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 import { sql } from '../client.ts';
 import { upsertDamByExternalId } from './dams.ts';
 import { upsertObservations } from './observations.ts';
-import { classifyDamCoverage, recordUniverse } from './source_universe.ts';
+import {
+  classifyDamCoverage,
+  classifyOneDam,
+  coverageSummary,
+  recordUniverse,
+} from './source_universe.ts';
 
 const SRC_A = 'universe-test-a';
 const SRC_B = 'universe-test-b';
@@ -137,6 +142,55 @@ describe('source universe coverage triage', () => {
     } finally {
       await sql`DELETE FROM source_universe_runs WHERE source_id IN ${sql(remaining.map((r) => r.source_id))}`;
     }
+  });
+
+  test('a retired source does not hold the gate open', async () => {
+    // niigata-bousai and shizuoka-bousai were retired (active = false, 0101)
+    // because their robots.txt disallows crawling. They will never record
+    // another scan, so counting them would keep every dam 未調査 for good.
+    await sql`UPDATE source_priorities SET active = FALSE WHERE source_id = ${SRC_B}`;
+    await recordUniverse(SRC_A, [
+      { externalId: 'a-1', name: 'univ-covered', resolvedDamId: covered },
+      { externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale },
+    ]);
+
+    const remaining = await sql<{ source_id: string }[]>`
+      SELECT sp.source_id FROM source_priorities sp
+      WHERE sp.active AND sp.provides_observations AND sp.universe_enumerable
+        AND NOT sp.historical_only
+        AND NOT EXISTS (SELECT 1 FROM source_universe_runs r WHERE r.source_id = sp.source_id)
+    `;
+    for (const r of remaining)
+      await recordUniverse(r.source_id, [
+        { externalId: `stub-${r.source_id}`, name: 'stub', resolvedDamId: null },
+      ]);
+    try {
+      expect((await coverageSummary()).sourcesPendingScan).toBe(0);
+      expect(only(await classifyDamCoverage(), absent)).toBe('not_published');
+    } finally {
+      await sql`DELETE FROM source_universe_runs WHERE source_id IN ${sql(remaining.map((r) => r.source_id))}`;
+    }
+  });
+
+  test("a retired source's last list is neither an ingestion bug nor backlog", async () => {
+    // A retired source's universe rows stay behind with the resolution of its
+    // last run. Its dams must not be reported as 「取り込み側の不具合で、
+    // こちらで直せる」 — we stopped on purpose — and its unmatched stations are
+    // no longer work we can do.
+    await recordUniverse(SRC_B, [
+      { externalId: 'b-stale', name: 'univ-stale', resolvedDamId: stale },
+      { externalId: 'b-unmatched', name: 'マスタ未登録', resolvedDamId: null },
+    ]);
+    const before = await coverageSummary();
+    await sql`UPDATE source_priorities SET active = FALSE WHERE source_id = ${SRC_B}`;
+
+    const row = (await classifyDamCoverage()).find((r) => r.damId === stale);
+    expect(row?.status).not.toBe('published_not_ingested');
+    expect(row?.publishedBy).toEqual([]);
+    const one = await classifyOneDam(stale);
+    expect(one?.status).toBe(row?.status);
+    expect(one?.publishedBy).toEqual([]);
+    expect((await coverageSummary()).unmatchedStations).toBe(before.unmatchedStations - 1);
   });
 
   test('separates "we have data" from "published but we are not ingesting it"', async () => {

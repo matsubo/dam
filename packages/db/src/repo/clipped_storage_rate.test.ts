@@ -38,7 +38,7 @@ const SQUARE_OFFSHORE = {
 
 const EXT_IDS = ['CLIP-TEST-A', 'CLIP-TEST-B'];
 // One of the sources migration 0040 marks trusted_rate_basis.
-const TRUSTED_SOURCE = 'niigata-bousai';
+const TRUSTED_SOURCE = 'okayama-bousai';
 
 // 屈足ダム's shape: stored volume is 3.4x the master capacity.
 const CLIPPED_CAPACITY = 844_000;

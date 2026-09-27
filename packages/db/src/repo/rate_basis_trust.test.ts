@@ -40,8 +40,8 @@ const SQUARE_OFFSHORE = {
 };
 
 const EXT_IDS = ['TRUST-TEST-A', 'TRUST-TEST-B'];
-// 'niigata-bousai' is one of the sources migration 0040 marks trusted_rate_basis.
-const TRUSTED_SOURCE = 'niigata-bousai';
+// 'okayama-bousai' is one of the sources migration 0040 marks trusted_rate_basis.
+const TRUSTED_SOURCE = 'okayama-bousai';
 const UNTRUSTED_SOURCE = 'test';
 
 let watershedId: bigint;

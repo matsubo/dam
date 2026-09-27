@@ -34,6 +34,12 @@ canonical product/architecture spec. It precedes any LLM-written doc.
   or doc mentions it. `seed_synthetic_observations.ts` still exists for a
   local/fresh bring-up and re-inserts the row if you run it — don't
   reintroduce it into the public surface.
+- **Do not crawl an upstream whose `robots.txt` disallows it.** User
+  decision, 2026-09-28: `niigata-bousai` and `shizuoka-bousai` were retired
+  for this (migration 0101 sets them `active = false`; their tasks are gone,
+  their historical observations stay). Check `robots.txt` before adding a
+  source; an allowed alternate path (e.g. `ingest_shiga.ts`'s `/mobile/dam/`)
+  is fine.
 - **Do not invent new URLs / endpoints** in commits or docs. If you reference
   an external upstream, verify it actually exists with `curl -sI`.
 - **Do not add features the user did not ask for.** Read `CLAUDE.md` rules.
