@@ -1,7 +1,8 @@
 // apps/worker/src/tasks/ingest_jwa_kiso_rt.test.ts
 
-import { describe, expect, test } from 'bun:test';
-import { parseKisoRtHtml, parseKisoRtTimestamp } from './ingest_jwa_kiso_rt.ts';
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { sql } from '@dam/db/client';
+import { ensureExternalIds, parseKisoRtHtml, parseKisoRtTimestamp } from './ingest_jwa_kiso_rt.ts';
 
 describe('parseKisoRtTimestamp', () => {
   test('parses JST timestamp to UTC (subtract 9h)', () => {
@@ -116,5 +117,74 @@ ${inRow}${outRow}</tbody></table>`;
     const { observedAt, rows } = parseKisoRtHtml(html);
     expect(observedAt).toBeNull();
     expect(rows).toHaveLength(1); // still parses dam data
+  });
+});
+
+describe('ensureExternalIds binds 中里貯水池 to 三重用水 in 三重県', () => {
+  // 中里貯水池 is 三重用水's reservoir (いなべ市, NDI 940; the jwa-chubu report
+  // prints its 利水容量 16,000 千m³ = the master's 有効). Migration 0031 had
+  // invented a 長野 '中里' for it, which carried the stamp on prod. Synthetic
+  // rows: the 三重 master and a stamped 長野 namesake.
+  const SLUGS = ['jwa-kiso-rt-t-nakazato-mie', 'jwa-kiso-rt-t-nakazato-nagano'];
+  const KEY = '中里貯水池';
+
+  async function insertDam(slug: string, prefCode: string, stamped: boolean): Promise<bigint> {
+    const ids = stamped ? { 'jwa-kiso-rt': KEY } : {};
+    const rows = await sql<{ id: bigint }[]>`
+      INSERT INTO dams (slug, name, pref_code, location, external_ids)
+      VALUES (${slug}, '中里', ${prefCode},
+              ST_SetSRID(ST_MakePoint(136.48, 35.22), 4326)::geography, ${sql.json(ids)})
+      RETURNING id
+    `;
+    const id = rows[0]?.id;
+    if (!id) throw new Error('insert dam failed');
+    return id;
+  }
+
+  async function stampOf(id: bigint): Promise<string | null> {
+    const rows = await sql<{ k: string | null }[]>`
+      SELECT external_ids->>'jwa-kiso-rt' AS k FROM dams WHERE id = ${id}
+    `;
+    return rows[0]?.k ?? null;
+  }
+
+  // ensureExternalIds records the jwa-kiso-rt universe; remove only the rows
+  // this file created, never ones that were already there.
+  let universeBefore: string[] = [];
+  let runBefore = false;
+  beforeAll(async () => {
+    const rows = await sql<{ k: string }[]>`
+      SELECT source_external_id AS k FROM source_universe WHERE source_id = 'jwa-kiso-rt'
+    `;
+    universeBefore = rows.map((r) => r.k);
+    const runs = await sql`SELECT 1 FROM source_universe_runs WHERE source_id = 'jwa-kiso-rt'`;
+    runBefore = runs.length > 0;
+  });
+  beforeEach(async () => {
+    await sql`DELETE FROM dams WHERE slug = ANY(${SLUGS})`;
+  });
+  afterAll(async () => {
+    await sql`DELETE FROM dams WHERE slug = ANY(${SLUGS})`;
+    await sql`
+      DELETE FROM source_universe
+      WHERE source_id = 'jwa-kiso-rt' AND NOT (source_external_id = ANY(${universeBefore}))
+    `;
+    if (!runBefore) await sql`DELETE FROM source_universe_runs WHERE source_id = 'jwa-kiso-rt'`;
+  });
+
+  test('the 三重 row wins over a 長野 namesake that holds the stamp', async () => {
+    const mie = await insertDam(SLUGS[0] as string, '24', false);
+    const nagano = await insertDam(SLUGS[1] as string, '20', true);
+
+    const matches = await ensureExternalIds(() => {});
+
+    expect(matches.find((m) => m.kisoName === KEY)?.damId.toString()).toBe(mie.toString());
+    expect(await stampOf(mie)).toBe(KEY);
+    expect(await stampOf(nagano)).toBeNull();
+    const [u] = await sql<{ prefCode: string | null }[]>`
+      SELECT pref_code AS "prefCode" FROM source_universe
+      WHERE source_id = 'jwa-kiso-rt' AND source_external_id = ${KEY}
+    `;
+    expect(u?.prefCode).toBe('24');
   });
 });
