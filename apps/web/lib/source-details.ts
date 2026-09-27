@@ -91,6 +91,15 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '利根川水系 9 施設 (矢木沢/奈良俣/藤原/相俣/薗原/八ッ場/下久保/草木/渡良瀬貯水池) と荒川水系 4 施設 (二瀬/滝沢/浦山/荒川貯水池) の貯水量(万m³)・貯水率。藤原/相俣/薗原/八ッ場/二瀬は新規カバレッジ。',
     label: 'JWA 利根川/荒川',
   },
+  'jwa-tonekako': {
+    upstream:
+      '水資源機構 利根川河口堰管理所 利根河口堰 情報提供 (tonekako.sakura.ne.jp — water.go.jp/honsya/honsya/suigen/realtime/ からリンク)',
+    license:
+      '水資源機構ウェブサイト利用ルール — 「数値データ、簡単な表・グラフ等は著作権の対象ではありません…自由に利用できます」(出典: 独立行政法人水資源機構)',
+    cadence: '時次 (正時値・直近 24 時間; 取得は毎時 :54、24 時間分を毎回 upsert)',
+    what: '利根川河口堰 (茨城/千葉境) の堰上流水位 (新宿 19.0km, Y.P.m)・堰流入量・堰通過流量 (ゲート全開時は ** = 欠測扱い)。貯水量・貯水率は公表なし。他に実時間データのない施設。',
+    label: 'JWA 利根川河口堰',
+  },
   'jwa-toyokawa': {
     upstream: '水資源機構 中部支社 豊川水系 (water.go.jp/mizu/chubu/realtime/index_2.html)',
     license: '公的統計 — 出典明示で再配布可',
