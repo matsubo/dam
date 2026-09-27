@@ -383,7 +383,7 @@ export const CRONTAB = `
 # 長野県企業局 ダム情報 10分諸量 JSON — 高遠 (also kasenbosai) / 菅平 (sole source).
 # Four newest 10-min rows per file, "HH:MM" only; dated from Last-Modified.
 # EL 貯水位 + 全流入量 + 全放流量; 菅平 also 貯水率 (untrusted, no volume).
-# Priority 307. Cron at :50.
+# Priority 311 (kasenbosai's 高遠 rows are all NULL; see the task). Cron at :50.
 50 * * * * ingest:nagano-kigyo
 
 # 佐賀県河川砂防情報システム ダム現況表 — 19 県管理ダム (岸川/庭木/繁昌/天ヶ瀬/

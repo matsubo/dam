@@ -2,7 +2,7 @@
 //
 // 長野県企業局 ダム情報 — the 企業局's own 10分諸量 for its generating dams.
 //
-//   高遠ダム (天竜川水系三峰川; 発電・かんがい) — also on kasenbosai
+//   高遠ダム (天竜川水系三峰川; 発電・かんがい) — kasenbosai rows are all NULL
 //   菅平ダム (信濃川水系神川; かんがい・発電・上水道) — no other live source
 //
 // Source: https://naganoken-kigyokyoku.jp/dam/ loads, per dam,
@@ -31,8 +31,13 @@
 // Rate: 菅平's v_chor is stored as a fraction but NOT trusted — the feed
 // publishes no 貯水量, so the denominator cannot be back-solved per 0048.
 //
-// Priority 307: below kasenbosai (310), which carries a volume and a trusted
-// rate for 高遠; alone on 菅平. Cron hourly at :50.
+// Priority 311, above kasenbosai (310). kasenbosai's 高遠 station (stamp
+// 2183100700009) has never carried a volume (0 of 3,199 prod rows) and its
+// last non-NULL value is 2026-07-03 05:50 UTC — 2,014 all-NULL rows since
+// 07-06 as of 2026-09-27 — yet it keeps writing hourly rows, and
+// preferredSourceForDam() picks the top-priority source with ANY row, so
+// below it 高遠's chart stays empty. 311 is shared only by tochigi-bodik /
+// hyogo-bodik, which never cover 長野. Alone on 菅平. Cron hourly at :50.
 
 import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
@@ -139,7 +144,7 @@ export function parseNaganoKigyoTable(json: string, cfg: DamCfg, lastModified: D
 async function ensureSourcePriority(): Promise<void> {
   await sql`
     INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 307,
+    VALUES (${SOURCE_ID}, 311,
             '長野県企業局 ダム情報 10分諸量 — 高遠・菅平 (貯水位・全流入量・全放流量, 菅平は貯水率)',
             true)
     ON CONFLICT (source_id) DO UPDATE
