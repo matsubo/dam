@@ -1,19 +1,25 @@
 // apps/worker/src/tasks/ingest_chiba.ts
 //
-// Phase B6 (#10): 千葉県 県内ダムの貯水状況 daily snapshot.
+// Phase B6 (#10): 千葉県 県内ダムの貯水状況 weekly snapshot.
 //
 // Source: https://www.pref.chiba.lg.jp/suisei/chosui/chosuijoukyou.html
-// Page is updated each morning around 9:00 JST with a static HTML table:
+// Page is updated weekly (Mondays; 更新日 a day or so later) with a static
+// HTML table:
 //   貯水率（％）| ダム名 | 水道事業者 | 貯水容量(m³) | 貯水量(m³) | 貯水率(%)
 // Two tables (水道用 + 工業用水) total ~23 dams across 千葉県 (master has 50).
-// Page header carries 「令和X年M月D日H時現在」 timestamp.
+// The survey date is the table heading 「県内ダム貯水状況（令和X年M月D日現在）」.
+// The chart image above the table has its own 「令和X年M月D日9時現在」 alt text,
+// which is NOT updated reliably: on 2026-09-27 the page carried 9/14 data
+// under a 9/7 alt, and reading the alt stamped the 9/14 figures onto the 9/7
+// rows.
 //
 // We extract one observation per dam at the page's stated timestamp
 // (snapped to JST → UTC). No flow / level data on this source, only
 // storage volume + rate.
 //
-// Cron: daily at 02:00 UTC = 11:00 JST (gives upstream 2h headroom after
-// its 9 AM publish).
+// Cron: daily at 02:30 UTC = 11:30 JST. The page changes about once a week
+// (sometimes skipping one); polling daily and UPSERTing on the survey date
+// picks the update up within a day.
 
 import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
@@ -41,15 +47,18 @@ function parseNum(s: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Map "令和X(YYYY)年M月D日H時" or "令和X年M月D日H時" → UTC Date snapped to H:00 JST. */
+/**
+ * The table heading's 「県内ダム貯水状況（令和X年M月D日[H時]現在）」 → UTC.
+ * The heading carries no hour; the survey is the 9時 reading, so H defaults
+ * to 9 (JST).
+ */
 export function parseChibaTimestamp(html: string): Date | null {
-  // Prefer the in-body 「令和X年M月D日H時現在」 line over the header 更新日.
-  const m = html.match(/令和(\d+)年(\d{1,2})月(\d{1,2})日(\d{1,2})時/);
+  const m = html.match(/県内ダム貯水状況（令和(\d+)年(\d{1,2})月(\d{1,2})日(?:(\d{1,2})時)?現在/);
   if (!m) return null;
   // 令和元年 = 2019. 令和X = 2018 + X (令和8 = 2026).
-  const reiwa = Number(m[1]);
-  const yyyy = 2018 + reiwa;
-  return new Date(Date.UTC(yyyy, Number(m[2]) - 1, Number(m[3]), Number(m[4]) - 9, 0, 0, 0));
+  const yyyy = 2018 + Number(m[1]);
+  const hour = m[4] === undefined ? 9 : Number(m[4]);
+  return new Date(Date.UTC(yyyy, Number(m[2]) - 1, Number(m[3]), hour - 9, 0, 0, 0));
 }
 
 /** Normalize 一/二 → 1/2 and strip "ダム" suffix to compare against master.name. */
@@ -91,7 +100,7 @@ async function ensureSourcePriority(): Promise<void> {
   await sql`
     INSERT INTO source_priorities (source_id, priority, description, active)
     VALUES (${SOURCE_ID}, 290,
-            '千葉県 県内ダムの貯水状況 — daily 09:00 JST snapshot (23 ダム; 水道用+工業用水)',
+            '千葉県 県内ダムの貯水状況 — weekly 09:00 JST survey (23 ダム; 水道用+工業用水)',
             true)
     ON CONFLICT (source_id) DO UPDATE
       SET priority    = EXCLUDED.priority,
