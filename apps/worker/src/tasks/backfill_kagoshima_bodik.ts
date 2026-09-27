@@ -24,7 +24,9 @@
 // To import only recent years:
 //   add_job('backfill:kagoshima-bodik', { fromYear: 2024 })
 
+import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
+import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import { unzipSync } from 'fflate';
@@ -170,8 +172,9 @@ async function resolveDamIds(
   names: string[],
   log: (s: string) => void,
 ): Promise<Map<string, bigint>> {
-  const masters = await sql<{ id: bigint; name: string }[]>`
-    SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
+  const masters = await sql<BindableMaster[]>`
+    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
+    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out = new Map<string, bigint>();
 
@@ -179,8 +182,12 @@ async function resolveDamIds(
     const stem = normalizeName(rawName);
     if (!stem) continue;
 
-    let best: { id: bigint; rank: number } | null = null;
-    for (const m of masters) {
+    // A row already stamped with this station keeps it (#57).
+    const stamped = stampedMaster(masters, rawName);
+    let best: { m: BindableMaster; rank: number } | null = stamped
+      ? { m: stamped, rank: -1 }
+      : null;
+    for (const m of stamped ? [] : masters) {
       const mStem = normalizeName(m.name);
       let rank: number;
       if (mStem === stem) rank = 0;
@@ -188,8 +195,8 @@ async function resolveDamIds(
       else if (mStem.startsWith(stem)) rank = 2;
       else if (mStem.includes(stem)) rank = 3;
       else continue;
-      if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-        best = { id: m.id, rank };
+      if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
+        best = { m, rank };
       }
     }
 
@@ -198,14 +205,8 @@ async function resolveDamIds(
       continue;
     }
 
-    out.set(rawName, best.id);
-    await sql`
-      UPDATE dams
-      SET external_ids = COALESCE(external_ids, '{}'::jsonb)
-                       || jsonb_build_object(${SOURCE_ID}::text, ${rawName}::text)
-      WHERE id = ${best.id}
-        AND COALESCE(external_ids->>${SOURCE_ID}, '') <> ${rawName}
-    `;
+    out.set(rawName, best.m.id);
+    await bindExternalId(best.m.id, SOURCE_ID, rawName);
   }
 
   return out;

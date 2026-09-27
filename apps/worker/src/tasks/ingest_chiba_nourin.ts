@@ -32,6 +32,7 @@
 // = 64.5), so back-solving returns the source's own 有効貯水量. The per-row
 // check below enforces that rather than trusting the claim wholesale.
 
+import { type BindableMaster, preferMaster } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
@@ -167,17 +168,17 @@ export function normalizeName(s: string): string {
 
 const KIND_SUFFIX_RE = /(調整池|貯水池|ため池|溜池)$/;
 
-/** Best master dam for a feed name; exact beats stem beats substring. */
-export function chooseMaster(
-  feedName: string,
-  masters: { id: bigint; name: string }[],
-): bigint | null {
+/**
+ * Best master dam for a feed name; exact beats stem beats substring, ties
+ * going to the current （元）/（再） twin, else the lower id.
+ */
+export function chooseMaster(feedName: string, masters: BindableMaster[]): bigint | null {
   const stem = normalizeName(feedName);
   if (!stem) return null;
   const bareStem = stem.replace(KIND_SUFFIX_RE, '');
   const hasBareStem = bareStem.length >= 2 && bareStem !== stem;
 
-  let best: { id: bigint; rank: number } | null = null;
+  let best: { m: BindableMaster; rank: number } | null = null;
   for (const m of masters) {
     const mStem = normalizeName(m.name);
     let rank: number;
@@ -188,11 +189,11 @@ export function chooseMaster(
     else if (mStem.includes(stem)) rank = 4;
     else if (hasBareStem && mStem === bareStem) rank = 5;
     else continue;
-    if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-      best = { id: m.id, rank };
+    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
+      best = { m, rank };
     }
   }
-  return best?.id ?? null;
+  return best?.m.id ?? null;
 }
 
 // --- DB helpers -------------------------------------------------------------
@@ -238,8 +239,9 @@ const task: Task = async (_payload, helpers) => {
   }
   log(`${SOURCE_ID}: parsed ${rows.length} dam rows for ${reportDate.toISOString()}`);
 
-  const masters = await sql<{ id: bigint; name: string }[]>`
-    SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
+  const masters = await sql<BindableMaster[]>`
+    SELECT id, name, completed_year AS "completedYear"
+    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
 
   const universe: UniverseRow[] = published.map((name) => ({
