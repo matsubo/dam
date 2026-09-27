@@ -12,6 +12,7 @@ import ingestAichiKasen from './tasks/ingest_aichi_kasen.ts';
 import ingestAitoyo from './tasks/ingest_aitoyo.ts';
 import ingestAkita from './tasks/ingest_akita_kasen.ts';
 import ingestAomori from './tasks/ingest_aomori.ts';
+import ingestCgrAshidaSeki from './tasks/ingest_cgr_ashida_seki.ts';
 import ingestCgrMlit from './tasks/ingest_cgr_mlit.ts';
 import ingestChiba from './tasks/ingest_chiba.ts';
 import ingestChibaNourin from './tasks/ingest_chiba_nourin.ts';
@@ -133,6 +134,7 @@ async function main(): Promise<void> {
       'ingest:aomori-dam': ingestAomori,
       'ingest:hkd-mlit-dam': ingestHkdMlit,
       'ingest:cgr-mlit-dam': ingestCgrMlit,
+      'ingest:cgr-ashida-seki': ingestCgrAshidaSeki,
       'ingest:ktr-kinu-dam': ingestKtrKinu,
       'ingest:ktr-tone-dam': ingestKtrTone,
       'ingest:qsr-ryumon-dam': ingestQsrRyumon,

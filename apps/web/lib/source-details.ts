@@ -264,6 +264,15 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '中国地方整備局直轄 11 ダム (岡山:苫田 / 広島:土師・弥栄・八田原・温井・灰塚 / 山口:島地川 / 鳥取:菅沢・殿 / 島根:志津見・尾原) の貯水位・流入量・放流量・貯水率(有効容量)・雨量。',
     label: '中国地方整備局ダム',
   },
+  'cgr-ashida-seki': {
+    upstream:
+      '国土交通省 中国地方整備局 福山河川国道事務所「芦田川水系 水文データ」 (cgr.mlit.go.jp/fukuyama/mobile_ashidagawa/sekisyoryou.php)',
+    license:
+      '中国地方整備局ホームページのコンテンツは、権利表記の記載がない限り「公共データ利用規約（第1.0版）」(PDL1.0) に準拠した利用条件の下で利用可 — 出典記載が必要 (cgr.mlit.go.jp/about_manual)',
+    cadence: '時次 (元データは 10 分更新の最新値のみ; 取得は毎時 :54)',
+    what: '芦田川河口堰 (広島県福山市) の堰上水位・貯水量(千m³)・流入量・放流量。貯水率は非公表 (貯水量と有効貯水容量から算出)。',
+    label: '芦田川河口堰',
+  },
   synthetic: {
     upstream: '当サイトの内部生成 (シード値)',
     license: 'CC0 (出典明示は任意)',
