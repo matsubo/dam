@@ -16,7 +16,7 @@
 //   2. Score with match_kasenbosai_scoring.pickBest — see that module for the
 //      tiers, the cross-prefecture rule and the ordinal-sibling guard.
 //   3. Distance tie-break: nearer beats farther within same score tier;
-//      （元）/（再） twins tie-break on preferMaster instead.
+//      （元）/（再） twins keep the one already stamped, else preferMaster.
 //   4. Write external_ids.kasenbosai for score ≥ MATCH_THRESHOLD with
 //      bindExternalId, so the station leaves any row it was stamped on before;
 //      stage anything below REVIEW_THRESHOLD for human review in match_review.
@@ -217,6 +217,7 @@ export async function matchOne(d: CatalogueDam): Promise<MatchResult> {
       distance_m: number;
       pref_code: string | null;
       completed_year: number | null;
+      stamp: string | null;
     }[]
   >`
     SELECT
@@ -224,7 +225,8 @@ export async function matchOne(d: CatalogueDam): Promise<MatchResult> {
       d.name,
       ST_Distance(d.location::geography, ST_GeogFromText(${point})) AS distance_m,
       d.pref_code,
-      d.completed_year
+      d.completed_year,
+      d.external_ids->>'kasenbosai' AS stamp
     FROM dams d
     WHERE d.location IS NOT NULL
       AND ST_DWithin(d.location::geography, ST_GeogFromText(${point}), 5000)
@@ -255,11 +257,13 @@ export async function matchOne(d: CatalogueDam): Promise<MatchResult> {
       id: r.id,
       name: r.name,
       completedYear: r.completed_year,
+      stamp: r.stamp,
       distanceM: r.distance_m,
       prefCode: r.pref_code,
     })),
     normStem,
     jisPref,
+    { stationKey: d.obsFcd },
   );
   if (!best || best.score < MATCH_THRESHOLD) {
     return {

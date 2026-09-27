@@ -17,13 +17,14 @@ function cand(
   name: string,
   distanceM: number,
   prefCode: string | null,
-  master: { id?: number; completedYear?: number | null } = {},
+  master: { id?: number; completedYear?: number | null; stamp?: string | null } = {},
 ): ScoreCandidate {
   nextId += 1;
   return {
     id: BigInt(master.id ?? nextId),
     name,
     completedYear: master.completedYear ?? null,
+    stamp: master.stamp ?? null,
     distanceM,
     prefCode,
   };
@@ -162,8 +163,8 @@ describe('pickBest — （元）/（再） twins', () => {
     const moto = cand('南畑（元）', 27.1, '40', { id: 11045, completedYear: 1985 });
     const sai = cand('南畑（再）', 27.1, '40', { id: 11046, completedYear: 1985 });
     const stem = normalizeJaName('南畑ダム');
-    expect(pickBest([moto, sai], stem, '40', 2026)?.candidate.name).toBe('南畑（再）');
-    expect(pickBest([sai, moto], stem, '40', 2026)?.candidate.name).toBe('南畑（再）');
+    expect(pickBest([moto, sai], stem, '40', { year: 2026 })?.candidate.name).toBe('南畑（再）');
+    expect(pickBest([sai, moto], stem, '40', { year: 2026 })?.candidate.name).toBe('南畑（再）');
   });
 
   test('松原 binds its （再）, not both rows', () => {
@@ -175,7 +176,7 @@ describe('pickBest — （元）/（再） twins', () => {
       ],
       normalizeJaName('松原ダム'),
       '44',
-      2026,
+      { year: 2026 },
     );
     expect(String(best?.candidate.id)).toBe('11337');
   });
@@ -191,7 +192,7 @@ describe('pickBest — （元）/（再） twins', () => {
       ],
       normalizeJaName('天ヶ瀬ダム'),
       '26',
-      2026,
+      { year: 2026 },
     );
     expect(best?.candidate.name).toBe('天ヶ瀬（再）');
     expect(best?.score).toBe(1);
@@ -205,8 +206,8 @@ describe('pickBest — （元）/（再） twins', () => {
       cand('長安口（再）', 17.2, '36', { id: 10555, completedYear: 2028 }),
     ];
     const stem = normalizeJaName('長安口ダム');
-    expect(pickBest(rows, stem, '36', 2026)?.candidate.name).toBe('長安口（元）');
-    expect(pickBest(rows, stem, '36', 2028)?.candidate.name).toBe('長安口（再）');
+    expect(pickBest(rows, stem, '36', { year: 2026 })?.candidate.name).toBe('長安口（元）');
+    expect(pickBest(rows, stem, '36', { year: 2028 })?.candidate.name).toBe('長安口（再）');
   });
 
   test('the tie-break needs equal scores: a better-scoring （元） is not overridden', () => {
@@ -220,10 +221,59 @@ describe('pickBest — （元）/（再） twins', () => {
       ],
       normalizeJaName('下筌ダム'),
       '43',
-      2026,
+      { year: 2026 },
     );
     expect(best?.candidate.name).toBe('下筌（元）');
     expect(best?.score).toBe(1);
+  });
+
+  describe('a twin already stamped with the station keeps it', () => {
+    // 松川ダム (長野, 2183100700010) is 447 m from both 松川 rows. Prod's
+    // 松川（再） has no completion year (0056 cleared it: ダム便覧 leaves it
+    // blank), so preferMaster alone would pick the （元）.
+    const KEY = '2183100700010';
+    const stem = normalizeJaName('松川ダム');
+    const pair = (
+      stamps: { moto?: string | null; sai?: string | null },
+      saiYear: number | null = null,
+    ) => [
+      cand('松川（元）', 446.7, '20', {
+        id: 9771,
+        completedYear: 1974,
+        stamp: stamps.moto ?? null,
+      }),
+      cand('松川（再）', 446.7, '20', {
+        id: 9770,
+        completedYear: saiYear,
+        stamp: stamps.sai ?? null,
+      }),
+    ];
+
+    test('a stamp on the not-yet-dated （再） stays there', () => {
+      const best = pickBest(pair({ sai: KEY }), stem, '20', { stationKey: KEY, year: 2026 });
+      expect(best?.candidate.name).toBe('松川（再）');
+    });
+
+    test('a stamp on the （元） stays there even when the （再） is completed', () => {
+      const best = pickBest(pair({ moto: KEY }, 1974), stem, '20', { stationKey: KEY, year: 2026 });
+      expect(best?.candidate.name).toBe('松川（元）');
+    });
+
+    test('both stamped falls back to preferMaster', () => {
+      const best = pickBest(pair({ moto: KEY, sai: KEY }), stem, '20', {
+        stationKey: KEY,
+        year: 2026,
+      });
+      expect(best?.candidate.name).toBe('松川（元）');
+    });
+
+    test("another station's stamp does not count", () => {
+      const best = pickBest(pair({ sai: '2183100700007' }), stem, '20', {
+        stationKey: KEY,
+        year: 2026,
+      });
+      expect(best?.candidate.name).toBe('松川（元）');
+    });
   });
 });
 
