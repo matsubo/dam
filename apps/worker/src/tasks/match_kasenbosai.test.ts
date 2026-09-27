@@ -1,6 +1,15 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { sql } from '@dam/db/client';
-import { matchOne, writeMatchReview } from './match_kasenbosai.ts';
+import {
+  bindStation,
+  type CatalogueDam,
+  type DamCollection,
+  matchOne,
+  parseDamCollection,
+  writeMatchReview,
+} from './match_kasenbosai.ts';
 
 const OBS_FCD = 'TEST-MATCH-REVIEW-001';
 let damA: bigint;
@@ -166,5 +175,84 @@ describe('matchOne — candidate query', () => {
     });
     expect(String(m.damId)).toBe(String(samePref));
     expect(m.reason).toBe('exact-name');
+  });
+});
+
+describe('（元）/（再） twins share one station', () => {
+  // 長野's dam file from the 2026-09-27 16:20 JST snapshot, trimmed to 美和ダム
+  // and two neighbours. The twin rows below copy the local master: same point
+  // 248 m from the station, both completed 2023.
+  const FIXTURE = join(
+    import.meta.dir,
+    '..',
+    '..',
+    '..',
+    '..',
+    'tests/fixtures/kasenbosai/obs_dam_2001_2026-09-27.json',
+  );
+  const MIWA_FCD = '2183100700002';
+  const SLUGS = ['kb79-test-miwa-moto', 'kb79-test-miwa-sai'];
+
+  async function insertTwin(slug: string, name: string, stamp: string | null): Promise<bigint> {
+    const ids = stamp == null ? {} : { kasenbosai: stamp };
+    const rows = await sql<{ id: bigint }[]>`
+      INSERT INTO dams (slug, name, pref_code, completed_year, location, external_ids)
+      VALUES (${slug}, ${name}, '20', 2023,
+              ST_SetSRID(ST_MakePoint(138.07926446300007, 35.81380310600008), 4326)::geography,
+              ${sql.json(ids)})
+      RETURNING id
+    `;
+    const id = rows[0]?.id;
+    if (!id) throw new Error('insert dam failed');
+    return id;
+  }
+
+  async function stampOf(id: bigint): Promise<string | null> {
+    const rows = await sql<{ k: string | null }[]>`
+      SELECT external_ids->>'kasenbosai' AS k FROM dams WHERE id = ${id}
+    `;
+    return rows[0]?.k ?? null;
+  }
+
+  async function miwaStation(): Promise<CatalogueDam> {
+    const fc = JSON.parse(await readFile(FIXTURE, 'utf8')) as DamCollection;
+    const station = parseDamCollection(fc, 2001).find((d) => d.obsFcd === MIWA_FCD);
+    if (!station) throw new Error('美和ダム missing from fixture');
+    return station;
+  }
+
+  beforeEach(async () => {
+    await sql`DELETE FROM dams WHERE slug = ANY(${SLUGS})`;
+  });
+  afterAll(async () => {
+    await sql`DELETE FROM dams WHERE slug = ANY(${SLUGS})`;
+  });
+
+  test('a run clears the stamp both twins picked up and keeps the completed （再）', async () => {
+    // The state #79 found on 美和, 横山, 南畑, 天ヶ瀬, 松原: earlier runs each
+    // picked whichever twin the distance-ordered query returned first, and
+    // stamps were only ever added. （元） is inserted first so it leads the tie.
+    const moto = await insertTwin(SLUGS[0] as string, '美和（元）', MIWA_FCD);
+    const sai = await insertTwin(SLUGS[1] as string, '美和（再）', MIWA_FCD);
+
+    const m = await matchOne(await miwaStation());
+    expect(String(m.damId)).toBe(String(sai));
+    expect(m.reason).toBe('exact-name');
+    if (m.damId == null) throw new Error('unmatched');
+
+    expect(await bindStation(m.damId, MIWA_FCD)).toBe(false); // already on （再）
+    expect(await stampOf(sai)).toBe(MIWA_FCD);
+    expect(await stampOf(moto)).toBeNull();
+  });
+
+  test('a stamp left on the （元） moves to the （再）', async () => {
+    const moto = await insertTwin(SLUGS[0] as string, '美和（元）', MIWA_FCD);
+    const sai = await insertTwin(SLUGS[1] as string, '美和（再）', null);
+
+    const m = await matchOne(await miwaStation());
+    if (m.damId == null) throw new Error('unmatched');
+    expect(await bindStation(m.damId, MIWA_FCD)).toBe(true);
+    expect(await stampOf(sai)).toBe(MIWA_FCD);
+    expect(await stampOf(moto)).toBeNull();
   });
 });

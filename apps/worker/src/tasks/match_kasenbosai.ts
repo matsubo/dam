@@ -15,9 +15,11 @@
 //      irrespective of prefecture.
 //   2. Score with match_kasenbosai_scoring.pickBest — see that module for the
 //      tiers, the cross-prefecture rule and the ordinal-sibling guard.
-//   3. Distance tie-break: nearer beats farther within same score tier.
-//   4. Write external_ids.kasenbosai for score ≥ MATCH_THRESHOLD; stage
-//      anything below REVIEW_THRESHOLD for human review in match_review.
+//   3. Distance tie-break: nearer beats farther within same score tier;
+//      （元）/（再） twins tie-break on preferMaster instead.
+//   4. Write external_ids.kasenbosai for score ≥ MATCH_THRESHOLD with
+//      bindExternalId, so the station leaves any row it was stamped on before;
+//      stage anything below REVIEW_THRESHOLD for human review in match_review.
 //
 // Triggered ad-hoc:
 //   add_job('match:kasenbosai', { date?: 'YYYYMMDD', time?: 'HHMM' })
@@ -26,6 +28,7 @@
 import { PREFECTURES } from '@dam/core/prefectures';
 import { normalizeJaName } from '@dam/core/similarity';
 import { sql } from '@dam/db/client';
+import { bindExternalId } from '@dam/db/repo/dams';
 import { recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 import {
@@ -106,8 +109,24 @@ interface DamFeature {
   geometry?: { coordinates?: [number, number] };
   properties?: { obs_fcd?: string; obs_nm?: string; ofc_cd?: number };
 }
-interface DamCollection {
+export interface DamCollection {
   features?: DamFeature[];
+}
+
+/** One prefecture's SCC dam GeoJSON → catalogue rows, skipping unlocated ones. */
+export function parseDamCollection(fc: DamCollection, kbPrefCd: number): CatalogueDam[] {
+  const out: CatalogueDam[] = [];
+  for (const f of fc.features ?? []) {
+    const p = f.properties ?? {};
+    const c = f.geometry?.coordinates;
+    if (!p.obs_fcd || !p.obs_nm || !c || c.length < 2) continue;
+    const lon = c[0];
+    const lat = c[1];
+    if (typeof lon !== 'number' || typeof lat !== 'number') continue;
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+    out.push({ obsFcd: p.obs_fcd, obsNm: p.obs_nm, ofcCd: p.ofc_cd ?? 0, lon, lat, kbPrefCd });
+  }
+  return out;
 }
 
 export async function fetchAllKasenbosaiDams(
@@ -120,24 +139,7 @@ export async function fetchAllKasenbosaiDams(
   for (const pref of prefArea.prefs) {
     const url = `${OBS_BASE}/${date}/${time}/dam/${pref.prefCd}.json`;
     try {
-      const fc = await fetchJson<DamCollection>(url, 8_000);
-      for (const f of fc.features ?? []) {
-        const p = f.properties ?? {};
-        const c = f.geometry?.coordinates;
-        if (!p.obs_fcd || !p.obs_nm || !c || c.length < 2) continue;
-        const lon = c[0];
-        const lat = c[1];
-        if (typeof lon !== 'number' || typeof lat !== 'number') continue;
-        if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
-        out.push({
-          obsFcd: p.obs_fcd,
-          obsNm: p.obs_nm,
-          ofcCd: p.ofc_cd ?? 0,
-          lon,
-          lat,
-          kbPrefCd: pref.prefCd,
-        });
-      }
+      out.push(...parseDamCollection(await fetchJson<DamCollection>(url, 8_000), pref.prefCd));
     } catch (err) {
       log(
         `match:kasenbosai: pref ${pref.prefCd} (${pref.prefNm}) skipped: ${(err as Error).message}`,
@@ -209,13 +211,20 @@ export async function matchOne(d: CatalogueDam): Promise<MatchResult> {
   // LIMIT is 20 rather than 10 because cross-prefecture rows now compete for
   // slots in this distance-ordered list.
   const rows = await sql<
-    { id: bigint; name: string; distance_m: number; pref_code: string | null }[]
+    {
+      id: bigint;
+      name: string;
+      distance_m: number;
+      pref_code: string | null;
+      completed_year: number | null;
+    }[]
   >`
     SELECT
       d.id,
       d.name,
       ST_Distance(d.location::geography, ST_GeogFromText(${point})) AS distance_m,
-      d.pref_code
+      d.pref_code,
+      d.completed_year
     FROM dams d
     WHERE d.location IS NOT NULL
       AND ST_DWithin(d.location::geography, ST_GeogFromText(${point}), 5000)
@@ -245,6 +254,7 @@ export async function matchOne(d: CatalogueDam): Promise<MatchResult> {
     rows.map((r) => ({
       id: r.id,
       name: r.name,
+      completedYear: r.completed_year,
       distanceM: r.distance_m,
       prefCode: r.pref_code,
     })),
@@ -275,14 +285,18 @@ export async function matchOne(d: CatalogueDam): Promise<MatchResult> {
   };
 }
 
-async function writeExternalId(damId: bigint, obsFcd: string): Promise<void> {
-  await sql`
-    UPDATE dams
-    SET external_ids = COALESCE(external_ids, '{}'::jsonb)
-                     || jsonb_build_object('kasenbosai', ${obsFcd}::text)
-    WHERE id = ${damId}
-      AND COALESCE(external_ids->>'kasenbosai', '') <> ${obsFcd}
+/**
+ * Stamp `damId` with the station and take the stamp off every other row.
+ * Returns false when `damId` already carried it. The removal runs either way:
+ * adding-only left the stamp on both （元）/（再） twins whenever successive runs
+ * picked different ones (#79).
+ */
+export async function bindStation(damId: bigint, obsFcd: string): Promise<boolean> {
+  const existing = await sql<{ k: string | null }[]>`
+    SELECT external_ids->>'kasenbosai' AS k FROM dams WHERE id = ${damId}
   `;
+  await bindExternalId(damId, 'kasenbosai', obsFcd);
+  return existing[0]?.k !== obsFcd;
 }
 
 export async function writeMatchReview(d: CatalogueDam, m: MatchResult): Promise<void> {
@@ -357,18 +371,13 @@ const task: Task = async (rawPayload, helpers) => {
       }
       continue;
     }
-    // Check current external_ids.kasenbosai to track new vs existing.
-    const existing = await sql<{ k: string | null }[]>`
-      SELECT external_ids->>'kasenbosai' AS k FROM dams WHERE id = ${m.damId}
-    `;
-    if (existing[0]?.k === d.obsFcd) {
-      alreadySet += 1;
-    } else {
-      await writeExternalId(m.damId, d.obsFcd);
+    if (await bindStation(m.damId, d.obsFcd)) {
       matched += 1;
       log(
         `  ok ${m.obsNm.padEnd(14)} → ${m.damName} (${Math.round(m.distanceM ?? 0)} m, ${m.reason})`,
       );
+    } else {
+      alreadySet += 1;
     }
     // Also stage uncertain auto-matches for review.
     if (m.score < REVIEW_THRESHOLD) {
