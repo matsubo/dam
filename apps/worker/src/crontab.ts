@@ -54,6 +54,18 @@ export const CRONTAB = `
 # 01:00 UTC = 10:00 JST.
 0 1 * * * ingest:jwa-chikugo
 
+# JWA 筑後川局 水管理情報WEB (chikugo.ec-net.jp) — hourly, 5 施設
+# (江川/寺内/小石原川/大山/筑後大堰). Each rep*_I60 page is a 24-row hourly
+# table regenerated at ~:37; the whole window is upserted. Priority 298: above
+# jwa-chikugo (297), below kasenbosai (310). 筑後大堰 has no other source.
+# Cron at :50.
+50 * * * * ingest:jwa-chikugo-rt
+
+# JWA 筑後川局 福岡導水管理室 — 山口調整池 (天拝湖). One page with the day's
+# 0時 reading, regenerated on weekdays at ~04:30 JST; idempotent upsert on the
+# report hour, so hourly polling costs nothing. Cron at :54.
+54 * * * * ingest:jwa-fukudou
+
 # かながわの水がめ JSON API — hourly cadence for 5 prefectural dams
 # (相模/城山/三保/宮ヶ瀬/道志). Page rolls a 30-hour window; cron at
 # every hour :05 captures the freshest reading shortly after the
