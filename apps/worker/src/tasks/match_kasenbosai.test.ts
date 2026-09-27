@@ -281,3 +281,85 @@ describe('（元）/（再） twins share one station', () => {
     expect(await stampOf(moto)).toBeNull();
   });
 });
+
+describe('本河内（高部）: the stamp 0068 moves to the （再） survives the weekly run', () => {
+  // 長崎's dam file from the 2026-09-27 18:00 JST snapshot, trimmed to the two
+  // 本河内 stations. "本河内（高部）" reduces to 本河内, so all four 本河内 rows
+  // score alike and distance alone picks the nearer （元）. The rows sit at
+  // their prod offsets from the station, both shifted to the empty-ocean point.
+  const FIXTURE = join(
+    import.meta.dir,
+    '..',
+    '..',
+    '..',
+    '..',
+    'tests/fixtures/kasenbosai/obs_dam_4201_2026-09-27.json',
+  );
+  const STATION = { lon: 129.9097028, lat: 32.754275 };
+  const MASTERS = [
+    {
+      slug: 'kb79-test-koubu-moto',
+      name: '本河内高部（元）',
+      year: 1891,
+      lon: 129.9092482,
+      lat: 32.7544223,
+    },
+    {
+      slug: 'kb79-test-koubu-sai',
+      name: '本河内高部（再）',
+      year: 2006,
+      lon: 129.9089877,
+      lat: 32.7541035,
+    },
+    {
+      slug: 'kb79-test-teibu-moto',
+      name: '本河内低部（元）',
+      year: 1903,
+      lon: 129.8990358,
+      lat: 32.7524985,
+    },
+    {
+      slug: 'kb79-test-teibu-sai',
+      name: '本河内低部（再）',
+      year: 2012,
+      lon: 129.8990099,
+      lat: 32.7525316,
+    },
+  ];
+  const SLUGS = MASTERS.map((m) => m.slug);
+
+  beforeEach(async () => {
+    await sql`DELETE FROM dams WHERE slug = ANY(${SLUGS})`;
+  });
+  afterAll(async () => {
+    await sql`DELETE FROM dams WHERE slug = ANY(${SLUGS})`;
+  });
+
+  test('keeps 本河内高部（再） over the nearer （元） and the 低部 pair', async () => {
+    const key = 'TEST-KB79-HONGOUCHI-KOUBU';
+    for (const m of MASTERS) {
+      const stamp = m.slug === 'kb79-test-koubu-sai' ? { kasenbosai: key } : {};
+      await sql`
+        INSERT INTO dams (slug, name, pref_code, completed_year, location, external_ids)
+        VALUES (${m.slug}, ${m.name}, '42', ${m.year},
+                ST_SetSRID(ST_MakePoint(${EMPTY_LON + m.lon - STATION.lon},
+                                        ${EMPTY_LAT + m.lat - STATION.lat}), 4326)::geography,
+                ${sql.json(stamp)})
+      `;
+    }
+    const fc = JSON.parse(await readFile(FIXTURE, 'utf8')) as DamCollection;
+    const real = parseDamCollection(fc, 4201).find((d) => d.obsFcd === '1075300700034');
+    if (!real) throw new Error('1075300700034 missing from fixture');
+    expect(real.obsNm).toBe('本河内（高部）');
+
+    const m = await matchOne({ ...real, obsFcd: key, lat: EMPTY_LAT, lon: EMPTY_LON });
+    expect(m.candidates[0]?.name).toBe('本河内高部（元）');
+    expect(m.damName).toBe('本河内高部（再）');
+    if (m.damId == null) throw new Error('unmatched');
+    expect(await bindStation(m.damId, key)).toBe(false);
+    const stamped = await sql<{ slug: string }[]>`
+      SELECT slug FROM dams WHERE slug = ANY(${SLUGS}) AND external_ids->>'kasenbosai' = ${key}
+    `;
+    expect(stamped.map((r) => r.slug)).toEqual(['kb79-test-koubu-sai']);
+  });
+});
