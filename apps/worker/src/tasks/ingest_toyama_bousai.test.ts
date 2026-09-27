@@ -1,125 +1,117 @@
 // apps/worker/src/tasks/ingest_toyama_bousai.test.ts
+//
+// Fixtures are verbatim captures of the two CSVs behind 富山県 河川現況表
+// (https://kawa.pref.toyama.jp/camera/02condlist.html?id=0&sel=3), taken
+// 2026-09-27 at the 16:30 JST update.
 
 import { describe, expect, test } from 'bun:test';
-import { chooseMaster, parseToyamaPage, parseToyamaTimestamp } from './ingest_toyama_bousai.ts';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import {
+  chooseMaster,
+  parseToyamaDamData,
+  parseToyamaStations,
+  type ToyamaStation,
+} from './ingest_toyama_bousai.ts';
 
-// Raw HTML with &#N; numeric entities as served by the Salesforce page.
-// 年=&#24180; 月=&#26376; 日=&#26085; 時=&#26178; 分=&#20998; （=&#65288; ）=&#65289;
-const TS_H2 =
-  '<h2>&#30476;&#20869;&#12480;&#12512;&#24773;&#22577;&#23455;&#27841;&#34920;' +
-  '&#65288;2026&#24180;06&#26376;05&#26085; 17&#26178;00&#20998;&#65289;</h2>';
+const FIXTURES = join(import.meta.dir, '..', '..', '..', '..', 'tests/fixtures/toyama');
 
-describe('parseToyamaTimestamp', () => {
-  test('parses YYYY年MM月DD日 HH時MM分 (JST) → UTC', () => {
-    const d = parseToyamaTimestamp(TS_H2);
-    expect(d?.toISOString()).toBe('2026-06-05T08:00:00.000Z');
+async function fixture(name: string): Promise<string> {
+  return readFile(join(FIXTURES, name), 'utf8');
+}
+
+describe('parseToyamaStations', () => {
+  test('lists all 16 published dams in page order', async () => {
+    const stations = parseToyamaStations(await fixture('damname_data_2026-09-27.csv'));
+    expect(stations.map((s) => s.toyamaName)).toEqual([
+      '室牧ダム',
+      '上市川ダム',
+      '和田川ダム',
+      '利賀川ダム',
+      '白岩川ダム',
+      '子撫川ダム',
+      '角川ダム',
+      '熊野川ダム',
+      '上市川第二ダム',
+      '朝日小川ダム',
+      '布施川ダム',
+      '城端ダム',
+      '境川ダム',
+      '大谷ダム',
+      '久婦須川ダム',
+      '舟川ダム',
+    ]);
+    expect(stations[0]?.code).toBe('0040001');
   });
 
-  test('handles midnight crossover (JST 01:00 → previous UTC day)', () => {
-    const h2 = '<h2>&#65288;2026&#24180;06&#26376;05&#26085; 01&#26178;00&#20998;&#65289;</h2>';
-    const d = parseToyamaTimestamp(h2);
-    expect(d?.toISOString()).toBe('2026-06-04T16:00:00.000Z');
-  });
-
-  test('returns null for page without h2 timestamp', () => {
-    expect(parseToyamaTimestamp('<html><body>no data</body></html>')).toBeNull();
+  test('熊野川 and 朝日小川 are the two dams the page prints no 貯水率 for', async () => {
+    const stations = parseToyamaStations(await fixture('damname_data_2026-09-27.csv'));
+    expect(stations.filter((s) => !s.ratePublished).map((s) => s.toyamaName)).toEqual([
+      '熊野川ダム',
+      '朝日小川ダム',
+    ]);
   });
 });
 
-// Minimal sample page — 3 rows covering: full data / all-null / "--" values.
-// Dam names and 水系名 are &#N;-encoded; numeric values and data-title attrs are plain.
-// 室牧ダム = &#23460;&#29287;&#12480;&#12512;
-// 利賀川ダム = &#21033;&#36032;&#24029;&#12480;&#12512;
-// 大谷ダム = &#22823;&#35895;&#12480;&#12512;
-const SAMPLE_PAGE = `${TS_H2}<table>
-<tbody>
-<tr>
-  <td data-title="ダム名"><a href="https://example.com" target="_blank">&#23460;&#29287;&#12480;&#12512;</a></td>
-  <td data-title="水系名">&#31070;&#36890;&#24029;&#27700;&#31995;</td>
-  <td data-title="全流入量 (m&sup3;/s)">2.16</td>
-  <td data-title="全放流量 (m&sup3;/s)">18.33</td>
-  <td data-title="貯水位 (m)">
-    <span class="normal">
-      250.50
-    </span><span class="low"> &#8595;</span>
-  </td>
-  <td data-title="貯水割合20％水位 (m)">--</td>
-  <td data-title="貯水割合100％水位 (m)">259.0</td>
-</tr>
-<tr>
-  <td data-title="ダム名"><a href="https://example.com" target="_blank">&#21033;&#36032;&#24029;&#12480;&#12512;</a></td>
-  <td data-title="水系名">&#24481;&#27874;&#24029;&#27700;&#31995;</td>
-  <td data-title="全流入量 (m&sup3;/s)">--</td>
-  <td data-title="全放流量 (m&sup3;/s)">--</td>
-  <td data-title="貯水位 (m)">
-    <span class="normal">
-      893.06
-    </span><span class="up"> &#8593;</span>
-  </td>
-  <td data-title="貯水割合20％水位 (m)">--</td>
-  <td data-title="貯水割合100％水位 (m)">--</td>
-</tr>
-<tr>
-  <td data-title="ダム名"><a href="https://example.com" target="_blank">&#22823;&#35895;&#12480;&#12512;</a></td>
-  <td data-title="水系名">&#23567;&#30000;&#24029;&#27700;&#31995;</td>
-  <td data-title="全流入量 (m&sup3;/s)">0.10</td>
-  <td data-title="全放流量 (m&sup3;/s)">0.09</td>
-  <td data-title="貯水位 (m)">
-    <span class="normal">
-      143.66
-    </span><span class="low"> &#8595;</span>
-  </td>
-  <td data-title="貯水割合20％水位 (m)">--</td>
-  <td data-title="貯水割合100％水位 (m)">148.0</td>
-</tr>
-</tbody>
-</table>`;
+describe('parseToyamaDamData', () => {
+  let stations: ToyamaStation[] = [];
+  const parse = async () => {
+    stations = parseToyamaStations(await fixture('damname_data_2026-09-27.csv'));
+    return parseToyamaDamData(await fixture('dam_data_2026-09-27-1630.csv'), stations);
+  };
 
-describe('parseToyamaPage', () => {
-  test('parses 3 dam rows', () => {
-    const rows = parseToyamaPage(SAMPLE_PAGE);
-    expect(rows).toHaveLength(3);
-    expect(rows.map((r) => r.toyamaName)).toEqual(['室牧ダム', '利賀川ダム', '大谷ダム']);
+  test('室牧: 貯水率 is the 利水容量 column, stamped with the row own JST time', async () => {
+    const r = (await parse()).find((x) => x.toyamaName === '室牧ダム');
+    // 16:20 JST on this row while most rows read 16:30.
+    expect(r?.observedAt.toISOString()).toBe('2026-09-27T07:20:00.000Z');
+    expect(r?.waterLevelM).toBeCloseTo(244.15);
+    expect(r?.inflowM3s).toBeCloseTo(4.28);
+    expect(r?.outflowM3s).toBeCloseTo(17.23);
+    // 利水容量 66.3 %, not 有効容量 36.6 %.
+    expect(r?.storageRate).toBeCloseTo(0.663, 6);
   });
 
-  test('all rows share the same observedAt (2026-06-05T08:00Z)', () => {
-    const rows = parseToyamaPage(SAMPLE_PAGE);
-    const ts = '2026-06-05T08:00:00.000Z';
-    for (const r of rows) {
-      expect(r.observedAt.toISOString()).toBe(ts);
-    }
+  test('大谷: a full 利水 pool reads 1.0 while 有効 reads 4.7 %', async () => {
+    const r = (await parse()).find((x) => x.toyamaName === '大谷ダム');
+    expect(r?.storageRate).toBeCloseTo(1, 6);
   });
 
-  test('室牧ダム: all fields parsed correctly', () => {
-    const r = parseToyamaPage(SAMPLE_PAGE).find((x) => x.toyamaName === '室牧ダム');
-    expect(r).toBeDefined();
-    expect(r?.waterLevelM).toBeCloseTo(250.5);
-    expect(r?.inflowM3s).toBeCloseTo(2.16);
-    expect(r?.outflowM3s).toBeCloseTo(18.33);
+  test('角川: flows are scaled ×10 the way the page renders them', async () => {
+    // CSV carries 0.04; the page (and MLIT 川の防災情報 for the same station)
+    // shows 0.40 m³/s.
+    const r = (await parse()).find((x) => x.toyamaName === '角川ダム');
+    expect(r?.inflowM3s).toBeCloseTo(0.4, 6);
+    expect(r?.outflowM3s).toBeCloseTo(0.4, 6);
+    expect(r?.storageRate).toBeCloseTo(0.978, 6);
   });
 
-  test('利賀川ダム: "--" inflow/outflow → null; water level still present', () => {
-    const r = parseToyamaPage(SAMPLE_PAGE).find((x) => x.toyamaName === '利賀川ダム');
-    expect(r).toBeDefined();
-    expect(r?.inflowM3s).toBeNull();
-    expect(r?.outflowM3s).toBeNull();
-    expect(r?.waterLevelM).toBeCloseTo(893.06);
+  test('舟川: flows are scaled ÷10 to what MLIT reads for the same minute', async () => {
+    // CSV 2.11 at 16:30; MLIT 川の防災情報 0.21 at 16:30, Salesforce 0.21 at 16:00.
+    const r = (await parse()).find((x) => x.toyamaName === '舟川ダム');
+    expect(r?.inflowM3s).toBeCloseTo(0.211, 6);
+    expect(r?.outflowM3s).toBeCloseTo(0.211, 6);
   });
 
-  test('大谷ダム: small values parsed correctly', () => {
-    const r = parseToyamaPage(SAMPLE_PAGE).find((x) => x.toyamaName === '大谷ダム');
-    expect(r?.inflowM3s).toBeCloseTo(0.1);
-    expect(r?.outflowM3s).toBeCloseTo(0.09);
-    expect(r?.waterLevelM).toBeCloseTo(143.66);
+  test('熊野川: no 貯水率 where the page prints －, level still kept', async () => {
+    const r = (await parse()).find((x) => x.toyamaName === '熊野川ダム');
+    expect(r?.waterLevelM).toBeCloseTo(308.52);
+    expect(r?.storageRate).toBeNull();
   });
 
-  test('returns empty array for page with no tbody', () => {
-    expect(parseToyamaPage('<html><body>no data</body></html>')).toHaveLength(0);
+  test('城端 / 利賀川: a 貯水率 held over a 欠測 level is not a reading', async () => {
+    // Both print 貯水位 欠測 and no flows, yet the CSV still carries 利水
+    // 18.8 / 15.4 %; MLIT flags the same stations' rates missing.
+    const names = (await parse()).map((x) => x.toyamaName);
+    expect(names).not.toContain('城端ダム');
+    expect(names).not.toContain('利賀川ダム');
+    expect(names).toHaveLength(14);
   });
 
-  test('returns empty array when timestamp is missing', () => {
-    const noTs = '<html><body><table><tbody><tr><td>foo</td></tr></tbody></table></body></html>';
-    expect(parseToyamaPage(noTs)).toHaveLength(0);
+  test('a data row for a code missing from the name list is dropped', () => {
+    const rows = parseToyamaDamData('9999999,2026/09/27,16:30,1.00,1,1.00,1.00,50.0,20.0,-99.9', [
+      { code: '0040001', toyamaName: '室牧ダム', ratePublished: true },
+    ]);
+    expect(rows).toEqual([]);
   });
 });
 
