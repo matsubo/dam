@@ -444,9 +444,15 @@ export const CRONTAB = `
 # 山口県土木防災情報システム ダム観測局 — 23 ダム (小瀬川/生見川/御庄川/中山川/平瀬/
 # 今富/厚東川/真締川/末武川/木屋川/向道/菅野/川上/屋代/佐波川/荒谷/一の坂/湯免/
 # 大坊/見島/阿武川/黒杭川/黒杭川上流). UTF-8 ASPX HTML; one fetch per station;
-# table rows class="hour_XX"; waterLevel + storageRate + inflow + outflow (no volume).
+# writes all 24 on-the-hour rows (class="hour_XX") of the page's 24-hour table;
+# waterLevel + storageRate + inflow + outflow (no volume).
 # Priority 308. Cron at :46.
 46 * * * * ingest:yamaguchi-bousai
+
+# 国土交通省 中国地方整備局 福山河川国道事務所 — 芦田川河口堰 (芦田川水系, 広島/34).
+# mobile_ashidagawa/sekisyoryou.php, one 10分更新 snapshot: 堰上水位 + 貯水量(千m³)
+# + 流入量 + 放流量 (no rate). Priority 303. Cron at :54.
+54 * * * * ingest:cgr-ashida-seki
 
 # 高知県水防情報システム ダム諸量現況表 — 11 ダム (和食/永瀬/鎌井谷/鏡/桐見/坂本/
 # 以布利川 [pref] + 早明浦/大渡/中筋川/横瀬川 [国交省]). Pre-generated static
