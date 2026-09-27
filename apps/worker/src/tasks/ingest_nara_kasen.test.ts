@@ -1,7 +1,7 @@
 // apps/worker/src/tasks/ingest_nara_kasen.test.ts
 
 import { describe, expect, test } from 'bun:test';
-import { parseNaraPage, parseNaraTimestamp } from './ingest_nara_kasen.ts';
+import { chooseMaster, parseNaraPage, parseNaraTimestamp } from './ingest_nara_kasen.ts';
 
 // refDt = 2026-06-05 08:10 UTC (= 17:10 JST, same as page timestamp)
 const REF_DT = new Date('2026-06-05T08:10:00.000Z');
@@ -93,5 +93,23 @@ describe('parseNaraPage', () => {
 
   test('returns empty array for page without tables', () => {
     expect(parseNaraPage('<html><body>no data</body></html>', REF_DT)).toHaveLength(0);
+  });
+});
+
+describe('chooseMaster (#79)', () => {
+  test('keeps the row already stamped with the station over a better name match', () => {
+    const masters = [
+      { id: 10307n, name: '白川（再）', completedYear: 1996, stamp: null },
+      { id: 10308n, name: '白川溜池（元）', completedYear: 1933, stamp: '白川ダム' },
+    ];
+    expect(chooseMaster('白川', masters, '白川ダム')).toBe(10308n);
+  });
+
+  test('binds an equal-rank （元）/（再） pair to the completed （再）, not the lower id', () => {
+    const masters = [
+      { id: 10n, name: '天理（元）', completedYear: 1950, stamp: null },
+      { id: 20n, name: '天理（再）', completedYear: 1978, stamp: null },
+    ];
+    expect(chooseMaster('天理', masters, '天理ダム')).toBe(20n);
   });
 });
