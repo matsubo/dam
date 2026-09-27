@@ -23,6 +23,17 @@ const DATA_URL = process.env.GIFU_KASEN_DAM_URL ?? 'https://www.kasen.pref.gifu.
 
 const SOURCE_ID = 'gifu-kasen';
 
+// Names alone cross prefectures: ダム便覧 has a 岩村 in 北海道 (lower id) as
+// well as this page's 岩村 in 岐阜. Every station here is in 岐阜 except three
+// upper-Kiso / Yahagi dams the prefecture also reports, which ダム便覧 files
+// under 長野 and 愛知.
+const GIFU_PREF = '21';
+const PREF_OUTSIDE_GIFU: Record<string, string> = {
+  矢作ダム: '23',
+  牧尾ダム: '20',
+  味噌川ダム: '20',
+};
+
 // --- types ------------------------------------------------------------------
 
 export interface ParsedRow {
@@ -116,9 +127,40 @@ interface DamMatch {
   damId: bigint;
 }
 
+export interface GifuMaster extends BindableMaster {
+  prefCode: string | null;
+}
+
+/**
+ * Best master dam for a station name, among the station's prefecture:
+ * exact name, stem, then substring.
+ */
+export function chooseMaster(gifuName: string, masters: GifuMaster[]): bigint | null {
+  const stem = normalizeName(gifuName);
+  if (!stem) return null;
+  const pref = PREF_OUTSIDE_GIFU[gifuName] ?? GIFU_PREF;
+  let best: { m: GifuMaster; rank: number } | null = null;
+  for (const m of masters) {
+    if (m.prefCode !== pref) continue;
+    const mStem = normalizeName(m.name);
+    let rank: number;
+    if (m.name === gifuName) rank = 0;
+    else if (mStem === stem) rank = 1;
+    else if (m.name === `${stem}ダム`) rank = 2;
+    else if (mStem.startsWith(stem)) rank = 3;
+    else if (mStem.includes(stem)) rank = 4;
+    else continue;
+    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
+      best = { m, rank };
+    }
+  }
+  return best?.m.id ?? null;
+}
+
 async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear" FROM dams ORDER BY id
+  const masters = await sql<GifuMaster[]>`
+    SELECT id, name, completed_year AS "completedYear", pref_code AS "prefCode"
+    FROM dams ORDER BY id
   `;
   const out: DamMatch[] = [];
   // What this source publishes, matched or not — recorded so /coverage can
@@ -127,40 +169,24 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
   const universe = new Map<string, UniverseRow>();
 
   for (const r of rows) {
-    const stem = normalizeName(r.gifuName);
-    if (!stem) continue;
+    if (!normalizeName(r.gifuName)) continue;
+    const damId = chooseMaster(r.gifuName, masters);
 
-    let best: { m: BindableMaster; rank: number } | null = null;
-    for (const m of masters) {
-      const mStem = normalizeName(m.name);
-      let rank: number;
-      if (m.name === r.gifuName) rank = 0;
-      else if (mStem === stem) rank = 1;
-      else if (m.name === `${stem}ダム`) rank = 2;
-      else if (mStem.startsWith(stem)) rank = 3;
-      else if (mStem.includes(stem)) rank = 4;
-      else continue;
-      if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-        best = { m, rank };
-      }
-    }
-
-    // The page publishes no station id, so the name is the key. `prefCode`
-    // stays null on purpose: this list spans 岐阜/愛知/長野 (矢作・牧尾・味噌川),
-    // so no single code would be true for it — and the names are distinct.
+    // The page publishes no station id, so the name is the key, and the
+    // station's prefecture keeps it apart from same-named dams elsewhere.
     universe.set(r.gifuName, {
       externalId: r.gifuName,
       name: r.gifuName,
-      prefCode: null,
-      resolvedDamId: best?.m.id ?? null,
+      prefCode: PREF_OUTSIDE_GIFU[r.gifuName] ?? GIFU_PREF,
+      resolvedDamId: damId,
     });
 
-    if (!best) {
+    if (!damId) {
       log(`${SOURCE_ID}: no master match for "${r.gifuName}"`);
       continue;
     }
 
-    out.push({ gifuName: r.gifuName, damId: best.m.id });
+    out.push({ gifuName: r.gifuName, damId });
   }
 
   await recordUniverse(SOURCE_ID, [...universe.values()]);
