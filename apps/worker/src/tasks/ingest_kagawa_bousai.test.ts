@@ -99,9 +99,9 @@ describe('parseKagawaItems', () => {
 });
 
 describe('chooseMaster (#79)', () => {
-  // 香川's twin rows as the master holds them (local ids); completion years as
-  // prod shows them: the （再）of 長柄 and 五名 has none in ダム便覧, 内海（再）
-  // was completed in 2013.
+  // 香川's twin rows as the master holds them (local ids). 長柄 and 五名 are in
+  // service as the （元）: both （再） are 建設中 per 香川県 (0071), so they have
+  // no completion year. 内海（再） was completed in 2013.
   const masters = [
     { id: 10477n, name: '五名（元）', completedYear: 1961 },
     { id: 10494n, name: '長柄（再）', completedYear: null },
@@ -111,12 +111,18 @@ describe('chooseMaster (#79)', () => {
     { id: 10524n, name: '五名（再）', completedYear: null },
   ];
 
-  test('a stamped 長柄（再）keeps the station although its completion is unknown', () => {
-    const stamped = masters.map((m) => ({ ...m, stamp: m.id === 10494n ? '長柄ダム' : null }));
-    expect(chooseMaster('長柄ダム', stamped)).toBe(10494n);
+  test('the stamp 0071 puts on 長柄（元）holds even once a （再）year is recorded', () => {
+    // Hypothetical year: the raise is not finished. Moving the station then
+    // takes a migration, not a name match.
+    const stamped = masters.map((m) => ({
+      ...m,
+      completedYear: m.id === 10494n ? 2025 : m.completedYear,
+      stamp: m.id === 10496n ? '長柄ダム' : null,
+    }));
+    expect(chooseMaster('長柄ダム', stamped)).toBe(10496n);
   });
 
-  test('unstamped, 長柄 and 五名 bind the （元）while the （再）has no completion year', () => {
+  test('unstamped, 長柄 and 五名 bind the （元）while the （再）is unfinished', () => {
     expect(chooseMaster('長柄ダム', masters)).toBe(10496n);
     expect(chooseMaster('五名ダム', masters)).toBe(10477n);
   });
