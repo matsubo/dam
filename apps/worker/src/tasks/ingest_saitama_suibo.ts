@@ -25,6 +25,7 @@
 //
 // Priority 308. Cron hourly at :44.
 
+import { type BindableMaster, preferMaster } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
@@ -181,8 +182,8 @@ interface DamMatch {
 }
 
 async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<{ id: bigint; name: string; pref_code: string }[]>`
-    SELECT id, name, pref_code FROM dams
+  const masters = await sql<BindableMaster[]>`
+    SELECT id, name, completed_year AS "completedYear" FROM dams
     WHERE pref_code IN (${PREF_CODE}, '09', '10', '13')
     ORDER BY id
   `;
@@ -202,7 +203,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
   for (const r of rows) {
     const stem = normalizeName(r.saitamaName);
 
-    let best: { id: bigint; rank: number } | null = null;
+    let best: { m: BindableMaster; rank: number } | null = null;
     if (stem) {
       for (const m of masters) {
         const mStem = normalizeName(m.name);
@@ -213,8 +214,8 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
         else if (mStem.startsWith(stem)) rank = 3;
         else if (mStem.includes(stem)) rank = 4;
         else continue;
-        if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-          best = { id: m.id, rank };
+        if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
+          best = { m, rank };
         }
       }
     }
@@ -223,14 +224,14 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
       externalId: r.code,
       name: r.saitamaName,
       prefCode: PREF_CODE,
-      resolvedDamId: best?.id ?? null,
+      resolvedDamId: best?.m.id ?? null,
     });
 
     if (!best) {
       log(`${SOURCE_ID}: no master match for "${r.saitamaName}"`);
       continue;
     }
-    out.push({ saitamaName: r.saitamaName, damId: best.id });
+    out.push({ saitamaName: r.saitamaName, damId: best.m.id });
   }
 
   await recordUniverse(SOURCE_ID, universe);

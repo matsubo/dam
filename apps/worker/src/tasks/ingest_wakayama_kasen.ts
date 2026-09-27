@@ -23,6 +23,7 @@
 //
 // Priority 308. Cron hourly at :41.
 
+import { type BindableMaster, preferMaster } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
@@ -157,16 +158,17 @@ interface DamMatch {
 
 /**
  * Best master dam for a station name: an exact name beats an equal stem beats
- * a `<stem>ダム` master beats a prefix beats a substring, ties going to the
- * lowest master id. Pure, so the universe can resolve every STATION_MAP entry
- * without re-running the fetch.
+ * a `<stem>ダム` master beats a prefix beats a substring, ties going to
+ * preferMaster (the current （元）/（再） twin, else the lowest master id). Pure,
+ * so the universe can resolve every STATION_MAP entry without re-running the
+ * fetch.
  */
 export function chooseMaster(
   rawName: string,
   stem: string,
-  masters: { id: bigint; name: string }[],
+  masters: BindableMaster[],
 ): bigint | null {
-  let best: { id: bigint; rank: number } | null = null;
+  let best: { m: BindableMaster; rank: number } | null = null;
   for (const m of masters) {
     const mStem = normalizeName(m.name);
     let rank: number;
@@ -176,19 +178,20 @@ export function chooseMaster(
     else if (mStem.startsWith(stem)) rank = 3;
     else if (mStem.includes(stem)) rank = 4;
     else continue;
-    if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-      best = { id: m.id, rank };
+    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
+      best = { m, rank };
     }
   }
-  return best?.id ?? null;
+  return best?.m.id ?? null;
 }
 
 async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
   // Include Nara (29) and Mie (24) alongside Wakayama (30): the 22077xxx/22088xxx
   // KKR dams in this source (猿谷/川迫/九尾/大滝/大迫/津風呂/坂本/池原/七色/二津野/小森/風屋)
   // sit in the 熊野川/北山川 watershed spanning all three prefectures.
-  const masters = await sql<{ id: bigint; name: string }[]>`
-    SELECT id, name FROM dams WHERE pref_code = ANY(ARRAY['24', '29', '30']) ORDER BY id
+  const masters = await sql<BindableMaster[]>`
+    SELECT id, name, completed_year AS "completedYear"
+    FROM dams WHERE pref_code = ANY(ARRAY['24', '29', '30']) ORDER BY id
   `;
   const out: DamMatch[] = [];
 

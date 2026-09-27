@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { parseYamaguchiHtml, parseYamaguchiTimestamp } from './ingest_yamaguchi_bousai.ts';
+import {
+  chooseMaster,
+  parseYamaguchiHtml,
+  parseYamaguchiTimestamp,
+} from './ingest_yamaguchi_bousai.ts';
 
 describe('parseYamaguchiTimestamp', () => {
   test('parses "YYYY/MM/DD HH:MM" (JST) → UTC', () => {
@@ -105,5 +109,15 @@ describe('parseYamaguchiHtml', () => {
     expect(row?.storageRate).toBeNull();
     expect(row?.inflowM3s).toBeNull();
     expect(row?.outflowM3s).toBeCloseTo(4.83);
+  });
+});
+
+describe('chooseMaster (#79)', () => {
+  test('binds 木屋川ダム to the completed （再）, not the lower-id （元）', () => {
+    const masters = [
+      { id: 10610n, name: '木屋川（元）', completedYear: 1955 },
+      { id: 10622n, name: '木屋川（再）', completedYear: 1955 },
+    ];
+    expect(chooseMaster('木屋川ダム', masters)).toBe(10622n);
   });
 });

@@ -22,11 +22,16 @@
 // Master match note: 狭山池（再）and 狭山池（元）both normalize to the same stem.
 // chooseMaster breaks the tie by preferring （再）over （元）since rebuilt dams
 // are the operational ones (confirmed: 狭山池（再）total_capacity_m3 = 2,800,000
-// matches the API's storageCapacity exactly).
+// matches the API's storageCapacity exactly). This rank deliberately comes
+// before preferMaster: 狭山池（再）'s completion year is blank in prod (its
+// master name does not match ダム便覧's 狭山池ダム（再）), and preferMaster
+// alone would then fall back to the （元） (#79).
 //
 // Cron: hourly at :31.
 
+import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
+import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
@@ -118,12 +123,20 @@ interface DamMatch {
 }
 
 /**
- * Pick the best master dam for a facility name. When the stem matches both
- * （元）and（再）variants at equal rank, prefer（再）because rebuilt dams are
- * the operational ones (e.g., 狭山池ダム → 狭山池（再）not 狭山池（元）).
+ * Pick the best master dam for a facility name. A row already stamped with
+ * the facility keeps it (#57). When the stem matches both （元）and（再）
+ * variants at equal rank, prefer（再）because rebuilt dams are the
+ * operational ones (e.g., 狭山池ダム → 狭山池（再）not 狭山池（元）), even when
+ * the （再）'s completion year is unknown; remaining ties go to preferMaster.
  */
-export function chooseMaster(stem: string, masters: { id: bigint; name: string }[]): bigint | null {
-  let best: { id: bigint; rank: number; rebuilt: boolean } | null = null;
+export function chooseMaster(
+  stem: string,
+  masters: BindableMaster[],
+  stationKey?: string,
+): bigint | null {
+  const stamped = stationKey ? stampedMaster(masters, stationKey) : null;
+  if (stamped) return stamped.id;
+  let best: { m: BindableMaster; rank: number; rebuilt: boolean } | null = null;
   for (const m of masters) {
     const mStem = normalizeName(m.name);
     let rank: number;
@@ -137,17 +150,18 @@ export function chooseMaster(stem: string, masters: { id: bigint; name: string }
       !best ||
       rank < best.rank ||
       (rank === best.rank && rebuilt && !best.rebuilt) ||
-      (rank === best.rank && rebuilt === best.rebuilt && m.id < best.id)
+      (rank === best.rank && rebuilt === best.rebuilt && preferMaster(m, best.m))
     ) {
-      best = { id: m.id, rank, rebuilt };
+      best = { m, rank, rebuilt };
     }
   }
-  return best?.id ?? null;
+  return best?.m.id ?? null;
 }
 
 async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<{ id: bigint; name: string }[]>`
-    SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
+  const masters = await sql<BindableMaster[]>`
+    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
+    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out: DamMatch[] = [];
   // What this source publishes, matched or not — recorded so /coverage can
@@ -158,7 +172,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
   for (const r of rows) {
     const stem = normalizeName(r.facilityNm);
     if (!stem) continue;
-    const damId = chooseMaster(stem, masters);
+    const damId = chooseMaster(stem, masters, r.facilityId);
     universe.push({
       externalId: r.facilityId,
       name: r.facilityNm,
@@ -170,13 +184,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
       continue;
     }
     out.push({ facilityId: r.facilityId, damId });
-    await sql`
-      UPDATE dams
-      SET external_ids = COALESCE(external_ids, '{}'::jsonb)
-                       || jsonb_build_object(${SOURCE_ID}::text, ${r.facilityId}::text)
-      WHERE id = ${damId}
-        AND COALESCE(external_ids->>${SOURCE_ID}, '') <> ${r.facilityId}
-    `;
+    await bindExternalId(damId, SOURCE_ID, r.facilityId);
   }
   await recordUniverse(SOURCE_ID, universe);
   return out;
