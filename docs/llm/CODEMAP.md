@@ -100,7 +100,7 @@ the file for detail.
 | File | Purpose |
 |---|---|
 | `src/index.ts` | graphile-worker entry; registers tasks + crontab |
-| `src/crontab.ts` | cron schedule (colon-separated task names) |
+| `src/crontab.ts` | cron schedule (colon-separated task names); every `ingest:*` line carries `?jobKey=<task>` so a tick replaces its pending retry (`crontab.test.ts` enforces it) |
 | `src/tasks/master_refresh_ndi.ts` | monthly NLNI reimport |
 | `src/tasks/master_refresh_damnet.ts` | monthly damnet attribute pass |
 | `src/tasks/master_match.ts` | `master:match`: placeholder, logs and returns (still on the nightly cron) |
