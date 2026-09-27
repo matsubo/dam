@@ -176,14 +176,14 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     upstream: '水資源機構 中部支社 (water.go.jp/mizu/chubu/report/)',
     license: '公的統計 — 出典明示で再配布可',
     cadence: '日次 (取得は毎時 :41)',
-    what: '木曽川水系 6 ダム (牧尾/阿木川/味噌川/岩屋/中里/徳山) の貯水量(千m³)・貯水率・流入量・放流量。中里ダムは新規カバレッジ; 他 5 ダムは jwa-junpo より日次で詳細なデータを提供。',
+    what: '木曽川水系 5 ダム (牧尾/阿木川/味噌川/岩屋/徳山) と三重用水 中里ダム (三重県いなべ市) の 0時の貯水位(EL.m)・貯水量(千m³)・貯水率(利水容量比)・前日平均の流入量・放流量。中里ダムは新規カバレッジ; 他 5 ダムは jwa-junpo より日次で詳細なデータを提供。',
     label: 'JWA 中部支社',
   },
   'jwa-kiso-rt': {
     upstream: '水資源機構 中部支社 木曽川水系 実時計 (water.go.jp/mizu/chubu/realtime/index.html)',
     license: '公的統計 — 出典明示で再配布可',
     cadence: '時次 (元データは ~10 分粒度; 取得は毎時 :47)',
-    what: '木曽川水系 6 dams (牧尾/味噌川/阿木川/岩屋/徳山/中里貯水池) の貯水位(EL.m)・有効貯水量(千m³→m³)・流入量・放流量。jwa-chubu (日次, 優先度 296) を時次に格上げ。',
+    what: '木曽川水系 5 dams (牧尾/味噌川/阿木川/岩屋/徳山) と三重用水 中里貯水池 の貯水位(EL.m)・有効貯水量(千m³→m³)・流入量・放流量。jwa-chubu (日次, 優先度 296) を時次に格上げ。',
     label: 'JWA 木曽川 実時計',
   },
   'jwa-biwako': {
