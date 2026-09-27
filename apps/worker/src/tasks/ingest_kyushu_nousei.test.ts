@@ -168,6 +168,18 @@ describe('parseKyushuNouseiPdfText — the R8.9.15 PDF (no leading 利水容量 
     expect(row('花宗ため池')?.storageVolumeM3).toBe(1_499_000);
   });
 
+  test('keeps a row whose first survey column is a 「－ －」 missing pair', () => {
+    // 教良木ダム printed 「－ －」 for 8/1; once the window reaches that column
+    // it is the first pair after 有効貯水量, where no 利水容量 column precedes it.
+    const p2 = parseKyushuNouseiPdfText(
+      '熊本 教良木川 教良木ダム 1,371 - - 1,153 84.1% 1,064 77.6% 1,200 87.5% 90.0%',
+    );
+    expect(p2.published).toEqual([{ name: '教良木ダム', prefCode: '43' }]);
+    expect(p2.rows).toHaveLength(1);
+    expect(p2.rows[0]?.storageVolumeM3).toBe(1_064_000);
+    expect(p2.rows[0]?.storageRate).toBeCloseTo(0.776, 3);
+  });
+
   test('checks a multi-purpose dam against its reprinted 利水容量, not 有効貯水量', () => {
     // 寺内ダム 有効 16,000 / 利水 8,230: 1,937 / 8,230 = 23.5 %.
     const r = p.rows.find((x) => x.kyushuName === '寺内ダム');
