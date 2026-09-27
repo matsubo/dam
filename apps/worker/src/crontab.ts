@@ -243,8 +243,12 @@ export const CRONTAB = `
 39 * * * * ingest:jwa-toneara
 
 # 水資源機構 中部支社 — 木曽川水系 5 dams (牧尾/阿木川/味噌川/岩屋/徳山) + 三重用水 中里.
-# Daily static HTML; 0時 EL + 千m³ storage + 利水 rate + inflow/outflow. New: 中里ダム. Cron at :41.
-41 * * * * ingest:jwa-chubu
+# Daily static HTML; 0時 EL + 千m³ storage + 利水 rate + inflow/outflow. New: 中里ダム.
+# The report comes out once per weekday, 09:40–11:40 JST (first seen 10:12–11:41
+# on prod, 2026-08-31..09-25), and the 中部支社 site asks users not to collect
+# with tools (server load). So 3 fetches per weekday — 01:41 / 03:41 / 06:41 UTC
+# = 10:41 / 12:41 / 15:41 JST — instead of 24 a day.
+41 1,3,6 * * 1-5 ingest:jwa-chubu
 
 # 水資源機構 中部支社 豊川水系 — 2 dams (宇連/大島). Real-time page updated
 # every ~10 min; water level (EL.m) + 有効貯水量(10³m³) + inflow; no outflow (the
@@ -259,7 +263,8 @@ export const CRONTAB = `
 
 # 水資源機構 中部支社 木曽川水系 実時計 — 6 dams (牧尾/味噌川/阿木川/岩屋/徳山 + 三重用水 中里).
 # Real-time page (~10 min cadence); 貯水位(EL.m) + 有効貯水量(10³m³) + inflow/outflow.
-# Upgrades jwa-chubu (daily, priority 296) to hourly. Priority 297. Cron at :47.
+# Upgrades jwa-chubu (daily, priority 296) to hourly. Priority 297. One page per
+# run; cron at :47.
 47 * * * * ingest:jwa-kiso-rt
 
 # 群馬県水位雨量情報システム ダム現況表 — 7 県管理ダム hourly (Shift_JIS HTML,

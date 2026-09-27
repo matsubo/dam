@@ -1,7 +1,7 @@
 // apps/worker/src/tasks/ingest_jwa_toyokawa.ts
 //
 // 水資源機構 中部支社 豊川水系 — 宇連ダム / 大島ダム.
-// Real-time page updated every ~10 minutes; fetched hourly.
+// Real-time page updated every ~10 minutes; one page fetched hourly.
 //
 //   豊川水系: 宇連 (愛知) / 大島 (愛知)
 //
@@ -14,7 +14,15 @@
 //         The only outflow printed is 放流量（利水）, the water-supply release, not
 //         the total (大島: 0.00 here while kasenbosai's total was > 0 at 49 of 61
 //         shared timestamps), so no outflow is stored.
-// License: 水資源機構 published; 出典明示で再配布可.
+// License: 水資源機構「著作権・リンク等について」(honsya/honsya/policy/copyright):
+//         「数値データ、簡単な表・グラフ等は著作権の対象ではありませんので、これらに
+//         ついては本利用ルールの適用はなく、自由に利用できます。」 The 中部支社
+//         リアルタイム情報 note (mizu/chubu/res/description/description.pdf) asks:
+//         「ツール等による、自動的なデータ収集等はサーバに負荷がかかり、情報提供
+//         できなくなる恐れがありますのでご遠慮頂くよう、ご理解・ご協力をお願い
+//         いたします。」 Kept on that basis (user decision, 2026-09-28): only the
+//         observed numbers are stored, with the source named, and the fetch is one
+//         page an hour (the page itself refreshes every 10 minutes).
 //
 // These two dams are in jwa-junpo (10-day) and aitoyo (daily). This adapter
 // upgrades them to real-time cadence and adds 水位 (EL.m) not available from

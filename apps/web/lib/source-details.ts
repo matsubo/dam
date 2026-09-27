@@ -17,6 +17,14 @@ export interface SourceDetail {
   label?: string;
 }
 
+// jwa-chubu, jwa-kiso-rt and jwa-toyokawa all read pages of the 中部支社
+// リアルタイム情報 system (water.go.jp/mizu/chubu/), whose note asks users not to
+// collect with tools. They are kept because the organisation-wide rule puts
+// numeric data outside copyright; each entry adds how its fetch rate is kept
+// low. Quotes verified against both documents on 2026-09-28.
+const JWA_CHUBU_TERMS =
+  '水資源機構「著作権・リンク等について」(water.go.jp/honsya/honsya/policy/copyright/): 「数値データ、簡単な表・グラフ等は著作権の対象ではありませんので、これらについては本利用ルールの適用はなく、自由に利用できます。」 中部支社 リアルタイム情報「ご利用上の注意事項」(water.go.jp/mizu/chubu/res/description/description.pdf): 「ツール等による、自動的なデータ収集等はサーバに負荷がかかり、情報提供できなくなる恐れがありますのでご遠慮頂くよう、ご理解・ご協力をお願いいたします。」「このサイトを営利目的に利用することはできません。私的使用又は引用等の著作権法上認められた行為を除き、機構に無断で転載、複製、出版、放送、上映等を行うことはできません。」 本サイトは観測値 (数値データ) のみを出典明示のうえ保持し、ページの文章・図表は複製しない。';
+
 export const SOURCE_DETAILS: Record<string, SourceDetail> = {
   ndi: {
     upstream: '国土交通省 国土数値情報 (W01: ダム, W05: 河川, W07: 流域メッシュ)',
@@ -149,7 +157,7 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
   },
   'jwa-toyokawa': {
     upstream: '水資源機構 中部支社 豊川水系 (water.go.jp/mizu/chubu/realtime/index_2.html)',
-    license: '公的統計 — 出典明示で再配布可',
+    license: `${JWA_CHUBU_TERMS} 取得は 1 回 1 ページ、毎時 1 回に抑えている。`,
     cadence: '時次 (元データは ~10 分粒度; 取得は毎時 :43)',
     what: '豊川水系 2 ダム (宇連/大島) の貯水位(EL.m)・有効貯水量(10³m³→m³)・流入量。ページの放流量は放流量（利水）のみで全放流量ではないため保存しない。リアルタイム観測; jwa-junpo (10 日) / aitoyo (日次) より高頻度。',
     label: 'JWA 豊川',
@@ -174,14 +182,15 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
   },
   'jwa-chubu': {
     upstream: '水資源機構 中部支社 (water.go.jp/mizu/chubu/report/)',
-    license: '公的統計 — 出典明示で再配布可',
-    cadence: '日次 (取得は毎時 :41)',
+    license: `${JWA_CHUBU_TERMS} 報告は平日 1 回の掲載のため、取得は平日 3 回 (1 回 1 ページ) に抑えている。`,
+    cadence:
+      '平日日次 (当日 0 時値, 平日 09:40〜11:40 JST 頃掲載; 取得は平日 10:41 / 12:41 / 15:41 JST)',
     what: '木曽川水系 5 ダム (牧尾/阿木川/味噌川/岩屋/徳山) と三重用水 中里ダム (三重県いなべ市) の 0時の貯水位(EL.m)・貯水量(千m³)・貯水率(利水容量比)・前日平均の流入量・放流量。中里ダムは新規カバレッジ; 他 5 ダムは jwa-junpo より日次で詳細なデータを提供。',
     label: 'JWA 中部支社',
   },
   'jwa-kiso-rt': {
     upstream: '水資源機構 中部支社 木曽川水系 実時計 (water.go.jp/mizu/chubu/realtime/index.html)',
-    license: '公的統計 — 出典明示で再配布可',
+    license: `${JWA_CHUBU_TERMS} 取得は 1 回 1 ページ、毎時 1 回に抑えている。`,
     cadence: '時次 (元データは ~10 分粒度; 取得は毎時 :47)',
     what: '木曽川水系 5 dams (牧尾/味噌川/阿木川/岩屋/徳山) と三重用水 中里貯水池 の貯水位(EL.m)・有効貯水量(千m³→m³)・流入量・放流量。jwa-chubu (日次, 優先度 296) を時次に格上げ。',
     label: 'JWA 木曽川 実時計',
