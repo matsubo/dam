@@ -12,19 +12,34 @@
 // Values carry a trend arrow (&rarr;/&uarr;/&darr;) and &nbsp; padding; the
 // legend marks ***=欠測, ---=無効, ###=データ異常, blank=未入力. No 貯水率.
 //
-// 貯水容量 is counted from the reservoir bed. 貯水容量 + 空容量 equals the
-// 総貯水容量 for 初瀬 (2,015 + 2,375 = 4,390), 天理 (1,037 + 1,463 = 2,500) and
-// 岩井川 (179 + 631 = 810), so 堆砂容量 (総 − 有効: 650 / 250 / 120 千m³ on the
-// prefecture's spec pages) is inside it. The 0036 trigger divides the stored
-// volume by 有効貯水容量, so we store 貯水容量 − 堆砂容量 — the water above
-// 最低水位 — and only for a dam whose printed sum matches the master 総貯水容量.
-// 白川 (338 + 1,222 = 1,560) does not match: the prefecture's spec page
-// (pref.nara.lg.jp/n138/9770.html) gives 総 1,560,000 = 有効 1,360,000 +
-// 堆砂 200,000, but ダム便覧 No.1572 lists 総 = 有効 = 1,360 千m³, leaving out
-// the 堆砂. A migration would not last: master:refresh:damnet writes ダム便覧's
-// non-blank total over the existing one every month. So 白川's volume stays
-// null until ダム便覧 or that precedence changes. 大門 (146 + 3 = 149: 空容量
-// runs to 常時満水位, not サーチャージ) cannot be tied to the master either.
+// 空容量 is the room left up to a fixed top, so 貯水容量 + 空容量 is constant
+// (±1 for rounding) at every level. Checked on the live table and on
+// historical ones (nw=0&tm=…, 1st/15th of each month since 2024-01 and every
+// day of June–October 2024–2026, EL from near 最低水位 to over 常時満水位)
+// against the prefecture's spec pages (pref.nara.lg.jp/n138/9773, 9769, 9772,
+// 9770) and each station's ダムグラフ (servletBousaiGraph?sy=gra_dam):
+//
+//   初瀬   4,390  = 総貯水容量; 空容量 keeps falling above 常時満水位 221.60
+//                  (EL 222.95 → 2,193 < 洪水調節容量 2,390)
+//   天理   2,500  = 総; at 常時満水位 255.00, 空容量 1,298 ≈ 洪水調節容量 1,300
+//   岩井川   810  = 総; EL 247.75 (常時満水位 247.00) → 401 < 洪水調節容量 430
+//   白川   1,560  = 総 on the spec page (有効 1,360 + 堆砂 200); at 117.38
+//                  (常時満水位 117.30) 空容量 488 ≈ 洪水調節容量 500
+//   大門     149  ≠ 総 177: 空容量 reaches 0 at 常時満水位 262.70 and stays 0
+//                  above it (EL 262.87 → 153 / 0)
+//
+// So for the first four 空容量 counts down from サーチャージ水位, the top of
+// 有効貯水容量, and 有効 − 空容量 is the water above 最低水位 — the volume the
+// 0036 trigger divides by 有効貯水容量. It needs no 総貯水容量 from the
+// master, which matters for 白川: ダム便覧 No.1572 lists 総 = 有効 = 1,360
+// 千m³ without the 堆砂, and master:refresh:damnet rewrites it monthly. 有効
+// is 3,740 / 2,250 / 690 / 1,360 千m³ in both the master and the spec pages.
+//
+// 大門's 空容量 runs to 常時満水位 instead, so 有効 − 空容量 overstates it by the
+// 30 千m³ flood pool (MLIT ダム諸量 form01/383: 総 177 = 堆砂 29 + 利水 118 +
+// 洪水 30) and reads full on every flood. 貯水容量 − 堆砂 does not tie either:
+// the table's 149 at 常時満水位 is 2 千m³ over 堆砂 + 利水 = 147, so its zero is
+// not the master's. 大門's volume stays null.
 // Priority 308.
 
 import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
@@ -55,10 +70,17 @@ export interface ParsedRow {
   outflowM3s: number | null;
 }
 
-export interface MasterCapacity {
-  totalCapacityM3: number | null;
-  activeCapacityM3: number | null;
-}
+/**
+ * 総貯水容量 (m³) the table's 空容量 counts down from, per station: the
+ * prefecture spec page's figure, where 貯水容量 + 空容量 was checked to add
+ * up at every level. Stations absent here (大門) are not measured to サーチャージ.
+ */
+const SURCHARGE_TOTAL_M3: Readonly<Record<string, number>> = {
+  初瀬ダム: 4_390_000,
+  天理ダム: 2_500_000,
+  岩井川ダム: 810_000,
+  白川ダム: 1_560_000,
+};
 
 // --- parsing ----------------------------------------------------------------
 
@@ -132,20 +154,21 @@ export function parseNaraTable(html: string): ParsedRow[] {
 const PRINT_ROUNDING_M3 = 1_000;
 
 /**
- * Water above 最低水位 (m³), comparable with 有効貯水容量: 貯水容量 less
- * 堆砂容量 (総 − 有効). Null unless 貯水容量 + 空容量 equals the master
- * 総貯水容量, which is what shows the printed volume counts from the bed of
- * that same capacity table.
+ * Water above 最低水位 (m³), comparable with 有効貯水容量: 有効 less 空容量.
+ * Null for a station whose 空容量 is not counted from サーチャージ, and when
+ * 貯水容量 + 空容量 no longer adds up to that station's 総貯水容量.
  */
 export function usableVolumeM3(
-  row: Pick<ParsedRow, 'storedVolumeM3' | 'emptyVolumeM3'>,
-  cap: MasterCapacity,
+  row: Pick<ParsedRow, 'naraName' | 'storedVolumeM3' | 'emptyVolumeM3'>,
+  activeCapacityM3: number | null,
 ): number | null {
-  const { storedVolumeM3: stored, emptyVolumeM3: empty } = row;
-  const { totalCapacityM3: total, activeCapacityM3: active } = cap;
-  if (stored === null || empty === null || total === null || active === null) return null;
-  if (Math.abs(stored + empty - total) > PRINT_ROUNDING_M3) return null;
-  return Math.max(0, stored - (total - active));
+  const { naraName, storedVolumeM3: stored, emptyVolumeM3: empty } = row;
+  const top = SURCHARGE_TOTAL_M3[naraName];
+  if (top === undefined || stored === null || empty === null || activeCapacityM3 === null) {
+    return null;
+  }
+  if (Math.abs(stored + empty - top) > PRINT_ROUNDING_M3) return null;
+  return Math.max(0, activeCapacityM3 - empty);
 }
 
 // --- DB helpers -------------------------------------------------------------
@@ -201,13 +224,12 @@ export function chooseMaster(
 interface DamMatch {
   naraName: string;
   damId: bigint;
-  capacity: MasterCapacity;
+  activeCapacityM3: number | null;
 }
 
 async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<(BindableMaster & MasterCapacity)[]>`
+  const masters = await sql<(BindableMaster & { activeCapacityM3: number | null })[]>`
     SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp,
-           total_capacity_m3::float8 AS "totalCapacityM3",
            active_capacity_m3::float8 AS "activeCapacityM3"
     FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
@@ -234,7 +256,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
       log(`${SOURCE_ID}: no master match for "${r.naraName}"`);
       continue;
     }
-    out.push({ naraName: r.naraName, damId, capacity: master });
+    out.push({ naraName: r.naraName, damId, activeCapacityM3: master.activeCapacityM3 });
     await bindExternalId(damId, SOURCE_ID, r.naraName);
   }
 
@@ -274,15 +296,20 @@ const task: Task = async (_payload, helpers) => {
   for (const p of rows) {
     const match = matchByName.get(p.naraName);
     if (!match) continue;
-    const volume = usableVolumeM3(p, match.capacity);
-    if (volume === null && p.storedVolumeM3 !== null && p.emptyVolumeM3 !== null) {
-      // A printed volume was dropped: the table no longer ties to the master
-      // (e.g. a ダム便覧 refresh changed 総/有効), or a capacity is missing.
-      const { totalCapacityM3: total, activeCapacityM3: active } = match.capacity;
+    const volume = usableVolumeM3(p, match.activeCapacityM3);
+    const top = SURCHARGE_TOTAL_M3[p.naraName];
+    if (
+      volume === null &&
+      top !== undefined &&
+      p.storedVolumeM3 !== null &&
+      p.emptyVolumeM3 !== null
+    ) {
+      // A printed volume was dropped: the table stopped adding up to the
+      // station's 総貯水容量, or the master lost 有効貯水容量.
       log(
         `${SOURCE_ID}: volume not stored for "${p.naraName}": ` +
-          `貯水容量+空容量=${p.storedVolumeM3 + p.emptyVolumeM3} m³, ` +
-          `master total=${total ?? 'null'} active=${active ?? 'null'}`,
+          `貯水容量+空容量=${p.storedVolumeM3 + p.emptyVolumeM3} m³ (expected ${top}), ` +
+          `master active=${match.activeCapacityM3 ?? 'null'}`,
       );
     }
     inputs.push({
