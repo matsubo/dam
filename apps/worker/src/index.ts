@@ -69,7 +69,6 @@ import ingestNagano from './tasks/ingest_nagano_kasen.ts';
 import ingestNaganoKigyo from './tasks/ingest_nagano_kigyo.ts';
 import ingestNagasaki from './tasks/ingest_nagasaki_kasen.ts';
 import ingestNaraKasen from './tasks/ingest_nara_kasen.ts';
-import ingestNiigata from './tasks/ingest_niigata.ts';
 import ingestOita from './tasks/ingest_oita_bousai.ts';
 import ingestOitaNourin from './tasks/ingest_oita_nourin.ts';
 import ingestOkayama from './tasks/ingest_okayama.ts';
@@ -85,7 +84,6 @@ import ingestSaseboSuido from './tasks/ingest_sasebo_suido.ts';
 import ingestShiga from './tasks/ingest_shiga.ts';
 import ingestShimaneBousai from './tasks/ingest_shimane_bousai.ts';
 import ingestShimokubo from './tasks/ingest_shimokubo.ts';
-import ingestShizuokaBousai from './tasks/ingest_shizuoka_bousai.ts';
 import ingestSkrHiji from './tasks/ingest_skr_hiji.ts';
 import ingestTndamHyogo from './tasks/ingest_tndam_hyogo.ts';
 import ingestTochigi from './tasks/ingest_tochigi.ts';
@@ -166,7 +164,6 @@ async function main(): Promise<void> {
       'ingest:chiba-suisei': ingestChiba,
       'ingest:okinawa-eb': ingestOkinawaEb,
       'ingest:okayama-bousai': ingestOkayama,
-      'ingest:niigata-bousai': ingestNiigata,
       'ingest:oita-bousai': ingestOita,
       'ingest:hyogo-bodik': ingestHyogo,
       'ingest:tochigi-bodik': ingestTochigi,
@@ -206,7 +203,6 @@ async function main(): Promise<void> {
       'ingest:gifu-kasen': ingestGifuKasen,
       'ingest:aichi-kasen': ingestAichiKasen,
       'ingest:fukui-bousai': ingestFukuiBousai,
-      'ingest:shizuoka-bousai': ingestShizuokaBousai,
       'ingest:ehime-bousai': ingestEhimeBousai,
       'ingest:toyama-bousai': ingestToyamaBousai,
       'ingest:nara-kasen': ingestNaraKasen,

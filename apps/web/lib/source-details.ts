@@ -251,12 +251,21 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '岡山県管理 ~15 ダム (旭川/鳴滝/河平/三室川/黒木/香々美/久賀/津川/黒谷/鬼ヶ岳/大佐/日笠/槙谷/楢井 ほか) の貯水位・有効貯水量・貯水率・流入量・全放流量。',
     label: 'おかやま防災ポータル',
   },
+  // Retired sources stay listed: /sources shows every source_priorities row,
+  // and the dam charts still attribute their historical rows here.
   'niigata-bousai': {
     upstream: '新潟県河川防災情報システム (doboku-bousai.pref.niigata.jp/kasen)',
     license: '新潟県オープンデータ — 出典明示で再配布可 (推定)',
-    cadence: '時次 (元データは 10 分粒度; 取得は毎時 :23)',
-    what: '新潟県管理 ~20 ダム (三面/奥三面/大谷/胎内川/奥胎内/早出川/破間川/笠堀/刈谷田川 ほか) の貯水位・貯水率・流入量・全放流量。',
+    cadence: '取得停止 (2026-09-28)',
+    what: '取得を停止したソース: robots.txt がサイト全体のクロールを禁止しているため (2026-09-28 確認)。新潟県管理 ~20 ダムの貯水位・貯水率・流入量・全放流量の過去の観測値のみ掲載。',
     label: '新潟県河川防災情報',
+  },
+  'shizuoka-bousai': {
+    upstream: '静岡県土木総合防災情報システム SIPOS (sipos.pref.shizuoka.jp)',
+    license: '利用条件は未確認 — 過去の観測値のみを出典明示で掲載',
+    cadence: '取得停止 (2026-09-28)',
+    what: '取得を停止したソース: robots.txt が /index.html 以外のクロールを禁止しているため (2026-09-28 確認)。静岡県 6 ダム (奥野/太田川/都田川/青野大師/大倉川/長島) の貯水位・貯水量・貯水率・流入量・放流量の過去の観測値のみ掲載。',
+    label: '静岡県 SIPOS',
   },
   'hyogo-bodik': {
     upstream: '兵庫県 ダム諸量データ (data.bodik.jp/dataset/280003_dam_hyogo)',
