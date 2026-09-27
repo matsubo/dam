@@ -167,7 +167,13 @@ interface DamMatch {
   damId: bigint;
 }
 
-async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
+interface MasterMatches {
+  matches: DamMatch[];
+  /** Every pref-42 master already stamped with a nagasaki-kasen dam_cd. */
+  byExternalId: Map<number, bigint>;
+}
+
+async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<MasterMatches> {
   // Load any dams that were pre-seeded with a nagasaki-kasen external_id
   // (e.g. け知ダム added via migration with dam_cd=2030).  Matching by
   // external_id is more reliable than name matching for dams whose name in
@@ -222,7 +228,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     await bindExternalId(best.m.id, SOURCE_ID, String(r.damCd));
   }
 
-  return out;
+  return { matches: out, byExternalId };
 }
 
 /**
@@ -291,12 +297,15 @@ const task: Task = async (_payload, helpers) => {
   const rows = parseAllDamsJson(allDams, masterMap);
   log(`${SOURCE_ID}: parsed ${rows.length} dam rows from ${snapshotUrl}`);
 
-  const matches = await matchMaster(rows, log);
+  const { matches, byExternalId } = await matchMaster(rows, log);
   const damByCd = new Map(matches.map((m) => [m.damCd, m.damId]));
 
+  // A catalogued dam missing from this snapshot is absent from `damByCd`, but
+  // its master may already carry the stamp — resolve it rather than record a
+  // bound, published dam as unmatched backlog (#82).
   await recordUniverse(
     SOURCE_ID,
-    buildNagasakiUniverse(masterList, (damCd) => damByCd.get(damCd)),
+    buildNagasakiUniverse(masterList, (damCd) => damByCd.get(damCd) ?? byExternalId.get(damCd)),
   );
 
   const inputs = [] as Parameters<typeof upsertObservations>[0];

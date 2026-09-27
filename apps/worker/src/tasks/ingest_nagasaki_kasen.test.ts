@@ -1,7 +1,9 @@
 // apps/worker/src/tasks/ingest_nagasaki_kasen.test.ts
 
-import { describe, expect, test } from 'bun:test';
-import {
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { sql } from '@dam/db/client';
+import type { JobHelpers } from 'graphile-worker';
+import task, {
   buildNagasakiUniverse,
   buildSnapshotUrl,
   parseAllDamsJson,
@@ -257,5 +259,104 @@ describe('buildNagasakiUniverse', () => {
     // An empty list is how recordUniverse recognises a failed fetch, so the
     // builder must not invent rows.
     expect(buildNagasakiUniverse([], () => undefined)).toEqual([]);
+  });
+});
+
+describe('task: universe resolution for a catalogue dam absent from the snapshot', () => {
+  // Issue #82: a dam listed in dam_m.json that carries no reading this run is
+  // still published. When the master already holds its nagasaki-kasen stamp,
+  // the universe row must resolve to it — otherwise a bound, published dam
+  // shows up as unmatched backlog until it happens to report.
+  const SOURCE = 'nagasaki-kasen';
+  const REPORTING = { slug: 'nagasaki-univ-test-reporting', cd: 990001, name: '試験報告ダム' };
+  const SILENT = { slug: 'nagasaki-univ-test-silent', cd: 990002, name: '試験欠測ダム' };
+  const FIXTURE_CDS = [String(REPORTING.cd), String(SILENT.cd)];
+  const ids = new Map<string, bigint>();
+  const realFetch = globalThis.fetch;
+  let hadRun = false;
+
+  const json = (body: unknown): Response =>
+    new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
+
+  async function cleanup(): Promise<void> {
+    await sql`
+      DELETE FROM source_universe
+      WHERE source_id = ${SOURCE} AND source_external_id IN ${sql(FIXTURE_CDS)}`;
+    await sql`
+      DELETE FROM observations WHERE dam_id IN (
+        SELECT id FROM dams WHERE slug IN (${REPORTING.slug}, ${SILENT.slug}))`;
+    await sql`DELETE FROM dams WHERE slug IN (${REPORTING.slug}, ${SILENT.slug})`;
+  }
+
+  beforeAll(async () => {
+    await cleanup();
+    const [run] = await sql`SELECT 1 FROM source_universe_runs WHERE source_id = ${SOURCE}`;
+    hadRun = run !== undefined;
+    for (const d of [REPORTING, SILENT]) {
+      const [r] = await sql<{ id: bigint }[]>`
+        INSERT INTO dams (slug, name, pref_code, location, external_ids)
+        VALUES (${d.slug}, ${d.name}, '42',
+                ST_SetSRID(ST_MakePoint(129.9, 32.9), 4326)::geography,
+                ${sql.json({ [SOURCE]: String(d.cd) })})
+        RETURNING id`;
+      ids.set(d.slug, r?.id ?? 0n);
+    }
+
+    // The upstream: both dams are catalogued, only one carries a reading.
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.endsWith('/data/dt_range.json')) {
+        return json({ min_dt: '2026/06/01 00:00:00', max_dt: '2026/06/05 15:30:00' });
+      }
+      if (url.endsWith('/data/dam_m.json')) {
+        return json([
+          { dam_cd: REPORTING.cd, dam_nm: REPORTING.name },
+          { dam_cd: SILENT.cd, dam_nm: SILENT.name },
+        ]);
+      }
+      if (url.endsWith('/data/all/202606/20260605/all_20260605_1530_d.json')) {
+        return json({
+          ymd: '2026/06/05',
+          time: '15:30',
+          list: [
+            {
+              dam_cd: REPORTING.cd,
+              lv: '64.77',
+              pondage: '97',
+              rate: '36.7',
+              rate_r: '96.2',
+              rate_y: '36.6',
+              in: '0.01',
+              dis: '0.01',
+            },
+          ],
+        });
+      }
+      return new Response('not found', { status: 404 });
+    }) as typeof fetch;
+
+    const helpers = { logger: { info: () => {} } } as unknown as JobHelpers;
+    await task({}, helpers);
+  });
+
+  afterAll(async () => {
+    globalThis.fetch = realFetch;
+    await cleanup();
+    if (!hadRun) await sql`DELETE FROM source_universe_runs WHERE source_id = ${SOURCE}`;
+  });
+
+  const resolvedFor = async (cd: number): Promise<bigint | null | undefined> => {
+    const [row] = await sql<{ resolved: bigint | null }[]>`
+      SELECT resolved_dam_id AS resolved FROM source_universe
+      WHERE source_id = ${SOURCE} AND source_external_id = ${String(cd)}`;
+    return row?.resolved;
+  };
+
+  test('resolves the dam that reported this run', async () => {
+    expect(await resolvedFor(REPORTING.cd)).toBe(ids.get(REPORTING.slug) as bigint);
+  });
+
+  test('resolves a stamped dam that did not report this run', async () => {
+    expect(await resolvedFor(SILENT.cd)).toBe(ids.get(SILENT.slug) as bigint);
   });
 });
