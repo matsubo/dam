@@ -160,8 +160,8 @@ export const CRONTAB = `
 # Cron at :23.
 23 * * * * ingest:skr-hiji-dam
 
-# 千葉県 県内ダムの貯水状況 — 23 dams (水道用+工業用水). Daily 9 JST
-# publish. Fetch at 02:30 UTC = 11:30 JST, giving upstream 2.5h headroom.
+# 千葉県 県内ダムの貯水状況 — 23 dams (水道用+工業用水). Weekly 9 JST survey
+# (Mondays, 更新日 ~1 day later). Polled daily at 02:30 UTC = 11:30 JST.
 30 2 * * * ingest:chiba-suisei
 
 # おかやま防災ポータル — ~15 県管理ダム (JSON feed, 30分更新). A pointer
