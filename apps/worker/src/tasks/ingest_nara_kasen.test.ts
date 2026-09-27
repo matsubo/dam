@@ -71,7 +71,7 @@ describe('parseNaraTable', () => {
   });
 });
 
-// Master capacities are the dams rows (ダム便覧) for pref 29.
+// Master capacities are the dams rows for pref 29 (ダム便覧, 白川 per 0070).
 describe('usableVolumeM3', () => {
   test('subtracts 堆砂容量 when 貯水容量 + 空容量 equals the master 総貯水容量', async () => {
     const rows = await fixture('dam_table_2026-09-27.shiftjis.html');
@@ -96,11 +96,19 @@ describe('usableVolumeM3', () => {
         activeCapacityM3: 690_000,
       }),
     ).toBe(59_000);
+    // 白川 338 + 1,222 = 1,560 = total (0070, the prefecture's figure); dead 200.
+    expect(
+      usableVolumeM3(row(rows, '白川ダム'), {
+        totalCapacityM3: 1_560_000,
+        activeCapacityM3: 1_360_000,
+      }),
+    ).toBe(138_000);
   });
 
   test('stores nothing when the printed sum does not match the master total', async () => {
     const rows = await fixture('dam_table_2026-09-27.shiftjis.html');
-    // 白川 338 + 1,222 = 1,560 千m³ (the prefecture's 総貯水容量), master total 1,360.
+    // 白川 338 + 1,222 = 1,560 千m³ against ダム便覧's 1,360, which
+    // master:refresh:damnet writes back over 0070's fix.
     expect(
       usableVolumeM3(row(rows, '白川ダム'), {
         totalCapacityM3: 1_360_000,

@@ -18,9 +18,11 @@
 // prefecture's spec pages) is inside it. The 0036 trigger divides the stored
 // volume by 有効貯水容量, so we store 貯水容量 − 堆砂容量 — the water above
 // 最低水位 — and only for a dam whose printed sum matches the master 総貯水容量.
-// 白川 (338 + 1,222 = 1,560, the prefecture's figure; ダム便覧 master 1,360)
-// and 大門 (146 + 3 = 149: 空容量 runs to 常時満水位, not サーチャージ) cannot
-// be tied to the master, so their volume is not stored.
+// 白川 (338 + 1,222 = 1,560) matches since 0070 set its total to the
+// prefecture's 1,560; a master:refresh:damnet run writes ダム便覧's 1,360 back
+// and its volume is dropped again. 大門 (146 + 3 = 149: 空容量 runs to
+// 常時満水位, not サーチャージ) cannot be tied to the master, so its volume is
+// not stored.
 // Priority 308.
 
 import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
