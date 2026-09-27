@@ -228,9 +228,9 @@ describe('pickBest — （元）/（再） twins', () => {
   });
 
   describe('a twin already stamped with the station keeps it', () => {
-    // 松川ダム (長野, 2183100700010) is 447 m from both 松川 rows. Prod's
-    // 松川（再） has no completion year (0056 cleared it: ダム便覧 leaves it
-    // blank), so preferMaster alone would pick the （元）.
+    // 松川ダム (長野, 2183100700010) is 447 m from both 松川 rows. 松川（再） is
+    // not finished (長野県; 0071 stamps the station on the （元）), so it has no
+    // completion year and preferMaster alone picks the （元）.
     const KEY = '2183100700010';
     const stem = normalizeJaName('松川ダム');
     const pair = (
@@ -249,7 +249,9 @@ describe('pickBest — （元）/（再） twins', () => {
       }),
     ];
 
-    test('a stamp on the not-yet-dated （再） stays there', () => {
+    test('a stamp on a （再） whose year is not recorded stays there', () => {
+      // The rule for a completed （再） ダム便覧 leaves undated; 松川's rows
+      // only give it shape.
       const best = pickBest(pair({ sai: KEY }), stem, '20', { stationKey: KEY, year: 2026 });
       expect(best?.candidate.name).toBe('松川（再）');
     });
