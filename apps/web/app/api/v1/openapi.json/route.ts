@@ -549,6 +549,11 @@ const components = {
               description:
                 '公開一覧を列挙できない提供元の数 (例: 洪水時のみダムを掲載する県のポータル)。判定ゲートからは除外しているため、その担当地域の `notPublished` には保留が残る。',
             },
+            sourcesHistoricalOnly: {
+              type: 'integer',
+              description:
+                '一度きりの歴史ダンプ / backfill 専用で、定期スキャンが存在しない提供元の数 (mudam, kagoshima-bodik)。判定ゲートからは除外している。これらのダムは `historicalDamCount` 側で数えられる。',
+            },
           },
         },
         statusMeanings: {
