@@ -270,11 +270,22 @@ const task: Task = async (_payload, helpers) => {
   for (const p of rows) {
     const match = matchByName.get(p.naraName);
     if (!match) continue;
+    const volume = usableVolumeM3(p, match.capacity);
+    if (volume === null && p.storedVolumeM3 !== null && p.emptyVolumeM3 !== null) {
+      // A printed volume was dropped: the table no longer ties to the master
+      // (e.g. a ダム便覧 refresh changed 総/有効), or a capacity is missing.
+      const { totalCapacityM3: total, activeCapacityM3: active } = match.capacity;
+      log(
+        `${SOURCE_ID}: volume not stored for "${p.naraName}": ` +
+          `貯水容量+空容量=${p.storedVolumeM3 + p.emptyVolumeM3} m³, ` +
+          `master total=${total ?? 'null'} active=${active ?? 'null'}`,
+      );
+    }
     inputs.push({
       observedAt: p.observedAt,
       damId: match.damId,
       sourceId: SOURCE_ID,
-      storageVolumeM3: usableVolumeM3(p, match.capacity),
+      storageVolumeM3: volume,
       storageRate: null,
       inflowM3s: p.inflowM3s,
       outflowM3s: p.outflowM3s,
