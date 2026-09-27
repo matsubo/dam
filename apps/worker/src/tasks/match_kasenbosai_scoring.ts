@@ -181,8 +181,8 @@ export interface PickOptions {
  * each run could stamp the other twin (#79). Instead the twin already stamped
  * with this station keeps it; only when neither or both are does preferMaster
  * decide. Stamp first because a blank （再） completion year means "under
- * construction" or "not recorded" (新保川, 松川, 長柄, 五名), and preferMaster
- * reads both as "（元）", which would move a stamp already confirmed on the （再）.
+ * construction" or "not recorded", and preferMaster reads both as "（元）",
+ * which would move a stamp already confirmed on a （再） whose year is missing.
  */
 export function pickBest<T extends ScoreCandidate>(
   candidates: readonly T[],
