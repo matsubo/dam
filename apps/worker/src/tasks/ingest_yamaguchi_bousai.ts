@@ -124,8 +124,9 @@ export function parseYamaguchiHtml(html: string, name: string): ParsedRow[] {
 
     const waterLevelM = parseVal(cells[1] ?? '');
     // No reservoir here sits at EL 0 m (the lowest, 見島, holds ~19 m). The
-    // page prints outages as 0.00 with every other column 0 (see 0086), so the
-    // whole row is a placeholder.
+    // page prints outages as 0.00 with every other column 0 (see deploy/ops/
+    // oneoff/2026-09-28_yamaguchi_bousai_outage_zeros.sql), so the whole row
+    // is a placeholder.
     if (waterLevelM === 0) continue;
     const storageRatePct = parseVal(cells[2] ?? '');
     const storageRate = storageRatePct !== null ? storageRatePct / 100 : null;
