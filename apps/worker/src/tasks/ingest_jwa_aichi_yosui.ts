@@ -15,6 +15,9 @@
 //         whose description.pdf asks users not to collect with tools.
 // License: 愛知用水総合管理所 サイトポリシー「著作権について」— 私的使用または
 //         引用等、著作権法上認められた行為を除き無断転載不可; 引用時は出所明示.
+//         水資源機構「著作権・リンク等について」(honsya/policy/copyright): 数値データ、
+//         簡単な表・グラフ等は著作権の対象ではなく自由に利用できる. Only the
+//         observed numbers are stored, with the source named.
 //
 // 東郷調整池 and 前山 have no other live source. 牧尾 is here because the page
 // publishes it; priority 294 keeps it below every other 牧尾 feed (aitoyo 295,
