@@ -6,7 +6,11 @@
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { parseYamanashiStatusHtml, parseYamanashiTimestamp } from './ingest_yamanashi_dam.ts';
+import {
+  chooseMaster,
+  parseYamanashiStatusHtml,
+  parseYamanashiTimestamp,
+} from './ingest_yamanashi_dam.ts';
 
 const FIXTURE = join(
   import.meta.dir,
@@ -82,5 +86,34 @@ describe('parseYamanashiStatusHtml', () => {
 
   test('returns no rows when the page has no timestamp', () => {
     expect(parseYamanashiStatusHtml('<html><body><table></table></body></html>')).toEqual([]);
+  });
+});
+
+describe('chooseMaster (#79)', () => {
+  const m = (
+    id: number,
+    name: string,
+    completedYear: number | null = null,
+    stamp: string | null = null,
+  ) => ({
+    id: BigInt(id),
+    name,
+    completedYear,
+    stamp,
+  });
+
+  test('keeps the row already stamped with the station code over a better name match', () => {
+    const masters = [m(10, '大門ダム'), m(20, '大門', null, '5002')];
+    expect(chooseMaster('大門ダム', masters, '5002')).toBe(20n);
+  });
+
+  test('ignores a stamp for another station and ranks by name', () => {
+    const masters = [m(10, '大門ダム'), m(20, '大門', null, '5001')];
+    expect(chooseMaster('大門ダム', masters, '5002')).toBe(10n);
+  });
+
+  test('binds to the completed （再）, not the lower-id （元）', () => {
+    const masters = [m(10, '荒川（元）', 1960), m(20, '荒川（再）', 2010)];
+    expect(chooseMaster('荒川ダム', masters, '1001')).toBe(20n);
   });
 });

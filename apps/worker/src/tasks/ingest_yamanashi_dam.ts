@@ -30,7 +30,9 @@
 //
 // Priority 280. Cron hourly at :36.
 
+import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
+import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
@@ -168,11 +170,20 @@ interface DamMatch {
 }
 
 /** Best master dam for a dam name, or null when nothing ranks. */
-function chooseMaster(name: string, masters: { id: bigint; name: string }[]): bigint | null {
+export function chooseMaster(
+  name: string,
+  masters: BindableMaster[],
+  stationKey?: string,
+): bigint | null {
+  // A row already stamped with this station keeps it; names alone cannot
+  // separate same-name dams (#57).
+  const stamped = stationKey ? stampedMaster(masters, stationKey) : null;
+  if (stamped) return stamped.id;
+
   const stem = normalizeName(name);
   if (!stem) return null;
 
-  let best: { id: bigint; rank: number } | null = null;
+  let best: { m: BindableMaster; rank: number } | null = null;
   for (const m of masters) {
     const mStem = normalizeName(m.name);
     let rank: number;
@@ -182,40 +193,40 @@ function chooseMaster(name: string, masters: { id: bigint; name: string }[]): bi
     else if (mStem.startsWith(stem)) rank = 3;
     else if (mStem.includes(stem)) rank = 4;
     else continue;
-    if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-      best = { id: m.id, rank };
+    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
+      best = { m, rank };
     }
   }
-  return best?.id ?? null;
+  return best?.m.id ?? null;
 }
 
 async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<{ id: bigint; name: string }[]>`
-    SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
+  const masters = await sql<BindableMaster[]>`
+    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
+    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out: DamMatch[] = [];
 
-  for (const r of rows) {
-    const damId = chooseMaster(r.yamanashiName, masters);
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${r.yamanashiName}"`);
-      continue;
-    }
-    out.push({ yamanashiName: r.yamanashiName, damId });
-  }
-
   // What this source publishes, matched or not — taken from the dam catalogue
-  // rather than this run's parsed rows, so a dam whose page failed to load
-  // still counts as published instead of reading as 提供元なし.
+  // rather than this run's parsed rows, so a dam missing from the page still
+  // counts as published instead of reading as 提供元なし. The station code is
+  // the stamp, as it is the universe's external id.
   const universe: UniverseRow[] = [];
   for (const d of DAMS) {
-    const damId = chooseMaster(d.name, masters);
+    const damId = chooseMaster(d.name, masters, d.code);
     universe.push({
       externalId: d.code,
       name: d.name,
       prefCode: PREF_CODE,
       resolvedDamId: damId,
     });
+    if (!rows.some((r) => r.yamanashiName === d.name)) continue;
+    if (!damId) {
+      log(`${SOURCE_ID}: no master match for "${d.name}"`);
+      continue;
+    }
+    out.push({ yamanashiName: d.name, damId });
+    await bindExternalId(damId, SOURCE_ID, d.code);
   }
   await recordUniverse(SOURCE_ID, universe);
 
