@@ -57,18 +57,22 @@ describe('tonekakoHours', () => {
     expect(first?.inflowM3s).toBe(988.08);
   });
 
-  test('joins the two tables by hour when one was published an hour later', async () => {
+  test('keeps only hours both tables carry when a fetch straddles an update', async () => {
+    // upsertObservations overwrites every column, so an hour present in one
+    // table only would null the other table's values stored an hour earlier.
     const newer = (await ryuryo()).replace('2026\\/09\\/27 21:00:00', '2026\\/09\\/27 22:00:00');
     const hours = tonekakoHours(await suii(), newer);
-    expect(hours).toHaveLength(25);
-    // 09/26 22:00 only exists in the older 水位表.
-    expect(hours[0]?.waterLevelM).toBe(1.37);
-    expect(hours[0]?.inflowM3s).toBeNull();
-    // 09/27 22:00 only in the newer 流量表, whose last cell is 848.20.
-    const last = hours.at(-1);
-    expect(last?.observedAt.toISOString()).toBe('2026-09-27T13:00:00.000Z');
-    expect(last?.waterLevelM).toBeNull();
-    expect(last?.inflowM3s).toBe(848.2);
+    expect(hours).toHaveLength(23);
+    // 09/26 22:00 is only in the older 水位表 and 09/27 22:00 only in the newer
+    // 流量表: neither is emitted.
+    expect(hours[0]?.observedAt.toISOString()).toBe('2026-09-26T14:00:00.000Z');
+    expect(hours.at(-1)?.observedAt.toISOString()).toBe('2026-09-27T12:00:00.000Z');
+    expect(hours.every((h) => h.waterLevelM !== null && h.inflowM3s !== null)).toBe(true);
+    // Each hour pairs the rows labelled with that hour, not the same index.
+    expect(hours[0]?.waterLevelM).toBe(1.35); // 水位表 row 2 (09/26 23:00)
+    expect(hours[0]?.inflowM3s).toBe(988.08); // newer 流量表 row 1 (09/26 23:00)
+    expect(hours.at(-1)?.waterLevelM).toBe(1.41);
+    expect(hours.at(-1)?.inflowM3s).toBe(864.83);
   });
 
   test('stores nothing when a table no longer has the 8-column layout', async () => {
