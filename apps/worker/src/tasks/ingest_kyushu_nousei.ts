@@ -275,25 +275,34 @@ export function parseKyushuNouseiPdfText(text: string): {
     const tail = line.slice((nameMatch.index ?? 0) + name.length);
     const tokens = tokenize(tail);
 
-    // First two tokens: 有効貯水量, 利水容量 (千m³). Both must be real numbers
-    // for a line to count as a real table row at all — this is also what
+    // First token: 有効貯水量 (千m³). The R8.9.1 PDF followed it with a 利水容量
+    // column; from R8.9.15 the table's date window slid right and the row goes
+    // straight into the first (貯水量, 貯水率) pair. Which layout a row has is
+    // read off the third token: a percentage there means the second token is
+    // already a volume. Without the leading 利水容量 the row starts from
+    // 有効貯水量, and pairDateColumns picks up the real 利水容量 from the next
+    // bare number the row reprints (寺内ダム 8,230) — before the current survey
+    // column, which is the only one checked.
+    // A line with no numeric tail is not a table row — this is also what
     // rejects the page's title lines and the embedded chart's own "繁敷ダム"
-    // caption, which NAME_RE matches but which carry no numeric tail. The
-    // PDF's own footnote ("利水容量に対する貯水率としている") says the rate is
-    // always against 利水容量 (the second column), not 有効貯水量 — for our
-    // 12 target dams the two are the same number, but for multi-purpose dams
-    // sharing the table (寺内ダム 16,000/8,230 etc.) they differ, and using
-    // the wrong one fails the consistency check below for no reason.
+    // caption, which NAME_RE matches but which carry no numbers. The PDF's
+    // own footnote ("利水容量に対する貯水率としている") says the rate is
+    // always against 利水容量, not 有効貯水量 — for our 12 target dams the two
+    // are the same number, but for multi-purpose dams sharing the table
+    // (寺内ダム 16,000/8,230 etc.) they differ, and using the wrong one fails
+    // the consistency check below for no reason.
     const effCapTok = tokens[0];
-    const waterRightTok = tokens[1];
-    if (effCapTok?.kind !== 'num' || waterRightTok?.kind !== 'num') continue;
-    if (waterRightTok.value <= 0) continue;
+    const secondTok = tokens[1];
+    if (effCapTok?.kind !== 'num' || secondTok?.kind !== 'num') continue;
+    const hasWaterRightColumn = tokens[2]?.kind !== 'pct';
+    const initialCapacity = hasWaterRightColumn ? secondTok.value : effCapTok.value;
+    if (initialCapacity <= 0) continue;
 
     // A real row, even if the rest of it turns out unusable below — recorded
     // now so an unmatched or zero-rate dam still counts as published.
     published.push({ name, prefCode: currentPrefCode });
 
-    const pairs = pairDateColumns(tokens.slice(2), waterRightTok.value);
+    const pairs = pairDateColumns(tokens.slice(hasWaterRightColumn ? 2 : 1), initialCapacity);
     // The last pair is always 平年; the one before it is the current survey.
     // Fewer than 2 pairs means there is no current reading to distinguish
     // from the 平年 baseline (would only happen on a PDF with a single date
@@ -356,16 +365,19 @@ export function findLatestPdfUrl(html: string, baseUrl: string): string | null {
 // --- name matching ----------------------------------------------------------
 
 /**
- * Strip the ダム suffix and parenthetical annotations; fold ノ/の and 渓/溪.
+ * Strip the ダム suffix and parenthetical annotations; fold ノ/の, 渓/溪 and
+ * ため池/溜池.
  *
  * 渓/溪 fixes the one known mismatch this feed brings (also present in
  * oita-nourin's own table): the PDF prints 「耶馬渓ダム」, master holds
- * 「耶馬溪ダム」.
+ * 「耶馬溪ダム」. ため池/溜池 likewise: the PDF prints 「花宗ため池」, master
+ * holds 「花宗溜池」.
  */
 export function normalizeName(s: string): string {
   return s
     .replace(/[（(][^）)]*[）)]/g, '')
     .replace(/ダム$/, '')
+    .replace(/ため池$/, '溜池')
     .replace(/ノ/g, 'の')
     .replace(/渓/g, '溪')
     .trim();
@@ -499,6 +511,15 @@ const task: Task = async (_payload, helpers) => {
   log(
     `${SOURCE_ID} done: parsed=${rows.length} matched=${inputs.length} unmatched=${unmatched} written=${written}`,
   );
+
+  // The R8.9.15 PDF dropped its leading 利水容量 column and this adapter
+  // parsed 0 of 59 rows while exiting green. A run that finds dam rows but no
+  // usable reading is a layout change; throwing puts it in failing_jobs.
+  if (published.length > 0 && rows.length === 0) {
+    throw new Error(
+      `${SOURCE_ID}: parsed ${published.length} dam names but no usable rows from ${pdfUrl} — layout change?`,
+    );
+  }
 };
 
 export default task;
