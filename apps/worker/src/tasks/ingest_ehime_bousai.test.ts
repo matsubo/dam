@@ -1,7 +1,7 @@
 // apps/worker/src/tasks/ingest_ehime_bousai.test.ts
 
 import { describe, expect, test } from 'bun:test';
-import { parseEhimePage, parseEhimeTimestamp } from './ingest_ehime_bousai.ts';
+import { chooseMaster, parseEhimePage, parseEhimeTimestamp } from './ingest_ehime_bousai.ts';
 
 // Sample HTML matching the actual kawabou-mng format (2 tables):
 // Table 0: meta (観測所名, 水系名, ...)
@@ -128,5 +128,16 @@ describe('parseEhimePage', () => {
     const html = makeHtml([makeRow('06/22 19:00', '155.85', '2.16', '2.16', '6853', '100.0')]);
     const r = parseEhimePage(html, 'U1001_MMENU003', '玉川ダム', 2026);
     expect(r?.storageRate).toBeCloseTo(1.0);
+  });
+});
+
+describe('chooseMaster (#79)', () => {
+  test('binds 鹿野川 (MMENU009) to the completed （再）, not the lower-id （元）', () => {
+    // The 愛媛 master holds both structures; the （元） has the lower id.
+    const masters = [
+      { id: 10444n, name: '鹿野川（元）', completedYear: 1959 },
+      { id: 10466n, name: '鹿野川（再）', completedYear: 2018 },
+    ];
+    expect(chooseMaster('鹿野川ダム', '鹿野川', masters)).toBe(10466n);
   });
 });
