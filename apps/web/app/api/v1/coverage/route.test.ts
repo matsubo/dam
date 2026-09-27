@@ -7,12 +7,22 @@ process.env.API_AUTH_BYPASS = '1';
 const { GET } = await import('./route.ts');
 
 const SRC = 'coverage-api-test';
+// An observation source that has never recorded a scan: the fixture's own
+// handle on the honesty gate, so the test never depends on rollout progress.
+const PENDING = 'coverage-api-pending';
 const EXT = ['COVAPI-1'];
 let damId: bigint;
 
 beforeAll(async () => {
-  await sql`DELETE FROM source_universe WHERE source_id = ${SRC}`;
-  await sql`DELETE FROM source_universe_runs WHERE source_id = ${SRC}`;
+  await sql`DELETE FROM source_universe WHERE source_id IN (${SRC}, ${PENDING})`;
+  await sql`DELETE FROM source_universe_runs WHERE source_id IN (${SRC}, ${PENDING})`;
+  await sql`
+    INSERT INTO source_priorities (source_id, priority, description, provides_observations)
+    VALUES (${PENDING}, 1, 'coverage gate test', TRUE)
+    ON CONFLICT (source_id) DO UPDATE SET
+      active = TRUE, provides_observations = TRUE,
+      universe_enumerable = TRUE, historical_only = FALSE
+  `;
   await sql`
     DELETE FROM observations WHERE dam_id IN (
       SELECT id FROM dams WHERE external_ids ->> 'ndi' IN ${sql(EXT)})`;
@@ -31,13 +41,20 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await sql`DELETE FROM source_universe WHERE source_id = ${SRC}`;
-  await sql`DELETE FROM source_universe_runs WHERE source_id = ${SRC}`;
+  await sql`DELETE FROM source_universe WHERE source_id IN (${SRC}, ${PENDING})`;
+  await sql`DELETE FROM source_universe_runs WHERE source_id IN (${SRC}, ${PENDING})`;
+  await sql`DELETE FROM source_priorities WHERE source_id = ${PENDING}`;
   if (damId !== undefined) {
     await sql`DELETE FROM observations WHERE dam_id = ${damId}`;
     await sql`DELETE FROM dams WHERE id = ${damId}`;
   }
 });
+
+async function summary(): Promise<Record<string, unknown>> {
+  const res = await GET(new Request('http://localhost/api/v1/coverage'));
+  expect(res.status).toBe(200);
+  return (await res.json()).summary;
+}
 
 describe('GET /api/v1/coverage', () => {
   test('returns the summary with the honesty gate exposed', async () => {
@@ -49,11 +66,42 @@ describe('GET /api/v1/coverage', () => {
     for (const k of ['covered', 'publishedNotIngested', 'unknown', 'notPublished']) {
       expect(typeof body.summary[k]).toBe('number');
     }
-    // The gate must be visible to clients: while > 0, `notPublished` is not a
-    // claim that nobody publishes those dams — it is "not looked at yet".
-    expect(typeof body.summary.sourcesPendingScan).toBe('number');
-    expect(body.summary.sourcesPendingScan).toBeGreaterThan(0);
+    // Historical dumps are excluded from the gate, and clients are told how many.
+    expect(Number.isInteger(body.summary.sourcesHistoricalOnly)).toBe(true);
     expect(body._links.self.href).toBe('/api/v1/coverage');
+  });
+
+  test('sourcesPendingScan counts unrecorded sources and drops to 0 once all record', async () => {
+    // Stand in for every other still-unscanned source (on a fresh scratch DB
+    // the migration-seeded ones never record), leaving PENDING as the only
+    // thing holding the gate open. Only the stamps inserted here are removed.
+    const others = await sql<{ source_id: string }[]>`
+      SELECT sp.source_id FROM source_priorities sp
+      WHERE sp.active AND sp.provides_observations AND sp.universe_enumerable
+        AND NOT sp.historical_only AND sp.source_id <> ${PENDING}
+        AND NOT EXISTS (SELECT 1 FROM source_universe_runs r WHERE r.source_id = sp.source_id)
+    `;
+    const stubbed = others.map((r) => r.source_id);
+    try {
+      for (const id of stubbed) {
+        await sql`
+          INSERT INTO source_universe_runs (source_id, last_full_scan_at, row_count)
+          VALUES (${id}, NOW(), 0)`;
+      }
+
+      // While > 0, `notPublished` is not a claim that nobody publishes those
+      // dams — it is "not looked at yet". The count must say so.
+      expect((await summary()).sourcesPendingScan).toBe(1);
+
+      await recordUniverse(PENDING, [
+        { externalId: 'p-1', name: 'Coverage gate stub', resolvedDamId: null },
+      ]);
+      expect((await summary()).sourcesPendingScan).toBe(0);
+    } finally {
+      if (stubbed.length > 0) {
+        await sql`DELETE FROM source_universe_runs WHERE source_id IN ${sql(stubbed)}`;
+      }
+    }
   });
 
   test('status=published_not_ingested lists the actionable dams with links', async () => {
