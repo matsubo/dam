@@ -119,4 +119,12 @@ describe('chooseMaster', () => {
   test('returns null when nothing matches', () => {
     expect(chooseMaster('存在しない', masters)).toBeNull();
   });
+
+  test('keeps the row already stamped with the observatory id (#79)', () => {
+    // 90050101 is 黒谷's observatory id. A stamp outranks the name match, so a
+    // station moved onto another row stays there instead of being re-decided.
+    const stamped = masters.map((m) => ({ ...m, stamp: m.id === 1n ? '90050101' : null }));
+    expect(chooseMaster('黒谷', stamped, '90050101')).toBe(1n);
+    expect(chooseMaster('黒谷', stamped, '99999999')).toBe(2n);
+  });
 });

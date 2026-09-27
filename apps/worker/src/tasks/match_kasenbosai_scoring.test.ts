@@ -12,8 +12,22 @@ import {
   scoreCandidate,
 } from './match_kasenbosai_scoring.ts';
 
-function cand(name: string, distanceM: number, prefCode: string | null): ScoreCandidate {
-  return { name, distanceM, prefCode };
+let nextId = 1_000_000;
+function cand(
+  name: string,
+  distanceM: number,
+  prefCode: string | null,
+  master: { id?: number; completedYear?: number | null; stamp?: string | null } = {},
+): ScoreCandidate {
+  nextId += 1;
+  return {
+    id: BigInt(master.id ?? nextId),
+    name,
+    completedYear: master.completedYear ?? null,
+    stamp: master.stamp ?? null,
+    distanceM,
+    prefCode,
+  };
 }
 
 describe('scoreCandidate — same prefecture', () => {
@@ -135,6 +149,131 @@ describe('pickBest', () => {
       '21',
     );
     expect(best?.candidate.name).toBe('上大須');
+  });
+});
+
+describe('pickBest — （元）/（再） twins', () => {
+  // Master rows, ids, completion years and station distances as in the local
+  // DB and the 2026-09-27 MLIT catalogue. Both twins normalise to the same
+  // stem, so they tie on score and usually on distance too.
+
+  test('the completed （再） wins a tie on shared coordinates, whatever the row order', () => {
+    // 南畑ダム (福岡, 1024100700002) is 27 m from both 南畑 rows. Its （再） has
+    // the HIGHER id, so neither input order nor lowest-id can explain the pick.
+    const moto = cand('南畑（元）', 27.1, '40', { id: 11045, completedYear: 1985 });
+    const sai = cand('南畑（再）', 27.1, '40', { id: 11046, completedYear: 1985 });
+    const stem = normalizeJaName('南畑ダム');
+    expect(pickBest([moto, sai], stem, '40', { year: 2026 })?.candidate.name).toBe('南畑（再）');
+    expect(pickBest([sai, moto], stem, '40', { year: 2026 })?.candidate.name).toBe('南畑（再）');
+  });
+
+  test('松原 binds its （再）, not both rows', () => {
+    const best = pickBest(
+      [
+        cand('松原（元）', 55.8, '44', { id: 11336, completedYear: 1984 }),
+        cand('松原（再）', 55.8, '44', { id: 11337, completedYear: 1984 }),
+        cand('下筌（元）', 3892.8, '44', { id: 11359, completedYear: 1972 }),
+      ],
+      normalizeJaName('松原ダム'),
+      '44',
+      { year: 2026 },
+    );
+    expect(String(best?.candidate.id)).toBe('11337');
+  });
+
+  test('a farther plain namesake still loses to the nearby twins', () => {
+    // 天ヶ瀬ダム (京都): both twins at 140 m, and a separate 天ヶ瀬 row 2.5 km off
+    // that scores the same exact 1.0.
+    const best = pickBest(
+      [
+        cand('天ヶ瀬（元）', 140, '26', { id: 10150, completedYear: 2022 }),
+        cand('天ヶ瀬', 2457.5, '26', { id: 18713, completedYear: 1964 }),
+        cand('天ヶ瀬（再）', 140, '26', { id: 10149, completedYear: 2022 }),
+      ],
+      normalizeJaName('天ヶ瀬ダム'),
+      '26',
+      { year: 2026 },
+    );
+    expect(best?.candidate.name).toBe('天ヶ瀬（再）');
+    expect(best?.score).toBe(1);
+  });
+
+  test('the twin rule outranks distance, both ways round', () => {
+    // 長安口ダム: （元） 12.6 m, （再） 17.2 m, （再） due 2028. Until then the
+    // （元） is the structure MLIT gauges; from then on the farther （再） is.
+    const rows = [
+      cand('長安口（元）', 12.6, '36', { id: 10551, completedYear: 2028 }),
+      cand('長安口（再）', 17.2, '36', { id: 10555, completedYear: 2028 }),
+    ];
+    const stem = normalizeJaName('長安口ダム');
+    expect(pickBest(rows, stem, '36', { year: 2026 })?.candidate.name).toBe('長安口（元）');
+    expect(pickBest(rows, stem, '36', { year: 2028 })?.candidate.name).toBe('長安口（再）');
+  });
+
+  test('the tie-break needs equal scores: a better-scoring （元） is not overridden', () => {
+    // Both real 下筌 rows are 大分 (44) and MLIT files the station under 熊本
+    // (43), so both score the cross-pref 0.75. Relabel the （元） as 熊本 and it
+    // scores 1.0: preferMaster only settles ties, never a higher score.
+    const best = pickBest(
+      [
+        cand('下筌（元）', 156.2, '43', { id: 11359, completedYear: 1972 }),
+        cand('下筌（再）', 58.9, '44', { id: 11360, completedYear: 1972 }),
+      ],
+      normalizeJaName('下筌ダム'),
+      '43',
+      { year: 2026 },
+    );
+    expect(best?.candidate.name).toBe('下筌（元）');
+    expect(best?.score).toBe(1);
+  });
+
+  describe('a twin already stamped with the station keeps it', () => {
+    // 松川ダム (長野, 2183100700010) is 447 m from both 松川 rows. Prod's
+    // 松川（再） has no completion year (0056 cleared it: ダム便覧 leaves it
+    // blank), so preferMaster alone would pick the （元）.
+    const KEY = '2183100700010';
+    const stem = normalizeJaName('松川ダム');
+    const pair = (
+      stamps: { moto?: string | null; sai?: string | null },
+      saiYear: number | null = null,
+    ) => [
+      cand('松川（元）', 446.7, '20', {
+        id: 9771,
+        completedYear: 1974,
+        stamp: stamps.moto ?? null,
+      }),
+      cand('松川（再）', 446.7, '20', {
+        id: 9770,
+        completedYear: saiYear,
+        stamp: stamps.sai ?? null,
+      }),
+    ];
+
+    test('a stamp on the not-yet-dated （再） stays there', () => {
+      const best = pickBest(pair({ sai: KEY }), stem, '20', { stationKey: KEY, year: 2026 });
+      expect(best?.candidate.name).toBe('松川（再）');
+    });
+
+    test('a stamp on the （元） stays there even when the （再） is completed', () => {
+      const best = pickBest(pair({ moto: KEY }, 1974), stem, '20', { stationKey: KEY, year: 2026 });
+      expect(best?.candidate.name).toBe('松川（元）');
+    });
+
+    test('both stamped falls back to preferMaster', () => {
+      const best = pickBest(pair({ moto: KEY, sai: KEY }), stem, '20', {
+        stationKey: KEY,
+        year: 2026,
+      });
+      expect(best?.candidate.name).toBe('松川（元）');
+    });
+
+    test("another station's stamp does not count", () => {
+      const best = pickBest(pair({ sai: '2183100700007' }), stem, '20', {
+        stationKey: KEY,
+        year: 2026,
+      });
+      expect(best?.candidate.name).toBe('松川（元）');
+    });
   });
 });
 

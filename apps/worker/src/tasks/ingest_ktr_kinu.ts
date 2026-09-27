@@ -23,7 +23,9 @@
 //   [s][5]: 発電使用水量
 //   [s][6]: 累加雨量 (mm)
 
+import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
+import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
@@ -172,21 +174,24 @@ async function matchMaster(log: (s: string) => void): Promise<DamMatch[]> {
   // say "they publish it, we failed to link it" instead of guessing.
   const universe: UniverseRow[] = [];
   for (const c of DAMS) {
-    const rows = await sql<{ id: bigint }[]>`
-      SELECT id FROM dams
+    // Both twins of a redeveloped dam rank alike so chooseRanked picks the
+    // current one; a row already stamped with the slug keeps it (#79).
+    const rows = await sql<(BindableMaster & { rank: number })[]>`
+      SELECT id, name, completed_year AS "completedYear",
+             external_ids->>${SOURCE_ID} AS stamp,
+             CASE
+               WHEN name = ${c.masterName} THEN 0
+               WHEN name = ${`${c.masterName}ダム`} THEN 1
+               WHEN name LIKE ${`${c.masterName}（再）%`}
+                 OR name LIKE ${`${c.masterName}（元）%`} THEN 2
+               ELSE 5
+             END AS rank
+      FROM dams
       WHERE pref_code = ${PREF_CODE}
         AND name LIKE ${`%${c.masterName}%`}
-      ORDER BY
-        CASE
-          WHEN name = ${c.masterName} THEN 0
-          WHEN name = ${`${c.masterName}ダム`} THEN 1
-          WHEN name LIKE ${`${c.masterName}（再）%`} THEN 2
-          ELSE 5
-        END,
-        id
-      LIMIT 1
+      ORDER BY rank, id
     `;
-    const r = rows[0];
+    const r = chooseRanked(rows, c.slug);
     // `slug` is the page's own DamTbl key.
     universe.push({
       externalId: c.slug,
@@ -199,13 +204,7 @@ async function matchMaster(log: (s: string) => void): Promise<DamMatch[]> {
       continue;
     }
     matches.push({ cfg: c, damId: r.id });
-    await sql`
-      UPDATE dams
-      SET external_ids = COALESCE(external_ids, '{}'::jsonb)
-                       || jsonb_build_object(${SOURCE_ID}::text, ${c.slug}::text)
-      WHERE id = ${r.id}
-        AND COALESCE(external_ids->>${SOURCE_ID}, '') <> ${c.slug}
-    `;
+    await bindExternalId(r.id, SOURCE_ID, c.slug);
   }
   await recordUniverse(SOURCE_ID, universe);
   return matches;

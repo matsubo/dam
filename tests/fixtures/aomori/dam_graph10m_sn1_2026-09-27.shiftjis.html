@@ -1,0 +1,249 @@
+<!DOCTYPE html SYSTEM "about:legacy-compat">
+<html lang="ja">
+<head>
+<META http-equiv="Content-Type" content="text/html; charset=SHIFT_JIS">
+<meta charset="Shift_JIS">
+<meta content="no-cache" http-equiv="pragma">
+<link href="../css/common.css" rel="stylesheet">
+<link href="../css/common-popup.css" rel="stylesheet">
+<link href="../css/graph.css" rel="stylesheet">
+<script src="../js/commons.js"></script><script src="../js/graph.js"></script>
+<title>ダム諸量グラフ:下湯ダム</title>
+<script>
+<!--
+var siteno = '1';
+var gratime = '20260927164000';
+var time1 = '20260927164000';
+var time2 = '20260927163000';
+var time3 = '2026092716';
+var newch = '0';
+
+
+var url = "bousaiweb.servletBousaiContents?style=dam_graph10m&dk=4&it=0&sn="+siteno+"&nw=0";
+
+function loadGimg(){
+  var urls = "bousaiweb.servletBousaiGraphImage?cacheclear=1&uq="+getUniqueValue()+"&wl=1&wsl=0&sy=gra_castdam2&sn="+ siteno +"&nwg=0&rg=1&tmg="+ gratime;
+  document.graphBackImg.src = urls;
+  document.graphBackImg.style.visibility = "visible";
+
+  DateOption10m();
+  makeMenu10m();
+}
+
+//--></script>
+<style>
+        table.dataInfo th.time{
+          text-align: right;
+          font-size: 9pt;
+        }
+      </style>
+</head>
+<body onload="loadGimg();">
+<div id="header">
+<table width="655">
+<tr>
+<td style="white-space:nowrap;" width="210" class="title">ダムグラフ:下湯ダム</td><td id="opDate" width="180" class="option"></td><td id="slDate" width="275" class="option"></td>
+</tr>
+</table>
+</div>
+<div id="main">
+<table width="655" class="siteInfo">
+<tr>
+<th nowrap colspan="5" class="title">観測局</th>
+</tr>
+<tr>
+<th nowrap width="59">雨量局</th><th nowrap width="85">局名</th><td nowrap width="210">&nbsp;
+          下湯ダム</td><th width="85" nowrap>所在地</th><td nowrap width="210">&nbsp;
+          青森市大字荒川字横倉</td>
+</tr>
+<tr>
+<th rowspan="2" nowrap>ダム局</th><th nowrap>局名</th><td nowrap>&nbsp;
+          下湯ダム</td><th nowrap>河川名</th><td nowrap>&nbsp;
+          堤川</td>
+</tr>
+<tr>
+<th nowrap>所在地</th><td nowrap>&nbsp;
+          青森市大字荒川字横倉</td><th nowrap>所轄</th><td nowrap>&nbsp;
+          東青</td>
+</tr>
+</table>
+<table width="655" cellspacing="0" cellpadding="1" border="0" class="dataInfo">
+<tr>
+<th nowrap colspan="9" class="title">
+<table width="590" border="0">
+<tr>
+<td style="width:350px;text-align:right">10分間&nbsp;|&nbsp;<a href="bousaiweb.servletBousaiContents?style=dam_graph&dk=4&it=1&sn=1&tm=20260927230000&nw=0&cacheclear=1">1時間</a></td><td style="width:240px;text-align:right"><a href="bousaiweb.servletBousaiContents?style=dam_photo&dk=4&sn=1&tm=">&gt;&gt;現地写真</a></td>
+</tr>
+</table>
+</th>
+</tr>
+<tr>
+<th nowrap colspan="9" class="date">2026年09月27日</th>
+</tr>
+<tr>
+<th rowspan="2" width="40" nowrap class="title">時分</th><th colspan="2" nowrap class="title">ダム地点</th><th rowspan="2" width="75" nowrap class="title">流入量<br>[m<sup>3</sup>/s]</th><th rowspan="2" width="80" nowrap class="title">全放流量<br>[m<sup>3</sup>/s]</th><th rowspan="2" width="75" nowrap class="title">貯水位<br>[EL.m]</th><th rowspan="2" width="80" nowrap class="title">貯水量<br>(有効容量)<br>[1000m<sup>3</sup>]</th><th rowspan="2" width="80" nowrap class="title">貯水率<br>(有効容量)<br>[%]</th><th rowspan="2" width="80" nowrap class="title">貯水率<br>(利水容量)<br>[%]</th>
+</tr>
+<tr>
+<th width="60" nowrap class="title">10分<br>[mm]</th><th width="60" nowrap class="title">累加<br>[mm]</th>
+</tr>
+<tr>
+<th nowrap class="title time">12:50&nbsp;</th><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.22</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.23</td><td nowrap>&nbsp;263.44</td><td nowrap>&nbsp;&nbsp;2114</td><td nowrap>&nbsp;19.20</td><td nowrap>100.00</td>
+</tr>
+<tr>
+<th nowrap class="title time">13:00&nbsp;</th><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.22</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.23</td><td nowrap>&nbsp;263.44</td><td nowrap>&nbsp;&nbsp;2114</td><td nowrap>&nbsp;19.20</td><td nowrap>100.00</td>
+</tr>
+<tr>
+<th nowrap class="title time">13:10&nbsp;</th><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.22</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.23</td><td nowrap>&nbsp;263.44</td><td nowrap>&nbsp;&nbsp;2114</td><td nowrap>&nbsp;19.20</td><td nowrap>100.00</td>
+</tr>
+<tr>
+<th nowrap class="title time">13:20&nbsp;</th><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.22</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.22</td><td nowrap>&nbsp;263.44</td><td nowrap>&nbsp;&nbsp;2114</td><td nowrap>&nbsp;19.20</td><td nowrap>100.00</td>
+</tr>
+<tr>
+<th nowrap class="title time">13:30&nbsp;</th><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.22</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.23</td><td nowrap>&nbsp;263.44</td><td nowrap>&nbsp;&nbsp;2114</td><td nowrap>&nbsp;19.20</td><td nowrap>100.00</td>
+</tr>
+<tr>
+<th nowrap class="title time">13:40&nbsp;</th><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.22</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.21</td><td nowrap>&nbsp;263.44</td><td nowrap>&nbsp;&nbsp;2114</td><td nowrap>&nbsp;19.20</td><td nowrap>100.00</td>
+</tr>
+<tr>
+<th nowrap class="title time">13:50&nbsp;</th><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.22</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.22</td><td nowrap>&nbsp;263.44</td><td nowrap>&nbsp;&nbsp;2114</td><td nowrap>&nbsp;19.20</td><td nowrap>100.00</td>
+</tr>
+<tr>
+<th nowrap class="title time">14:00&nbsp;</th><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.52</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.21</td><td nowrap>&nbsp;263.43</td><td nowrap>&nbsp;&nbsp;2111</td><td nowrap>&nbsp;19.20</td><td nowrap>100.00</td>
+</tr>
+<tr>
+<th nowrap class="title time">14:10&nbsp;</th><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.44</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.19</td><td nowrap>&nbsp;263.43</td><td nowrap>&nbsp;&nbsp;2111</td><td nowrap>&nbsp;19.20</td><td nowrap>100.00</td>
+</tr>
+<tr>
+<th nowrap class="title time">14:20&nbsp;</th><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.44</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.20</td><td nowrap>&nbsp;263.43</td><td nowrap>&nbsp;&nbsp;2111</td><td nowrap>&nbsp;19.20</td><td nowrap>100.00</td>
+</tr>
+<tr>
+<th nowrap class="title time">14:30&nbsp;</th><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.44</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.19</td><td nowrap>&nbsp;263.43</td><td nowrap>&nbsp;&nbsp;2111</td><td nowrap>&nbsp;19.20</td><td nowrap>100.00</td>
+</tr>
+<tr>
+<th nowrap class="title time">14:40&nbsp;</th><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.43</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.20</td><td nowrap>&nbsp;263.43</td><td nowrap>&nbsp;&nbsp;2111</td><td nowrap>&nbsp;19.20</td><td nowrap>100.00</td>
+</tr>
+<tr>
+<th nowrap class="title time">14:50&nbsp;</th><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.51</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.20</td><td nowrap>&nbsp;263.43</td><td nowrap>&nbsp;&nbsp;2111</td><td nowrap>&nbsp;19.20</td><td nowrap>100.00</td>
+</tr>
+<tr>
+<th nowrap class="title time">15:00&nbsp;</th><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.12</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.21</td><td nowrap>&nbsp;263.43</td><td nowrap>&nbsp;&nbsp;2111</td><td nowrap>&nbsp;19.20</td><td nowrap>100.00</td>
+</tr>
+<tr>
+<th nowrap class="title time">15:10&nbsp;</th><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.20</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.21</td><td nowrap>&nbsp;263.43</td><td nowrap>&nbsp;&nbsp;2111</td><td nowrap>&nbsp;19.20</td><td nowrap>100.00</td>
+</tr>
+<tr>
+<th nowrap class="title time">15:20&nbsp;</th><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.20</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.20</td><td nowrap>&nbsp;263.43</td><td nowrap>&nbsp;&nbsp;2111</td><td nowrap>&nbsp;19.20</td><td nowrap>100.00</td>
+</tr>
+<tr>
+<th nowrap class="title time">15:30&nbsp;</th><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.20</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.21</td><td nowrap>&nbsp;263.43</td><td nowrap>&nbsp;&nbsp;2111</td><td nowrap>&nbsp;19.20</td><td nowrap>100.00</td>
+</tr>
+<tr>
+<th nowrap class="title time">15:40&nbsp;</th><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.20</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.21</td><td nowrap>&nbsp;263.43</td><td nowrap>&nbsp;&nbsp;2111</td><td nowrap>&nbsp;19.20</td><td nowrap>100.00</td>
+</tr>
+<tr>
+<th nowrap class="title time">15:50&nbsp;</th><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.12</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.20</td><td nowrap>&nbsp;263.43</td><td nowrap>&nbsp;&nbsp;2111</td><td nowrap>&nbsp;19.20</td><td nowrap>100.00</td>
+</tr>
+<tr>
+<th nowrap class="title time">16:00&nbsp;</th><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.20</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.20</td><td nowrap>&nbsp;263.43</td><td nowrap>&nbsp;&nbsp;2111</td><td nowrap>&nbsp;19.20</td><td nowrap>100.00</td>
+</tr>
+<tr>
+<th nowrap class="title time">16:10&nbsp;</th><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.20</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.19</td><td nowrap>&nbsp;263.43</td><td nowrap>&nbsp;&nbsp;2111</td><td nowrap>&nbsp;19.20</td><td nowrap>100.00</td>
+</tr>
+<tr>
+<th nowrap class="title time">16:20&nbsp;</th><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.20</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.20</td><td nowrap>&nbsp;263.43</td><td nowrap>&nbsp;&nbsp;2111</td><td nowrap>&nbsp;19.20</td><td nowrap>100.00</td>
+</tr>
+<tr>
+<th nowrap class="title time">16:30&nbsp;</th><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;0</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.20</td><td nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.20</td><td nowrap>&nbsp;263.43</td><td nowrap>&nbsp;&nbsp;2111</td><td nowrap>&nbsp;19.20</td><td nowrap>100.00</td>
+</tr>
+<tr>
+<th nowrap class="title time">16:40&nbsp;</th><td nowrap></td><td nowrap></td><td nowrap></td><td nowrap></td><td nowrap></td><td nowrap></td><td nowrap></td><td nowrap></td>
+</tr>
+<tr>
+<td style="text-align:center;vertical-align:middle;" height="340" colspan="9" nowrap id="graphBack"><img style="visibility:hidden;" name="graphBackImg" border="0"><br>
+<img src="../img/damCast.png" border="0"></td>
+</tr>
+</table>
+<div style="margin:5px;">
+<span>※洪水量：ダム毎に設定された洪水調節を開始する基準となる流入量。</span>
+</div>
+</div>
+<div style="position:absolute;left:665px;top:130px;">
+<table cellspacing="0" cellpadding="1" border="0" class="hanrei">
+<tr>
+<th colspan="2" nowrap>凡例</th>
+</tr>
+<tr>
+<td nowrap style="width:25px;">10分<br>雨量</td><td>
+<table cellspacing="0" cellpadding="1">
+<tr>
+<td style="color:#3366FF;width:90px">&nbsp;1mm～&nbsp;9mm</td>
+</tr>
+<tr>
+<td style="color:#006633;width:90px">10mm～19mm</td>
+</tr>
+<tr>
+<td style="color:#ff6600;width:90px">20mm～29mm</td>
+</tr>
+<tr>
+<td style="color:#ff0000;width:90px">30mm以上</td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td style="width:25px;">***</td><td>欠測</td>
+</tr>
+<tr>
+<td style="width:25px;">---</td><td>無効、閉局、保守</td>
+</tr>
+<tr>
+<td style="width:25px;">空欄</td><td>未受信</td>
+</tr>
+</table>
+</div>
+<div style="position:absolute;left:665px;top:580px;">
+<table cellspacing="0" cellpadding="1" border="0" class="hanrei">
+<tr>
+<th colspan="2" nowrap>凡例</th>
+</tr>
+<tr>
+<th class="thkind" colspan="2" nowrap>雨量</th>
+</tr>
+<tr>
+<td style="width:25px;"><img height="13" width="13" src="../img/ln9AB3FF.gif"></td><td style="width:94px;">時間雨量[mm]</td>
+</tr>
+<tr>
+<td style="width:25px;"><img height="13" width="13" src="../img/lngreen.gif"></td><td>累加雨量[mm]</td>
+</tr>
+<tr>
+<th class="thkind" colspan="2" nowrap>ダム</th>
+</tr>
+<tr>
+<td style="width:25px;"><img height="13" width="13" src="../img/ln3366FF.gif"></td><td>貯水位[m]</td>
+</tr>
+<tr>
+<td style="width:25px;"><img height="13" width="13" src="../img/ln000099.gif"></td><td>流入量[m<sup>3</sup>/s]</td>
+</tr>
+<tr>
+<td style="width:25px;"><img height="13" width="13" src="../img/lngreen.gif"></td><td>全放流量[m<sup>3</sup>/s]</td>
+</tr>
+<tr>
+<td style="width:25px;"><img height="13" width="13" src="../img/lnFF00FF.gif"></td><td>洪水時最高水位<br>(&nbsp;282.60m)</td>
+</tr>
+<tr>
+<td style="width:25px;"><img height="13" width="13" src="../img/lnFF9900.gif"></td><td>平常時最高水位<br>(&nbsp;263.40m)</td>
+</tr>
+<tr>
+<td style="width:25px;"><img height="13" width="13" src="../img/lnCC3333.gif"></td><td>洪水貯留準備水位<br>(---)</td>
+</tr>
+<tr>
+<td style="width:25px;"><img height="13" width="13" src="../img/lnblue.gif"></td><td>最低水位<br>(&nbsp;253.40m)</td>
+</tr>
+<tr>
+<td style="width:25px;"><img height="13" width="13" src="../img/lnred.gif"></td><td>洪水量(※)<br>(&nbsp;&nbsp;&nbsp;45.00m<sup>3</sup>/s
+    )</td>
+</tr>
+</table>
+</div>
+</body>
+</html>

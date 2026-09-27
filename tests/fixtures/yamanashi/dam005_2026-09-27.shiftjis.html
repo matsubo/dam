@@ -1,0 +1,180 @@
+
+
+<script language="javascript1.2">
+<!--
+function init(){
+  var no = arrayParams["pKyoku"]; 
+  if(no == undefined) 
+    no = 1;
+}
+// -->
+</script>
+
+<!--- グローバル変数定義 --->
+
+
+<!--- 共通関数 --->
+<script type="text/javascript">
+<!--
+	var get_pos_buf;
+	get_pos_buf="";
+// 座標取得 
+// IDにD1を持つタグを指定すること
+function get_pos_func(xmgn, ymgn ) {
+	var x;
+	var	y;
+	//IE6
+	if (document.all && document.getElementById && (document.compatMode=='CSS1Compat')) {
+	    x=event.clientX+document.documentElement.scrollLeft;
+	    y=event.clientY+document.documentElement.scrollTop;
+    }
+	//その他
+	else if (document.all) {
+		//画面全体の位置
+	    x=event.clientX+document.body.scrollLeft;
+	    y=event.clientY+document.body.scrollTop;
+    }
+    
+	get_pos_buf = get_pos_buf + "[" + (x) + "," + (y) + "]<BR>";
+    document.all.D1.innerHTML = get_pos_buf;
+    
+}
+// 座標を消す
+function cls_pos_func( ) {
+	cls_pos_buf = "";
+    document.all.D1.innerHTML = cls_pos_buf;
+ 
+}
+
+//現在時刻の取得
+function getNowTime(){
+	obj = new Date();
+	yy = obj.getYear();
+	mm = obj.getMonth() + 1;
+	dd = obj.getDate();
+	hh = obj.getHours()
+	nn = obj.getMinutes()
+
+	if (yy < 2000) { yy += 1900; }
+	if (mm < 10) { mm = "0" + mm; }
+	if (dd < 10) { dd = "0" + dd; }
+	if (hh < 10) { hh = "0" + hh; }
+	if (nn < 10) { nn = "00"; }
+	 else if (nn < 20)  { nn = "10"; }
+	 else if (nn < 30)  { nn = "20"; }
+	 else if (nn < 40)  { nn = "30"; }
+	 else if (nn < 50)  { nn = "40"; }
+	 else if (nn < 60)  { nn = "50"; }
+	str = yy + "/" + mm + "/" + dd + " " + hh + ":" + nn;
+
+	return str;
+}
+// -->
+</script>
+
+
+<!--- 画面パラメータ取得 --->
+
+<!--- ＤＢデータ取得 --->
+<!--- グローバル変数定義 --->
+
+
+
+<HTML>
+  <HEAD>
+    <TITLE>山梨県雨量・水位情報</TITLE>
+	<meta HTTP-EQUIV="content-type " CONTENT="text/html;charset=SHIFT_JIS">
+	<meta http-equiv="imagetoolbar" content="no">
+	<meta name="author" content="NEC Co.">
+	<meta name="copyright" content="ja">
+	<meta name="build" content="2013/06/17">
+    <meta content="no-cache" http-equiv="pragma">
+  </HEAD>
+<style type="text/css">
+<!--
+.ListHead {	font-size:14px;
+			color:WHITE;
+			font-weight: bold;
+			height:25px;
+			background-color: lightseagreen;
+			text-align: center;
+}
+.ListHead2 {font-size:14px;
+			color:WHITE;
+			font-weight: bold;
+			height:40px;
+			background-color: lightseagreen;
+			text-align: center;
+}
+.ListBody1 { font-size:14px;
+			height:23px;
+			text-align: Right;
+			background-color:skyblue;
+}
+.ListBody2 { font-size:14px;
+			height:23px;
+			text-align: Right;
+			background-color:White;
+}
+.ListBody2 td {
+			padding-right: 5px;
+}
+-->
+</style>
+  <BODY bgcolor="#f3e8ff" leftmargin="0px" topmargin="0px" marginwidth="0px" >
+
+
+
+	<TABLE BORDER="0" CELLSPACING="0" cellpadding="0" width="1275" style="font-size:16;">
+		<TR>
+			
+			<TD VALIGN="top">
+				<!--- ダム諸元表 --->
+				<TABLE cellSpacing="0" cellPadding="0" width="1275" border="0">
+					<TR Height="50">
+					    
+						<TD width="300" valign="CENTER" align="CENTER" style="font-size:16px;font-weight: bold">
+						ダム状況表
+						</TD>
+						<TD valign="CENTER" align="LEFT">
+						2026年09月27日 16時00分 現在
+						</TD>
+						
+					</TR>
+					<TR>
+						<TD Height="20" valign="Bottom" align="right" style="font-size:14px;">
+
+						</TD>
+					</TR>
+				</TABLE>
+				<TABLE cellSpacing="0" cellPadding="0" width="1275" border="1" style="font-size:16;">
+					<!--- ヘッダー表示	--->
+					
+					<TR class="ListHead">
+						<TD width="12%" rowspan="2">ダム名</TD>
+						<TD width="7%"  rowspan="2">貯水位<BR>[EL.m]</TD>
+						<TD width="7%"  rowspan="2">貯水量<BR>[千 m3]</TD>
+						<TD width="7%"  rowspan="2">空容量<BR>[千 m3]</TD>
+						<TD width="7%"  rowspan="2">全流入量<BR>[m3/s]</TD>
+						<TD width="7%"  rowspan="2">全放流量<BR>[m3/s]</TD>
+						<TD width="" colspan="2">ダム雨量</TD>
+                    </TR>
+                    <TR class="ListHead2">
+						<TD width="5%">時間<BR>[mm/h]</TD>
+						<TD width="5%">累計<BR>[mm]</TD>
+					</TR>
+
+					
+					<!--- グリッドデータ表示	--->
+					
+					<TR CLASS="ListBody2"><TD bgcolor="moccasin" align="CENTER">大門ダム</TD><TD>895.49</TD><TD>1114</TD><TD>1045</TD><TD>2.31</TD><TD>3.69</TD><TD>0</TD><TD>0</TD></TR><TR CLASS="ListBody2"><TD bgcolor="moccasin" align="CENTER">塩川ダム</TD><TD>879.66</TD><TD>5145</TD><TD>3755</TD><TD>3.83</TD><TD>3.81</TD><TD>0</TD><TD>0</TD></TR><TR CLASS="ListBody2"><TD bgcolor="moccasin" align="CENTER">広瀬ダム</TD><TD>1042.90</TD><TD>5151</TD><TD>6199</TD><TD>5.12</TD><TD>5.12</TD><TD>0</TD><TD>0</TD></TR><TR CLASS="ListBody2"><TD bgcolor="moccasin" align="CENTER">琴川ダム</TD><TD>1453.22</TD><TD>3144</TD><TD>1606</TD><TD>0.65</TD><TD>0.89</TD><TD>0</TD><TD>0</TD></TR><TR CLASS="ListBody2"><TD bgcolor="moccasin" align="CENTER">荒川ダム</TD><TD>783.98</TD><TD>3381</TD><TD>5219</TD><TD>1.94</TD><TD>2.06</TD><TD>0</TD><TD>0</TD></TR><TR CLASS="ListBody2"><TD bgcolor="moccasin" align="CENTER">深城ダム</TD><TD>610.98</TD><TD>880</TD><TD>4457</TD><TD>3.93</TD><TD>3.94</TD><TD>0</TD><TD>0</TD></TR>
+					
+				</TABLE>
+			</TD>
+		</TR>
+	</TABLE>
+	
+  </BODY>
+</HTML>
+
+<!--- ここからスクリプト開始 --->

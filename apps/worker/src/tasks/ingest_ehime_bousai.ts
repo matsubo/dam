@@ -21,7 +21,9 @@
 //
 // Priority 308. Cron hourly at :57.
 
+import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
+import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
@@ -239,14 +241,15 @@ interface DamMatch {
 
 /**
  * Pick the best master dam for a published name: an exact raw-name hit beats a
- * stem hit beats a prefix/substring hit, ties going to the lower id.
+ * stem hit beats a prefix/substring hit, ties going to the current （元）/（再）
+ * twin, else the lower id.
  */
-function chooseMaster(
+export function chooseMaster(
   rawName: string,
   stem: string,
-  masters: { id: bigint; name: string }[],
+  masters: BindableMaster[],
 ): bigint | null {
-  let best: { id: bigint; rank: number } | null = null;
+  let best: { m: BindableMaster; rank: number } | null = null;
   for (const m of masters) {
     const mStem = normalizeName(m.name);
     let rank: number;
@@ -256,27 +259,26 @@ function chooseMaster(
     else if (mStem.startsWith(stem)) rank = 3;
     else if (mStem.includes(stem)) rank = 4;
     else continue;
-    if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-      best = { id: m.id, rank };
+    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
+      best = { m, rank };
     }
   }
-  return best?.id ?? null;
+  return best?.m.id ?? null;
 }
 
 async function matchMaster(
   readings: EhimeReading[],
   log: (s: string) => void,
 ): Promise<DamMatch[]> {
-  const masters = await sql<
-    { id: bigint; name: string; external_ids: Record<string, string> | null }[]
-  >`
-    SELECT id, name, external_ids FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
+  const masters = await sql<BindableMaster[]>`
+    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
+    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out: DamMatch[] = [];
 
   for (const r of readings) {
-    // Prefer external_id lookup
-    const byExtId = masters.find((m) => m.external_ids?.[SOURCE_ID] === r.myMenuId);
+    // A row already stamped with this station keeps it (#57).
+    const byExtId = stampedMaster(masters, r.myMenuId);
     if (byExtId) {
       out.push({ myMenuId: r.myMenuId, damId: byExtId.id });
       continue;
@@ -291,13 +293,7 @@ async function matchMaster(
       continue;
     }
 
-    await sql`
-      UPDATE dams
-      SET external_ids = COALESCE(external_ids, '{}'::jsonb)
-                       || jsonb_build_object(${SOURCE_ID}::text, ${r.myMenuId}::text)
-      WHERE id = ${damId}
-        AND COALESCE(external_ids->>${SOURCE_ID}, '') <> ${r.myMenuId}
-    `;
+    await bindExternalId(damId, SOURCE_ID, r.myMenuId);
     out.push({ myMenuId: r.myMenuId, damId });
   }
 

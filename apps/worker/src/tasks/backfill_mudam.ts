@@ -26,7 +26,9 @@
 // name (or vice-versa) AND whose location is within 10 km of (lat, lng). If
 // no match within that window, the mudam entry is logged and skipped.
 
+import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
+import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
 import type { Task } from 'graphile-worker';
 
@@ -226,39 +228,40 @@ interface MatchResult {
  * proximity. Returns the closest match within `radiusM` whose name contains
  * the mudam name (or vice-versa, allowing the 「ダム」 suffix to be omitted
  * either side). Null if no acceptable match.
+ *
+ * A row already stamped with this damsysId keeps it. The （元） and （再） of
+ * one dam rank at the nearer twin's distance (花山's share coordinates), so
+ * the current structure wins instead of whichever row the sort met first.
  */
-async function matchMaster(mudam: MudamDam, radiusM = 10_000): Promise<MatchResult | null> {
-  const rows = await sql<{ id: bigint; name: string; dist: number }[]>`
-    SELECT id, name, ST_Distance(
-      location,
-      ST_SetSRID(ST_MakePoint(${mudam.lng}, ${mudam.lat}), 4326)::geography
-    )::FLOAT8 AS dist
-    FROM dams
-    WHERE ST_DWithin(
-      location,
-      ST_SetSRID(ST_MakePoint(${mudam.lng}, ${mudam.lat}), 4326)::geography,
-      ${radiusM}
-    )
-      AND (
-        name LIKE ${`%${mudam.name}%`}
-        OR ${mudam.name}::text LIKE ('%' || REPLACE(REPLACE(name, 'ダム', ''), '貯水池', '') || '%')
+export async function matchMaster(mudam: MudamDam, radiusM = 10_000): Promise<MatchResult | null> {
+  const rows = await sql<(BindableMaster & { rank: number; dist: number })[]>`
+    SELECT id, name, completed_year AS "completedYear", stamp, dist,
+           CASE WHEN twin
+                THEN MIN(dist) OVER (PARTITION BY twin, regexp_replace(name, '（(元|再)）$', ''))
+                ELSE dist
+           END AS rank
+    FROM (
+      SELECT id, name, completed_year, external_ids->>'mudam' AS stamp,
+             name ~ '（(元|再)）$' AS twin,
+             ST_Distance(
+               location,
+               ST_SetSRID(ST_MakePoint(${mudam.lng}, ${mudam.lat}), 4326)::geography
+             )::FLOAT8 AS dist
+      FROM dams
+      WHERE ST_DWithin(
+        location,
+        ST_SetSRID(ST_MakePoint(${mudam.lng}, ${mudam.lat}), 4326)::geography,
+        ${radiusM}
       )
-    ORDER BY dist
-    LIMIT 1
+        AND (
+          name LIKE ${`%${mudam.name}%`}
+          OR ${mudam.name}::text LIKE ('%' || REPLACE(REPLACE(name, 'ダム', ''), '貯水池', '') || '%')
+        )
+    ) c
   `;
-  const r = rows[0];
+  const r = chooseRanked(rows, String(mudam.damsysId));
   if (!r) return null;
   return { damId: r.id, distanceM: r.dist, damName: r.name };
-}
-
-async function stampExternalId(damId: bigint, damsysId: number): Promise<void> {
-  await sql`
-    UPDATE dams
-    SET external_ids = COALESCE(external_ids, '{}'::jsonb)
-                     || jsonb_build_object('mudam', ${String(damsysId)}::text)
-    WHERE id = ${damId}
-      AND COALESCE(external_ids->>'mudam', '') <> ${String(damsysId)}
-  `;
 }
 
 const task: Task = async (rawPayload, helpers) => {
@@ -295,7 +298,7 @@ const task: Task = async (rawPayload, helpers) => {
         continue;
       }
       totalMatched += 1;
-      await stampExternalId(match.damId, m.damsysId);
+      await bindExternalId(match.damId, 'mudam', String(m.damsysId));
 
       const inputs = [] as Parameters<typeof upsertObservations>[0];
       for (const y of yearList) {

@@ -70,8 +70,8 @@ export const CRONTAB = `
 # hour catches the freshest values.
 9 * * * * ingest:tottori-dam
 
-# 青森県砂防ダム情報 — 7 dams. Page is real-time (JST minute-level
-# timestamp). Cron at :11 every hour.
+# 青森県河川砂防情報提供システム — 7 dams, one ダム諸量グラフ (10分) page
+# each; stores the latest row. Cron at :11 every hour.
 11 * * * * ingest:aomori-dam
 
 # 愛知県 川の防災情報 ダム表 — 2 県管理ダム (雨山/木瀬). UTF-8 HTML; 10分更新.
@@ -108,16 +108,16 @@ export const CRONTAB = `
 # Cron at :14 every hour.
 14 * * * * ingest:fukui-bousai
 
-# 奈良県河川情報システム モバイル ダム現況 — 5 ダム (Shift_JIS HTML, ~10分更新).
-# 岩井川/天理/白川/初瀬/大門. 貯水位/流入量/放流量のみ (no storage).
-# Each dam is a separate table; latest row has "MM/DD HH:MM" JST timestamp.
+# 奈良県河川情報システム ダム現況表 (PC) — 5 ダム (防災Web Shift_JIS, 10分更新).
+# 岩井川/天理/白川/初瀬/大門. 貯水位/貯水容量/空容量/全流入量/放流量, no 貯水率.
+# 貯水容量 counts from the bed; stored less 堆砂容量 where the table ties to the master.
 # Cron at :18 every hour.
 18 * * * * ingest:nara-kasen
 
-# 富山県 県内ダム情報実況表 — 16 ダム (Salesforce public page, hourly).
+# 富山県 河川現況表 ダム貯水位表 — 16 ダム (kawa.pref.toyama.jp CSV, 10分更新).
 # 室牧/上市川/和田川/利賀川/白岩川/子撫川/角川/熊野川/上市川第二/朝日小川/
-# 布施川/城端/境川/大谷/久婦須川/舟川. Columns: 全流入量/全放流量/貯水位のみ.
-# No storage volume. HTML numeric entity-encoded. Cron at :16 every hour.
+# 布施川/城端/境川/大谷/久婦須川/舟川. Columns: 貯水位/全流入量/全放流量/
+# 貯水率 (利水容量). No storage volume. Cron at :16 every hour.
 16 * * * * ingest:toyama-bousai
 
 # 国土交通省 中国地方整備局 — 11 国管理 dams across 5 prefectures
@@ -285,9 +285,9 @@ export const CRONTAB = `
 # Cron at :55.
 55 * * * * ingest:miyazaki-bousai
 
-# 山梨県雨量・水位情報 時間ダム諸量表 — 6 県管理ダム (大門/塩川/広瀬/琴川/荒川/深城).
-# Shift_JIS HTML; 6 parallel requests (one per dam). Handles "24:00" midnight.
-# level + inflow + outflow + hourly rain (no storage volume). Cron at :36.
+# 山梨県雨量・水位情報 ダム状況表 — 6 県管理ダム (大門/塩川/広瀬/琴川/荒川/深城).
+# Shift_JIS HTML; one page lists every dam. Handles "24時00分" midnight.
+# level + storage volume + inflow + outflow + hourly rain (no rate). Cron at :36.
 36 * * * * ingest:yamanashi-dam
 
 # 長野県 河川砂防情報ステーション ダム諸量 — 17 県管理ダム (松川/片桐/箕輪/横川/
@@ -367,6 +367,12 @@ export const CRONTAB = `
 # NOTE: Returns empty items during normal conditions; populated only during
 # active flood/disaster events. Adapter exits early when no data present.
 56 * * * * ingest:kagoshima-bousai
+
+# 鹿児島県河川砂防情報システム ダム一覧表 — 3 県管理ダム (西之谷/川辺/大和).
+# Published continuously, unlike the portal above. 防災Web servlet dk=4,
+# Shift_JIS HTML, 10-min values; 貯水率（利水） is the stored rate.
+# Priority 309 (above the flood-only kagoshima-bousai at 308). Cron at :52.
+52 * * * * ingest:kagoshima-kasen
 
 # 佐賀県河川砂防情報システム ダム現況表 — 19 県管理ダム (岸川/庭木/繁昌/天ヶ瀬/
 # 平木場/伊岐佐/都川内/井手口川/竜門/有田/古木場/本部/矢筈/狩立日ノ峯/中木庭/

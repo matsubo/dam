@@ -21,6 +21,7 @@
 // Priority: 302 (pref/bureau-managed water supply, daily).
 // Cron: daily at 03:00 UTC = 12:00 JST.
 
+import { type BindableMaster, preferMaster } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
@@ -139,8 +140,9 @@ async function matchMaster(
   rows: ParsedRow[],
   log: (s: string) => void,
 ): Promise<Map<string, bigint>> {
-  const masters = await sql<{ id: bigint; name: string }[]>`
-    SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
+  const masters = await sql<BindableMaster[]>`
+    SELECT id, name, completed_year AS "completedYear"
+    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out = new Map<string, bigint>();
   // What this source publishes, matched or not — recorded so /coverage can
@@ -154,7 +156,7 @@ async function matchMaster(
   for (const dam of DAMS) {
     const stem = dam.masterName;
 
-    let best: { id: bigint; rank: number } | null = null;
+    let best: { m: BindableMaster; rank: number } | null = null;
     for (const m of masters) {
       let rank: number;
       if (m.name === dam.csvName) rank = 0;
@@ -163,8 +165,8 @@ async function matchMaster(
       else if (m.name.startsWith(stem)) rank = 3;
       else if (m.name.includes(stem)) rank = 4;
       else continue;
-      if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-        best = { id: m.id, rank };
+      if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
+        best = { m, rank };
       }
     }
 
@@ -172,14 +174,14 @@ async function matchMaster(
       externalId: dam.csvName,
       name: dam.csvName,
       prefCode: PREF_CODE,
-      resolvedDamId: best?.id ?? null,
+      resolvedDamId: best?.m.id ?? null,
     });
 
     if (!best) {
       log(`${SOURCE_ID}: no master match for "${dam.csvName}"`);
       continue;
     }
-    if (reported.has(dam.csvName)) out.set(dam.csvName, best.id);
+    if (reported.has(dam.csvName)) out.set(dam.csvName, best.m.id);
   }
 
   await recordUniverse(SOURCE_ID, universe);
