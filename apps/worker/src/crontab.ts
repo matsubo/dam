@@ -110,7 +110,7 @@ export const CRONTAB = `
 
 # 奈良県河川情報システム ダム現況表 (PC) — 5 ダム (防災Web Shift_JIS, 10分更新).
 # 岩井川/天理/白川/初瀬/大門. 貯水位/貯水容量/空容量/全流入量/放流量, no 貯水率.
-# 貯水容量 counts from the bed; stored less 堆砂容量 where the table ties to the master.
+# Volume = 有効 − 空容量 where 空容量 runs to サーチャージ (all but 大門, which stops at 常時満水位).
 # Cron at :18 every hour.
 18 * * * * ingest:nara-kasen
 
