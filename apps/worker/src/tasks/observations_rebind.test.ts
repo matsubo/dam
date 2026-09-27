@@ -126,11 +126,16 @@ describe('rebindObservations on a compressed chunk', () => {
     `;
     expect(owning).toBeDefined();
     await sql`SELECT compress_chunk(${owning?.qualified ?? ''}::regclass, if_not_compressed => true)`;
-    const [state] = await sql<{ status: number }[]>`
-      SELECT status FROM _timescaledb_catalog.chunk
-      WHERE format('%I.%I', schema_name, table_name) = ${owning?.qualified ?? ''}
+    // Public view plus the chunk's own heap: _timescaledb_catalog.chunk's
+    // columns differ across TimescaleDB releases (CI pulls a newer image).
+    const [state] = await sql<{ compressed: boolean }[]>`
+      SELECT is_compressed AS compressed FROM timescaledb_information.chunks
+      WHERE format('%I.%I', chunk_schema, chunk_name) = ${owning?.qualified ?? ''}
     `;
-    expect(state?.status).toBe(1); // compressed, nothing left in the heap
+    expect(state?.compressed).toBe(true);
+    // `qualified` is built by format('%I.%I'), so it is a quoted identifier.
+    const heap = await sql.unsafe(`SELECT 1 FROM ONLY ${owning?.qualified ?? ''} LIMIT 1`);
+    expect(heap.length).toBe(0); // nothing left uncompressed
 
     const moved = await rebindObservations(sql, {
       sourceId: SOURCE,
