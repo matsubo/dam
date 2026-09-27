@@ -114,10 +114,10 @@ export const CRONTAB = `
 # Cron at :18 every hour.
 18 * * * * ingest:nara-kasen
 
-# 富山県 県内ダム情報実況表 — 16 ダム (Salesforce public page, hourly).
+# 富山県 河川現況表 ダム貯水位表 — 16 ダム (kawa.pref.toyama.jp CSV, 10分更新).
 # 室牧/上市川/和田川/利賀川/白岩川/子撫川/角川/熊野川/上市川第二/朝日小川/
-# 布施川/城端/境川/大谷/久婦須川/舟川. Columns: 全流入量/全放流量/貯水位のみ.
-# No storage volume. HTML numeric entity-encoded. Cron at :16 every hour.
+# 布施川/城端/境川/大谷/久婦須川/舟川. Columns: 貯水位/全流入量/全放流量/
+# 貯水率 (利水容量). No storage volume. Cron at :16 every hour.
 16 * * * * ingest:toyama-bousai
 
 # 国土交通省 中国地方整備局 — 11 国管理 dams across 5 prefectures
