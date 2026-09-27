@@ -76,6 +76,25 @@ describe('parseKochiKigyoTable', () => {
     expect(yoshino?.waterLevelM).toBeNull();
     expect(yoshino?.inflowM3s).toBe(19.4);
   });
+
+  test('drops an hour whose level, inflow and outflow are all missing', async () => {
+    // Blank 杉田's three 21:00 cells (the first 76.82 / 28.1 / 21.6 after that
+    // timestamp); 吉野's cells on the same row stay.
+    const html = await fixtureHtml();
+    const at = html.indexOf('2026-09-27 21:00:00.0');
+    const tail = html
+      .slice(at)
+      .replace('>76.82<', '>***<')
+      .replace('>28.1<', '>***<')
+      .replace('>21.6<', '>***<');
+    const { dams, readings } = parseKochiKigyoTable(html.slice(0, at) + tail);
+    const latest = readings.filter(
+      (r) => r.observedAt.toISOString() === '2026-09-27T12:00:00.000Z',
+    );
+    expect(latest.map((r) => r.name)).toEqual(['吉野ダム']);
+    expect(readings.filter((r) => r.name === '杉田ダム')).toHaveLength(47);
+    expect(dams).toEqual(['吉野ダム', '杉田ダム']);
+  });
 });
 
 describe('chooseMaster', () => {
@@ -88,7 +107,7 @@ describe('chooseMaster', () => {
 
   // Real pref-39 rows: 吉野 (NDI 2096, 高知県公営企業局) and the unrelated
   // agricultural 吉野溜池 (NDI 2085), which shares the 吉野 prefix.
-  test('binds 吉野ダム to 吉野, not the lower-id 吉野溜池', () => {
+  test('binds 吉野ダム to 吉野, not the prefix-sharing 吉野溜池', () => {
     const masters = [m(10369, '吉野'), m(10370, '杉田'), m(10398, '吉野溜池')];
     expect(chooseMaster('吉野ダム', masters)).toBe(10369n);
     expect(chooseMaster('杉田ダム', masters)).toBe(10370n);
