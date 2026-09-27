@@ -44,6 +44,9 @@ const FRESHNESS_HOURS: Record<string, number> = {
   // Survey-date source: 福島県 publishes 隔週 in かんがい期 but only monthly
   // Oct–Mar, so the window has to clear a full winter gap plus publish lag.
   'fukushima-nourin': 45 * 24,
+  // Hand-edited about monthly; the index shows gaps up to 62 days (2026/3/26
+  // → 5/27), and the 現在 date runs ~5 days behind the edit.
+  'awaji-suido': 70 * 24,
   // mudam is historical (1-2 yr lag) — don't alert.
 };
 

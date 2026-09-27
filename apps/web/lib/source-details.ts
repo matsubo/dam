@@ -355,6 +355,15 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '松江市の水道専用 2 ダム (千本/大谷) の日別貯水量(m³)・貯水率。当月と前月の全日を毎回取り込み。',
     label: '松江市上下水道局',
   },
+  'awaji-suido': {
+    upstream: '淡路広域水道企業団「各水源地の貯水状況」 (www.awaji-suido.jp/osirase-01.html)',
+    license:
+      '利用条件の記載なし (robots.txt なし; フッターは「Copyright（C）2005 淡路広域水道企業団 All Rights Reserved.」) — 出典明示で観測値 (事実) のみを引用',
+    cadence:
+      '月 1 回程度 (手動更新; 日付のみ・時刻非公表のため 00:00 JST で記録; 取得は毎日 12:17 JST)',
+    what: '淡路広域水道企業団の水源ダムの貯水量(m³)。猪ノ鼻/猪鼻第2/竹原/本庄川を取り込み。貯水率は企業団独自の容量 (本庄川・牛内は利水分) 基準のため保存せず、貯水量から算出。天川第2 は貯水量が台帳の有効貯水容量を超えるため保存せず、牛内は他ソースで毎時取得済み。天川第1 は台帳になく、成相・北富士は合算値のため未紐付け。',
+    label: '淡路広域水道企業団',
+  },
   'shimane-bousai': {
     upstream:
       '島根県水防情報システム (www.suibou-shimane.jp) — /dyn/dps/json/{YYYYMMDD}/dam60.json',

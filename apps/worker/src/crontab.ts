@@ -433,6 +433,11 @@ export const CRONTAB = `
 # per page, edited on weekday late mornings. Daily at 04:58 UTC (13:58 JST).
 58 4 * * * ingest:matsue-suido
 
+# 淡路広域水道企業団 各水源地の貯水状況 — 淡路島の水道ダム (猪鼻第１/第２/竹原/
+# 天川第１/第２/成相・北富士/牛内/本庄川), 貯水量 on a 現在 date, hand-edited
+# about monthly. Priority 288. Daily at 03:17 UTC (12:17 JST).
+17 3 * * * ingest:awaji-suido ?jobKey=ingest:awaji-suido
+
 # M&C鳥取水力発電 発電所・ダム運転情報 — 鳥取県営発電 4 ダム (茗荷谷/三朝調整池/
 # 中津 + 菅沢). One current value per dam (refreshed every minute): 10分間流入量
 # and ゲート放流量 only — the published ダム水位 is a gauge height, not EL.
