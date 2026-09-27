@@ -9,7 +9,8 @@
 // Format: Static HTML; date "YYYY年MM月DD日"; storage units 千m³. Each dam is a
 //         block headed by <span class="dam-name">; values sit in
 //         <div class="databox">: [EL …] = 0時の貯水位, 流入量/放流量 = 前日平均,
-//         貯水量<br>&lt;午前0時&gt; and (貯水率 …) on the 利水容量 basis.
+//         貯水量<br>&lt;午前0時&gt; and (貯水率 …) on the 利水容量 basis; only the
+//         有効 part of that is stored (see storedStorage).
 // License: 水資源機構 published; 出典明示で再配布可.
 //
 // New coverage: 中里ダム (not in jwa-junpo).
@@ -35,10 +36,16 @@ const NAME_MAP: Array<{ chubuName: string; masterName: string; prefCodes: string
   { chubuName: '徳山ダム', masterName: '徳山', prefCodes: ['21'] },
 ];
 
-interface ParsedRow {
+export interface ParsedRow {
   chubuName: string;
+  /** Label of the capacity printed under the name: 利水容量 or 有効貯水量 (徳山). */
+  capacityBasis: '利水' | '有効' | null;
+  capacityThouM3: number | null;
+  /** 貯水量 at 午前0時 — storage within `capacityBasis`, not necessarily 有効. */
   storageVolumeThouM3: number;
   storageRatePct: number;
+  /** The current 有効貯水量 a few blocks print below the 利水 figures (阿木川, 味噌川). */
+  effectiveVolumeThouM3: number | null;
   waterLevelM: number | null;
   inflowM3s: number | null;
   outflowM3s: number | null;
@@ -96,15 +103,20 @@ export function parseChubuHtml(html: string): { reportDate: Date | null; rows: P
     const block = damBlock(html, m.chubuName);
     if (!block) continue;
 
+    const capacity = /^(?:\s|<br\s*>)*(利水容量|有効貯水量)<br>/.exec(block);
     // 貯水量<br>&lt;午前0時&gt; is the storage; the 有効貯水量<br> label above
     // it (徳山) is the capacity, and 前日貯水量との増減 the day's change.
     const volume = databoxAfter(block, /(?<!有効)貯水量<br>/);
     const rate = databoxAfter(block, /貯水率(?=<div)/);
     if (volume == null || rate == null) continue;
+    const afterRate = block.slice(block.indexOf('貯水率'));
     rows.push({
       chubuName: m.chubuName,
+      capacityBasis: capacity ? (capacity[1] === '利水容量' ? '利水' : '有効') : null,
+      capacityThouM3: capacity ? databoxAfter(block, /^/) : null,
       storageVolumeThouM3: volume,
       storageRatePct: rate,
+      effectiveVolumeThouM3: databoxAfter(afterRate, /有効貯水量<br>/),
       waterLevelM: databoxAfter(block, /\[EL\s*/),
       inflowM3s: databoxAfter(block, /流入量(?=<div)/),
       outflowM3s: databoxAfter(block, /(?<!利水)放流量(?=<div)/),
@@ -113,9 +125,47 @@ export function parseChubuHtml(html: string): { reportDate: Date | null; rows: P
   return { reportDate, rows };
 }
 
+/**
+ * What of a parsed row may be stored. jwa-chubu is not trusted_rate_basis, so
+ * the site divides every stored volume by the master's 有効 capacity: only
+ * 有効 storage may go in, and a published rate only where its denominator is
+ * that same capacity.
+ *
+ * - 利水容量 equal to the master's 有効 (牧尾, 中里): 貯水量 and 貯水率 both are.
+ * - A printed current 有効貯水量 (阿木川, 味噌川): store it; the 利水 rate is not
+ *   有効-based, so the 0036 trigger derives one instead.
+ * - Labelled 有効貯水量 (徳山): 貯水量 is 有効 storage, but the rate divides by a
+ *   seasonal pool (257,400 / 366,400 千m³ per the page footer), not the master.
+ * - Otherwise (岩屋: 利水 61,900 of a 150,000 千m³ pool) nothing is 有効.
+ */
+export function storedStorage(
+  row: ParsedRow,
+  masterActiveM3: number | null,
+): { storageVolumeM3: number | null; storageRate: number | null } {
+  const pool = row.capacityThouM3 === null ? null : row.capacityThouM3 * 1_000;
+  if (
+    masterActiveM3 !== null &&
+    pool !== null &&
+    Math.abs(pool - masterActiveM3) <= masterActiveM3 * 0.005
+  ) {
+    return {
+      storageVolumeM3: row.storageVolumeThouM3 * 1_000,
+      storageRate: Math.max(0, Math.min(1, row.storageRatePct / 100)),
+    };
+  }
+  if (row.effectiveVolumeThouM3 !== null) {
+    return { storageVolumeM3: row.effectiveVolumeThouM3 * 1_000, storageRate: null };
+  }
+  if (row.capacityBasis === '有効') {
+    return { storageVolumeM3: row.storageVolumeThouM3 * 1_000, storageRate: null };
+  }
+  return { storageVolumeM3: null, storageRate: null };
+}
+
 interface DamMatch {
   chubuName: string;
   damId: bigint;
+  activeCapacityM3: number | null;
 }
 
 async function ensureSourcePriority(): Promise<void> {
@@ -138,9 +188,12 @@ export async function ensureExternalIds(log: (s: string) => void): Promise<DamMa
   const universe: UniverseRow[] = [];
   for (const m of NAME_MAP) {
     // （元） and （再） rank alike so chooseRanked binds the current twin.
-    const candidates = await sql<(BindableMaster & { rank: number })[]>`
+    const candidates = await sql<
+      (BindableMaster & { rank: number; activeCapacityM3: string | null })[]
+    >`
       SELECT id, name, completed_year AS "completedYear",
              external_ids->>'jwa-chubu' AS stamp,
+             active_capacity_m3 AS "activeCapacityM3",
              CASE
                WHEN name = ${`${m.masterName}ダム`}       THEN 0
                WHEN name = ${m.masterName}                 THEN 1
@@ -163,7 +216,11 @@ export async function ensureExternalIds(log: (s: string) => void): Promise<DamMa
       log(`jwa-chubu: no master match for "${m.chubuName}" (${m.masterName})`);
       continue;
     }
-    matches.push({ chubuName: m.chubuName, damId: r.id });
+    matches.push({
+      chubuName: m.chubuName,
+      damId: r.id,
+      activeCapacityM3: r.activeCapacityM3 === null ? null : Number(r.activeCapacityM3),
+    });
     await bindExternalId(r.id, 'jwa-chubu', m.chubuName);
   }
   await recordUniverse('jwa-chubu', universe);
@@ -199,17 +256,18 @@ const task: Task = async (_payload, helpers) => {
     return;
   }
 
-  const matchByName = new Map(matches.map((m) => [m.chubuName, m.damId]));
+  const matchByName = new Map(matches.map((m) => [m.chubuName, m]));
   const inputs = [] as Parameters<typeof upsertObservations>[0];
   for (const row of parsed) {
-    const damId = matchByName.get(row.chubuName);
-    if (!damId) continue;
+    const match = matchByName.get(row.chubuName);
+    if (!match) continue;
+    const { storageVolumeM3, storageRate } = storedStorage(row, match.activeCapacityM3);
     inputs.push({
       observedAt: reportDate,
-      damId,
+      damId: match.damId,
       sourceId: 'jwa-chubu',
-      storageVolumeM3: row.storageVolumeThouM3 * 1_000,
-      storageRate: Math.max(0, Math.min(1, row.storageRatePct / 100)),
+      storageVolumeM3,
+      storageRate,
       inflowM3s: row.inflowM3s,
       outflowM3s: row.outflowM3s,
       waterLevelM: row.waterLevelM,

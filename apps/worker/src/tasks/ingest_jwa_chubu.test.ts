@@ -4,7 +4,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { sql } from '@dam/db/client';
-import { ensureExternalIds, parseChubuDate, parseChubuHtml } from './ingest_jwa_chubu.ts';
+import {
+  ensureExternalIds,
+  parseChubuDate,
+  parseChubuHtml,
+  storedStorage,
+} from './ingest_jwa_chubu.ts';
 
 describe('parseChubuDate', () => {
   test('parses YYYY年MM月DD日 to JST midnight (= UTC day-1 15:00)', () => {
@@ -52,8 +57,11 @@ describe('parseChubuHtml', () => {
     ]);
     expect(rows.find((r) => r.chubuName === '牧尾ダム')).toEqual({
       chubuName: '牧尾ダム',
+      capacityBasis: '利水',
+      capacityThouM3: 68_000,
       storageVolumeThouM3: 58_534,
       storageRatePct: 86.1,
+      effectiveVolumeThouM3: null,
       waterLevelM: 876.8,
       inflowM3s: 8.66,
       outflowM3s: 8.38,
@@ -63,8 +71,11 @@ describe('parseChubuHtml', () => {
 
   test('takes 貯水量 at 午前0時, not the 有効貯水量 capacity printed above it', async () => {
     const tokuyama = parseChubuHtml(await fixture()).rows.find((r) => r.chubuName === '徳山ダム');
+    expect(tokuyama?.capacityBasis).toBe('有効');
+    expect(tokuyama?.capacityThouM3).toBe(257_400);
     expect(tokuyama?.storageVolumeThouM3).toBe(163_530);
     expect(tokuyama?.storageRatePct).toBe(63.5);
+    expect(tokuyama?.effectiveVolumeThouM3).toBeNull();
     expect(tokuyama?.outflowM3s).toBe(21.11);
   });
 
@@ -74,12 +85,24 @@ describe('parseChubuHtml', () => {
     const nakazato = parseChubuHtml(await fixture()).rows.find((r) => r.chubuName === '中里ダム');
     expect(nakazato).toEqual({
       chubuName: '中里ダム',
+      capacityBasis: '利水',
+      capacityThouM3: 16_000,
       storageVolumeThouM3: 1_760,
       storageRatePct: 11,
+      effectiveVolumeThouM3: null,
       waterLevelM: null,
       inflowM3s: 0.21,
       outflowM3s: 0.24,
     });
+  });
+
+  test('reads the 有効貯水量 that 阿木川 and 味噌川 print below their 利水 storage', async () => {
+    const rows = parseChubuHtml(await fixture()).rows;
+    const agigawa = rows.find((r) => r.chubuName === '阿木川ダム');
+    expect(agigawa?.storageVolumeThouM3).toBe(22_000);
+    expect(agigawa?.effectiveVolumeThouM3).toBe(27_130);
+    expect(rows.find((r) => r.chubuName === '味噌川ダム')?.effectiveVolumeThouM3).toBe(42_644);
+    expect(rows.find((r) => r.chubuName === '岩屋ダム')?.effectiveVolumeThouM3).toBeNull();
   });
 
   test('drops a dam whose 貯水量 or 貯水率 is not a number', async () => {
@@ -90,6 +113,70 @@ describe('parseChubuHtml', () => {
     const names = parseChubuHtml(html).rows.map((r) => r.chubuName);
     expect(names).not.toContain('牧尾ダム');
     expect(names).toContain('阿木川ダム');
+  });
+});
+
+describe('storedStorage', () => {
+  // The page's 貯水量 is the 利水 portion (footer: 「貯水量：…利水容量」).
+  // jwa-chubu is untrusted, so every stored volume is divided by the master's
+  // 有効 capacity; only 有効 storage may go into storage_volume_m3. Master
+  // active capacities below are production's (2026-09-27).
+  const FIXTURE = join(
+    import.meta.dir,
+    '..',
+    '..',
+    '..',
+    '..',
+    'tests/fixtures/jwa_chubu/report_2026-09-27.html',
+  );
+  async function stored(name: string, masterActiveM3: number | null) {
+    const rows = parseChubuHtml(await readFile(FIXTURE, 'utf8')).rows;
+    const row = rows.find((r) => r.chubuName === name);
+    if (!row) throw new Error(`${name} not parsed`);
+    return storedStorage(row, masterActiveM3);
+  }
+
+  test('keeps volume and rate where the 利水容量 is the whole 有効 pool', async () => {
+    expect(await stored('牧尾ダム', 68_000_000)).toEqual({
+      storageVolumeM3: 58_534_000,
+      storageRate: 0.861,
+    });
+    expect(await stored('中里ダム', 16_000_000)).toEqual({
+      storageVolumeM3: 1_760_000,
+      storageRate: 0.11,
+    });
+  });
+
+  test('stores the printed 有効貯水量, not the 利水 portion, for 阿木川 and 味噌川', async () => {
+    // 利水 22,000 / 100 % against a 44,000 千m³ master would read as 50 %.
+    expect(await stored('阿木川ダム', 44_000_000)).toEqual({
+      storageVolumeM3: 27_130_000,
+      storageRate: null,
+    });
+    expect(await stored('味噌川ダム', 55_000_000)).toEqual({
+      storageVolumeM3: 42_644_000,
+      storageRate: null,
+    });
+  });
+
+  test('stores nothing for 岩屋, whose 利水 61,900 is part of a 150,000 千m³ pool', async () => {
+    expect(await stored('岩屋ダム', 150_000_000)).toEqual({
+      storageVolumeM3: null,
+      storageRate: null,
+    });
+  });
+
+  test('keeps 徳山 storage but not its seasonal-basis rate', async () => {
+    // Labelled 有効貯水量 and divided by the season's 257,400, not the
+    // master's 380,400 千m³; the volume itself is 有効 storage.
+    expect(await stored('徳山ダム', 380_400_000)).toEqual({
+      storageVolumeM3: 163_530_000,
+      storageRate: null,
+    });
+  });
+
+  test('stores nothing when the master has no capacity to compare against', async () => {
+    expect(await stored('牧尾ダム', null)).toEqual({ storageVolumeM3: null, storageRate: null });
   });
 });
 
