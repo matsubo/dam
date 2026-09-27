@@ -45,6 +45,7 @@ import ingestJwaTonekako from './tasks/ingest_jwa_tonekako.ts';
 import ingestJwaToyokawa from './tasks/ingest_jwa_toyokawa.ts';
 import ingestJwaYoshino from './tasks/ingest_jwa_yoshino.ts';
 import ingestKagawa from './tasks/ingest_kagawa_bousai.ts';
+import ingestKagawaTameike from './tasks/ingest_kagawa_tameike.ts';
 import ingestKagoshimaBousai from './tasks/ingest_kagoshima_bousai.ts';
 import ingestKagoshimaKasen from './tasks/ingest_kagoshima_kasen.ts';
 import ingestKanagawa from './tasks/ingest_kanagawa.ts';
@@ -62,6 +63,7 @@ import ingestKyushuNousei from './tasks/ingest_kyushu_nousei.ts';
 import ingestMatsueSuido from './tasks/ingest_matsue_suido.ts';
 import ingestMcTottoriHydro from './tasks/ingest_mc_tottori_hydro.ts';
 import ingestMiyagi from './tasks/ingest_miyagi_kasen.ts';
+import ingestMiyagiNousei from './tasks/ingest_miyagi_nousei.ts';
 import ingestMiyazaki from './tasks/ingest_miyazaki_bousai.ts';
 import ingestNagano from './tasks/ingest_nagano_kasen.ts';
 import ingestNaganoKigyo from './tasks/ingest_nagano_kigyo.ts';
@@ -76,6 +78,7 @@ import ingestOsaka from './tasks/ingest_osaka.ts';
 import ingestQsrRyumon from './tasks/ingest_qsr_ryumon.ts';
 import ingestQsrToukan from './tasks/ingest_qsr_toukan.ts';
 import ingestQsrTuruta from './tasks/ingest_qsr_turuta.ts';
+import ingestSadoNourin from './tasks/ingest_sado_nourin.ts';
 import ingestSagaBousai from './tasks/ingest_saga_bousai.ts';
 import ingestSaitama from './tasks/ingest_saitama_suibo.ts';
 import ingestSaseboSuido from './tasks/ingest_sasebo_suido.ts';
@@ -197,6 +200,9 @@ async function main(): Promise<void> {
       'ingest:chiba-nourin': ingestChibaNourin,
       'ingest:oita-nourin': ingestOitaNourin,
       'ingest:kyushu-nousei': ingestKyushuNousei,
+      'ingest:miyagi-nousei': ingestMiyagiNousei,
+      'ingest:kagawa-tameike': ingestKagawaTameike,
+      'ingest:sado-nourin': ingestSadoNourin,
       'ingest:gifu-kasen': ingestGifuKasen,
       'ingest:aichi-kasen': ingestAichiKasen,
       'ingest:fukui-bousai': ingestFukuiBousai,
