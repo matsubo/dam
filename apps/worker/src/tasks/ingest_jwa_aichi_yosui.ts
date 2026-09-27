@@ -1,12 +1,15 @@
 // apps/worker/src/tasks/ingest_jwa_aichi_yosui.ts
 //
 // 水資源機構 愛知用水総合管理所 水情報 — 牧尾ダム + 東郷調整池 (愛知池) + 前山池,
-// daily 0時 JST values (page updated ~10:00 JST).
+// daily 0時 JST 貯水位 / 貯水量 / 貯水率 (page updated ~10:00 JST).
 //
 // Source: https://www.water.go.jp/chubu/aityosui/b(jyouhou-main)/02(mizu)/00(top)/b-02.html
 // Format: UTF-8 HTML (ホームページビルダー nested tables). One header
 //         "YYYY年M月D日（曜）H時現在の状況をお知らせします" for the page;
 //           牧尾ダム:  水位(標高) [m], 貯水量 [千m³], 貯水率 [%], 流入量, 放流量 [m³/s]
+//                      — the two flows are the previous day's daily means, not
+//                      0時 readings (放流量 6.42 on 9/27 = the 9/26 mean while
+//                      every hourly feed read 0 at 0時), so they are not stored.
 //           調整池表:  東郷調整池 | 前山池 columns of 貯水位 [m], 貯水量 [千m³],
 //                      貯水率 [%]
 //         貯水率 is 貯水量 / 有効貯水量 (page footnote: 東郷 9,000 / 前山 972
@@ -49,8 +52,6 @@ export interface ParsedRow {
   waterLevelM: number | null;
   storageVolumeM3: number | null;
   storageRate: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
 }
 
 /** Cell text → number; 欠測 / blank / any non-numeric → null. */
@@ -75,8 +76,7 @@ function percent(s: string | undefined): number | null {
 const V = '(\\S+)';
 const THOUSAND_M3 = '千 ?m ?3';
 const MAKIO_RE = new RegExp(
-  `牧尾ダム .*?水位 \\(標高\\) ${V} m 貯水量 ${V} ${THOUSAND_M3} 貯水率 ${V} [％%] ` +
-    `流入量 ${V} m 3 ／ｓ 放流量 ${V} m 3 ／ｓ`,
+  `牧尾ダム .*?水位 \\(標高\\) ${V} m 貯水量 ${V} ${THOUSAND_M3} 貯水率 ${V} [％%]`,
 );
 const PONDS_RE = new RegExp(
   `東郷調整池 前 ?山 ?池 貯水位 ${V} m ${V} m 貯水量 ${V} ${THOUSAND_M3} ${V} ${THOUSAND_M3} ` +
@@ -110,8 +110,6 @@ export function parseAichiYosuiPage(html: string): {
       waterLevelM: parseNum(makio[1]),
       storageVolumeM3: thousandM3(makio[2]),
       storageRate: percent(makio[3]),
-      inflowM3s: parseNum(makio[4]),
-      outflowM3s: parseNum(makio[5]),
     });
   }
   const ponds = text.match(PONDS_RE);
@@ -122,16 +120,12 @@ export function parseAichiYosuiPage(html: string): {
         waterLevelM: parseNum(ponds[1]),
         storageVolumeM3: thousandM3(ponds[3]),
         storageRate: percent(ponds[5]),
-        inflowM3s: null,
-        outflowM3s: null,
       },
       {
         name: '前山池',
         waterLevelM: parseNum(ponds[2]),
         storageVolumeM3: thousandM3(ponds[4]),
         storageRate: percent(ponds[6]),
-        inflowM3s: null,
-        outflowM3s: null,
       },
     );
   }
@@ -227,8 +221,8 @@ const task: Task = async (_payload, helpers) => {
       sourceId: SOURCE_ID,
       storageVolumeM3: row.storageVolumeM3,
       storageRate: row.storageRate,
-      inflowM3s: row.inflowM3s,
-      outflowM3s: row.outflowM3s,
+      inflowM3s: null, // 牧尾's printed flows are previous-day means, not 0時 values
+      outflowM3s: null,
       waterLevelM: row.waterLevelM,
       rainfallMm: null,
       rawSnapshotId: null,
