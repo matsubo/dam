@@ -7,17 +7,19 @@ Two-page summary of what's in this repo and why each piece exists.
 Be the most complete dam-reservoir dataset for Japan. Three concrete things
 the project must do:
 
-1. **Master**: enumerate every dam (currently 2,749) and every river system
-   (644) with location, attributes, and a stable URL slug.
+1. **Master**: enumerate every dam (2,754 on production, 2026-09-28) and every
+   river system (644) with location, attributes, and a stable URL slug.
 2. **Time-series**: store hourly reservoir observations (storage volume,
    storage rate, inflow, outflow, water level, rainfall) with provenance.
 3. **Public surface**: serve a SEO-friendly website + a HATEOAS REST API
    that external consumers can rely on, plus a Japan map view.
 
-Current state: master is loaded with real NLNI W01 + Damnet data; watershed
-boundaries from NLNI W07 are loaded for 463/644 systems; observations are
-synthetic placeholder while we sort out a non-blocked upstream
-(www.river.go.jp returns 403 to scrapers).
+Current state (production, 2026-09-28): master is loaded with real NLNI W01 +
+Damnet data; watershed boundaries from NLNI W07 are loaded for 463/644
+systems. Observations are real: 88 ingest tasks pull from 川の防災情報, the
+MLIT regional bureaus, 水資源機構, prefectural river portals, agricultural
+survey tables and water utilities. 72 sources wrote observations in the last
+30 days, covering 975 dams; `/coverage` has the per-source breakdown.
 
 ## Architecture in one paragraph
 
@@ -40,7 +42,7 @@ apps/
 │   ├── lib/                #  api helpers (auth, hateoas response, formatters)
 │   └── bin/                #  one-off importers + seeders (run from repo root)
 └── worker/                 # graphile-worker process
-    └── src/tasks/          #  master.refresh.ndi, ingest.kasenbosai, …
+    └── src/tasks/          #  master:refresh:ndi, ingest:kasenbosai-v2, …
 
 packages/
 ├── core/                   # zero-dep utilities + shared types
@@ -63,7 +65,7 @@ packages/
 └── adapters/
     ├── ndi/                # NLNI W01 (dams) + W07 (watersheds)
     ├── damnet/             # ダム便覧 (dambinran.damnet.or.jp)
-    ├── kasenbosai/         # 川の防災情報 (currently synthetic — upstream blocks scrapers)
+    ├── kasenbosai/         # 川の防災情報 SourceAdapter (the live feed is the ingest:kasenbosai-v2 task)
     └── suimon/             # 水文水質DB (deferred — EUC-JP form-based)
 ```
 
@@ -82,16 +84,19 @@ observations   ── PK (dam_id, observed_at, source_id) ── HYPERTABLE on o
                                           quality_flag bitfield
                                           → FK raw_snapshot_id
 raw_snapshots  ── one row per fetched HTTP response, body in MinIO
-source_priorities ── source_id → priority (synthetic=200, kasenbosai=100, suimon=90, ndi=80, damnet=50)
+source_priorities ── source_id → priority, higher wins the chart (77 rows on prod: feeds 279–313, e.g. kasenbosai=310, mudam=280; master ndi=80, damnet=50)
+source_universe / source_universe_runs ── each provider's whole published list per run (recordUniverse), read by /coverage
 backfill_progress ── (source_id, dam_id, year) → status
 api_keys / api_key_usage ── public-API auth + per-key rate-limit
 obs_daily / obs_monthly  ── TimescaleDB continuous aggregates
 quality_missing_24h      ── view: per-dam missing rate over last 24h
 ```
 
-12 numbered SQL migrations live in `packages/db/migrations/0000–0020_*.sql`.
-They're applied in lexicographic order by `packages/db/src/migrate.ts`. New
-migrations land as the next number.
+67 numbered SQL migrations live in `packages/db/migrations/0000–0098_*.sql`
+(numbers are reserved per branch, so there are gaps). They're applied in
+lexicographic order by `packages/db/src/migrate.ts`. Data fixes on the
+compressed `observations` hypertable never go in a migration: they are
+one-off scripts under `deploy/ops/oneoff/` (runbook §9).
 
 ## Public surface
 
@@ -128,18 +133,38 @@ header. Set `API_AUTH_BYPASS=1` for local development.
 
 ## Worker tasks (graphile-worker)
 
-Cron schedule lives in `apps/worker/src/crontab.ts`. Task names use `:`
-separators because graphile-worker rejects `.` in identifiers.
+Cron schedule lives in `apps/worker/src/crontab.ts` (times are UTC); every task
+is registered in `apps/worker/src/index.ts`. Task names use `:` separators
+because graphile-worker rejects `.` in identifiers. Each ingest task writes
+under its own `source_id` (the task name without `ingest:`, except
+`kasenbosai-v2`, which writes `kasenbosai`) and calls `recordUniverse()` with
+the provider's whole published list (`kasenbosai`'s list is recorded by
+`match:kasenbosai`; exemptions live in `universe_instrumentation.test.ts`).
+`CODEMAP.md` has one line per task file.
 
 | Task | Schedule | What it does |
 |---|---|---|
 | `master:refresh:ndi` | 1st of month 03:00 | Reimport NLNI W01/W07 |
 | `master:refresh:damnet` | 5th of month 03:00 | Reimport Damnet attribute table |
-| `master:match` | nightly 04:00 | Re-run reconciliation for low-confidence matches |
-| `ingest:kasenbosai` | every hour at :05 | Pull realtime observations (currently synth-only) |
-| `backfill:suimon:enqueue` | manual | Populate `backfill_progress` for a year×dam range |
-| `backfill:suimon:run` | every 5 min | Drain the backfill queue |
-| `quality:recompute` | nightly 04:30 | Flag missing/outlier/mismatch in last 24 h |
+| `master:refresh:elevation` | 3rd of month 05:00 | Fill missing `elevation_m` from the GSI DEM API |
+| `images:refresh:wikipedia` | 2nd of month 05:00 | Wikipedia cover image for dams without a Damnet photo |
+| `master:match` | nightly 04:00 | Placeholder; logs and returns |
+| `match:kasenbosai` | Mondays 03:30 | Seed `external_ids.kasenbosai` from the 川の防災情報 dam catalogue |
+| `ingest:kasenbosai-v2` | hourly :03 | 川の防災情報 per-dam JSON for every `external_ids.kasenbosai` dam (800+) |
+| `ingest:kasenbosai` | manual | Original SourceAdapter run for 川の防災情報; superseded by v2 |
+| MLIT regional bureaus (12): `hkd-mlit-dam` `ktr-kinu-dam` `ktr-tone-dam` `hrr-mlit-dam` `kkr-mlit-dam` `cgr-mlit-dam` `cgr-okakawa-dam` `cgr-ashida-seki` `skr-hiji-dam` `qsr-turuta-dam` `qsr-ryumon-dam` `qsr-toukan-dam` | hourly; `kkr-mlit-dam` and `cgr-okakawa-dam` daily | 国管理 dam dashboards of 北海道開発局 and the 地方整備局 |
+| 水資源機構 (14): `jwa-junpo` `jwa-toneara` `jwa-tonekako` `shimokubo` `jwa-chubu` `jwa-kiso-rt` `jwa-toyokawa` `jwa-aichi-yosui` `jwa-biwako` `jwa-yoshino` `jwa-chikugo` `jwa-chikugo-rt` `jwa-fukudou` `jwa-chiba-bouso` | hourly; `jwa-junpo`, `jwa-aichi-yosui`, `jwa-chikugo`, `jwa-chiba-bouso` daily | JWA realtime pages, daily 0時 tables and the 旬報 |
+| Prefectural river / disaster portals (41): `akita-kasen` `aomori-dam` `iwate-kasen` `miyagi-kasen` `yamagata-bousai` `fukushima-kasen` `ibaraki-bousai` `tochigi-bodik` `gunma-kasen` `saitama-suibo` `kanagawa-dam` `yamanashi-dam` `nagano-kasen` `gifu-kasen` `aichi-kasen` `toyama-bousai` `ishikawa-kasen` `fukui-bousai` `shiga-bousai` `kyoto-bousai` `osaka-bousai` `hyogo-bodik` `nara-kasen` `wakayama-kasen` `tottori-dam` `tottori-bousai` `shimane-bousai` `okayama-bousai` `hiroshima-bousai` `yamaguchi-bousai` `tokushima-bousai` `kagawa-bousai` `ehime-bousai` `kochi-bousai` `saga-bousai` `nagasaki-kasen` `kumamoto-bousai` `oita-bousai` `miyazaki-bousai` `kagoshima-bousai` `kagoshima-kasen` | hourly, each at its own minute (`nagasaki-kasen` twice) | 県管理 dam tables: 防災Web HTML, JSON feeds, BODIK CSVs |
+| Agricultural (8): `fukushima-nourin` `chiba-nourin` `miyagi-nousei` `oita-nourin` `kyushu-nousei` `kagawa-tameike` `sado-nourin` `tndam-hyogo` | daily 04:15–05:54; `tndam-hyogo` hourly | 農業用ダム / ため池 survey tables and PDFs (mostly 貯水率 only) |
+| Water utilities, 企業局, other operators (11): `tokyo-waterworks` `chiba-suisei` `fukuoka-bodik` `kitakyushu-suido` `sasebo-suido` `matsue-suido` `okinawa-eb` `kochi-kigyo` `nagano-kigyo` `mc-tottori-hydro` `aitoyo` | hourly or daily per upstream | Waterworks 水源状況, 企業局 dam data, hydro operators |
+| `backfill:mudam` | 20th of month 05:00 (last year); manual for more | NILIM ダム諸量DB daily history |
+| `backfill:jwa-junpo` / `backfill:kagoshima-bodik` | manual | JWA 旬報 archive / 鹿児島県 BODIK ZIP archives |
+| `backfill:suimon:enqueue` / `backfill:suimon:run` | manual | Populate and drain `backfill_progress` for 水文水質DB |
+| `quality:recompute` | nightly 04:30 | Flag missing/mismatch rows; null phantom zero-storage series |
+| `storageRate:recompute` | nightly 04:45 | Derive the rate for rows with a volume but no rate, chunk by chunk |
+| `quality:freshness-check` | hourly :35 | Stale-source digest to Discord (or the log) |
+| `aggregates:refresh` | 20th of month 08:00 | Refresh `obs_daily` / `obs_monthly` over full history |
+| `observations:rebind` | manual | Move one source's observations to the right dam, keyed by NDI id |
 
 ## Plans authored
 
