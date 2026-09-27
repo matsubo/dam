@@ -7,8 +7,8 @@
 --        SELECT applied_at FROM _migrations
 --        WHERE name = '0083_drop_fabricated_nakazato_nagano.sql';
 --      (0083 itself deletes nothing on prod: the stub still has observations.)
---   2. Run this file once, as a single transaction:
---        psql -U dam -d dam -v ON_ERROR_STOP=1 -1 -f 2026-09-28_nakazato_stub.sql
+--   2. Run this file once; it is its own transaction (BEGIN … COMMIT):
+--        psql -U dam -d dam -v ON_ERROR_STOP=1 -f 2026-09-28_nakazato_stub.sql
 --   3. SELECT graphile_worker.add_job('ingest:jwa-chubu');
 --      rewrites the report currently on the page with the fixed parser.
 --   4. SELECT graphile_worker.add_job('aggregates:refresh');
@@ -34,6 +34,7 @@
 -- task stores no such rate (storedStorage), so the old ones go too. Only rows
 -- first written before 0083 was applied are touched.
 
+BEGIN;
 SET LOCAL timescaledb.max_tuples_decompressed_per_dml_transaction = 0;
 
 CREATE TEMP TABLE nk ON COMMIT DROP AS
@@ -82,3 +83,5 @@ WHERE d.id = o.dam_id
   AND (o.storage_volume_m3 IS NOT NULL
        OR (o.storage_rate IS NOT NULL
            AND d.external_ids->>'jwa-chubu' NOT IN ('牧尾ダム', '中里ダム')));
+
+COMMIT;

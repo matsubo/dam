@@ -1,8 +1,8 @@
 -- One-off (prod, after the ingest_yamaguchi_bousai parser fix is deployed):
 -- delete yamaguchi-bousai's outage placeholders (貯水位 0.00 rows).
 --
--- Run once, as a single transaction:
---   psql -U dam -d dam -v ON_ERROR_STOP=1 -1 -f 2026-09-28_yamaguchi_bousai_outage_zeros.sql
+-- Run once; the file is its own transaction (BEGIN … COMMIT):
+--   psql -U dam -d dam -v ON_ERROR_STOP=1 -f 2026-09-28_yamaguchi_bousai_outage_zeros.sql
 -- Not a migration: most of these rows sit in compressed chunks (242 of 283),
 -- and a DELETE that decompresses them does not belong in the migrate path.
 --
@@ -34,6 +34,7 @@
 -- chunks are touched; idempotent (a second run deletes nothing). The final
 -- SELECT reports what is left (expected 0).
 
+BEGIN;
 SET LOCAL timescaledb.max_tuples_decompressed_per_dml_transaction = 0;
 
 DELETE FROM observations
@@ -54,3 +55,5 @@ WHERE source_id = 'yamaguchi-bousai'
 SELECT count(*) AS remaining_zero_level_rows
 FROM observations
 WHERE source_id = 'yamaguchi-bousai' AND water_level_m = 0;
+
+COMMIT;
