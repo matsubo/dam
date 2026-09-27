@@ -1,6 +1,8 @@
 // apps/worker/src/tasks/ingest_miyagi_kasen.test.ts
 
 import { describe, expect, test } from 'bun:test';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import {
   chooseMaster,
   parseMiyagiDispDate,
@@ -178,14 +180,16 @@ describe('parseMiyagiTable', () => {
     expect(rows[0]?.observedAt.toISOString()).toBe('2026-06-04T21:00:00.000Z');
   });
 
-  test('skips rows with fewer than 5 dat2 values', () => {
+  test('keeps a station whose row is short but reads none of its cells', () => {
     const html = makeHtml('2026年06月05日 15時00分', [
       { stationNo: '104007011', name: '大倉ダム', vals: ['268.11', '21135', '3865'] },
       { stationNo: '104007012', name: '樽水ダム', vals: SAMPLE_VALS_OKURA },
     ]);
     const rows = parseMiyagiTable(html);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.miyagiName).toBe('樽水ダム');
+    expect(rows.map((r) => r.stationNo)).toEqual(['104007011', '104007012']);
+    expect(rows[0]?.waterLevelM).toBeNull();
+    expect(rows[0]?.storageVolumeM3).toBeNull();
+    expect(rows[1]?.waterLevelM).toBeCloseTo(268.11);
   });
 
   test('negative adjustment flow does not corrupt outflow', () => {
@@ -216,6 +220,57 @@ describe('parseMiyagiTable', () => {
     // 2026-06-06T08:00 JST = 2026-06-05T23:00:00.000Z
     expect(rows[0]?.observedAt.toISOString()).toBe('2026-06-05T23:00:00.000Z');
     expect(rows[0]?.waterLevelM).toBeCloseTo(268.11);
+  });
+});
+
+// Verbatim Shift_JIS capture of Gamen42Servlet (ダム現況表, 全県) taken
+// 2026-09-27 21:40 JST, trimmed to the commonParam script and the table.
+describe('parseMiyagiTable on the live ダム現況表', () => {
+  const fixture = async (): Promise<string> =>
+    new TextDecoder('shift_jis').decode(
+      await readFile(
+        join(
+          import.meta.dir,
+          '..',
+          '..',
+          '..',
+          '..',
+          'tests/fixtures/miyagi_kasen/Gamen42Servlet_2026-09-27.shiftjis.html',
+        ),
+      ),
+    );
+
+  test('lists all 21 stations, the three 国 dams included', async () => {
+    const rows = parseMiyagiTable(await fixture());
+    expect(rows).toHaveLength(21);
+    expect(rows.slice(-3).map((r) => [r.stationNo, r.miyagiName])).toEqual([
+      ['104007201', '鳴子ダム'],
+      ['104007202', '釜房ダム'],
+      ['104007203', '七ヶ宿ダム'],
+    ]);
+    for (const r of rows) expect(r.observedAt.toISOString()).toBe('2026-09-27T12:00:00.000Z');
+  });
+
+  test('reads the 国 rows, whose value <div>s are never closed', async () => {
+    const naruko = parseMiyagiTable(await fixture()).find((r) => r.stationNo === '104007201');
+    expect(naruko?.waterLevelM).toBe(240.25);
+    expect(naruko?.storageVolumeM3).toBe(9_988_000);
+    expect(naruko?.inflowM3s).toBe(10.18);
+    expect(naruko?.outflowM3s).toBe(10.01);
+    expect(naruko?.storageRate).toBeCloseTo(0.624, 6);
+  });
+
+  test('reads 二ツ石 and leaves 長沼 (level only) without volume or flow', async () => {
+    const rows = parseMiyagiTable(await fixture());
+    const futatsuishi = rows.find((r) => r.stationNo === '104007024');
+    expect(futatsuishi?.waterLevelM).toBe(237.68);
+    expect(futatsuishi?.storageVolumeM3).toBe(9_003_000);
+    expect(futatsuishi?.storageRate).toBeCloseTo(0.928, 6);
+    const naganuma = rows.find((r) => r.stationNo === '104007006');
+    expect(naganuma?.waterLevelM).toBe(8.91);
+    expect(naganuma?.storageVolumeM3).toBeNull();
+    expect(naganuma?.inflowM3s).toBeNull();
+    expect(naganuma?.storageRate).toBeNull();
   });
 });
 
