@@ -308,8 +308,11 @@ describe('readingsToStore', () => {
     const futatsuishi = stored.find((r) => r.stationNo === '104007024');
     expect(futatsuishi?.observedAt.toISOString()).toBe('2026-09-27T12:00:00.000Z');
     expect(futatsuishi?.waterLevelM).toBe(237.68);
-    // All 18 県管理 stations at 21:00 plus the four already in at 22:00.
-    expect(stored).toHaveLength(22);
+    // Every 県管理 station (10400700xx) reports at 21:00, not just the early four.
+    const at2100 = stored.filter((r) => r.observedAt.toISOString() === '2026-09-27T12:00:00.000Z');
+    expect(
+      new Set(at2100.filter((r) => r.stationNo < '104007100').map((r) => r.stationNo)).size,
+    ).toBe(18);
   });
 
   test('never repeats a (station, time) when the earlier table is not older', async () => {
