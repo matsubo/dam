@@ -1,11 +1,12 @@
 // apps/worker/src/tasks/ingest_miyagi_kasen.test.ts
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   chooseMaster,
   earlierTableUrl,
+  fetchEarlierRows,
   parseMiyagiDispDate,
   parseMiyagiTable,
   parseMiyagiTimestamp,
@@ -320,5 +321,21 @@ describe('readingsToStore', () => {
     const stored = readingsToStore(late, late);
     const keys = stored.map((r) => `${r.stationNo}@${r.observedAt.toISOString()}`);
     expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
+describe('fetchEarlierRows', () => {
+  test('a network failure yields no earlier rows instead of failing the run', async () => {
+    const latest = await fixtureHtml('dam_table_2026-09-27T2200.shiftjis.html');
+    const fetchSpy = spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('fetch failed'));
+    try {
+      const logs: string[] = [];
+      const rows = await fetchEarlierRows(latest, (s) => logs.push(s));
+      expect(rows).toEqual([]);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(logs.join('\n')).toContain('previous-hour fetch failed');
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 });
