@@ -100,7 +100,8 @@ describe('usableVolumeM3', () => {
 
   test('stores nothing when the printed sum does not match the master total', async () => {
     const rows = await fixture('dam_table_2026-09-27.shiftjis.html');
-    // 白川 338 + 1,222 = 1,560 千m³ (the prefecture's 総貯水容量), master total 1,360.
+    // 白川 338 + 1,222 = 1,560 千m³ (the prefecture's 総貯水容量) against
+    // ダム便覧's 1,360, which leaves out the 200 千m³ 堆砂容量.
     expect(
       usableVolumeM3(row(rows, '白川ダム'), {
         totalCapacityM3: 1_360_000,

@@ -25,7 +25,11 @@
 //   derives it from volume / active_capacity_m3. 貯水量 + 空容量 is the page's
 //   implied denominator; on 2026-09-27 it equalled the master 有効貯水容量 for
 //   塩川 8,900 / 広瀬 11,350 / 琴川 4,750 / 荒川 8,600 千m³ (大門 2,159 vs
-//   2,350, 深城 5,337 vs 5,140). The derived rate is therefore 有効-based, the
+//   2,350, 深城 5,337 vs 5,140). The master is right for those two: the
+//   dam offices' spec pages (pref.yamanashi.jp/dam-dmskkn/dam-profile.html,
+//   /damu-fk/fukasiro_dam_toha.html) give 有効 2,350,000 / 5,140,000, and 空容量
+//   runs to サーチャージ, not a seasonal level (大門 895.51 m, above its 常時満水位
+//   894.50, still printed 1,042 空). The derived rate is therefore 有効-based, the
 //   static denominator, and this source is not trusted_rate_basis (0048).
 //
 // Priority 280. Cron hourly at :36.
