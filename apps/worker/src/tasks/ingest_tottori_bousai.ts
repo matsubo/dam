@@ -12,11 +12,19 @@
 //   百谷/佐治川/東郷/賀祥/朝鍋 → already in tottori-dam (priority 307)
 //   菅沢                        → new coverage (not in tottoridam.jp)
 //
-// source_priorities: tottori-dam=307 wins for the 5 overlapping dams;
-// tottori-bousai=312 becomes preferredSource only for 菅沢.
+// source_priorities: tottori-bousai=312 outranks tottori-dam=307 and
+// cgr-mlit-dam=304 (priority DESC wins), so it is the chart source for all 6.
 //
 // damEffectiveStorageQuantities is in 千m³ (× 1000 → m³); confirmed by
 // 菅沢: 10,604 千m³ = 61.7% of 17,200,000 m³ effective capacity.
+//
+// Some hourly lists are never completed: total=2 (朝鍋 + 菅沢) instead of 6,
+// ~2 a day in September 2026. Their 朝鍋 item — and at times a 菅沢 item that
+// copies it field for field — is a placeholder reading 0 m / 0 千m³ with flag
+// "0" (normal), next to the item's own 最低水位 of 97 m (353.1 m for 菅沢).
+// Stored as-is, those were 273 plunges to an empty reservoir on the chart
+// (cleaned by migration 0095). A level of 0 at a dam whose 最低水位 is above
+// sea level is that placeholder, so the whole item is skipped.
 //
 // Cron: hourly at :33.
 
@@ -48,6 +56,8 @@ interface TottoriBousaiItem {
   storageRateEffectiveCapacityFlg: string;
   storageRateWaterUseCapacity: number | null;
   storageRateWaterUseCapacityFlg: string;
+  /** 最低水位 [EL.m] of the dam, printed on every item. */
+  minWaterLevel: number | null;
 }
 
 export interface ParsedRow {
@@ -89,12 +99,14 @@ function gated(value: number | null, flg: string): number | null {
   return flg === '0' && typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-/** Convert feed items to observation rows, dropping all-null dams. */
+/** Convert feed items to observation rows, dropping all-null dams and the
+ *  0 m placeholders of incomplete lists (see header). */
 export function parseTottoriItems(items: TottoriBousaiItem[]): ParsedRow[] {
   const out: ParsedRow[] = [];
   for (const it of items) {
     const observedAt = parseTottoriTimestamp(it.dataTimestamp ?? '');
     if (!observedAt) continue;
+    if (it.damQuantitiesLevel === 0 && (it.minWaterLevel ?? 0) > 0) continue;
 
     const level = gated(it.damQuantitiesLevel, it.damQuantitiesLevelFlg);
     const inflow = gated(it.damInflowQuantities, it.damInflowQuantitiesFlg);
