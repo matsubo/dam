@@ -142,32 +142,42 @@ const task: Task = async (_payload, helpers) => {
   `;
 
   // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
+  // say "they publish it, we failed to link it" instead of guessing. Recorded
+  // before any page fetch so one failing page cannot discard it.
+  const universe: UniverseRow[] = links.map((link) => ({
+    externalId: link.name,
+    name: link.name,
+    prefCode: PREF_CODE,
+    resolvedDamId: chooseMaster(link.name, masters),
+  }));
+  await recordUniverse(SOURCE_ID, universe);
+
   const inputs = [] as Parameters<typeof upsertObservations>[0];
   let fetched = 0;
   let parsed = 0;
-  for (const link of links) {
-    const damId = chooseMaster(link.name, masters);
-    universe.push({
-      externalId: link.name,
-      name: link.name,
-      prefCode: PREF_CODE,
-      resolvedDamId: damId,
-    });
+  for (const [i, link] of links.entries()) {
+    const damId = universe[i]?.resolvedDamId;
     if (!damId) {
       log(`${SOURCE_ID}: no master match for "${link.name}"`);
       continue;
     }
     await bindExternalId(damId, SOURCE_ID, link.name);
 
-    const res = await fetch(link.url, { headers, signal: AbortSignal.timeout(20_000) });
-    if (res.status !== 200) {
-      log(`${SOURCE_ID}: HTTP ${res.status} for ${link.url}; skipping`);
+    // Seven independent pages: a timeout or DNS error on one must not throw
+    // away the other six.
+    let page: ParsedPage | null;
+    try {
+      const res = await fetch(link.url, { headers, signal: AbortSignal.timeout(20_000) });
+      if (res.status !== 200) {
+        log(`${SOURCE_ID}: HTTP ${res.status} for ${link.url}; skipping`);
+        continue;
+      }
+      fetched += 1;
+      page = parseSadoDamPage(await res.text());
+    } catch (err) {
+      log(`${SOURCE_ID}: fetch failed for ${link.url}: ${(err as Error).message}; skipping`);
       continue;
     }
-    fetched += 1;
-    const page = parseSadoDamPage(await res.text());
     if (!page) {
       log(`${SOURCE_ID}: no usable reading on ${link.url}`);
       continue;
@@ -187,7 +197,6 @@ const task: Task = async (_payload, helpers) => {
       qualityFlag: 0,
     });
   }
-  await recordUniverse(SOURCE_ID, universe);
 
   const written = await upsertObservations(inputs);
   log(
