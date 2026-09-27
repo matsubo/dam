@@ -41,6 +41,7 @@ import ingestJwaFukudou from './tasks/ingest_jwa_fukudou.ts';
 import ingestJwaJunpo from './tasks/ingest_jwa_junpo.ts';
 import ingestJwaKisoRt from './tasks/ingest_jwa_kiso_rt.ts';
 import ingestJwaToneAra from './tasks/ingest_jwa_toneara.ts';
+import ingestJwaTonekako from './tasks/ingest_jwa_tonekako.ts';
 import ingestJwaToyokawa from './tasks/ingest_jwa_toyokawa.ts';
 import ingestJwaYoshino from './tasks/ingest_jwa_yoshino.ts';
 import ingestKagawa from './tasks/ingest_kagawa_bousai.ts';
@@ -127,6 +128,7 @@ async function main(): Promise<void> {
       'ingest:tokyo-waterworks': ingestTokyoWaterworks,
       'ingest:jwa-junpo': ingestJwaJunpo,
       'ingest:jwa-toneara': ingestJwaToneAra,
+      'ingest:jwa-tonekako': ingestJwaTonekako,
       'ingest:jwa-chubu': ingestJwaChubu,
       'ingest:jwa-toyokawa': ingestJwaToyokawa,
       'ingest:jwa-kiso-rt': ingestJwaKisoRt,

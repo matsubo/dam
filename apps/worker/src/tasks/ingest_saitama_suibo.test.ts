@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { parseSaitamaCsv, parseSaitamaTimestamp } from './ingest_saitama_suibo.ts';
+import { chooseMaster, parseSaitamaCsv, parseSaitamaTimestamp } from './ingest_saitama_suibo.ts';
 
 describe('parseSaitamaTimestamp', () => {
   test('parses "YYYYMMDDHHmm" (JST) → UTC', () => {
@@ -99,5 +99,27 @@ describe('parseSaitamaCsv', () => {
   test('row with all null measurements is skipped', () => {
     const csv = '55301100001,1,c,c,,c,"50.0",202606052130,秩父県土整備事務所\n';
     expect(parseSaitamaCsv(csv)).toHaveLength(0);
+  });
+});
+
+describe('chooseMaster', () => {
+  // Real master rows (prefs 09/10/11/13) the station names could reach.
+  const masters = [
+    { id: 9292n, name: '東荒川', completedYear: 1990 },
+    { id: 9293n, name: '西荒川', completedYear: 1968 },
+    { id: 9377n, name: '渡良瀬遊水地（一期）', completedYear: 2002 },
+    { id: 9457n, name: '権現堂調節池', completedYear: 1991 },
+    { id: 9462n, name: '浦山', completedYear: 1998 },
+    { id: 9470n, name: '荒川調節池', completedYear: 1996 },
+  ];
+
+  test('binds 荒川第一調節池 to the master 荒川調節池', () => {
+    expect(chooseMaster('荒川第一調節池', masters)).toBe(9470n);
+  });
+
+  test('still binds the other stations by stem', () => {
+    expect(chooseMaster('浦山ダム', masters)).toBe(9462n);
+    expect(chooseMaster('権現堂調節池', masters)).toBe(9457n);
+    expect(chooseMaster('渡良瀬遊水地', masters)).toBe(9377n);
   });
 });
