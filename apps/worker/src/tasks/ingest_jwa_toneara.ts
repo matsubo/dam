@@ -16,7 +16,9 @@
 //   Overlap dams (矢木沢/奈良俣/下久保/草木/浦山/滝沢) get daily cadence here
 //   instead of jwa-junpo's 10-day cadence.
 
+import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
+import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
@@ -136,23 +138,23 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
   // say "they publish it, we failed to link it" instead of guessing.
   const universe: UniverseRow[] = [];
   for (const m of NAME_MAP) {
-    const rows = await sql<{ id: bigint; name: string }[]>`
-      SELECT id, name FROM dams
+    // （元） and （再） rank alike so chooseRanked binds the current twin.
+    const candidates = await sql<(BindableMaster & { rank: number })[]>`
+      SELECT id, name, completed_year AS "completedYear",
+             external_ids->>'jwa-toneara' AS stamp,
+             CASE
+               WHEN name = ${`${m.masterName}ダム`}        THEN 0
+               WHEN name = ${m.masterName}                  THEN 1
+               WHEN name = ${`${m.masterName}貯水池`}       THEN 2
+               WHEN name LIKE ${`${m.masterName}（再）%`}   THEN 3
+               WHEN name LIKE ${`${m.masterName}（元）%`}   THEN 3
+               ELSE 5
+             END AS rank
+      FROM dams
       WHERE pref_code = ANY(${m.prefCodes}::text[])
         AND name LIKE ${`%${m.masterName}%`}
-      ORDER BY
-        CASE
-          WHEN name = ${`${m.masterName}ダム`}        THEN 0
-          WHEN name = ${m.masterName}                  THEN 1
-          WHEN name = ${`${m.masterName}貯水池`}       THEN 2
-          WHEN name LIKE ${`${m.masterName}（再）%`}   THEN 3
-          WHEN name LIKE ${`${m.masterName}（元）%`}   THEN 9
-          ELSE 5
-        END,
-        id
-      LIMIT 1
     `;
-    const r = rows[0];
+    const r = chooseRanked(candidates, m.tonaraName);
     universe.push({
       externalId: m.tonaraName,
       name: m.tonaraName,
@@ -167,13 +169,7 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
       continue;
     }
     matches.push({ tonaraName: m.tonaraName, damId: r.id });
-    await sql`
-      UPDATE dams
-      SET external_ids = COALESCE(external_ids, '{}'::jsonb)
-                       || jsonb_build_object('jwa-toneara', ${m.tonaraName}::text)
-      WHERE id = ${r.id}
-        AND COALESCE(external_ids->>'jwa-toneara', '') <> ${m.tonaraName}
-    `;
+    await bindExternalId(r.id, 'jwa-toneara', m.tonaraName);
   }
   await recordUniverse('jwa-toneara', universe);
   return matches;
