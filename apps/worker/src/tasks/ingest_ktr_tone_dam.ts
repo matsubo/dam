@@ -26,6 +26,7 @@
 //
 // Priority 303. Cron hourly at :20.
 
+import { type BindableMaster, preferMaster } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
@@ -214,11 +215,14 @@ async function matchMaster(log: (s: string) => void): Promise<DamMatch[]> {
     const stem = normalizeName(cfg.name);
     if (!stem) continue;
 
-    const masters = await sql<{ id: bigint; name: string }[]>`
-      SELECT id, name FROM dams WHERE pref_code = ANY(${cfg.prefCodes}::text[]) ORDER BY id
+    const masters = await sql<BindableMaster[]>`
+      SELECT id, name, completed_year AS "completedYear"
+      FROM dams WHERE pref_code = ANY(${cfg.prefCodes}::text[]) ORDER BY id
     `;
 
-    let best: { id: bigint; rank: number } | null = null;
+    // Equal-rank ties go to the current （元）/（再） twin, else the lower id
+    // (#79). This source writes no station stamp.
+    let best: { m: BindableMaster; rank: number } | null = null;
     for (const m of masters) {
       const mStem = normalizeName(m.name);
       let rank: number;
@@ -228,8 +232,8 @@ async function matchMaster(log: (s: string) => void): Promise<DamMatch[]> {
       else if (mStem.startsWith(stem)) rank = 3;
       else if (mStem.includes(stem)) rank = 4;
       else continue;
-      if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-        best = { id: m.id, rank };
+      if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
+        best = { m, rank };
       }
     }
 
@@ -238,14 +242,14 @@ async function matchMaster(log: (s: string) => void): Promise<DamMatch[]> {
       externalId: damKey(cfg.officeCD, cfg.observationCD),
       name: cfg.name,
       prefCode: cfg.prefCodes[0] ?? null,
-      resolvedDamId: best?.id ?? null,
+      resolvedDamId: best?.m.id ?? null,
     });
 
     if (!best) {
       log(`${SOURCE_ID}: no master match for "${cfg.name}" (prefs: ${cfg.prefCodes.join(',')})`);
       continue;
     }
-    out.push({ toneName: cfg.name, damId: best.id });
+    out.push({ toneName: cfg.name, damId: best.m.id });
   }
 
   await recordUniverse(SOURCE_ID, universe);
