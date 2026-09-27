@@ -25,6 +25,7 @@
 //
 // Priority 308. Cron hourly at :40.
 
+import { type BindableMaster, preferMaster } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
@@ -184,8 +185,9 @@ interface DamMatch {
 }
 
 async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<{ id: bigint; name: string }[]>`
-    SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
+  const masters = await sql<BindableMaster[]>`
+    SELECT id, name, completed_year AS "completedYear"
+    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out: DamMatch[] = [];
   // What this source publishes, matched or not — recorded so /coverage can
@@ -196,7 +198,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
   for (const r of rows) {
     const stem = normalizeName(r.sagaName);
 
-    let best: { id: bigint; rank: number } | null = null;
+    let best: { m: BindableMaster; rank: number } | null = null;
     if (stem) {
       for (const m of masters) {
         const mStem = normalizeName(m.name);
@@ -208,8 +210,8 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
         else if (stem.startsWith(mStem) && mStem.length >= 2) rank = 4;
         else if (mStem.includes(stem)) rank = 5;
         else continue;
-        if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-          best = { id: m.id, rank };
+        if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
+          best = { m, rank };
         }
       }
     }
@@ -218,14 +220,14 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
       externalId: r.sagaName,
       name: r.sagaName,
       prefCode: PREF_CODE,
-      resolvedDamId: best?.id ?? null,
+      resolvedDamId: best?.m.id ?? null,
     });
 
     if (!best) {
       log(`${SOURCE_ID}: no master match for "${r.sagaName}"`);
       continue;
     }
-    out.push({ sagaName: r.sagaName, damId: best.id });
+    out.push({ sagaName: r.sagaName, damId: best.m.id });
   }
 
   await recordUniverse(SOURCE_ID, universe);

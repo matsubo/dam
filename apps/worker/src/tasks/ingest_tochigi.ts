@@ -15,7 +15,9 @@
 // 千m³ — multiply by 1000 for m³. Seven prefectural dams in this feed
 // (寺山/塩原/西荒川/東荒川/三河沢/中禅寺/松田川). Cron hourly at :27.
 
+import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
+import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
@@ -125,9 +127,18 @@ export function normalizeName(s: string): string {
     .trim();
 }
 
-/** Best master dam for a feed stem; exact stem match beats substring. */
-export function chooseMaster(stem: string, masters: { id: bigint; name: string }[]): bigint | null {
-  let best: { id: bigint; rank: number } | null = null;
+/**
+ * Best master dam for a feed stem; a row already stamped with the station
+ * keeps it (#57), otherwise exact stem match beats substring.
+ */
+export function chooseMaster(
+  stem: string,
+  masters: BindableMaster[],
+  stationKey?: string,
+): bigint | null {
+  const stamped = stationKey ? stampedMaster(masters, stationKey) : null;
+  if (stamped) return stamped.id;
+  let best: { m: BindableMaster; rank: number } | null = null;
   for (const m of masters) {
     const mStem = normalizeName(m.name);
     let rank: number;
@@ -136,11 +147,11 @@ export function chooseMaster(stem: string, masters: { id: bigint; name: string }
     else if (mStem.startsWith(stem)) rank = 2;
     else if (mStem.includes(stem)) rank = 3;
     else continue;
-    if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-      best = { id: m.id, rank };
+    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
+      best = { m, rank };
     }
   }
-  return best?.id ?? null;
+  return best?.m.id ?? null;
 }
 
 async function ensureSourcePriority(): Promise<void> {
@@ -162,8 +173,9 @@ interface DamMatch {
 }
 
 async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<{ id: bigint; name: string }[]>`
-    SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
+  const masters = await sql<BindableMaster[]>`
+    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
+    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out: DamMatch[] = [];
   // What this source publishes, matched or not — recorded so /coverage can
@@ -172,7 +184,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
   for (const r of rows) {
     const stem = normalizeName(r.tochigiName);
     if (!stem) continue;
-    const damId = chooseMaster(stem, masters);
+    const damId = chooseMaster(stem, masters, r.tochigiName);
     universe.push({
       externalId: r.tochigiName,
       name: r.tochigiName,
@@ -184,13 +196,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
       continue;
     }
     out.push({ tochigiName: r.tochigiName, damId });
-    await sql`
-      UPDATE dams
-      SET external_ids = COALESCE(external_ids, '{}'::jsonb)
-                       || jsonb_build_object(${SOURCE_ID}::text, ${r.tochigiName}::text)
-      WHERE id = ${damId}
-        AND COALESCE(external_ids->>${SOURCE_ID}, '') <> ${r.tochigiName}
-    `;
+    await bindExternalId(damId, SOURCE_ID, r.tochigiName);
   }
   await recordUniverse(SOURCE_ID, universe);
   return out;
