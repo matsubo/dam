@@ -371,7 +371,7 @@ export const CRONTAB = `
 # 鹿児島県河川砂防情報システム ダム一覧表 — 3 県管理ダム (西之谷/川辺/大和).
 # Published continuously, unlike the portal above. 防災Web servlet dk=4,
 # Shift_JIS HTML, 10-min values; 貯水率（利水） is the stored rate.
-# Priority 308. Cron at :52.
+# Priority 309 (above the flood-only kagoshima-bousai at 308). Cron at :52.
 52 * * * * ingest:kagoshima-kasen
 
 # 佐賀県河川砂防情報システム ダム現況表 — 19 県管理ダム (岸川/庭木/繁昌/天ヶ瀬/
