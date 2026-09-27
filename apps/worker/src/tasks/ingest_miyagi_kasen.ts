@@ -103,49 +103,32 @@ export function parseMiyagiTable(html: string): ParsedRow[] {
 
   const rows: ParsedRow[] = [];
 
-  // Each dam section starts at: stationNo','XXXXXX'")>DAM_NAME</span>
-  // followed by 10 <div class="dat2"> values
-  const damPositions: { pos: number; stationNo: string; name: string }[] = [];
+  // Each dam is one <tr>: a stationNo','XXXXXX'")>DAM_NAME</span> cell, the
+  // 県/国 manager cell, then 10 <div class="dat2"> value cells. The 国 rows
+  // (鳴子/釜房/七ヶ宿) never close their <div>, so a value is the text up to
+  // the next tag, and a row runs to its own </tr>.
   for (const m of html.matchAll(/stationNo','(\d+)'\)">([^<]+)<\/span>/g)) {
-    damPositions.push({
-      pos: m.index ?? 0,
-      stationNo: m[1] ?? '',
-      name: m[2]?.trim() ?? '',
-    });
-  }
-
-  for (let i = 0; i < damPositions.length; i++) {
-    const entry = damPositions[i];
-    if (!entry) continue;
-    const { pos, stationNo, name } = entry;
-    const end = i + 1 < damPositions.length ? (damPositions[i + 1]?.pos ?? pos + 2000) : pos + 2000;
-    const section = html.slice(pos, end);
-
-    const vals = Array.from(section.matchAll(/<div class="dat2"[^>]*>([\s\S]*?)<\/div>/g)).map(
-      (m) =>
-        (m[1] ?? '')
-          .replace(/<[^>]+>/g, '')
-          .replace(/&nbsp;/g, ' ')
-          .trim(),
+    const pos = m.index ?? 0;
+    const end = html.indexOf('</tr>', pos);
+    const section = html.slice(pos, end === -1 ? undefined : end);
+    const vals = Array.from(section.matchAll(/<div class="dat2"[^>]*>([^<]*)/g)).map((v) =>
+      (v[1] ?? '').replace(/&nbsp;/g, ' ').trim(),
     );
-
-    if (vals.length < 5) continue;
+    // Fewer than the 10 columns means the row is not the table we know; keep
+    // the station (it is still published) but trust none of its cells.
+    const cell = (i: number): number | null => (vals.length >= 10 ? parseNum(vals[i] ?? '') : null);
+    const volumeThou = cell(1);
+    const ratePct = cell(8);
 
     rows.push({
-      miyagiName: name,
-      stationNo,
+      miyagiName: m[2]?.trim() ?? '',
+      stationNo: m[1] ?? '',
       observedAt,
-      waterLevelM: parseNum(vals[0] ?? ''),
-      storageVolumeM3: (() => {
-        const v = parseNum(vals[1] ?? '');
-        return v !== null ? v * 1_000 : null;
-      })(),
-      inflowM3s: parseNum(vals[3] ?? ''),
-      outflowM3s: parseNum(vals[4] ?? ''),
-      storageRate: (() => {
-        const r = parseNum(vals[8] ?? '');
-        return r !== null ? r / 100 : null;
-      })(),
+      waterLevelM: cell(0),
+      storageVolumeM3: volumeThou !== null ? volumeThou * 1_000 : null,
+      inflowM3s: cell(3),
+      outflowM3s: cell(4),
+      storageRate: ratePct !== null ? ratePct / 100 : null,
     });
   }
 
