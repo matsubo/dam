@@ -18,7 +18,9 @@
 // Priority 295 (below tokyo-waterworks 300 since tokyo is fresher by ~1 day,
 // but above jwa-junpo 290 since aitoyo is fresher than jwa-junpo for overlap).
 
+import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
+import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
@@ -144,23 +146,25 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
   // say "they publish it, we failed to link it" instead of guessing.
   const universe: UniverseRow[] = [];
   for (const m of NAME_MAP) {
-    const rows = await sql<{ id: bigint; name: string }[]>`
-      SELECT id, name FROM dams
+    // All candidates, ranked by name; chooseRanked keeps a row already
+    // stamped with this station, and lets the （元）/（再） of one dam (牧尾)
+    // tie so the current structure wins rather than a fixed marker order.
+    const rows = await sql<(BindableMaster & { rank: number })[]>`
+      SELECT id, name, completed_year AS "completedYear",
+             external_ids->>'aitoyo' AS stamp,
+             CASE
+               WHEN name = ${`${m.masterName}ダム`} THEN 0
+               WHEN name = ${m.masterName} THEN 1
+               WHEN name LIKE ${`${m.masterName}（再）%`}
+                 OR name LIKE ${`${m.masterName}（元）%`} THEN 2
+               WHEN name = ${`${m.masterName}貯水池`} THEN 3
+               ELSE 5
+             END AS rank
+      FROM dams
       WHERE pref_code = ANY(${m.prefCodes}::text[])
         AND name LIKE ${`%${m.masterName}%`}
-      ORDER BY
-        CASE
-          WHEN name = ${`${m.masterName}ダム`} THEN 0
-          WHEN name = ${m.masterName} THEN 1
-          WHEN name LIKE ${`${m.masterName}（再）%`} THEN 2
-          WHEN name = ${`${m.masterName}貯水池`} THEN 3
-          WHEN name LIKE ${`${m.masterName}（元）%`} THEN 9
-          ELSE 5
-        END,
-        id
-      LIMIT 1
     `;
-    const r = rows[0];
+    const r = chooseRanked(rows, m.aitoyoName);
     // 矢作 straddles two prefectures; the first is its primary one. prefCode is
     // metadata here, not part of the (source_id, external_id) key.
     universe.push({
@@ -174,13 +178,7 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
       continue;
     }
     matches.push({ aitoyoName: m.aitoyoName, damId: r.id });
-    await sql`
-      UPDATE dams
-      SET external_ids = COALESCE(external_ids, '{}'::jsonb)
-                       || jsonb_build_object('aitoyo', ${m.aitoyoName}::text)
-      WHERE id = ${r.id}
-        AND COALESCE(external_ids->>'aitoyo', '') <> ${m.aitoyoName}
-    `;
+    await bindExternalId(r.id, 'aitoyo', m.aitoyoName);
   }
   await recordUniverse('aitoyo', universe);
   return matches;

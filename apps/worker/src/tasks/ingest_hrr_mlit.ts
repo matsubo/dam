@@ -14,7 +14,9 @@
 // 7 dams across 6 prefectures (福島/山形/新潟/長野/富山/石川):
 //   大川 / 大石 / 横川 / 三国川 / 大町 / 宇奈月 / 手取川
 
+import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
+import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
@@ -103,33 +105,30 @@ async function ensureSourcePriority(): Promise<void> {
 async function matchMaster(log: (s: string) => void): Promise<Map<string, bigint>> {
   const result = new Map<string, bigint>();
   for (const [pageName, c] of Object.entries(DAMS)) {
-    const rows = await sql<{ id: bigint }[]>`
-      SELECT id FROM dams
+    // All candidates, ranked by name; chooseRanked keeps a row already
+    // stamped with this station, and lets a （元）/（再） pair tie so the
+    // current structure wins.
+    const rows = await sql<(BindableMaster & { rank: number })[]>`
+      SELECT id, name, completed_year AS "completedYear",
+             external_ids->>${SOURCE_ID} AS stamp,
+             CASE
+               WHEN name = ${c.masterName} THEN 0
+               WHEN name = ${`${c.masterName}ダム`} THEN 1
+               WHEN name LIKE ${`${c.masterName}（再）%`}
+                 OR name LIKE ${`${c.masterName}（元）%`} THEN 2
+               ELSE 5
+             END AS rank
+      FROM dams
       WHERE pref_code = ${c.prefCode}
         AND name LIKE ${`%${c.masterName}%`}
-      ORDER BY
-        CASE
-          WHEN name = ${c.masterName} THEN 0
-          WHEN name = ${`${c.masterName}ダム`} THEN 1
-          WHEN name LIKE ${`${c.masterName}（再）%`} THEN 2
-          ELSE 5
-        END,
-        id
-      LIMIT 1
     `;
-    const r = rows[0];
+    const r = chooseRanked(rows, pageName);
     if (!r) {
       log(`${SOURCE_ID}: no master match for ${pageName} (pref ${c.prefCode})`);
       continue;
     }
     result.set(pageName, r.id);
-    await sql`
-      UPDATE dams
-      SET external_ids = COALESCE(external_ids, '{}'::jsonb)
-                       || jsonb_build_object(${SOURCE_ID}::text, ${pageName}::text)
-      WHERE id = ${r.id}
-        AND COALESCE(external_ids->>${SOURCE_ID}, '') <> ${pageName}
-    `;
+    await bindExternalId(r.id, SOURCE_ID, pageName);
   }
   return result;
 }
