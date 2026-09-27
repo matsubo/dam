@@ -247,8 +247,9 @@ export const CRONTAB = `
 41 * * * * ingest:jwa-chubu
 
 # 水資源機構 中部支社 豊川水系 — 2 dams (宇連/大島). Real-time page updated
-# every ~10 min; water level (EL.m) + 有効貯水量(m³) + inflow/outflow. Upgrades
-# 宇連/大島 from daily (aitoyo) to hourly cadence. Cron at :43.
+# every ~10 min; water level (EL.m) + 有効貯水量(10³m³) + inflow; no outflow (the
+# page prints only 放流量（利水）). Upgrades 宇連/大島 from daily (aitoyo) to
+# hourly cadence. One page per run; cron at :43.
 43 * * * * ingest:jwa-toyokawa
 
 # 水資源機構 吉野川上流総合管理所 — 5 dams (池田/早明浦/新宮/富郷/柳瀬).

@@ -151,7 +151,7 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     upstream: '水資源機構 中部支社 豊川水系 (water.go.jp/mizu/chubu/realtime/index_2.html)',
     license: '公的統計 — 出典明示で再配布可',
     cadence: '時次 (元データは ~10 分粒度; 取得は毎時 :43)',
-    what: '豊川水系 2 ダム (宇連/大島) の貯水位(EL.m)・有効貯水量(m³)・流入量・放流量。リアルタイム観測; jwa-junpo (10 日) / aitoyo (日次) より高頻度。',
+    what: '豊川水系 2 ダム (宇連/大島) の貯水位(EL.m)・有効貯水量(10³m³→m³)・流入量。ページの放流量は放流量（利水）のみで全放流量ではないため保存しない。リアルタイム観測; jwa-junpo (10 日) / aitoyo (日次) より高頻度。',
     label: 'JWA 豊川',
   },
   'jwa-yoshino': {
