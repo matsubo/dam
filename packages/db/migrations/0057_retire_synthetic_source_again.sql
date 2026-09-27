@@ -1,0 +1,26 @@
+-- Retire `synthetic` a second time, and this time make it stick.
+--
+-- Migration 0045 deleted the row. On 2026-09-18 — and still on 2026-09-27 —
+-- /api/v1/sources was advertising it: active, priority 200, zero observations.
+-- bootstrap.sh applies migrations BEFORE restoring the bundled master seed, and
+-- both seeds carried an INSERT for it, so every deploy re-inserted what the
+-- migration had just removed.
+--
+-- `master_upsert.sql.gz` was fixed upstream of here by EXCLUDED_SOURCES in
+-- `master_upsert_sql.ts` (bf47d62). `master.sql.gz` is a hand-taken pg_dump with
+-- no generator to fix, so this branch strips the row from the artefact itself
+-- and `apps/web/bin/master_upsert_seed.test.ts` fails if either shipped seed
+-- reintroduces a retired source. The DELETE below is therefore the last step
+-- rather than another turn of the loop.
+--
+-- Why it mattered beyond a stray row in /sources: an active row with
+-- provides_observations = TRUE and universe_enumerable = TRUE and no
+-- source_universe_runs entry holds `classifyDamCoverage`'s honesty gate open.
+-- While the gate is open no dam can ever be classified `not_published`, so
+-- /coverage reports 提供元なし = 0 and files every uncovered dam under 未調査.
+-- A placeholder that serves no data was helping suppress the answer.
+--
+-- Observations are untouched, as in 0045: production has none under this
+-- source, and a bulk DELETE on a compressed hypertable is not a migration's
+-- job.
+DELETE FROM source_priorities WHERE source_id = 'synthetic';
