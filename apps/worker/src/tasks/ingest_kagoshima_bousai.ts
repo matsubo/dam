@@ -29,7 +29,9 @@
 //
 // Priority 308 (hourly pref-managed). Cron :56 (spaced from other sources).
 
+import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
+import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
@@ -134,9 +136,41 @@ interface DamMatch {
   damId: bigint;
 }
 
+/**
+ * Best master dam for a station: the row already stamped with its
+ * `station_no` keeps it; otherwise an exact raw-name hit beats a stem hit
+ * beats a prefix/substring hit, and equal ranks go to the live （元）/（再）
+ * twin before the lower id.
+ */
+export function chooseMaster(
+  rawName: string,
+  stem: string,
+  masters: BindableMaster[],
+  stationKey: string,
+): bigint | null {
+  const stamped = stampedMaster(masters, stationKey);
+  if (stamped) return stamped.id;
+  let best: { m: BindableMaster; rank: number } | null = null;
+  for (const m of masters) {
+    const mStem = normalizeName(m.name);
+    let rank: number;
+    if (m.name === rawName) rank = 0;
+    else if (mStem === stem) rank = 1;
+    else if (m.name === `${stem}ダム`) rank = 2;
+    else if (mStem.startsWith(stem)) rank = 3;
+    else if (mStem.includes(stem)) rank = 4;
+    else continue;
+    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
+      best = { m, rank };
+    }
+  }
+  return best?.m.id ?? null;
+}
+
 async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<{ id: bigint; name: string }[]>`
-    SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
+  const masters = await sql<BindableMaster[]>`
+    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
+    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out: DamMatch[] = [];
   // What this source publishes, matched or not — recorded so /coverage can
@@ -147,20 +181,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     const stem = normalizeName(r.stationName);
     if (!stem) continue;
 
-    let best: { id: bigint; rank: number } | null = null;
-    for (const m of masters) {
-      const mStem = normalizeName(m.name);
-      let rank: number;
-      if (m.name === r.stationName) rank = 0;
-      else if (mStem === stem) rank = 1;
-      else if (m.name === `${stem}ダム`) rank = 2;
-      else if (mStem.startsWith(stem)) rank = 3;
-      else if (mStem.includes(stem)) rank = 4;
-      else continue;
-      if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-        best = { id: m.id, rank };
-      }
-    }
+    const damId = chooseMaster(r.stationName, stem, masters, r.stationNo);
 
     universe.push({
       externalId: r.stationNo,
@@ -168,14 +189,15 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
       prefCode: PREF_CODE,
       lat: r.lat,
       lng: r.lng,
-      resolvedDamId: best?.id ?? null,
+      resolvedDamId: damId,
     });
 
-    if (!best) {
+    if (!damId) {
       log(`${SOURCE_ID}: no master match for "${r.stationName}"`);
       continue;
     }
-    out.push({ stationName: r.stationName, damId: best.id });
+    out.push({ stationName: r.stationName, damId });
+    await bindExternalId(damId, SOURCE_ID, r.stationNo);
   }
 
   await recordUniverse(SOURCE_ID, universe);
