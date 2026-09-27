@@ -28,10 +28,18 @@
 --
 -- Idempotent; a no-op on a fresh database.
 --
+-- Run once (prod, after ingest_tottori_bousai's 最低水位 skip is deployed);
+-- the file is its own transaction (BEGIN … COMMIT), since 307 of the rows sit
+-- in compressed chunks:
+--   psql -U dam -d dam -v ON_ERROR_STOP=1 -f 2026-09-28_tottori_bousai_placeholders.sql
+--
 -- After it: obs_daily's refresh policy only reaches back 60 days, so refresh
 -- the older buckets by hand (outside a transaction):
 --   CALL refresh_continuous_aggregate('obs_daily', '2026-06-01', now() - interval '59 days');
 --   CALL refresh_continuous_aggregate('obs_monthly', '2026-06-01', '2026-08-01');
+
+BEGIN;
+SET LOCAL timescaledb.max_tuples_decompressed_per_dml_transaction = 0;
 
 DELETE FROM observations o
 USING dams d,
@@ -42,3 +50,5 @@ WHERE o.source_id = 'tottori-bousai'
   AND d.id = o.dam_id
   AND d.external_ids ->> 'tottori-bousai' = m.station
   AND o.water_level_m < m.min_level_m - 20;
+
+COMMIT;
