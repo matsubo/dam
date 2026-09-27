@@ -43,6 +43,7 @@ import ingestKagoshimaKasen from './tasks/ingest_kagoshima_kasen.ts';
 import ingestKanagawa from './tasks/ingest_kanagawa.ts';
 import ingestKasenbosai from './tasks/ingest_kasenbosai.ts';
 import ingestKasenbosaiV2 from './tasks/ingest_kasenbosai_v2.ts';
+import ingestKitakyushuSuido from './tasks/ingest_kitakyushu_suido.ts';
 import ingestKkrMlit from './tasks/ingest_kkr_mlit.ts';
 import ingestKochi from './tasks/ingest_kochi_bousai.ts';
 import ingestKtrKinu from './tasks/ingest_ktr_kinu.ts';
@@ -50,6 +51,7 @@ import ingestKtrTone from './tasks/ingest_ktr_tone_dam.ts';
 import ingestKumamoto from './tasks/ingest_kumamoto_bousai.ts';
 import ingestKyoto from './tasks/ingest_kyoto_bousai.ts';
 import ingestKyushuNousei from './tasks/ingest_kyushu_nousei.ts';
+import ingestMatsueSuido from './tasks/ingest_matsue_suido.ts';
 import ingestMiyagi from './tasks/ingest_miyagi_kasen.ts';
 import ingestMiyazaki from './tasks/ingest_miyazaki_bousai.ts';
 import ingestNagano from './tasks/ingest_nagano_kasen.ts';
@@ -66,6 +68,7 @@ import ingestQsrToukan from './tasks/ingest_qsr_toukan.ts';
 import ingestQsrTuruta from './tasks/ingest_qsr_turuta.ts';
 import ingestSagaBousai from './tasks/ingest_saga_bousai.ts';
 import ingestSaitama from './tasks/ingest_saitama_suibo.ts';
+import ingestSaseboSuido from './tasks/ingest_sasebo_suido.ts';
 import ingestShiga from './tasks/ingest_shiga.ts';
 import ingestShimaneBousai from './tasks/ingest_shimane_bousai.ts';
 import ingestShimokubo from './tasks/ingest_shimokubo.ts';
@@ -186,6 +189,9 @@ async function main(): Promise<void> {
       'ingest:tndam-hyogo': ingestTndamHyogo,
       'ingest:kagoshima-bousai': ingestKagoshimaBousai,
       'ingest:kagoshima-kasen': ingestKagoshimaKasen,
+      'ingest:kitakyushu-suido': ingestKitakyushuSuido,
+      'ingest:sasebo-suido': ingestSaseboSuido,
+      'ingest:matsue-suido': ingestMatsueSuido,
       'backfill:kagoshima-bodik': backfillKagoshima,
       'backfill:suimon:enqueue': backfillEnqueue,
       'backfill:suimon:run': backfillRun,
