@@ -7,9 +7,10 @@
 //
 // Source: https://naganoken-kigyokyoku.jp/dam/ loads, per dam,
 //   https://naganoken-kigyokyoku.jp/json/{takato,sugadaira}_new.json
-// ({"table":[…]}, the four newest 10-minute rows, newest first). robots.txt
-// disallows only /wp/wp-admin/. The page's third dam, 湯の瀬, has a camera
-// image and no figures, so it is not part of the published universe.
+// ({"table":[…]}, the four newest 10-minute rows, newest first), rewritten
+// 12–34 s after every 10-minute mark. robots.txt disallows only
+// /wp/wp-admin/. The page's third dam, 湯の瀬, has a camera image and no
+// figures, so it is not part of the published universe.
 //
 // Keys differ per dam (the page's own dam_data_new.js maps them):
 //   高遠   v_reservoirlevel10 (EL.m) · v_totalinflow1 (old name v_totalinflow11)
@@ -37,7 +38,13 @@
 // 07-06 as of 2026-09-27 — yet it keeps writing hourly rows, and
 // preferredSourceForDam() picks the top-priority source with ANY row, so
 // below it 高遠's chart stays empty. 311 is shared only by tochigi-bodik /
-// hyogo-bodik, which never cover 長野. Alone on 菅平. Cron hourly at :54.
+// hyogo-bodik, which never cover 長野. Alone on 菅平.
+//
+// Cron at :24 and :54. Four rows span 30 minutes, so one run an hour keeps
+// only four of the six rows. The :24 run sees :20/:10/:00/:50 (the :20
+// rewrite has landed, the :30 one has not), and the :54 run sees
+// :50/:40/:30/:20. Together they cover every 10-minute row; :20 and :50 are
+// read twice, and the upsert rewrites them with the same values.
 
 import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
