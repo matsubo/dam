@@ -276,7 +276,6 @@ if [ "${kick}" = "1" ]; then
   run_kick_step "enqueue_kasenbosai_v2" "SELECT graphile_worker.add_job('ingest:kasenbosai-v2','{}'::json);"
   run_kick_step "enqueue_chiba"        "SELECT graphile_worker.add_job('ingest:chiba-suisei','{}'::json);"
   run_kick_step "enqueue_okayama"      "SELECT graphile_worker.add_job('ingest:okayama-bousai','{}'::json);"
-  run_kick_step "enqueue_niigata"      "SELECT graphile_worker.add_job('ingest:niigata-bousai','{}'::json);"
   run_kick_step "enqueue_hyogo"        "SELECT graphile_worker.add_job('ingest:hyogo-bodik','{}'::json);"
   run_kick_step "enqueue_tochigi"      "SELECT graphile_worker.add_job('ingest:tochigi-bodik','{}'::json);"
   run_kick_step "enqueue_hiroshima"    "SELECT graphile_worker.add_job('ingest:hiroshima-bousai','{}'::json);"

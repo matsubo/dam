@@ -13,7 +13,7 @@
 //         "0" stored as literal "0", missing values as "" or absent.
 // License: 山形県 published; public site with no stated restriction.
 //
-// Priority 308, matching other 防災Web prefectural sources (niigata-bousai).
+// Priority 308, matching other 防災Web prefectural sources (fukui-bousai).
 
 import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';

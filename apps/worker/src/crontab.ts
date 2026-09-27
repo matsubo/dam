@@ -192,11 +192,6 @@ export const CRONTAB = `
 # :21 every hour, spaced from the other prefectural sources.
 21 * * * * ingest:okayama-bousai
 
-# 新潟県河川防災情報システム — ~20 県管理ダム (防災Web servlet dk=4 table).
-# Session cookie + single Shift_JIS table fetch gives every dam's level /
-# 貯水率 / inflow / outflow. Cron at :23 every hour.
-23 * * * * ingest:niigata-bousai
-
 # 兵庫県 ダム諸量 — 22観測所 (BODIK オープンデータ CSV, CC-BY 4.0, 10分更新).
 # Single CSV fetch gives level / 貯水量(千m³) / inflow / outflow. Cron at :25.
 25 * * * * ingest:hyogo-bodik
@@ -389,11 +384,6 @@ export const CRONTAB = `
 # clean structured data with storageRate + storageVolumeM3 + waterLevel +
 # inflow + outflow. Updated every 10 min. Cron at :39.
 39 * * * * ingest:kagawa-bousai
-
-# 静岡県 河川・砂防情報システム ダム諸量現況表 — 県管理ダム (防災Web HTML, Shift_JIS).
-# URL: kasen.pref.shizuoka.lg.jp (geo-blocked outside Japan; works from production).
-# Header-detection parser handles variable column layout. Cron at :55.
-55 * * * * ingest:shizuoka-bousai
 
 # 愛媛県 河川砂防総合情報システム ダム諸量現況表 — 県管理ダム (防災Web HTML, Shift_JIS).
 # URL: kasen.pref.ehime.jp (geo-blocked outside Japan; works from production).

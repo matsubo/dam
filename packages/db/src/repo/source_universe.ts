@@ -56,11 +56,11 @@ async function recordUniverseOrThrow(sourceId: string, rows: UniverseRow[]): Pro
   // ZIP — and callers run this BEFORE upsertObservations, so an exception
   // here would take the observation write down with it.
   //
-  // LAST ENTRY WINS, and that is load-bearing: shimane, saitama and shizuoka
-  // seed the full station list with `resolvedDamId: null` and then push the
-  // resolved rows after it, so a station missing from today's snapshot still
-  // counts as published while a matched one keeps its id. Changing this to
-  // first-wins would silently null out those three sources' matches.
+  // LAST ENTRY WINS, and that is load-bearing: shimane and saitama seed the
+  // full station list with `resolvedDamId: null` and then push the resolved
+  // rows after it, so a station missing from today's snapshot still counts
+  // as published while a matched one keeps its id. Changing this to
+  // first-wins would silently null out those sources' matches.
   const deduped = [...new Map(rows.map((r) => [r.externalId, r])).values()];
   if (deduped.length > 0) {
     const values = deduped.map((r) => ({
@@ -134,7 +134,7 @@ export interface DamCoverageRow {
  * `unknown`. Collapsing those two would quietly declare hundreds of dams
  * hopeless just because we never looked.
  *
- * Two residual caveats, both surfaced in `coverageSummary()` rather than
+ * Three residual caveats, all surfaced in `coverageSummary()` rather than
  * hidden:
  *  - `sourcesNotEnumerable` — providers that publish no station list at all
  *    (a portal that lists dams only during a flood event). They are excluded
@@ -142,10 +142,15 @@ export interface DamCoverageRow {
  *  - `sourcesHistoricalOnly` — one-off dumps and backfill-only sources, which
  *    have no recurring scan to record. Excluded for the same reason, and for
  *    the same price.
- *  - A handful of HTML-scraped providers (nara / niigata / miyagi) have no
- *    catalogue constant to iterate, so their universe is whatever parsed on
- *    the last good run. A station that reports even once ever is recorded and
+ *  - A handful of HTML-scraped providers (nara / miyagi) have no catalogue
+ *    constant to iterate, so their universe is whatever parsed on the last
+ *    good run. A station that reports even once ever is recorded and
  *    persists; one that has NEVER parsed stays invisible.
+ *
+ * A retired source (`active = false`, e.g. one whose robots.txt disallows
+ * us) counts nowhere: not in the gate, since it will never scan again, and
+ * not as a publisher, since a dam only it lists is not an ingestion bug we
+ * can fix and its unmatched stations are not work we can do.
  */
 export async function classifyDamCoverage(): Promise<DamCoverageRow[]> {
   return sql<DamCoverageRow[]>`
@@ -166,11 +171,14 @@ export async function classifyDamCoverage(): Promise<DamCoverageRow[]> {
       WHERE observed_at > NOW() - INTERVAL '30 days'
     ),
     published AS (
-      SELECT resolved_dam_id AS dam_id,
-             ARRAY_AGG(DISTINCT source_id ORDER BY source_id) AS sources
-      FROM source_universe
-      WHERE resolved_dam_id IS NOT NULL
-      GROUP BY resolved_dam_id
+      SELECT su.resolved_dam_id AS dam_id,
+             ARRAY_AGG(DISTINCT su.source_id ORDER BY su.source_id) AS sources
+      FROM source_universe su
+      WHERE su.resolved_dam_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM source_priorities sp WHERE sp.source_id = su.source_id AND NOT sp.active
+        )
+      GROUP BY su.resolved_dam_id
     )
     SELECT d.id                        AS "damId",
            d.slug                      AS "slug",
@@ -221,7 +229,12 @@ export async function coverageSummary(): Promise<CoverageSummary> {
     { unresolved: bigint; pending: bigint; not_enumerable: bigint; historical_only: bigint }[]
   >`
     SELECT
-      (SELECT COUNT(*) FROM source_universe WHERE resolved_dam_id IS NULL)::BIGINT AS unresolved,
+      (SELECT COUNT(*) FROM source_universe su
+        WHERE su.resolved_dam_id IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM source_priorities sp WHERE sp.source_id = su.source_id AND NOT sp.active
+          )
+      )::BIGINT AS unresolved,
       (SELECT COUNT(*) FROM source_priorities sp
         WHERE sp.active AND sp.provides_observations AND sp.universe_enumerable
           AND NOT sp.historical_only
@@ -261,9 +274,12 @@ export async function classifyOneDam(damId: bigint): Promise<DamCoverageRow | nu
         )
     ),
     published AS (
-      SELECT ARRAY_AGG(DISTINCT source_id ORDER BY source_id) AS sources
-      FROM source_universe
-      WHERE resolved_dam_id = ${damId}
+      SELECT ARRAY_AGG(DISTINCT su.source_id ORDER BY su.source_id) AS sources
+      FROM source_universe su
+      WHERE su.resolved_dam_id = ${damId}
+        AND NOT EXISTS (
+          SELECT 1 FROM source_priorities sp WHERE sp.source_id = su.source_id AND NOT sp.active
+        )
     )
     SELECT d.id       AS "damId",
            d.slug     AS "slug",
