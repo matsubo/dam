@@ -206,37 +206,43 @@ const task: Task = async (_payload, helpers) => {
   const inputs = [] as Parameters<typeof upsertObservations>[0];
   for (const { cfg, damId } of matches) {
     const url = `${GRAPH_URL}?style=dam_graph10m&dk=4&it=0&sn=${cfg.stationNo}&nw=1`;
-    const r = await fetch(url, {
-      headers: {
-        'user-agent':
-          process.env.HTTP_USER_AGENT ??
-          'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-      },
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (r.status !== 200) {
-      log(`aomori-dam: ${cfg.aomoriName} HTTP ${r.status}; skipping`);
-      continue;
+    // One page per dam: a timeout or network error on one must not throw away
+    // the readings already collected for the others.
+    try {
+      const r = await fetch(url, {
+        headers: {
+          'user-agent':
+            process.env.HTTP_USER_AGENT ??
+            'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
+        },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (r.status !== 200) {
+        log(`aomori-dam: ${cfg.aomoriName} HTTP ${r.status}; skipping`);
+        continue;
+      }
+      const html = new TextDecoder('shift_jis').decode(await r.arrayBuffer());
+      const latest = parseAomoriDamGraph(html).at(-1);
+      if (!latest) {
+        log(`aomori-dam: ${cfg.aomoriName} no parseable rows; skipping`);
+        continue;
+      }
+      inputs.push({
+        observedAt: latest.observedAt,
+        damId,
+        sourceId: 'aomori-dam',
+        storageVolumeM3: latest.storageVolumeM3,
+        storageRate: latest.storageRate,
+        inflowM3s: latest.inflowM3s,
+        outflowM3s: latest.outflowM3s,
+        waterLevelM: latest.waterLevelM,
+        rainfallMm: null,
+        rawSnapshotId: null,
+        qualityFlag: 0,
+      });
+    } catch (err) {
+      log(`aomori-dam: ${cfg.aomoriName} fetch error: ${(err as Error).message}`);
     }
-    const html = new TextDecoder('shift_jis').decode(await r.arrayBuffer());
-    const latest = parseAomoriDamGraph(html).at(-1);
-    if (!latest) {
-      log(`aomori-dam: ${cfg.aomoriName} no parseable rows; skipping`);
-      continue;
-    }
-    inputs.push({
-      observedAt: latest.observedAt,
-      damId,
-      sourceId: 'aomori-dam',
-      storageVolumeM3: latest.storageVolumeM3,
-      storageRate: latest.storageRate,
-      inflowM3s: latest.inflowM3s,
-      outflowM3s: latest.outflowM3s,
-      waterLevelM: latest.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
   }
   const written = await upsertObservations(inputs);
   log(`aomori-dam done: matched=${matches.length} parsed=${inputs.length} written=${written}`);
