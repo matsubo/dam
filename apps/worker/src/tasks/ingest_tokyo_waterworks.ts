@@ -39,7 +39,7 @@ const PAGE_URL =
 // unambiguous. `prefCode` narrows the match for collisions.
 //
 // Slugs come from the bundled master snapshot (verified locally).
-export const NAME_MAP: Array<{ tokyoName: string; masterName: string; prefCodes: string[] }> = [
+const NAME_MAP: Array<{ tokyoName: string; masterName: string; prefCodes: string[] }> = [
   // 利根川水系
   { tokyoName: '矢木沢ダム', masterName: '矢木沢', prefCodes: ['10'] }, // 群馬
   { tokyoName: '奈良俣ダム', masterName: '奈良俣', prefCodes: ['10'] },
