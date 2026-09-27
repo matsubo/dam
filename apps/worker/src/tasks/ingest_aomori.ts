@@ -2,14 +2,16 @@
 //
 // Eighth real-observation source. 青森県河川砂防情報提供システム
 // (kasensabo.bousai.pref.aomori.jp) publishes a per-dam ダム諸量グラフ page
-// with a 10-minute table. We read it for 7 治水 dams:
+// with a 10-minute table. The dams come from its ダム諸量現況表, which lists
+// every dam the system carries with the 局番号 its graph link passes to
+// damGraph() — 11 on 2026-09-27:
 //
-//   下湯, 浅虫, 久吉, 遠部, 浅瀬石川 (国管理), 津軽 (国管理), 清水目
+//   下湯, 久吉, 浅瀬石川 (国), 世増, 浅虫, 遠部, 津軽 (国), 飯詰, 小泊,
+//   清水目, 川内
 //
-// URL: servletBousaiContents?style=dam_graph10m&dk=4&it=0&sn={局番号}&nw=1
-// (the 局番号 is the one the ダム諸量状況図 map passes to damGraph()).
-// Shift_JIS HTML. The table header row reads, in order:
-//
+// List:  servletBousaiTableStatus?sv=3&dk=4&mp=0&no=0&fn=0&pg=1
+// Graph: servletBousaiContents?style=dam_graph10m&dk=4&it=0&sn={局番号}&nw=1
+// Both Shift_JIS HTML. The graph table's header row reads, in order:
 //   時分 | ダム地点 10分[mm] 累加[mm] | 流入量[m³/s] | 全放流量[m³/s] |
 //   貯水位[EL.m] | 貯水量(有効容量)[1000m³] | 貯水率(有効容量)[%] |
 //   貯水率(利水容量)[%]
@@ -21,12 +23,14 @@
 //
 // 貯水率: prefer 利水容量. Back-solving the live page (2026-09-27) shows 有効
 // is the annual 有効貯水容量 (下湯 2,111/0.192 = 10,995 千m³ vs master
-// 11,000; 久吉 6,070 vs 6,070; 浅虫 170 vs 170), while 利水 divides by a
-// smaller, season-aware pool (津軽 42,561/0.578 = 73,635 vs annual 127,200;
-// 世増 reads 100 % at its 洪水貯留準備水位, 3 m below 平常時最高水位). 治水-only
-// dams (遠部, 清水目) print "---" for 利水; for those we fall back to the 有効
-// rate, which is volume / annual 有効 — the same figure the site would derive
-// from the static capacity, so back-solving it is an identity.
+// 11,000; 久吉 6,070 vs 6,070; 浅虫 170 vs 170; 世増 33,066 vs 33,100; 飯詰
+// 2,007 vs 2,030; 小泊 340 vs 340; 川内 14,500 vs 14,500), while 利水 divides
+// by a smaller, season-aware pool (津軽 42,561/0.578 = 73,635 vs annual
+// 127,200; 川内 5,000 vs 14,500; 飯詰 747 vs 2,030; 世増 reads 100 % at its
+// 洪水貯留準備水位, 3 m below 平常時最高水位). 治水-only dams (遠部, 清水目)
+// print "---" for 利水; for those we fall back to the 有効 rate, which is
+// volume / annual 有効 — the same figure the site would derive from the
+// static capacity, so back-solving it is an identity.
 
 import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
@@ -35,28 +39,27 @@ import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
-const GRAPH_URL =
-  process.env.AOMORI_DAM_URL ??
-  'https://www.kasensabo.bousai.pref.aomori.jp/bousai/servlet/bousaiweb.servletBousaiContents';
+const BASE_URL =
+  process.env.AOMORI_DAM_BASE_URL ?? 'https://www.kasensabo.bousai.pref.aomori.jp/bousai/servlet';
+const LIST_URL = `${BASE_URL}/bousaiweb.servletBousaiTableStatus?sv=3&dk=4&mp=0&no=0&fn=0&pg=1`;
+const GRAPH_URL = `${BASE_URL}/bousaiweb.servletBousaiContents`;
 
-interface DamCfg {
+export interface DamCfg {
+  /** Name as the list prints it, "(国)" dropped; the station stamp. */
   aomoriName: string;
-  masterName: string;
   /** 局番号 (sn) of the dam's ダム諸量グラフ page. */
   stationNo: number;
 }
 
-const DAMS: DamCfg[] = [
-  { aomoriName: '下湯ダム', masterName: '下湯', stationNo: 1 },
-  { aomoriName: '浅虫ダム', masterName: '浅虫', stationNo: 2 },
-  { aomoriName: '久吉ダム', masterName: '久吉', stationNo: 6 },
-  { aomoriName: '遠部ダム', masterName: '遠部', stationNo: 7 },
-  { aomoriName: '浅瀬石川ダム', masterName: '浅瀬石川', stationNo: 40 },
-  { aomoriName: '津軽ダム', masterName: '津軽', stationNo: 41 },
-  { aomoriName: '清水目ダム', masterName: '清水目', stationNo: 26 },
-];
-
 const PREF_CODE = '02';
+
+/** Every dam the ダム諸量現況表 lists, in page order. */
+export function parseAomoriDamList(html: string): DamCfg[] {
+  return [...html.matchAll(/onClick="myIn\('(\d+)','[^']*','[^']*'\)">([^<]+)</gi)].map((m) => ({
+    aomoriName: (m[2] ?? '').replace(/\(国\)$/, '').trim(),
+    stationNo: Number(m[1]),
+  }));
+}
 
 export interface AomoriRow {
   observedAt: Date;
@@ -141,7 +144,7 @@ async function ensureSourcePriority(): Promise<void> {
   await sql`
     INSERT INTO source_priorities (source_id, priority, description, active)
     VALUES ('aomori-dam', 306,
-            '青森県河川砂防情報提供システム ダム諸量グラフ — hourly, 7 dams (下湯/浅虫/久吉/遠部/浅瀬石川/津軽/清水目)',
+            '青森県河川砂防情報提供システム ダム諸量グラフ — hourly, ダム諸量現況表の全ダム (11: 下湯/久吉/浅瀬石川/世増/浅虫/遠部/津軽/飯詰/小泊/清水目/川内)',
             true)
     ON CONFLICT (source_id) DO UPDATE
       SET priority    = EXCLUDED.priority,
@@ -155,12 +158,13 @@ interface DamMatch {
   damId: bigint;
 }
 
-async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
+async function ensureExternalIds(dams: DamCfg[], log: (s: string) => void): Promise<DamMatch[]> {
   const matches: DamMatch[] = [];
   // What this source publishes, matched or not — recorded so /coverage can
   // say "they publish it, we failed to link it" instead of guessing.
   const universe: UniverseRow[] = [];
-  for (const c of DAMS) {
+  for (const c of dams) {
+    const masterName = c.aomoriName.replace(/ダム$/, '');
     // All candidates, ranked by name; chooseRanked keeps a row already
     // stamped with this station, and lets a （元）/（再） pair tie so the
     // current structure wins.
@@ -168,15 +172,15 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
       SELECT id, name, completed_year AS "completedYear",
              external_ids->>'aomori-dam' AS stamp,
              CASE
-               WHEN name = ${c.masterName} THEN 0
-               WHEN name = ${`${c.masterName}ダム`} THEN 1
-               WHEN name LIKE ${`${c.masterName}（再）%`}
-                 OR name LIKE ${`${c.masterName}（元）%`} THEN 2
+               WHEN name = ${masterName} THEN 0
+               WHEN name = ${`${masterName}ダム`} THEN 1
+               WHEN name LIKE ${`${masterName}（再）%`}
+                 OR name LIKE ${`${masterName}（元）%`} THEN 2
                ELSE 5
              END AS rank
       FROM dams
       WHERE pref_code = ${PREF_CODE}
-        AND name LIKE ${`%${c.masterName}%`}
+        AND name LIKE ${`%${masterName}%`}
     `;
     const r = chooseRanked(rows, c.aomoriName);
     universe.push({
@@ -196,11 +200,28 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
   return matches;
 }
 
+const headers = {
+  'user-agent':
+    process.env.HTTP_USER_AGENT ??
+    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
+};
+
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
   await ensureSourcePriority();
-  const matches = await ensureExternalIds(log);
-  log(`aomori-dam: matched ${matches.length}/${DAMS.length} master dams`);
+
+  const list = await fetch(LIST_URL, { headers, signal: AbortSignal.timeout(15_000) });
+  if (list.status !== 200) {
+    log(`aomori-dam: ダム諸量現況表 HTTP ${list.status}; aborting`);
+    return;
+  }
+  const dams = parseAomoriDamList(new TextDecoder('shift_jis').decode(await list.arrayBuffer()));
+  if (dams.length === 0) {
+    log('aomori-dam: ダム諸量現況表 lists no dams; aborting');
+    return;
+  }
+  const matches = await ensureExternalIds(dams, log);
+  log(`aomori-dam: matched ${matches.length}/${dams.length} master dams`);
 
   const inputs = [] as Parameters<typeof upsertObservations>[0];
   for (const { cfg, damId } of matches) {
@@ -208,14 +229,7 @@ const task: Task = async (_payload, helpers) => {
     // One page per dam: a timeout or network error on one must not throw away
     // the readings already collected for the others.
     try {
-      const r = await fetch(url, {
-        headers: {
-          'user-agent':
-            process.env.HTTP_USER_AGENT ??
-            'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-        },
-        signal: AbortSignal.timeout(15_000),
-      });
+      const r = await fetch(url, { headers, signal: AbortSignal.timeout(15_000) });
       if (r.status !== 200) {
         log(`aomori-dam: ${cfg.aomoriName} HTTP ${r.status}; skipping`);
         continue;

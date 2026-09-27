@@ -70,8 +70,8 @@ export const CRONTAB = `
 # hour catches the freshest values.
 9 * * * * ingest:tottori-dam
 
-# 青森県河川砂防情報提供システム — 7 dams, one ダム諸量グラフ (10分) page
-# each; stores the latest row. Cron at :11 every hour.
+# 青森県河川砂防情報提供システム — every dam on the ダム諸量現況表 (11),
+# one ダム諸量グラフ (10分) page each; stores the latest row. Cron at :11.
 11 * * * * ingest:aomori-dam
 
 # 愛知県 川の防災情報 ダム表 — 2 県管理ダム (雨山/木瀬). UTF-8 HTML; 10分更新.
