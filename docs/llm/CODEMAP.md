@@ -105,6 +105,27 @@ the file for detail.
 | `src/tasks/master_refresh_damnet.ts` | monthly damnet attribute pass |
 | `src/tasks/master_match.ts` | nightly reconciliation rerun |
 | `src/tasks/ingest_kasenbosai.ts` | hourly realtime ingest (synth) |
+| `src/tasks/ingest_kasenbosai_v2.ts` | `kasenbosai-v2`: hourly 川の防災情報 per-dam JSON for every `external_ids.kasenbosai` dam; a reading whose every quantity is flagged invalid is skipped, not stored empty |
+| `src/tasks/ingest_shiga.ts` | `shiga-bousai`: hourly 滋賀県土木防災 dam stations, read only via `/mobile/dam/` (robots.txt disallows `/dam/`); level + flows, 6 h window re-upserted |
+| `src/tasks/ingest_aomori.ts` | `aomori-dam`: hourly 青森県河川砂防 ダム諸量グラフ for every dam the ダム諸量現況表 lists (11 on 2026-09-27), not a fixed set |
+| `src/tasks/ingest_nara_kasen.ts` | `nara-kasen`: hourly 奈良県 ダム現況表 (5 dams); volume stored as 有効 − 空容量 (usable), 大門's left null |
+| `src/tasks/backfill_mudam.ts` | `backfill:mudam`: NILIM ダム諸量DB daily history (monthly tail + on demand); name + 10 km match, `MUDAM_OVERRIDES` pins mis-bound listings to an NDI id |
+| `src/tasks/ingest_cgr_ashida_seki.ts` | `cgr-ashida-seki`: 福山河川国道事務所 芦田川河口堰 mobile page, hourly (level, volume, flows) |
+| `src/tasks/ingest_cgr_okakawa.ts` | `cgr-okakawa-dam`: 岡山河川事務所 三水系主要ダム貯水状況 PDF, daily 9時 edition (11 dams + 2 weirs; only source for 小阪部川 / 坂根堰) |
+| `src/tasks/ingest_jwa_aichi_yosui.ts` | `jwa-aichi-yosui`: 愛知用水総合管理所 水情報, daily 0時 (牧尾 + 東郷調整池 / 前山池; 牧尾's daily-mean flows not stored) |
+| `src/tasks/ingest_jwa_biwako.ts` | `jwa-biwako`: 琵琶湖総合管理所 堰諸量 JSON, hourly 24 h window (琵琶湖 level as T.P., 総流入 / 総流出; no volume) |
+| `src/tasks/ingest_jwa_chikugo_rt.ts` | `jwa-chikugo-rt`: JWA 筑後川局 水管理情報WEB, hourly 24 h window (江川/寺内/小石原川/大山 + 筑後大堰; rate trusted, 0087) |
+| `src/tasks/ingest_jwa_fukudou.ts` | `jwa-fukudou`: 福岡導水 山口調整池, daily 0時 (volume stored as 総 − 堆砂; rate null) |
+| `src/tasks/ingest_jwa_tonekako.ts` | `jwa-tonekako`: 利根川河口堰 水位/流量 scripts, hourly 24 h window (Y.P. level + flows; only hours both tables carry) |
+| `src/tasks/ingest_kagawa_tameike.ts` | `kagawa-tameike`: 香川県「かがわの水」daily PDF, ため池貯水率 of 26 named ponds (rate only, dated by survey) |
+| `src/tasks/ingest_kitakyushu_suido.ts` | `kitakyushu-suido`: 北九州市上下水道局 水源状況, daily (10 sources; rate trusted, 0098) |
+| `src/tasks/ingest_kochi_kigyo.ts` | `kochi-kigyo`: 高知県公営企業局 ダム水文量表, hourly 48 h window (吉野 / 杉田 level + flows; empty hours dropped) |
+| `src/tasks/ingest_matsue_suido.ts` | `matsue-suido`: 松江市上下水道局 千本 / 大谷 daily 貯水量・貯水率 table |
+| `src/tasks/ingest_mc_tottori_hydro.ts` | `mc-tottori-hydro`: M&C鳥取水力発電 運転情報, hourly (茗荷谷/三朝調整池/中津/菅沢 flows; gauge heights not stored) |
+| `src/tasks/ingest_miyagi_nousei.ts` | `miyagi-nousei`: 宮城県農政部「農業用水の状況」PDF, surveyed 1日・15日 (monthly off-season), polled daily (17 dams + 9 ため池; rate trusted, 0097) |
+| `src/tasks/ingest_nagano_kigyo.ts` | `nagano-kigyo`: 長野県企業局 10分諸量 JSON, hourly :54 (高遠 / 菅平; priority 311 over kasenbosai's empty 高遠) |
+| `src/tasks/ingest_sado_nourin.ts` | `sado-nourin`: 佐渡地域振興局 農業用ダム pages, polled daily (7 県営農業用ダム; volume + rate, trusted in 0097) |
+| `src/tasks/ingest_sasebo_suido.ts` | `sasebo-suido`: 佐世保市水道局 daily 貯水状況 PDF (6 reservoirs; rate trusted, 0098) |
 | `src/tasks/backfill_suimon_enqueue.ts` | populate backfill_progress |
 | `src/tasks/backfill_suimon_run.ts` | drain backfill queue every 5 min |
 | `src/tasks/quality_recompute.ts` | nightly missing/mismatch flagging |
@@ -119,6 +140,7 @@ the file for detail.
 | `src/http_client.ts` | `HttpClient` (throttle + retry + ETag) |
 | `src/hateoas.ts` | `buildLinks`, `Link`, `LinksInput` |
 | `src/similarity.ts` | `trigramSimilarity`, `normalizeJaName` |
+| `src/dam_binding.ts` | `BindableMaster`, `twinOf`, `preferMaster`, `stampedMaster`, `chooseRanked` (station → master: a stamped row keeps it, then lowest SQL rank, （元）/（再） tie-break) |
 
 ## packages/db
 
@@ -235,4 +257,5 @@ the file for detail.
 | `deploy/coolify/docker-compose.coolify.yml` | full stack with healthchecks |
 | `deploy/coolify/README.md` | first-time bring-up |
 | `deploy/backup/pgbackrest.conf` | full+diff schedule, S3 destination, AES-256 |
-| `deploy/ops/runbook.md` | operator runbook (302 lines) |
+| `deploy/ops/runbook.md` | operator runbook |
+| `deploy/ops/oneoff/*.sql` | dated one-off data fixes on compressed `observations` (never migrations); see runbook §9 |

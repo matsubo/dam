@@ -6,7 +6,7 @@ site and API that collects reservoir data for dams across Japan in one place.
 - **Master data**: about 2,749 dams and 644 river systems, built from 国土数値情報
   (W01 / W05 / W07) and ダム便覧.
 - **Observations**: hourly storage volume, storage rate, inflow and outflow, stored
-  in a TimescaleDB hypertable. They are collected from about 70 public upstream
+  in a TimescaleDB hypertable. They are collected from about 90 public upstream
   sources: national and prefectural 河川防災 systems, open-data portals and
   operator sites.
 - **Coverage transparency**: [/coverage](https://dam.teraren.com/coverage) shows, for
