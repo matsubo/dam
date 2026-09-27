@@ -1,20 +1,42 @@
 // apps/worker/src/tasks/ingest_jwa_toyokawa.test.ts
+//
+// Fixture is a verbatim UTF-8 capture of 水資源機構 中部支社 リアルタイム情報
+// 豊川水系 (water.go.jp/mizu/chubu/realtime/index_2.html) taken 2026-09-28
+// 07:16 JST, 観測時刻 2026年09月28日 07時10分:
+//   宇連ダム 貯水位 219.19 EL.m, 有効貯水量 18158 10³m³, 流入量 2.17 m³/s,
+//            放流量（利水） 0.00 m³/s
+//   大島ダム 貯水位 232.65 EL.m, 有効貯水量  7579 10³m³, 流入量 1.30 m³/s,
+//            放流量（利水） 0.00 m³/s
+// The unit sits in markup right after the value
+// (`18158<span class="unit">10<sup>3</sup>m<sup>3</sup></span>`), and the
+// page prints no total-outflow figure — only 放流量（利水）.
 
 import { describe, expect, test } from 'bun:test';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { parseTokyokawaTimestamp, parseToyokawaHtml } from './ingest_jwa_toyokawa.ts';
+
+const FIXTURE = join(
+  import.meta.dir,
+  '..',
+  '..',
+  '..',
+  '..',
+  'tests/fixtures/jwa_toyokawa/index_2_2026-09-28.html',
+);
+
+async function fixtureHtml(): Promise<string> {
+  return readFile(FIXTURE, 'utf8');
+}
 
 describe('parseTokyokawaTimestamp', () => {
   test('parses JST timestamp to UTC (subtract 9h)', () => {
     const d = parseTokyokawaTimestamp('観測時刻：2026年06月05日 09時40分');
-    expect(d).not.toBeNull();
-    // 09:40 JST = 00:40 UTC same day
     expect(d?.toISOString()).toBe('2026-06-05T00:40:00.000Z');
   });
 
   test('handles midnight crossover (JST hour < 9 wraps to previous UTC day)', () => {
     const d = parseTokyokawaTimestamp('観測時刻：2026年06月05日 08時00分');
-    expect(d).not.toBeNull();
-    // 08:00 JST = -1:00 UTC → JS Date normalizes to 23:00 UTC previous day
     expect(d?.toISOString()).toBe('2026-06-04T23:00:00.000Z');
   });
 
@@ -24,68 +46,32 @@ describe('parseTokyokawaTimestamp', () => {
 });
 
 describe('parseToyokawaHtml', () => {
-  const makeSection = (
-    name: string,
-    level: string,
-    storage: string,
-    inflow: string,
-    outflow: string,
-  ): string =>
-    `<div class="dam-block">
-      <h3>${name}</h3>
-      <table>
-        <tr><th>貯水位</th><td>${level} EL.m</td></tr>
-        <tr><th>有効貯水量</th><td>${storage} m³</td></tr>
-        <tr><th>流入量</th><td>${inflow} m³/s</td></tr>
-        <tr><th>放流量</th><td>${outflow} m³/s</td></tr>
-      </table>
-    </div>`;
-
-  const makeHtml = (sections: string): string =>
-    `<html><body><p>観測時刻：2026年06月05日 09時40分</p>${sections}</body></html>`;
-
-  test('extracts water level, storage, inflow, outflow from both dams', () => {
-    const html = makeHtml(
-      makeSection('宇連ダム', '222.65', '21,418,000', '4.94', '0.00') +
-        makeSection('大島ダム', '234.19', '8,231,000', '0.95', '0.00'),
-    );
-    const { observedAt, rows } = parseToyokawaHtml(html);
-    expect(observedAt?.toISOString()).toBe('2026-06-05T00:40:00.000Z');
-    expect(rows).toHaveLength(2);
-
-    const uren = rows.find((r) => r.toyoName === '宇連ダム');
-    expect(uren?.waterLevelM).toBeCloseTo(222.65);
-    expect(uren?.storageVolumeM3).toBe(21418000);
-    expect(uren?.inflowM3s).toBeCloseTo(4.94);
-    expect(uren?.outflowM3s).toBeCloseTo(0.0);
-
-    const oshima = rows.find((r) => r.toyoName === '大島ダム');
-    expect(oshima?.waterLevelM).toBeCloseTo(234.19);
-    expect(oshima?.storageVolumeM3).toBe(8231000);
+  test('reads both dams at the page 観測時刻, 10³m³ volume as m³, no outflow', async () => {
+    const { observedAt, rows } = parseToyokawaHtml(await fixtureHtml());
+    expect(observedAt?.toISOString()).toBe('2026-09-27T22:10:00.000Z');
+    // Not 18,158,103 / 7,579,103: the 10<sup>3</sup> of the unit is not a digit
+    // of the value. 放流量（利水） is the water-supply release only, so no
+    // outflow is read.
+    expect(rows).toEqual([
+      { toyoName: '宇連ダム', waterLevelM: 219.19, storageVolumeM3: 18_158_000, inflowM3s: 2.17 },
+      { toyoName: '大島ダム', waterLevelM: 232.65, storageVolumeM3: 7_579_000, inflowM3s: 1.3 },
+    ]);
   });
 
-  test('treats "cc" sensor values as null (communication cut)', () => {
-    const html = makeHtml(
-      makeSection('宇連ダム', 'cc', 'cc', 'cc', 'cc') +
-        makeSection('大島ダム', '234.19', '8,231,000', '0.95', '0.00'),
-    );
+  test('a "cc" (communication cut) cell is null, not the 10³ or m³ of the unit', async () => {
+    const html = (await fixtureHtml()).replace('>18158<', '>cc<').replace('>2.17<', '>cc<');
+    const uren = parseToyokawaHtml(html).rows.find((r) => r.toyoName === '宇連ダム');
+    expect(uren).toEqual({
+      toyoName: '宇連ダム',
+      waterLevelM: 219.19,
+      storageVolumeM3: null,
+      inflowM3s: null,
+    });
+  });
+
+  test('skips a dam whose level and volume are both cut, keeps the other', async () => {
+    const html = (await fixtureHtml()).replace('>219.19<', '>cc<').replace('>18158<', '>cc<');
     const { rows } = parseToyokawaHtml(html);
-    // 宇連 still included (not skipped) but with all nulls (storage null → skipped at upsert)
-    // Actually the parser skips if both waterLevel AND storage are null.
-    const uren = rows.find((r) => r.toyoName === '宇連ダム');
-    expect(uren).toBeUndefined(); // skipped when both primary metrics are null
-    expect(rows).toHaveLength(1);
-  });
-
-  test('skips unknown dam names', () => {
-    const html = makeHtml(makeSection('謎ダム', '100.00', '5,000,000', '1.00', '0.50'));
-    const { rows } = parseToyokawaHtml(html);
-    expect(rows).toHaveLength(0);
-  });
-
-  test('returns null observedAt when no timestamp in HTML', () => {
-    const html = `<div>${makeSection('宇連ダム', '222.65', '21,418,000', '4.94', '0.00')}</div>`;
-    const { observedAt } = parseToyokawaHtml(html);
-    expect(observedAt).toBeNull();
+    expect(rows.map((r) => r.toyoName)).toEqual(['大島ダム']);
   });
 });

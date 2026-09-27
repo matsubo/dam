@@ -176,6 +176,38 @@ function normalizeName(s: string): string {
     .trim();
 }
 
+/**
+ * Published names the master files under another name. 荒川第一調節池 is the
+ * one built basin of MLIT's 荒川調節池; kasenbosai's station of the same name
+ * is bound to that row and reports identical values.
+ */
+const MASTER_NAME: Readonly<Record<string, string>> = { 荒川第一調節池: '荒川調節池' };
+
+/**
+ * Best master for a published station name: exact name, then equal stems,
+ * then prefix / substring stems; equal ranks go to preferMaster.
+ */
+export function chooseMaster(published: string, masters: BindableMaster[]): bigint | null {
+  const name = MASTER_NAME[published] ?? published;
+  const stem = normalizeName(name);
+  if (!stem) return null;
+  let best: { m: BindableMaster; rank: number } | null = null;
+  for (const m of masters) {
+    const mStem = normalizeName(m.name);
+    let rank: number;
+    if (m.name === name) rank = 0;
+    else if (mStem === stem) rank = 1;
+    else if (m.name === `${stem}ダム`) rank = 2;
+    else if (mStem.startsWith(stem)) rank = 3;
+    else if (mStem.includes(stem)) rank = 4;
+    else continue;
+    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
+      best = { m, rank };
+    }
+  }
+  return best?.m.id ?? null;
+}
+
 interface DamMatch {
   saitamaName: string;
   damId: bigint;
@@ -201,37 +233,18 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
   }));
 
   for (const r of rows) {
-    const stem = normalizeName(r.saitamaName);
-
-    let best: { m: BindableMaster; rank: number } | null = null;
-    if (stem) {
-      for (const m of masters) {
-        const mStem = normalizeName(m.name);
-        let rank: number;
-        if (m.name === r.saitamaName) rank = 0;
-        else if (mStem === stem) rank = 1;
-        else if (m.name === `${stem}ダム`) rank = 2;
-        else if (mStem.startsWith(stem)) rank = 3;
-        else if (mStem.includes(stem)) rank = 4;
-        else continue;
-        if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-          best = { m, rank };
-        }
-      }
-    }
-
+    const damId = chooseMaster(r.saitamaName, masters);
     universe.push({
       externalId: r.code,
       name: r.saitamaName,
       prefCode: PREF_CODE,
-      resolvedDamId: best?.m.id ?? null,
+      resolvedDamId: damId,
     });
-
-    if (!best) {
+    if (!damId) {
       log(`${SOURCE_ID}: no master match for "${r.saitamaName}"`);
       continue;
     }
-    out.push({ saitamaName: r.saitamaName, damId: best.m.id });
+    out.push({ saitamaName: r.saitamaName, damId });
   }
 
   await recordUniverse(SOURCE_ID, universe);

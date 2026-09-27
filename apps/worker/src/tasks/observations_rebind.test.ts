@@ -6,18 +6,24 @@ import { rebindObservations } from './observations_rebind.ts';
 // Fixture rows keyed by these NDI ids; cleanup is scoped to them.
 const FROM_NDI = '9999999993';
 const TO_NDI = '9999999992';
+// A second pair whose rows sit in a compressed chunk.
+const OLD_FROM_NDI = '9999999991';
+const OLD_TO_NDI = '9999999990';
+const FIXTURE_NDIS = [FROM_NDI, TO_NDI, OLD_FROM_NDI, OLD_TO_NDI];
 const SOURCE = 'test-rebind';
 const OTHER = 'test-rebind-other';
 
 const ids = new Map<string, bigint>();
 const t = (h: number) => new Date(Date.UTC(2026, 8, 20, h));
+// Far past every other fixture, so the chunk holds only this file's rows.
+const old = (h: number) => new Date(Date.UTC(2001, 5, 10, h));
 
 async function cleanup(): Promise<void> {
   const rows = await sql<{ id: bigint }[]>`
-    SELECT id FROM dams WHERE external_ids ->> 'ndi' IN (${FROM_NDI}, ${TO_NDI})
+    SELECT id FROM dams WHERE external_ids ->> 'ndi' IN ${sql(FIXTURE_NDIS)}
   `;
   for (const r of rows) await sql`DELETE FROM observations WHERE dam_id = ${r.id}`;
-  await sql`DELETE FROM dams WHERE external_ids ->> 'ndi' IN (${FROM_NDI}, ${TO_NDI})`;
+  await sql`DELETE FROM dams WHERE external_ids ->> 'ndi' IN ${sql(FIXTURE_NDIS)}`;
 }
 
 beforeAll(async () => {
@@ -26,6 +32,8 @@ beforeAll(async () => {
   for (const [ndi, slug, name, cap] of [
     [FROM_NDI, 'rebind-test-moto', '試験（元）', 1000],
     [TO_NDI, 'rebind-test-sai', '試験（再）', 4000],
+    [OLD_FROM_NDI, 'rebind-test-old-moto', '試験旧（元）', 1000],
+    [OLD_TO_NDI, 'rebind-test-old-sai', '試験旧（再）', 4000],
   ] as const) {
     const [r] = await sql<{ id: bigint }[]>`
       INSERT INTO dams (slug, name, pref_code, location, external_ids, active_capacity_m3)
@@ -92,5 +100,61 @@ describe('rebindObservations', () => {
     await expect(
       rebindObservations(sql, { sourceId: SOURCE, fromNdi: 'nope', toNdi: TO_NDI }),
     ).rejects.toThrow(/nope/);
+  });
+});
+
+describe('rebindObservations on a compressed chunk', () => {
+  test('keeps the right row copy of a clashing key instead of storing it twice', async () => {
+    const from = ids.get(OLD_FROM_NDI) ?? 0n;
+    const to = ids.get(OLD_TO_NDI) ?? 0n;
+    await upsertObservations([
+      { damId: from, observedAt: old(0), sourceId: SOURCE, storageVolumeM3: 100, qualityFlag: 0 },
+      // Both rows hold these two readings (a station stamped on both twins).
+      { damId: from, observedAt: old(1), sourceId: SOURCE, storageVolumeM3: 1, qualityFlag: 0 },
+      { damId: from, observedAt: old(2), sourceId: SOURCE, storageVolumeM3: 2, qualityFlag: 0 },
+      { damId: to, observedAt: old(1), sourceId: SOURCE, storageVolumeM3: 700, qualityFlag: 0 },
+      { damId: to, observedAt: old(2), sourceId: SOURCE, storageVolumeM3: 800, qualityFlag: 0 },
+    ]);
+
+    // Compress the owning chunk ourselves: a fresh database's 30-day policy
+    // has not run. Then check the premise, or the test proves nothing.
+    const [owning] = await sql<{ qualified: string }[]>`
+      SELECT format('%I.%I', c.chunk_schema, c.chunk_name) AS qualified
+      FROM timescaledb_information.chunks c
+      WHERE c.hypertable_name = 'observations'
+        AND ${old(0)} >= c.range_start AND ${old(0)} < c.range_end
+    `;
+    expect(owning).toBeDefined();
+    await sql`SELECT compress_chunk(${owning?.qualified ?? ''}::regclass, if_not_compressed => true)`;
+    // Public view plus the chunk's own heap: _timescaledb_catalog.chunk's
+    // columns differ across TimescaleDB releases (CI pulls a newer image).
+    const [state] = await sql<{ compressed: boolean }[]>`
+      SELECT is_compressed AS compressed FROM timescaledb_information.chunks
+      WHERE format('%I.%I', chunk_schema, chunk_name) = ${owning?.qualified ?? ''}
+    `;
+    expect(state?.compressed).toBe(true);
+    // `qualified` is built by format('%I.%I'), so it is a quoted identifier.
+    const heap = await sql.unsafe(`SELECT 1 FROM ONLY ${owning?.qualified ?? ''} LIMIT 1`);
+    expect(heap.length).toBe(0); // nothing left uncompressed
+
+    const moved = await rebindObservations(sql, {
+      sourceId: SOURCE,
+      fromNdi: OLD_FROM_NDI,
+      toNdi: OLD_TO_NDI,
+    });
+
+    const rows = await sql<{ h: number; vol: string }[]>`
+      SELECT EXTRACT(HOUR FROM observed_at)::int AS h, storage_volume_m3::TEXT AS vol
+      FROM observations WHERE dam_id = ${to} AND source_id = ${SOURCE}
+      ORDER BY observed_at, storage_volume_m3
+    `;
+    expect(rows.map((r) => [r.h, Number(r.vol)])).toEqual([
+      [0, 100],
+      [1, 700],
+      [2, 800],
+    ]);
+    expect(moved).toBe(1);
+    const left = await sql`SELECT 1 FROM observations WHERE dam_id = ${from}`;
+    expect(left.length).toBe(0);
   });
 });

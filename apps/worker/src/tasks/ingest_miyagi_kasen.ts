@@ -8,7 +8,8 @@
 //
 // Source:
 //   https://www.dobokusougou.pref.miyagi.jp/miyagi/servlet/Gamen42Servlet
-// Format: Shift_JIS HTML. Single GET, no session.
+// Format: Shift_JIS HTML, no session. Two GETs per run: the latest table and
+// the previous hour (most stations report well after the table flips hours).
 // Columns per dam (10 values after name/manager):
 //   [0] 貯水位 (EL.m)
 //   [1] 貯水量 (10³m³)
@@ -79,6 +80,25 @@ export function parseMiyagiDispDate(s: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * The same 現況表 `hoursBack` hours before the page's own dispDate, requested
+ * the way the site's 時刻切替 buttons do: the page's commonParam with dispDate
+ * replaced, passed as `?param=common=…` and encodeURI'd. Null when the page
+ * carries no commonParam to rewrite.
+ */
+export function earlierTableUrl(baseUrl: string, html: string, hoursBack: number): string | null {
+  const common = html.match(/var commonParam = "([^"]*)"/)?.[1];
+  const disp = common?.match(/dispDate:(\d{4}-\d{2}-\d{2}-\d{2}-\d{2})/)?.[1];
+  const at = disp ? parseMiyagiDispDate(disp) : null;
+  if (!common || !at) return null;
+  // Shift into JST wall-clock so the UTC getters read JST fields.
+  const jst = new Date(at.getTime() + (9 - hoursBack) * 3_600_000);
+  const p = (n: number): string => String(n).padStart(2, '0');
+  const earlier = `${jst.getUTCFullYear()}-${p(jst.getUTCMonth() + 1)}-${p(jst.getUTCDate())}-${p(jst.getUTCHours())}-${p(jst.getUTCMinutes())}`;
+  const rewritten = common.replace(/dispDate:[^$]*/, `dispDate:${earlier}`);
+  return `${baseUrl}?param=${encodeURI(`common=${rewritten}`)}`;
+}
+
 function parseNum(s: string): number | null {
   const clean = s.replace(/[^\d.-]/g, '');
   if (!clean) return null;
@@ -103,49 +123,32 @@ export function parseMiyagiTable(html: string): ParsedRow[] {
 
   const rows: ParsedRow[] = [];
 
-  // Each dam section starts at: stationNo','XXXXXX'")>DAM_NAME</span>
-  // followed by 10 <div class="dat2"> values
-  const damPositions: { pos: number; stationNo: string; name: string }[] = [];
+  // Each dam is one <tr>: a stationNo','XXXXXX'")>DAM_NAME</span> cell, the
+  // 県/国 manager cell, then 10 <div class="dat2"> value cells. The 国 rows
+  // (鳴子/釜房/七ヶ宿) never close their <div>, so a value is the text up to
+  // the next tag, and a row runs to its own </tr>.
   for (const m of html.matchAll(/stationNo','(\d+)'\)">([^<]+)<\/span>/g)) {
-    damPositions.push({
-      pos: m.index ?? 0,
-      stationNo: m[1] ?? '',
-      name: m[2]?.trim() ?? '',
-    });
-  }
-
-  for (let i = 0; i < damPositions.length; i++) {
-    const entry = damPositions[i];
-    if (!entry) continue;
-    const { pos, stationNo, name } = entry;
-    const end = i + 1 < damPositions.length ? (damPositions[i + 1]?.pos ?? pos + 2000) : pos + 2000;
-    const section = html.slice(pos, end);
-
-    const vals = Array.from(section.matchAll(/<div class="dat2"[^>]*>([\s\S]*?)<\/div>/g)).map(
-      (m) =>
-        (m[1] ?? '')
-          .replace(/<[^>]+>/g, '')
-          .replace(/&nbsp;/g, ' ')
-          .trim(),
+    const pos = m.index ?? 0;
+    const end = html.indexOf('</tr>', pos);
+    const section = html.slice(pos, end === -1 ? undefined : end);
+    const vals = Array.from(section.matchAll(/<div class="dat2"[^>]*>([^<]*)/g)).map((v) =>
+      (v[1] ?? '').replace(/&nbsp;/g, ' ').trim(),
     );
-
-    if (vals.length < 5) continue;
+    // Fewer than the 10 columns means the row is not the table we know; keep
+    // the station (it is still published) but trust none of its cells.
+    const cell = (i: number): number | null => (vals.length >= 10 ? parseNum(vals[i] ?? '') : null);
+    const volumeThou = cell(1);
+    const ratePct = cell(8);
 
     rows.push({
-      miyagiName: name,
-      stationNo,
+      miyagiName: m[2]?.trim() ?? '',
+      stationNo: m[1] ?? '',
       observedAt,
-      waterLevelM: parseNum(vals[0] ?? ''),
-      storageVolumeM3: (() => {
-        const v = parseNum(vals[1] ?? '');
-        return v !== null ? v * 1_000 : null;
-      })(),
-      inflowM3s: parseNum(vals[3] ?? ''),
-      outflowM3s: parseNum(vals[4] ?? ''),
-      storageRate: (() => {
-        const r = parseNum(vals[8] ?? '');
-        return r !== null ? r / 100 : null;
-      })(),
+      waterLevelM: cell(0),
+      storageVolumeM3: volumeThou !== null ? volumeThou * 1_000 : null,
+      inflowM3s: cell(3),
+      outflowM3s: cell(4),
+      storageRate: ratePct !== null ? ratePct / 100 : null,
     });
   }
 
@@ -244,11 +247,8 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
 
 // --- task -------------------------------------------------------------------
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
-  const r = await fetch(DATA_URL, {
+async function fetchTable(url: string): Promise<string | null> {
+  const r = await fetch(url, {
     headers: {
       'user-agent':
         process.env.HTTP_USER_AGENT ??
@@ -256,26 +256,75 @@ const task: Task = async (_payload, helpers) => {
     },
     signal: AbortSignal.timeout(20_000),
   });
+  if (r.status !== 200) return null;
+  return new TextDecoder('shift_jis').decode(await r.arrayBuffer());
+}
 
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
+/**
+ * The readings one run stores: the previous hour's table, then the latest.
+ *
+ * The table flips to the new hour as soon as the first stations report, and
+ * most land well after that, so at the :06 cron the latest hour is mostly
+ * blank rows — reading it alone never stored 岩堂沢 or 二ツ石 at all. The
+ * previous hour is complete by then, so every station arrives an hour late at
+ * worst; ON CONFLICT keeps the re-reads idempotent.
+ *
+ * Earlier rows must be strictly older than the latest table: were the server
+ * ever to ignore the requested time, the same (dam, time) twice in one INSERT
+ * would make ON CONFLICT reject the whole batch. A station still waiting on
+ * its telemetry (no level, no volume) carries nothing to store.
+ */
+export function readingsToStore(latest: ParsedRow[], earlier: ParsedRow[]): ParsedRow[] {
+  const latestMs = latest[0]?.observedAt.getTime() ?? Number.POSITIVE_INFINITY;
+  return [...earlier.filter((p) => p.observedAt.getTime() < latestMs), ...latest].filter(
+    (p) => p.waterLevelM !== null || p.storageVolumeM3 !== null,
+  );
+}
+
+/**
+ * The previous hour's rows, or none. The fetch is a best-effort extra: a
+ * timeout, DNS failure or reset here must not throw past the latest table,
+ * which would cost the run its universe and every observation.
+ */
+export async function fetchEarlierRows(
+  latestHtml: string,
+  log: (s: string) => void,
+): Promise<ParsedRow[]> {
+  const url = earlierTableUrl(DATA_URL, latestHtml, 1);
+  const html = url
+    ? await fetchTable(url).catch((err: unknown) => {
+        log(`${SOURCE_ID}: previous-hour fetch failed: ${String(err)}`);
+        return null;
+      })
+    : null;
+  if (html === null) {
+    log(`${SOURCE_ID}: previous-hour table unavailable`);
+    return [];
+  }
+  return parseMiyagiTable(html);
+}
+
+const task: Task = async (_payload, helpers) => {
+  const log = (s: string): void => helpers.logger.info(s);
+  await ensureSourcePriority();
+
+  const html = await fetchTable(DATA_URL);
+  if (html === null) {
+    log(`${SOURCE_ID}: latest table fetch failed; aborting`);
     return;
   }
-
-  const raw = await r.arrayBuffer();
-  const html = new TextDecoder('shift_jis').decode(raw);
   const rows = parseMiyagiTable(html);
   log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
+
+  const readings = readingsToStore(rows, await fetchEarlierRows(html, log));
 
   const matches = await matchMaster(rows, log);
   const damByName = new Map(matches.map((m) => [m.miyagiName, m.damId]));
 
   const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
+  for (const p of readings) {
     const damId = damByName.get(p.miyagiName);
     if (!damId) continue;
-    if (!p.observedAt) continue;
-    if (p.waterLevelM === null && p.storageVolumeM3 === null) continue;
 
     inputs.push({
       observedAt: p.observedAt,
@@ -293,7 +342,9 @@ const task: Task = async (_payload, helpers) => {
   }
 
   const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${matches.length} written=${written}`);
+  log(
+    `${SOURCE_ID} done: parsed=${rows.length} readings=${readings.length} matched=${matches.length} written=${written}`,
+  );
 };
 
 export default task;

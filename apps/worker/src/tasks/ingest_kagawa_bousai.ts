@@ -131,8 +131,9 @@ interface DamMatch {
 
 /**
  * Best master dam for a published station name. The row already stamped with
- * the name keeps it: 長柄 and 五名 have （元）/（再） twins whose （再） has no
- * completion year on record, so the name alone cannot settle them (#79).
+ * the name keeps it: names alone cannot settle （元）/（再） twins (#79).
+ * 長柄 and 五名 are stamped on the （元）, the dams in service; both （再） are
+ * 建設中 per the prefecture (0071).
  * Otherwise an exact raw-name hit beats stem equality, then the `〜ダム`
  * spelling, a prefix, a substring; ties go to the current twin, else the
  * lower id.
