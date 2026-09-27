@@ -18,11 +18,6 @@ const EXEMPT = new Map<string, string>([
       'catalogue. kasenbosai’s universe is recorded by match_kasenbosai.ts.',
   ],
   [
-    'ingest_nagasaki_kasen.ts',
-    'Same DB-derived target list as kasenbosai_v2; its universe comes from the ' +
-      'matcher, not the fetcher.',
-  ],
-  [
     'backfill_jwa_junpo.ts',
     'Backfill re-reads dams already matched by ingest_jwa_junpo.ts, which records ' +
       'the universe.',
