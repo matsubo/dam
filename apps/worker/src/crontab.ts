@@ -285,9 +285,9 @@ export const CRONTAB = `
 # Cron at :55.
 55 * * * * ingest:miyazaki-bousai
 
-# 山梨県雨量・水位情報 時間ダム諸量表 — 6 県管理ダム (大門/塩川/広瀬/琴川/荒川/深城).
-# Shift_JIS HTML; 6 parallel requests (one per dam). Handles "24:00" midnight.
-# level + inflow + outflow + hourly rain (no storage volume). Cron at :36.
+# 山梨県雨量・水位情報 ダム状況表 — 6 県管理ダム (大門/塩川/広瀬/琴川/荒川/深城).
+# Shift_JIS HTML; one page lists every dam. Handles "24時00分" midnight.
+# level + storage volume + inflow + outflow + hourly rain (no rate). Cron at :36.
 36 * * * * ingest:yamanashi-dam
 
 # 長野県 河川砂防情報ステーション ダム諸量 — 17 県管理ダム (松川/片桐/箕輪/横川/

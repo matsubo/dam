@@ -1,24 +1,32 @@
 // apps/worker/src/tasks/ingest_yamanashi_dam.ts
 //
-// 山梨県雨量・水位情報 時間ダム諸量表 — 6 県管理ダム hourly.
+// 山梨県雨量・水位情報 ダム状況表 — 6 県管理ダム hourly.
 //
 //   大門 / 塩川 / 広瀬 / 琴川 / 荒川 / 深城
 //
 // Source:
-//   http://www3.pref.yamanashi.jp/yamanashiweb/sub/dam/dam004.asp
-//   ?pFrm=2&pKbn=2&P1={YYYYMMDD HH:MM}&P2=6&P3={CODE}&P4=0&P5=0&pAu=2
+//   http://www3.pref.yamanashi.jp/yamanashiweb/sub/dam/dam005.asp?pAu=2
 //
-//   Shift_JIS HTML; 6 separate requests (one per dam) run in parallel.
+//   The 「ダム状況表」 tab of the ダム情報 frames (dam001.asp → dammain.asp
+//   ?pFrm=3). One Shift_JIS page lists every dam; the server ignores the
+//   P1..P5 query the site's own links carry and always serves the latest hour.
+//   Header: "YYYY年MM月DD日 HH時MM分 現在" (JST; "24時00分" = next-day 00:00).
 //   Table columns:
-//     [0] 計測時刻  "YYYY/MM/DD HH:MM" or "YYYY/MM/DD 24:00" (JST)
-//     [1] 時間雨量  [mm/h]
-//     [2] 累計雨量  [mm]
-//     [3] 貯水位    [EL.m]
-//     [4] 流入量    [m³/s]
-//     [5] 放流量    [m³/s]
+//     [0] ダム名
+//     [1] 貯水位    [EL.m]
+//     [2] 貯水量    [千 m3]
+//     [3] 空容量    [千 m3]
+//     [4] 全流入量  [m³/s]
+//     [5] 全放流量  [m³/s]
+//     [6] ダム雨量 時間 [mm/h]
+//     [7] ダム雨量 累計 [mm]
 //
-//   "YYYY/MM/DD 24:00" = next-day 00:00 JST (common in Japanese dam systems).
-//   No storage volume or storage rate available.
+//   No 貯水率 is published, so storage_rate stays NULL and the 0036 trigger
+//   derives it from volume / active_capacity_m3. 貯水量 + 空容量 is the page's
+//   implied denominator; on 2026-09-27 it equalled the master 有効貯水容量 for
+//   塩川 8,900 / 広瀬 11,350 / 琴川 4,750 / 荒川 8,600 千m³ (大門 2,159 vs
+//   2,350, 深城 5,337 vs 5,140). The derived rate is therefore 有効-based, the
+//   static denominator, and this source is not trusted_rate_basis (0048).
 //
 // Priority 280. Cron hourly at :36.
 
@@ -27,14 +35,17 @@ import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
-const BASE_URL =
-  process.env.YAMANASHI_DAM_URL ?? 'http://www3.pref.yamanashi.jp/yamanashiweb/sub/dam/dam004.asp';
+const STATUS_URL =
+  process.env.YAMANASHI_DAM_URL ??
+  'http://www3.pref.yamanashi.jp/yamanashiweb/sub/dam/dam005.asp?pAu=2';
 
 const PREF_CODE = '19';
 const SOURCE_ID = 'yamanashi-dam';
 
 // --- dam config (code → display name) --------------------------------------
 
+// The site's station codes (P3). ダム状況表 rows carry only the name, and
+// only these dams are ingested, as when each was fetched by code.
 const DAMS: { code: string; name: string }[] = [
   { code: '5002', name: '大門ダム' },
   { code: '5001', name: '塩川ダム' },
@@ -50,6 +61,7 @@ export interface ParsedRow {
   yamanashiName: string;
   observedAt: Date;
   waterLevelM: number | null;
+  storageVolumeM3: number | null;
   inflowM3s: number | null;
   outflowM3s: number | null;
   rainfallMm: number | null;
@@ -58,11 +70,11 @@ export interface ParsedRow {
 // --- parsing ----------------------------------------------------------------
 
 /**
- * "YYYY/MM/DD HH:MM" or "YYYY/MM/DD 24:00" (JST) → UTC.
- * "24:00" on date D is treated as D+1 00:00 JST.
+ * First "YYYY年MM月DD日 HH時MM分" (JST) in `s` → UTC.
+ * "24時00分" on date D is treated as D+1 00:00 JST.
  */
 export function parseYamanashiTimestamp(s: string): Date | null {
-  const m = s.trim().match(/^(\d{4})\/(\d{2})\/(\d{2})\s+(\d{2}):(\d{2})$/);
+  const m = s.match(/(\d{4})年(\d{2})月(\d{2})日\s*(\d{2})時(\d{2})分/);
   if (!m) return null;
   const [, yr, mo, dy, hh, mi] = m.map(Number) as [string, number, number, number, number, number];
   const utcH = hh === 24 ? -9 : hh - 9;
@@ -78,19 +90,12 @@ function parseNum(s: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Build URL for a single dam fetch. P1 is current JST time as-is; server ignores minutes. */
-export function buildYamanashiUrl(code: string, nowUtc: Date, baseUrl: string): string {
-  const jst = new Date(nowUtc.getTime() + 9 * 3_600_000);
-  const y = jst.getUTCFullYear();
-  const mo = String(jst.getUTCMonth() + 1).padStart(2, '0');
-  const dy = String(jst.getUTCDate()).padStart(2, '0');
-  const hh = String(jst.getUTCHours()).padStart(2, '0');
-  const p1 = encodeURIComponent(`${y}/${mo}/${dy} ${hh}:00`);
-  return `${baseUrl}?pFrm=2&pKbn=2&P1=${p1}&P2=6&P3=${code}&P4=0&P5=0&pAu=2`;
-}
+/** Every dam row of the ダム状況表 (dam005.asp), stamped with the page's "現在" time. */
+export function parseYamanashiStatusHtml(html: string): ParsedRow[] {
+  const observedAt = parseYamanashiTimestamp(html);
+  if (!observedAt) return [];
 
-/** Parse the first (latest) data row from the dam004.asp HTML. */
-export function parseYamanashiHtml(html: string, yamanashiName: string): ParsedRow | null {
+  const rows: ParsedRow[] = [];
   for (const trMatch of html.matchAll(/<tr[^>]*>(.*?)<\/tr>/gis)) {
     const cells = [...(trMatch[1] ?? '').matchAll(/<td[^>]*>(.*?)<\/td>/gis)].map(
       (c) =>
@@ -99,22 +104,39 @@ export function parseYamanashiHtml(html: string, yamanashiName: string): ParsedR
           .replace(/&nbsp;/g, ' ')
           .trim() ?? '',
     );
-    if (cells.length < 6) continue;
-    if (!/^\d{4}\/\d{2}\/\d{2}/.test(cells[0] ?? '')) continue;
+    // Data rows have 8 cells; the two header rows (rowspan / colspan) fewer.
+    const name = cells[0];
+    if (cells.length < 8 || !name) continue;
 
-    const observedAt = parseYamanashiTimestamp(cells[0] ?? '');
-    if (!observedAt) continue;
-
-    const rainfallMm = parseNum(cells[1] ?? '');
-    const waterLevelM = parseNum(cells[3] ?? '');
+    const waterLevelM = parseNum(cells[1] ?? '');
+    const volumeThousandM3 = parseNum(cells[2] ?? '');
     const inflowM3s = parseNum(cells[4] ?? '');
     const outflowM3s = parseNum(cells[5] ?? '');
+    if (
+      waterLevelM === null &&
+      volumeThousandM3 === null &&
+      inflowM3s === null &&
+      outflowM3s === null
+    ) {
+      continue;
+    }
 
-    if (waterLevelM === null && inflowM3s === null && outflowM3s === null) return null;
-
-    return { yamanashiName, observedAt, waterLevelM, inflowM3s, outflowM3s, rainfallMm };
+    rows.push({
+      yamanashiName: name,
+      observedAt,
+      waterLevelM,
+      storageVolumeM3: volumeThousandM3 === null ? null : Math.round(volumeThousandM3 * 1000),
+      inflowM3s,
+      outflowM3s,
+      rainfallMm: parseNum(cells[6] ?? ''),
+    });
   }
-  return null;
+
+  // A unit change would silently scale every stored volume.
+  if (rows.length > 0 && !/貯水量\s*(?:<br>)?\s*\[千\s*m3\]/i.test(html)) {
+    throw new Error(`${SOURCE_ID}: 貯水量 column is no longer labelled [千 m3]`);
+  }
+  return rows;
 }
 
 // --- DB helpers -------------------------------------------------------------
@@ -123,7 +145,7 @@ async function ensureSourcePriority(): Promise<void> {
   await sql`
     INSERT INTO source_priorities (source_id, priority, description, active)
     VALUES (${SOURCE_ID}, 280,
-            '山梨県雨量・水位情報 時間ダム諸量表 — 6 県管理ダム (Shift_JIS HTML)',
+            '山梨県雨量・水位情報 ダム状況表 — 6 県管理ダム (Shift_JIS HTML)',
             true)
     ON CONFLICT (source_id) DO UPDATE
       SET priority    = EXCLUDED.priority,
@@ -210,30 +232,24 @@ const task: Task = async (_payload, helpers) => {
     process.env.HTTP_USER_AGENT ??
     'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
 
-  const now = new Date();
+  let html: string | null = null;
+  try {
+    const r = await fetch(STATUS_URL, {
+      headers: { 'user-agent': ua },
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (r.status === 200) html = new TextDecoder('shift_jis').decode(await r.arrayBuffer());
+    else log(`${SOURCE_ID}: HTTP ${r.status}`);
+  } catch (e) {
+    // The universe is still recorded below, as it was when per-dam fetches failed.
+    log(`${SOURCE_ID}: fetch failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
 
-  // Fetch all 6 dams in parallel
-  const results = await Promise.allSettled(
-    DAMS.map(async ({ code, name }) => {
-      const url = buildYamanashiUrl(code, now, BASE_URL);
-      const r = await fetch(url, {
-        headers: { 'user-agent': ua },
-        signal: AbortSignal.timeout(20_000),
-      });
-      if (r.status !== 200) {
-        log(`${SOURCE_ID}: HTTP ${r.status} for ${name}`);
-        return null;
-      }
-      const buf = await r.arrayBuffer();
-      const html = new TextDecoder('shift_jis').decode(buf);
-      return parseYamanashiHtml(html, name);
-    }),
-  );
-
-  const rows: ParsedRow[] = results
-    .filter((r): r is PromiseFulfilledResult<ParsedRow | null> => r.status === 'fulfilled')
-    .map((r) => r.value)
-    .filter((v): v is ParsedRow => v !== null);
+  const rows: ParsedRow[] = [];
+  for (const r of html === null ? [] : parseYamanashiStatusHtml(html)) {
+    if (DAMS.some((d) => d.name === r.yamanashiName)) rows.push(r);
+    else log(`${SOURCE_ID}: "${r.yamanashiName}" is not in the dam catalogue; skipped`);
+  }
 
   log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
 
@@ -248,7 +264,7 @@ const task: Task = async (_payload, helpers) => {
       observedAt: p.observedAt,
       damId,
       sourceId: SOURCE_ID,
-      storageVolumeM3: null,
+      storageVolumeM3: p.storageVolumeM3,
       storageRate: null,
       inflowM3s: p.inflowM3s,
       outflowM3s: p.outflowM3s,
