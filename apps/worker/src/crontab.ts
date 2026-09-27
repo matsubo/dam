@@ -374,6 +374,11 @@ export const CRONTAB = `
 # Priority 309 (above the flood-only kagoshima-bousai at 308). Cron at :52.
 52 * * * * ingest:kagoshima-kasen
 
+# 水資源機構 琵琶湖総合管理所 堰諸量 — 琵琶湖 (master 琵琶湖開発). daminfo1_h.json,
+# 25 hourly rows: B.S.L. level (stored as T.P. = B.S.L. + 84.371 m), lake
+# 総流入量 / 総流出量. Priority 297. Cron at :54.
+54 * * * * ingest:jwa-biwako
+
 # 佐賀県河川砂防情報システム ダム現況表 — 19 県管理ダム (岸川/庭木/繁昌/天ヶ瀬/
 # 平木場/伊岐佐/都川内/井手口川/竜門/有田/古木場/本部/矢筈/狩立日ノ峯/中木庭/
 # 岩屋川内/横竹/深浦/河内). Transposed Shift_JIS HTML table; 3 pages (7+7+5
