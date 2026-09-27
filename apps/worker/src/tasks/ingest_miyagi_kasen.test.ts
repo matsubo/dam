@@ -1,12 +1,24 @@
 // apps/worker/src/tasks/ingest_miyagi_kasen.test.ts
 
 import { describe, expect, test } from 'bun:test';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import {
   chooseMaster,
+  earlierTableUrl,
   parseMiyagiDispDate,
   parseMiyagiTable,
   parseMiyagiTimestamp,
+  readingsToStore,
 } from './ingest_miyagi_kasen.ts';
+
+const FIXTURES = join(import.meta.dir, '..', '..', '..', '..', 'tests/fixtures/miyagi_kasen');
+const BASE = 'https://www.dobokusougou.pref.miyagi.jp/miyagi/servlet/Gamen42Servlet';
+
+/** Verbatim Shift_JIS Gamen42Servlet captures, 2026-09-27 (see the describe blocks). */
+async function fixtureHtml(name: string): Promise<string> {
+  return new TextDecoder('shift_jis').decode(await readFile(join(FIXTURES, name)));
+}
 
 // Build a minimal Gamen42Servlet HTML fragment
 function makeHtml(
@@ -238,5 +250,72 @@ describe('chooseMaster (#79)', () => {
   test('keeps the row already stamped with the station', () => {
     const masters = [m(10, '花山（元）', 1957, '104007001'), m(20, '花山（再）', 2020, null)];
     expect(chooseMaster('花山ダム', masters, '104007001')).toBe(10n);
+  });
+});
+
+describe('earlierTableUrl', () => {
+  // dam_table_2026-09-27T2100: the latest table at 21:37 JST, dispDate 21:00.
+  test('asks for the same table one hour back, keeping the other params', async () => {
+    const url = earlierTableUrl(
+      BASE,
+      await fixtureHtml('dam_table_2026-09-27T2100.shiftjis.html'),
+      1,
+    );
+    expect(url).toStartWith(`${BASE}?param=common=dispDate:2026-09-27-20-00$duration:60$`);
+    // 全県 is encodeURI'd the way the site's own chengeForm() does it.
+    expect(url).toContain('pageGroup:%E5%85%A8%E7%9C%8C$');
+    expect(decodeURI(url ?? '')).toContain('$stationNo:104007011$');
+  });
+
+  test('crosses midnight in JST, not UTC', async () => {
+    const url = earlierTableUrl(
+      BASE,
+      await fixtureHtml('dam_table_2026-09-27T2100.shiftjis.html'),
+      22,
+    );
+    expect(url).toContain('dispDate:2026-09-26-23-00$');
+  });
+
+  test('null without a commonParam to rewrite', () => {
+    expect(earlierTableUrl(BASE, '<html></html>', 1)).toBeNull();
+  });
+});
+
+describe('readingsToStore', () => {
+  // Two real captures of the same 現況表: T2200 fetched 22:06 JST, the minute
+  // the :06 cron runs — the table has already flipped to 22:00 but only
+  // 川内沢/栗駒/長沼/払川 have reported; T2100 fetched 21:37 JST, complete.
+  // Prod stored those same four dams and nothing else, ever.
+  const LATE = 'dam_table_2026-09-27T2200.shiftjis.html';
+  const COMPLETE = 'dam_table_2026-09-27T2100.shiftjis.html';
+
+  test('the latest table alone at :06 carries only four stations', async () => {
+    const stored = readingsToStore(parseMiyagiTable(await fixtureHtml(LATE)), []);
+    expect(stored.map((r) => r.miyagiName).sort()).toEqual(
+      ['川内沢ダム', '栗駒ダム', '長沼ダム', '払川ダム'].sort(),
+    );
+  });
+
+  test('the previous hour brings in 岩堂沢 and 二ツ石 at their own 21:00 JST', async () => {
+    const stored = readingsToStore(
+      parseMiyagiTable(await fixtureHtml(LATE)),
+      parseMiyagiTable(await fixtureHtml(COMPLETE)),
+    );
+    const gandosawa = stored.find((r) => r.stationNo === '104007025');
+    expect(gandosawa?.observedAt.toISOString()).toBe('2026-09-27T12:00:00.000Z');
+    expect(gandosawa?.waterLevelM).toBe(406.95);
+    expect(gandosawa?.storageVolumeM3).toBe(12_663_000);
+    const futatsuishi = stored.find((r) => r.stationNo === '104007024');
+    expect(futatsuishi?.observedAt.toISOString()).toBe('2026-09-27T12:00:00.000Z');
+    expect(futatsuishi?.waterLevelM).toBe(237.68);
+    // All 18 県管理 stations at 21:00 plus the four already in at 22:00.
+    expect(stored).toHaveLength(22);
+  });
+
+  test('never repeats a (station, time) when the earlier table is not older', async () => {
+    const late = parseMiyagiTable(await fixtureHtml(LATE));
+    const stored = readingsToStore(late, late);
+    const keys = stored.map((r) => `${r.stationNo}@${r.observedAt.toISOString()}`);
+    expect(new Set(keys).size).toBe(keys.length);
   });
 });
