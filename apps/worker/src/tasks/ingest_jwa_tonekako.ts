@@ -115,8 +115,10 @@ export interface TonekakoHour {
 }
 
 /**
- * 利根川河口堰 hours from the 水位表 and 流量表, joined on time — the two files
- * are fetched separately and can straddle an hourly update. A table whose
+ * 利根川河口堰 hours from the 水位表 and 流量表, for the hours both tables
+ * carry. The two files are fetched separately and can straddle an hourly
+ * update; an hour only one of them has would be upserted with the other
+ * table's fields null, wiping values an earlier run stored. A table whose
  * layout is no longer the 8 known columns contributes nothing, so a shifted
  * column is never stored under the wrong label.
  */
@@ -124,23 +126,19 @@ export function tonekakoHours(suiiSrc: string, ryuryoSrc: string): TonekakoHour[
   const suii = parseHourlyTable(suiiSrc);
   const ryuryo = parseHourlyTable(ryuryoSrc);
   if (suii?.columns.length !== COLUMNS || ryuryo?.columns.length !== COLUMNS) return [];
-  const byTime = new Map<number, TonekakoHour>();
-  const hour = (at: Date): TonekakoHour => {
-    const existing = byTime.get(at.getTime());
-    if (existing) return existing;
-    const fresh = { observedAt: at, waterLevelM: null, inflowM3s: null, outflowM3s: null };
-    byTime.set(at.getTime(), fresh);
-    return fresh;
-  };
+  const ryuryoRow = new Map(ryuryo.observedAt.map((at, i) => [at.getTime(), i]));
+  const hours: TonekakoHour[] = [];
   suii.observedAt.forEach((at, i) => {
-    hour(at).waterLevelM = suii.columns[SUII_UPSTREAM_COL]?.[i] ?? null;
+    const j = ryuryoRow.get(at.getTime());
+    if (j === undefined) return;
+    hours.push({
+      observedAt: at,
+      waterLevelM: suii.columns[SUII_UPSTREAM_COL]?.[i] ?? null,
+      inflowM3s: ryuryo.columns[RYURYO_INFLOW_COL]?.[j] ?? null,
+      outflowM3s: ryuryo.columns[RYURYO_THROUGH_COL]?.[j] ?? null,
+    });
   });
-  ryuryo.observedAt.forEach((at, i) => {
-    const h = hour(at);
-    h.inflowM3s = ryuryo.columns[RYURYO_INFLOW_COL]?.[i] ?? null;
-    h.outflowM3s = ryuryo.columns[RYURYO_THROUGH_COL]?.[i] ?? null;
-  });
-  return [...byTime.values()].sort((a, b) => a.observedAt.getTime() - b.observedAt.getTime());
+  return hours;
 }
 
 // --- DB helpers -------------------------------------------------------------
