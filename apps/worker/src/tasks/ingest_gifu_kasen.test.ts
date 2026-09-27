@@ -1,7 +1,7 @@
 // apps/worker/src/tasks/ingest_gifu_kasen.test.ts
 
 import { describe, expect, test } from 'bun:test';
-import { parseGifuDatetime, parseGifuPage } from './ingest_gifu_kasen.ts';
+import { chooseMaster, parseGifuDatetime, parseGifuPage } from './ingest_gifu_kasen.ts';
 
 describe('parseGifuDatetime', () => {
   test('parses "YYYY/MM/DD HH:MM現在" JST → UTC', () => {
@@ -125,5 +125,36 @@ describe('parseGifuPage', () => {
 
   test('returns empty array for empty string', () => {
     expect(parseGifuPage('')).toHaveLength(0);
+  });
+});
+
+describe('chooseMaster (#79)', () => {
+  // Real master rows (prod, 2026-09-27). ダム便覧 has two 岩村: NDI 97 in
+  // 北海道 and NDI 925, the 富田川 dam this page reports, in 岐阜.
+  const iwamuraHokkaido = { id: 8962n, name: '岩村', completedYear: 1973, prefCode: '01' };
+  const iwamuraGifu = { id: 9851n, name: '岩村', completedYear: 1997, prefCode: '21' };
+
+  test('binds 岩村ダム to 岐阜 岩村, not the lower-id 北海道 岩村', () => {
+    expect(chooseMaster('岩村ダム', [iwamuraHokkaido, iwamuraGifu])).toBe(9851n);
+  });
+
+  // The page also carries upper-Kiso and Yahagi dams outside 岐阜
+  // (/h/Dam.html, 2026-09-27); ダム便覧 files them under 長野 and 愛知.
+  test('binds 牧尾ダム to the completed 長野 牧尾（再）', () => {
+    const masters = [
+      { id: 9777n, name: '牧尾（再）', completedYear: 2006, prefCode: '20' },
+      { id: 9781n, name: '牧尾（元）', completedYear: 1961, prefCode: '20' },
+    ];
+    expect(chooseMaster('牧尾ダム', masters)).toBe(9777n);
+  });
+
+  test('binds 味噌川ダム in 長野 and 矢作ダム in 愛知', () => {
+    const masters = [
+      { id: 9774n, name: '味噌川', completedYear: 1996, prefCode: '20' },
+      { id: 9982n, name: '矢作', completedYear: 1970, prefCode: '23' },
+      { id: 10014n, name: '矢作第二', completedYear: 1970, prefCode: '23' },
+    ];
+    expect(chooseMaster('味噌川ダム', masters)).toBe(9774n);
+    expect(chooseMaster('矢作ダム', masters)).toBe(9982n);
   });
 });
