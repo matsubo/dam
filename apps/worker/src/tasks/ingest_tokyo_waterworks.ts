@@ -23,7 +23,9 @@
 //        storage_volume = 貯水量(万m³) × 10_000
 //        storage_rate   = 貯水率 / 100  (clipped to [0, 1])
 
+import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
+import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
@@ -37,7 +39,7 @@ const PAGE_URL =
 // unambiguous. `prefCode` narrows the match for collisions.
 //
 // Slugs come from the bundled master snapshot (verified locally).
-const NAME_MAP: Array<{ tokyoName: string; masterName: string; prefCodes: string[] }> = [
+export const NAME_MAP: Array<{ tokyoName: string; masterName: string; prefCodes: string[] }> = [
   // 利根川水系
   { tokyoName: '矢木沢ダム', masterName: '矢木沢', prefCodes: ['10'] }, // 群馬
   { tokyoName: '奈良俣ダム', masterName: '奈良俣', prefCodes: ['10'] },
@@ -136,28 +138,34 @@ async function ensureSourcePriority(): Promise<void> {
 }
 
 /**
- * Idempotent: stamp external_ids->>'tokyo-waterworks' on the 13 master dams
- * the first time the task runs. Match by (prefCode IN list) AND name LIKE
- * '%<masterName>%' to tolerate the「ダム」/「貯水池」suffix variation.
+ * Master row for a listing: match by (prefCode IN list) AND name LIKE
+ * '%<masterName>%' to tolerate the「ダム」/「貯水池」suffix variation. A row
+ * already stamped with the listing keeps it; a redeveloped dam's twins share
+ * the ELSE rank so chooseRanked picks the current one (村山下, #79).
  */
+export async function findMaster(m: (typeof NAME_MAP)[number]): Promise<BindableMaster | null> {
+  const rows = await sql<(BindableMaster & { rank: number })[]>`
+    SELECT id, name, completed_year AS "completedYear",
+           external_ids->>'tokyo-waterworks' AS stamp,
+           CASE WHEN name = ${`${m.masterName}ダム`} THEN 0
+                WHEN name = ${`${m.masterName}貯水池`} THEN 1
+                ELSE 2 END AS rank
+    FROM dams
+    WHERE pref_code = ANY(${m.prefCodes}::text[])
+      AND name LIKE ${`%${m.masterName}%`}
+    ORDER BY rank, id
+  `;
+  return chooseRanked(rows, m.tokyoName);
+}
+
+/** Stamp external_ids->>'tokyo-waterworks' on the listed master dams. */
 async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
   const matches: DamMatch[] = [];
   // What this source publishes, matched or not — recorded so /coverage can
   // say "they publish it, we failed to link it" instead of guessing.
   const universe: UniverseRow[] = [];
   for (const m of NAME_MAP) {
-    const rows = await sql<{ id: bigint; name: string }[]>`
-      SELECT id, name FROM dams
-      WHERE pref_code = ANY(${m.prefCodes}::text[])
-        AND name LIKE ${`%${m.masterName}%`}
-      ORDER BY
-        CASE WHEN name = ${`${m.masterName}ダム`} THEN 0
-             WHEN name = ${`${m.masterName}貯水池`} THEN 1
-             ELSE 2 END,
-        id
-      LIMIT 1
-    `;
-    const r = rows[0];
+    const r = await findMaster(m);
     universe.push({
       externalId: m.tokyoName,
       name: m.tokyoName,
@@ -169,13 +177,7 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
       continue;
     }
     matches.push({ tokyoName: m.tokyoName, damId: r.id });
-    await sql`
-      UPDATE dams
-      SET external_ids = COALESCE(external_ids, '{}'::jsonb)
-                       || jsonb_build_object('tokyo-waterworks', ${m.tokyoName}::text)
-      WHERE id = ${r.id}
-        AND COALESCE(external_ids->>'tokyo-waterworks', '') <> ${m.tokyoName}
-    `;
+    await bindExternalId(r.id, 'tokyo-waterworks', m.tokyoName);
   }
   await recordUniverse('tokyo-waterworks', universe);
   return matches;

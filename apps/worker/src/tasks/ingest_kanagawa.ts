@@ -28,7 +28,9 @@
 // observation per dam per fetch. Future task: a backfill that walks the
 // 30-hour rolling window in the response and emits 30 rows per dam.
 
+import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
+import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
@@ -143,20 +145,22 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
   // say "they publish it, we failed to link it" instead of guessing.
   const universe: UniverseRow[] = [];
   for (const m of NAME_MAP) {
-    const rows = await sql<{ id: bigint; name: string }[]>`
-      SELECT id, name FROM dams
+    // A redeveloped dam's twins share the ELSE rank, so chooseRanked picks the
+    // current one; a row already stamped with the key keeps it (#79).
+    const rows = await sql<(BindableMaster & { rank: number })[]>`
+      SELECT id, name, completed_year AS "completedYear",
+             external_ids->>'kanagawa-dam' AS stamp,
+             CASE
+               WHEN name = ${m.masterName} THEN 0
+               WHEN name = ${`${m.masterName}ダム`} THEN 1
+               ELSE 5
+             END AS rank
+      FROM dams
       WHERE pref_code = ANY(${m.prefCodes}::text[])
         AND name LIKE ${`%${m.masterName}%`}
-      ORDER BY
-        CASE
-          WHEN name = ${m.masterName} THEN 0
-          WHEN name = ${`${m.masterName}ダム`} THEN 1
-          ELSE 5
-        END,
-        id
-      LIMIT 1
+      ORDER BY rank, id
     `;
-    const r = rows[0];
+    const r = chooseRanked(rows, m.key);
     // The API names its series by key (`sagami_volume`), so the key is the
     // provider's own identifier.
     universe.push({
@@ -170,13 +174,7 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
       continue;
     }
     matches.push({ key: m.key, damId: r.id });
-    await sql`
-      UPDATE dams
-      SET external_ids = COALESCE(external_ids, '{}'::jsonb)
-                       || jsonb_build_object('kanagawa-dam', ${m.key}::text)
-      WHERE id = ${r.id}
-        AND COALESCE(external_ids->>'kanagawa-dam', '') <> ${m.key}
-    `;
+    await bindExternalId(r.id, 'kanagawa-dam', m.key);
   }
   await recordUniverse('kanagawa-dam', universe);
   return matches;
