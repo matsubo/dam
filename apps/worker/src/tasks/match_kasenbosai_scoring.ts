@@ -16,9 +16,9 @@
 // binds, and only at review confidence — see CROSS_PREF_EXACT_SCORE.
 //
 // The normalised name drops （元）/（再）, so a redeveloped dam's twin rows
-// score identically; preferMaster decides between them (#79).
+// score identically; the stamp, then preferMaster, decides between them (#79).
 
-import { type BindableMaster, preferMaster, twinOf } from '@dam/core/dam_binding';
+import { type BindableMaster, preferMaster, stampedMaster, twinOf } from '@dam/core/dam_binding';
 import { normalizeJaName, trigramSimilarity } from '@dam/core/similarity';
 
 /** Minimum score that writes `external_ids.kasenbosai`. */
@@ -166,19 +166,29 @@ function isTwinPair(a: ScoreCandidate, b: ScoreCandidate): boolean {
   return ta != null && tb != null && ta.base === tb.base && ta.marker !== tb.marker;
 }
 
+export interface PickOptions {
+  /** The station's obs_fcd: a twin already stamped with it keeps it. */
+  stationKey?: string | null;
+  year?: number;
+}
+
 /**
  * Highest score wins; ties break on distance so the ranking does not depend on
  * the order the caller happened to fetch candidates in.
  *
- * A winner whose twin scores the same yields to preferMaster instead of to
- * distance. The twins usually share coordinates, so the pick used to follow
- * the SQL row order, and each run could stamp the other twin (#79).
+ * A winner whose twin scores the same does not fall back to distance. The twins
+ * usually share coordinates, so the pick used to follow the SQL row order and
+ * each run could stamp the other twin (#79). Instead the twin already stamped
+ * with this station keeps it; only when neither or both are does preferMaster
+ * decide. Stamp first because a blank （再） completion year means "under
+ * construction" or "not recorded" (新保川, 松川, 長柄, 五名), and preferMaster
+ * reads both as "（元）", which would move a stamp already confirmed on the （再）.
  */
 export function pickBest<T extends ScoreCandidate>(
   candidates: readonly T[],
   normStem: string,
   jisPref: string | null,
-  year = new Date().getFullYear(),
+  { stationKey = null, year = new Date().getFullYear() }: PickOptions = {},
 ): BestMatch<T> | null {
   const scored = candidates.map((candidate) => ({
     ...scoreCandidate(candidate, normStem, jisPref),
@@ -193,5 +203,9 @@ export function pickBest<T extends ScoreCandidate>(
   const twin = scored.find(
     (s) => s.score === best.score && isTwinPair(s.candidate, best.candidate),
   );
-  return twin != null && preferMaster(twin.candidate, best.candidate, year) ? twin : best;
+  if (twin == null) return best;
+  const stamped =
+    stationKey == null ? null : stampedMaster([best.candidate, twin.candidate], stationKey);
+  if (stamped != null) return stamped === twin.candidate ? twin : best;
+  return preferMaster(twin.candidate, best.candidate, year) ? twin : best;
 }
