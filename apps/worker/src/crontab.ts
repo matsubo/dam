@@ -125,6 +125,12 @@ export const CRONTAB = `
 # values. Cron at :15 every hour.
 15 * * * * ingest:cgr-mlit-dam
 
+# 国土交通省 岡山河川事務所「三水系の主要ダムの貯水状況」— 吉井川・旭川・高梁川の
+# 11 ダム + 2 堰 (PDF, 平日 9時 速報値, ~09:45 JST 掲載)。小阪部川ダム・坂根堰は
+# ここにしか無い。10:50 / 14:50 JST に取得 (2 回目は遅れた掲載用)。PDF 内の
+# タイムスタンプへの冪等 UPSERT。
+50 1,5 * * * ingest:cgr-okakawa-dam
+
 # 国土交通省 関東地方整備局 鬼怒川ダム統管 — 4 dams (栃木県:
 # 五十里/川俣/川治/湯西川). realDM.html embeds the 4 dams' values
 # inline as JS arrays (10-min cadence at source). Cron at :17.
