@@ -11,7 +11,17 @@
 //         <div class="databox">: [EL …] = 0時の貯水位, 流入量/放流量 = 前日平均,
 //         貯水量<br>&lt;午前0時&gt; and (貯水率 …) on the 利水容量 basis; only the
 //         有効 part of that is stored (see storedStorage).
-// License: 水資源機構 published; 出典明示で再配布可.
+// License: 水資源機構「著作権・リンク等について」(honsya/honsya/policy/copyright):
+//         「数値データ、簡単な表・グラフ等は著作権の対象ではありませんので、これらに
+//         ついては本利用ルールの適用はなく、自由に利用できます。」 The report is
+//         served by the 中部支社 リアルタイム情報 system, whose note
+//         (mizu/chubu/res/description/description.pdf) asks: 「ツール等による、
+//         自動的なデータ収集等はサーバに負荷がかかり、情報提供できなくなる恐れが
+//         ありますのでご遠慮頂くよう、ご理解・ご協力をお願いいたします。」 Kept on
+//         that basis (user decision, 2026-09-28): only the observed numbers are
+//         stored, with the source named. The report comes out once per weekday
+//         (09:40–11:40 JST), so the cron fetches this one page three times per
+//         weekday, not hourly.
 //
 // New coverage: 中里ダム (not in jwa-junpo).
 // Overlap (牧尾/阿木川/味噌川/岩屋/徳山): provides inflow/outflow and daily
