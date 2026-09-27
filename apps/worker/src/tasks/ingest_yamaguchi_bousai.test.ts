@@ -65,8 +65,9 @@ describe('parseYamaguchiHtml', () => {
 
   test('drops an outage row the page prints as 貯水位 0.00', async () => {
     // Simulated: prod holds 283 yamaguchi-bousai rows (10 dams, 2026-06..09)
-    // with 貯水位/貯水率/流入量/放流量 all 0 (see migration 0086). Rewrite
-    // the fixture's 21:00 row into that shape.
+    // with 貯水位/貯水率/流入量/放流量 all 0 (see deploy/ops/oneoff/
+    // 2026-09-28_yamaguchi_bousai_outage_zeros.sql). Rewrite the fixture's
+    // 21:00 row into that shape.
     const html = (await fixtureHtml()).replace(
       '2026/09/27<br />21:00</td><td>30.90</td><td>36.6</td><td>5.91</td><td>4.91</td>',
       '2026/09/27<br />21:00</td><td>0.00</td><td>0.0</td><td>0.00</td><td>0.00</td>',
