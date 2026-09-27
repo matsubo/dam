@@ -85,11 +85,12 @@ describe('parseToyamaDamData', () => {
     expect(r?.storageRate).toBeCloseTo(0.978, 6);
   });
 
-  test('舟川: flows are scaled ÷10 to what MLIT reads for the same minute', async () => {
-    // CSV 2.11 at 16:30; MLIT 川の防災情報 0.21 at 16:30, Salesforce 0.21 at 16:00.
+  test('舟川: flows floor to 0.01 after ÷10, as the page renders them', async () => {
+    // CSV 2.11 at 16:30; the page (fileaccess.js DAMZenryuunyuuCalc), MLIT
+    // 川の防災情報 for the same minute and the Salesforce 実況表 all read 0.21.
     const r = (await parse()).find((x) => x.toyamaName === '舟川ダム');
-    expect(r?.inflowM3s).toBeCloseTo(0.211, 6);
-    expect(r?.outflowM3s).toBeCloseTo(0.211, 6);
+    expect(r?.inflowM3s).toBe(0.21);
+    expect(r?.outflowM3s).toBe(0.21);
   });
 
   test('熊野川: no 貯水率 where the page prints －, level still kept', async () => {
