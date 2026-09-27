@@ -11,10 +11,15 @@
 //
 // Source URL:
 //   https://www.suibou-shimane.jp/dyn/dps/json/YYYYMMDD/dam60.json  (JST date)
-//   Updated ~every 60 min. Single JSON with one timestamp key + "update".
+//   One file per JST day holding every hourly snapshot so far (00-00 … 23-00)
+//   plus "update". Rewritten at ~:05 every hour, but the copy the worker sees
+//   at hh:37 lags ~2 h: prod first stored each hour ~2.6 h late, and reading
+//   only the newest key never stored 22:00 or 23:00 (26 of 26 days in
+//   September 2026). Each run therefore reads every key of today's AND
+//   yesterday's file; the upsert makes the overlap idempotent.
 //
 // JSON structure:
-//   { "YYYY-MM-DD-HH-MM": { "8193_7_N": { "7_10": {dt, st}, ... } }, "update": "..." }
+//   { "YYYY-MM-DD-HH-MM": { "8193_7_N": { "7_10": {dt, st}, ... } }, …, "update": "..." }
 //
 // Item codes (st==0 = valid; st==-1 = 未収集):
 //   7_10  貯水位 [EL.m]
@@ -111,16 +116,24 @@ function getItem(station: StationData, code: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-export function parseShimaneSnapshot(data: Record<string, unknown>): ParsedRow[] {
-  const tsKeys = Object.keys(data).filter((k) => k !== 'update');
-  if (!tsKeys.length) return [];
+/** Every hourly snapshot in a day file, oldest first, one row per station. */
+export function parseShimaneDayFile(data: Record<string, unknown>): ParsedRow[] {
+  const rows: ParsedRow[] = [];
+  for (const ts of Object.keys(data)
+    .filter((k) => k !== 'update')
+    .sort()) {
+    const observedAt = parseShimaneTimestamp(ts);
+    if (!observedAt) continue;
+    rows.push(...parseSnapshot(ts, observedAt, data[ts] as Record<string, StationData>));
+  }
+  return rows;
+}
 
-  // Take the most recent timestamp key.
-  const ts = tsKeys.sort().at(-1) ?? '';
-  const observedAt = parseShimaneTimestamp(ts);
-  if (!observedAt) return [];
-
-  const snapshot = data[ts] as Record<string, StationData>;
+function parseSnapshot(
+  ts: string,
+  observedAt: Date,
+  snapshot: Record<string, StationData>,
+): ParsedRow[] {
   const rateItem = isFloodSeason(ts) ? '7_41' : '7_42';
   const rows: ParsedRow[] = [];
 
@@ -185,6 +198,16 @@ export function normalizeName(s: string): string {
     .trim();
 }
 
+/** YYYYMMDD of yesterday and today in JST — the day files one run reads. */
+export function dayFileDates(now: Date): string[] {
+  const jst = (offsetDays: number): string =>
+    new Date(now.getTime() + 9 * 60 * 60 * 1000 + offsetDays * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10)
+      .replace(/-/g, '');
+  return [jst(-1), jst(0)];
+}
+
 interface DamMatch {
   stationId: string;
   damId: bigint;
@@ -208,11 +231,14 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     resolvedDamId: null,
   }));
 
-  for (const r of rows) {
-    const stem = normalizeName(r.shimaneName);
+  // Rows span up to 48 hours per station; bind each station once.
+  const published = new Set(rows.map((r) => r.stationId));
+  for (const { stationId, name } of STATIONS) {
+    if (!published.has(stationId)) continue;
+    const stem = normalizeName(name);
 
     // A row already stamped with this station keeps it (#57).
-    const stamped = stampedMaster(masters, r.stationId);
+    const stamped = stampedMaster(masters, stationId);
     let best: { m: BindableMaster; rank: number } | null = stamped
       ? { m: stamped, rank: -1 }
       : null;
@@ -220,7 +246,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
       for (const m of masters) {
         const mStem = normalizeName(m.name);
         let rank: number;
-        if (m.name === r.shimaneName) rank = 0;
+        if (m.name === name) rank = 0;
         else if (mStem === stem) rank = 1;
         else if (m.name === `${stem}ダム`) rank = 2;
         else if (mStem.startsWith(stem)) rank = 3;
@@ -233,19 +259,19 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     }
 
     universe.push({
-      externalId: r.stationId,
-      name: r.shimaneName,
+      externalId: stationId,
+      name,
       prefCode: PREF_CODE,
       resolvedDamId: best?.m.id ?? null,
     });
 
     if (!best) {
-      log(`${SOURCE_ID}: no master match for "${r.shimaneName}" (${r.stationId})`);
+      log(`${SOURCE_ID}: no master match for "${name}" (${stationId})`);
       continue;
     }
 
-    out.push({ stationId: r.stationId, damId: best.m.id });
-    await bindExternalId(best.m.id, SOURCE_ID, r.stationId);
+    out.push({ stationId, damId: best.m.id });
+    await bindExternalId(best.m.id, SOURCE_ID, stationId);
   }
 
   await recordUniverse(SOURCE_ID, universe);
@@ -262,24 +288,22 @@ const task: Task = async (_payload, helpers) => {
     process.env.HTTP_USER_AGENT ??
     'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
 
-  // Use JST date to build the URL (data files are keyed by JST calendar date).
-  const jstDate = new Date(Date.now() + 9 * 60 * 60 * 1000);
-  const day = jstDate.toISOString().slice(0, 10).replace(/-/g, '');
-  const url = `${BASE_URL}/dyn/dps/json/${day}/dam60.json`;
-
-  const res = await fetch(url, {
-    headers: { 'user-agent': ua },
-    signal: AbortSignal.timeout(20_000),
-  });
-
-  if (res.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${res.status} for ${url}; aborting`);
-    return;
+  const rows: ParsedRow[] = [];
+  for (const day of dayFileDates(new Date())) {
+    const url = `${BASE_URL}/dyn/dps/json/${day}/dam60.json`;
+    const res = await fetch(url, {
+      headers: { 'user-agent': ua },
+      signal: AbortSignal.timeout(20_000),
+    });
+    // Today's file does not exist until the first snapshot after 00:00 JST.
+    if (res.status !== 200) {
+      log(`${SOURCE_ID}: HTTP ${res.status} for ${url}; skipping`);
+      continue;
+    }
+    rows.push(...parseShimaneDayFile((await res.json()) as Record<string, unknown>));
   }
-
-  const data = (await res.json()) as Record<string, unknown>;
-  const rows = parseShimaneSnapshot(data);
-  log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
+  log(`${SOURCE_ID}: parsed ${rows.length} station-hour rows`);
+  if (!rows.length) return;
 
   const matches = await matchMaster(rows, log);
   const damByStation = new Map(matches.map((m) => [m.stationId, m.damId]));

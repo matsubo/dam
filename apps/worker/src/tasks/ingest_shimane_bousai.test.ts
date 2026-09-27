@@ -2,9 +2,10 @@ import { describe, expect, it } from 'bun:test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
+  dayFileDates,
   normalizeName,
   type ParsedRow,
-  parseShimaneSnapshot,
+  parseShimaneDayFile,
   parseShimaneTimestamp,
 } from './ingest_shimane_bousai';
 
@@ -50,14 +51,49 @@ describe('normalizeName', () => {
   });
 });
 
-describe('parseShimaneSnapshot', () => {
+describe('dayFileDates', () => {
+  it('reads the previous JST day as well, across the JST (not UTC) date line', () => {
+    // 00:37 JST on 9/27 is still 9/26 in UTC; yesterday's file is 9/26.
+    expect(dayFileDates(new Date('2026-09-26T15:37:00Z'))).toEqual(['20260926', '20260927']);
+    // 08:37 JST on 9/27 is 23:37 UTC on 9/26.
+    expect(dayFileDates(new Date('2026-09-26T23:37:00Z'))).toEqual(['20260926', '20260927']);
+    expect(dayFileDates(new Date('2026-12-31T15:00:00Z'))).toEqual(['20261231', '20270101']);
+  });
+});
+
+describe('parseShimaneDayFile', () => {
   it('parses 19 dam rows from fixture', () => {
-    const rows = parseShimaneSnapshot(loadDam60());
+    const rows = parseShimaneDayFile(loadDam60());
     expect(rows.length).toBe(19);
   });
 
+  it('returns every hourly key in the file, not only the latest', () => {
+    // The file seen at hh:37 JST lags ~2 h, so reading only its newest key
+    // never stored 22:00 or 23:00 (26 of 26 days in September). Yesterday's
+    // complete file carries them; this fixture is its last three keys.
+    const file = JSON.parse(
+      fs.readFileSync(path.join(FIXTURE_DIR, 'dam60_20260926_last3h.json'), 'utf8'),
+    );
+    const rows = parseShimaneDayFile(file);
+    expect(rows.length).toBe(3 * 19);
+    const hachinohe = rows
+      .filter((r: ParsedRow) => r.stationId === '8193_7_4')
+      .map((r: ParsedRow) => [r.observedAt.toISOString(), r.waterLevelM, r.storageVolumeM3]);
+    expect(hachinohe).toEqual([
+      ['2026-09-26T12:00:00.000Z', 105.07, 4_107_000],
+      ['2026-09-26T13:00:00.000Z', 105.09, 4_117_000],
+      ['2026-09-26T14:00:00.000Z', 105.11, 4_128_000],
+    ]);
+    // 9/26 is 洪水期, so each key reads 7_41 (79.2 %), not 7_42 (20.3 %).
+    const at22 = rows.find(
+      (r: ParsedRow) =>
+        r.stationId === '8193_7_4' && r.observedAt.toISOString() === '2026-09-26T13:00:00.000Z',
+    );
+    expect(at22?.storageRate).toBeCloseTo(0.792, 5);
+  });
+
   it('converts storageVolumeM3 from 千m³ to m³', () => {
-    const rows = parseShimaneSnapshot(loadDam60());
+    const rows = parseShimaneDayFile(loadDam60());
     const hachitoRow = rows.find((r: ParsedRow) => r.shimaneName === '八戸ダム');
     expect(hachitoRow).toBeDefined();
     // fixture: 八戸ダム 7_20 = 5900 千m³ → 5,900,000 m³
@@ -65,21 +101,21 @@ describe('parseShimaneSnapshot', () => {
   });
 
   it('converts storageRate % → 0-1 fraction', () => {
-    const rows = parseShimaneSnapshot(loadDam60());
+    const rows = parseShimaneDayFile(loadDam60());
     const fubeRow = rows.find((r: ParsedRow) => r.shimaneName === '布部ダム');
     // 布部ダム on 2026-06-06 (非洪水期): 7_42=58.8%
     expect(fubeRow?.storageRate).toBeCloseTo(0.588, 5);
   });
 
   it('returns null storageRate when item is 未収集 (st == -1)', () => {
-    const rows = parseShimaneSnapshot(loadDam60());
+    const rows = parseShimaneDayFile(loadDam60());
     const hamadaRow = rows.find((r: ParsedRow) => r.shimaneName === '浜田ダム');
     // 浜田ダム: 7_41 and 7_42 both st=-1 (未収集)
     expect(hamadaRow?.storageRate).toBeNull();
   });
 
   it('parses water level and inflow correctly', () => {
-    const rows = parseShimaneSnapshot(loadDam60());
+    const rows = parseShimaneDayFile(loadDam60());
     const hachitoRow = rows.find((r: ParsedRow) => r.shimaneName === '八戸ダム');
     expect(hachitoRow?.waterLevelM).toBeCloseTo(108.34, 2);
     expect(hachitoRow?.inflowM3s).toBeCloseTo(2.57, 2);
@@ -87,7 +123,7 @@ describe('parseShimaneSnapshot', () => {
   });
 
   it('uses 7_42 (非洪水期) outside the flood season — fixture is 6/6', () => {
-    const rows = parseShimaneSnapshot(loadDam60());
+    const rows = parseShimaneDayFile(loadDam60());
     const byName = (n: string) => rows.find((r: ParsedRow) => r.shimaneName === n);
     // 7_41 reads a capped 100.0 for both: they still held more than their
     // 洪水期 pool on 6/6 (布部 2,509 vs ~2,300 千m³; 八戸 5,900 vs ~5,200).
@@ -105,7 +141,7 @@ describe('parseShimaneSnapshot', () => {
     },
   });
   const fubeRate = (ts: string) =>
-    parseShimaneSnapshot(seasonal(ts)).find((r: ParsedRow) => r.stationId === '8193_7_1')
+    parseShimaneDayFile(seasonal(ts)).find((r: ParsedRow) => r.stationId === '8193_7_1')
       ?.storageRate;
 
   it.each([
@@ -129,19 +165,19 @@ describe('parseShimaneSnapshot', () => {
         },
       },
     };
-    const row = parseShimaneSnapshot(snapshot).find((r: ParsedRow) => r.stationId === '8193_7_1');
+    const row = parseShimaneDayFile(snapshot).find((r: ParsedRow) => r.stationId === '8193_7_1');
     expect(row?.storageRate).toBeNull();
   });
 
   it('timestamp matches fixture key', () => {
-    const rows = parseShimaneSnapshot(loadDam60());
+    const rows = parseShimaneDayFile(loadDam60());
     // 2026-06-06-00-00 JST = 2026-06-05T15:00:00.000Z
     expect(rows[0]?.observedAt.toISOString()).toBe('2026-06-05T15:00:00.000Z');
   });
 
   it('returns empty array for malformed data', () => {
-    expect(parseShimaneSnapshot({})).toHaveLength(0);
-    expect(parseShimaneSnapshot({ update: '2026-06-06-00-05' })).toHaveLength(0);
+    expect(parseShimaneDayFile({})).toHaveLength(0);
+    expect(parseShimaneDayFile({ update: '2026-06-06-00-05' })).toHaveLength(0);
   });
 
   it('clamps storageRate to [0, 1]', () => {
@@ -153,7 +189,7 @@ describe('parseShimaneSnapshot', () => {
         },
       },
     };
-    const rows = parseShimaneSnapshot(snapshot);
+    const rows = parseShimaneDayFile(snapshot);
     const row = rows.find((r: ParsedRow) => r.stationId === '8193_7_1');
     expect(row?.storageRate).toBe(1.0);
   });

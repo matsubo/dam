@@ -308,11 +308,13 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     label: '松江市上下水道局',
   },
   'shimane-bousai': {
-    upstream: '島根県防災Web (bousai.pref.shimane.lg.jp/dam) — /data/dam/list/{ts}.json',
-    license: '公開情報 — 出典明示で再配布可',
-    cadence: '時次 (元データは 10 分粒度; 取得は毎時 :37)',
-    what: '島根県土木部管理 14 ダム (布部/山佐/三瓶/波積/八戸/浜田/第二浜田/大長見/御部/益田川/笹倉/大峠/銚子/美田) の貯水位・有効貯水量(千m³)・全流入量・全放流量・貯水率。県直轄ダムの新規カバレッジ。',
-    label: '島根県防災Web',
+    upstream:
+      '島根県水防情報システム (www.suibou-shimane.jp) — /dyn/dps/json/{YYYYMMDD}/dam60.json',
+    license:
+      '利用条件に再配布の定めなし (「利用における注意事項」: 無人観測所の速報値で異常値を含み得る)',
+    cadence: '時次 (60 分値; 取得は毎時 :37、前日分と当日分の全時刻を毎回読み直し)',
+    what: '島根県 19 ダム — 土木部 14 (布部/山佐/三瓶/波積/八戸/浜田/第二浜田/大長見/御部/益田川/笹倉/大峠/銚子/美田)、農林水産部 3 (清瀧/津田川/嵯峨谷)、三成/木都賀 — の貯水位・貯水量(千m³)・利水貯水率(洪水期/非洪水期)・流入量・全放流量。',
+    label: '島根県水防情報システム',
   },
   kasenbosai: {
     upstream: '国土交通省 川の防災情報 (river.go.jp) — tmlist/dam per-obs JSON',
