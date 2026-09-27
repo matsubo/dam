@@ -28,7 +28,11 @@
 // rather than mixing a second denominator into a trusted source. 利水 is
 // clamped at 100.0 once the level passes 常時満水位.
 //
-// Priority 308 (sibling 県 防災Web sources). Cron hourly at :52.
+// Priority 309 — one above kagoshima-bousai (308), which covers the same 3
+// dams but only during flood events. With equal priorities
+// preferredSourceForDam() (ORDER BY priority DESC LIMIT 1) has no tiebreak,
+// so the chart source would flip after every flood; the continuous, trusted
+// 利水 series should keep winning. Cron hourly at :52.
 
 import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
@@ -144,7 +148,7 @@ export function chooseMaster(name: string, masters: BindableMaster[]): bigint | 
 async function ensureSourcePriority(): Promise<void> {
   await sql`
     INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 308,
+    VALUES (${SOURCE_ID}, 309,
             '鹿児島県河川砂防情報システム ダム一覧表 — 3 ダム (Shift_JIS HTML, 10分更新)',
             true)
     ON CONFLICT (source_id) DO UPDATE

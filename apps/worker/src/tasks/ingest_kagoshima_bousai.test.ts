@@ -108,8 +108,9 @@ describe('chooseMaster (#79)', () => {
     expect(chooseMaster('大和ダム', '大和', masters, '013707002000000000')).toBe(20n);
   });
 
-  test('binds a redeveloped dam to the completed （再）, not the lower-id （元）', () => {
-    const masters = [m(10, '川辺（元）', 1960), m(20, '川辺（再）', 2002)];
-    expect(chooseMaster('川辺ダム', '川辺', masters, '013707010000000000')).toBe(20n);
+  test('binds 鶴田 to the completed （再）, not the lower-id （元）', () => {
+    // Real pref-46 twin rows and completion years from the master.
+    const masters = [m(11438, '鶴田（元）', 2017), m(11453, '鶴田（再）', 2017)];
+    expect(chooseMaster('鶴田ダム', '鶴田', masters, '013707099000000000')).toBe(11453n);
   });
 });

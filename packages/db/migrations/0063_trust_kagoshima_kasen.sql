@@ -26,6 +26,6 @@
 -- trusted_rate_basis.
 INSERT INTO source_priorities (source_id, priority, description, active, trusted_rate_basis)
 VALUES
-  ('kagoshima-kasen', 308, '鹿児島県河川砂防情報システム ダム一覧表 — 3 ダム (Shift_JIS HTML, 10分更新)', TRUE, TRUE)
+  ('kagoshima-kasen', 309, '鹿児島県河川砂防情報システム ダム一覧表 — 3 ダム (Shift_JIS HTML, 10分更新)', TRUE, TRUE)
 ON CONFLICT (source_id) DO UPDATE
   SET trusted_rate_basis = TRUE;
