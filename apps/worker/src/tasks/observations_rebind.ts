@@ -12,11 +12,18 @@ import type postgres from 'postgres';
 // - Where both rows already hold the same (observed_at, source), the right
 //   row's copy wins — it was written after the binding was fixed.
 // - A rate the trigger derived (quality_flag bit 32, derived_rate) used the wrong row's
-//   capacity. It is cleared so the BEFORE UPDATE trigger (0036/0051) derives
+//   capacity. It is cleared so the BEFORE INSERT trigger (0036/0051) derives
 //   it again against the right row; a source's own rate is kept as is.
 // - Rows sit in compressed chunks (segmentby dam_id), so the decompression cap
 //   is lifted for this transaction only, as bootstrap.sh does for its purge.
 //   One transaction per move; run it from the admin endpoint, not at boot.
+// - The rows are copied with INSERT … ON CONFLICT DO NOTHING, then deleted
+//   from the wrong row. Inside UPDATE/DELETE, TimescaleDB only decompresses
+//   the target's batches: a self-join (the old DELETE … USING of the clashes)
+//   cannot see the right row's compressed readings, and an UPDATE of dam_id
+//   is not checked against them either, so each clash was stored twice
+//   (33,219 keys on prod after the round-2 moves). INSERT is the one path
+//   that checks the key against compressed batches.
 
 type Types = typeof sql extends postgres.Sql<infer T> ? T : never;
 type Db = postgres.Sql<Types>;
@@ -39,20 +46,19 @@ export async function rebindObservations(db: Db, move: RebindMove): Promise<numb
     const from = await damIdByNdi(tx, move.fromNdi);
     const to = await damIdByNdi(tx, move.toNdi);
     await tx`SET LOCAL timescaledb.max_tuples_decompressed_per_dml_transaction = 0`;
-    await tx`
-      DELETE FROM observations f
-      USING observations t
-      WHERE f.dam_id = ${from} AND t.dam_id = ${to}
-        AND f.source_id = ${move.sourceId} AND t.source_id = ${move.sourceId}
-        AND f.observed_at = t.observed_at
-    `;
     const moved = await tx`
-      UPDATE observations SET
-        dam_id       = ${to},
-        storage_rate = CASE WHEN (quality_flag & 32) = 32 THEN NULL ELSE storage_rate END,
-        quality_flag = quality_flag & ~32
+      INSERT INTO observations (observed_at, dam_id, source_id, storage_volume_m3, storage_rate,
+                                inflow_m3s, outflow_m3s, water_level_m, rainfall_mm,
+                                raw_snapshot_id, quality_flag, created_at)
+      SELECT observed_at, ${to}, source_id, storage_volume_m3,
+             CASE WHEN (quality_flag & 32) = 32 THEN NULL ELSE storage_rate END,
+             inflow_m3s, outflow_m3s, water_level_m, rainfall_mm,
+             raw_snapshot_id, quality_flag & ~32, created_at
+      FROM observations
       WHERE dam_id = ${from} AND source_id = ${move.sourceId}
+      ON CONFLICT (dam_id, observed_at, source_id) DO NOTHING
     `;
+    await tx`DELETE FROM observations WHERE dam_id = ${from} AND source_id = ${move.sourceId}`;
     // The right row's own derived rows from after the fix used its capacity
     // already; nothing to redo there.
     return moved.count;
