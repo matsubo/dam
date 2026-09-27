@@ -2,6 +2,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import {
+  chooseMaster,
   parseMiyagiDispDate,
   parseMiyagiTable,
   parseMiyagiTimestamp,
@@ -215,5 +216,27 @@ describe('parseMiyagiTable', () => {
     // 2026-06-06T08:00 JST = 2026-06-05T23:00:00.000Z
     expect(rows[0]?.observedAt.toISOString()).toBe('2026-06-05T23:00:00.000Z');
     expect(rows[0]?.waterLevelM).toBeCloseTo(268.11);
+  });
+});
+
+describe('chooseMaster (#79)', () => {
+  // 宮城 has a 花山（元）/花山（再） pair; the live table publishes 花山ダム as
+  // stationNo 104007001 (Gamen42Servlet, 2026-09-27). Ids are chosen so the
+  // （元） has the lower one, which the old lowest-id tie-break would pick.
+  const m = (id: number, name: string, completedYear: number | null, stamp: string | null) => ({
+    id: BigInt(id),
+    name,
+    completedYear,
+    stamp,
+  });
+
+  test('binds 花山ダム to the completed （再）, not the lower-id （元）', () => {
+    const masters = [m(10, '花山（元）', 1957, null), m(20, '花山（再）', 2020, null)];
+    expect(chooseMaster('花山ダム', masters, '104007001')).toBe(20n);
+  });
+
+  test('keeps the row already stamped with the station', () => {
+    const masters = [m(10, '花山（元）', 1957, '104007001'), m(20, '花山（再）', 2020, null)];
+    expect(chooseMaster('花山ダム', masters, '104007001')).toBe(10n);
   });
 });
