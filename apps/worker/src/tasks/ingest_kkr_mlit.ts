@@ -25,7 +25,9 @@
 // Priority: 302 — MLIT national management, daily cadence.
 //   Slightly below hourly MLIT sources (304) but above JWA daily (296).
 
+import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
+import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
@@ -162,8 +164,9 @@ interface DamMatch {
  */
 async function matchMaster(log: (s: string) => void): Promise<DamMatch[]> {
   // Search all dams (no pref_code filter — these span Fukui/Kyoto/Nara/Mie/Hyogo)
-  const masters = await sql<{ id: bigint; name: string }[]>`
-    SELECT id, name FROM dams ORDER BY id
+  const masters = await sql<BindableMaster[]>`
+    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
+    FROM dams ORDER BY id
   `;
   const out: DamMatch[] = [];
   // What this source publishes, matched or not — recorded so /coverage can
@@ -174,7 +177,7 @@ async function matchMaster(log: (s: string) => void): Promise<DamMatch[]> {
     const stem = normalizeName(damName);
     if (!stem) continue;
 
-    let best: { id: bigint; rank: number } | null = null;
+    let best: { m: BindableMaster; rank: number } | null = null;
     for (const m of masters) {
       const mStem = normalizeName(m.name);
       let rank: number;
@@ -184,32 +187,30 @@ async function matchMaster(log: (s: string) => void): Promise<DamMatch[]> {
       else if (mStem.startsWith(stem)) rank = 3;
       else if (mStem.includes(stem)) rank = 4;
       else continue;
-      if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-        best = { id: m.id, rank };
+      if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
+        best = { m, rank };
       }
     }
+    // A row already stamped with this key keeps it rather than being
+    // re-decided by name every run (天ヶ瀬 has （元）/（再） twins and a
+    // same-name dam in 佐賀) (#79).
+    const damId = stampedMaster(masters, key)?.id ?? best?.m.id ?? null;
 
     // The feed's own JSON key is the stable id; these 12 dams span five
     // prefectures and the feed publishes no pref code, so leave it null.
     universe.push({
       externalId: key,
       name: damName,
-      resolvedDamId: best?.id ?? null,
+      resolvedDamId: damId,
     });
 
-    if (!best) {
+    if (!damId) {
       log(`${SOURCE_ID}: no master match for "${damName}"`);
       continue;
     }
 
-    out.push({ damName, damId: best.id });
-    await sql`
-      UPDATE dams
-      SET external_ids = COALESCE(external_ids, '{}'::jsonb)
-                       || jsonb_build_object(${SOURCE_ID}::text, ${key}::text)
-      WHERE id = ${best.id}
-        AND COALESCE(external_ids->>${SOURCE_ID}, '') <> ${key}
-    `;
+    out.push({ damName, damId });
+    await bindExternalId(damId, SOURCE_ID, key);
   }
 
   await recordUniverse(SOURCE_ID, universe);
