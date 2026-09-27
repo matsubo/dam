@@ -98,9 +98,15 @@ describe('buildMasterUpsertSql', () => {
     ]);
   });
 
-  test('leaves prod specs alone but fills blanks and adds non-damnet ids', async () => {
+  test('leaves prod specs and source stamps alone but fills blanks', async () => {
     const [a] = await sql<
-      { height: string; cap: string; manager: string | null; elev: number; seedOnly: string }[]
+      {
+        height: string;
+        cap: string;
+        manager: string | null;
+        elev: number;
+        seedOnly: string | null;
+      }[]
     >`
       SELECT height_m::TEXT AS height, active_capacity_m3::TEXT AS cap, manager,
              elevation_m AS elev, external_ids->>'seed-only' AS "seedOnly"
@@ -111,16 +117,18 @@ describe('buildMasterUpsertSql', () => {
       cap: '5000.00',
       manager: null,
       elev: 42,
-      seedOnly: `x-${NDI_A}`,
+      seedOnly: null,
     });
   });
 
-  test('inserts a brand-new dam without a damnet stamp', async () => {
-    const [n] = await sql<{ damnet: string | null; height: string }[]>`
-      SELECT external_ids->>'damnet' AS damnet, height_m::TEXT AS height
+  test('inserts a brand-new dam carrying only its ndi id', async () => {
+    // Source stamps (damnet, hyogo-bodik, …) belong to the tasks that bind
+    // them; a snapshot's copy may point at the wrong row (#54, #57).
+    const [n] = await sql<{ ids: Record<string, string>; height: string }[]>`
+      SELECT external_ids AS ids, height_m::TEXT AS height
       FROM dams WHERE external_ids ->> 'ndi' = ${NDI_NEW}
     `;
-    expect(n).toEqual({ damnet: null, height: '30.00' });
+    expect(n).toEqual({ ids: { ndi: NDI_NEW }, height: '30.00' });
   });
 
   test('source_priorities: inserts new rows only and never re-adds synthetic', async () => {

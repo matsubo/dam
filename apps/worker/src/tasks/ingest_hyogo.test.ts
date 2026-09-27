@@ -7,7 +7,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { parseHyogoCsv } from './ingest_hyogo.ts';
+import { chooseMaster, parseHyogoCsv } from './ingest_hyogo.ts';
 
 const FIXTURE = join(
   import.meta.dir,
@@ -50,5 +50,28 @@ describe('parseHyogoCsv', () => {
   test('returns empty array for header-only / empty input', () => {
     expect(parseHyogoCsv('局番号,観測所名,観測時刻\n')).toEqual([]);
     expect(parseHyogoCsv('')).toEqual([]);
+  });
+});
+
+describe('chooseMaster (#57)', () => {
+  const m = (
+    id: number,
+    name: string,
+    completedYear: number | null = null,
+    stamp: string | null = null,
+  ) => ({
+    id: BigInt(id),
+    name,
+    completedYear,
+    stamp,
+  });
+  test('keeps the 長谷 row already stamped with the station', () => {
+    // Two same-name 長谷 in 兵庫: the BODIK station is たつの's (id 20), not 神河's (id 10).
+    const masters = [m(10, '長谷'), m(20, '長谷', null, '長谷ダム')];
+    expect(chooseMaster('長谷', masters, '長谷ダム')).toBe(20n);
+  });
+  test('binds 菅生 to the completed （再）, not the lower-id （元）', () => {
+    const masters = [m(10, '菅生（元）', 1968), m(20, '菅生（再）', 2010)];
+    expect(chooseMaster('菅生', masters, '菅生ダム')).toBe(20n);
   });
 });
