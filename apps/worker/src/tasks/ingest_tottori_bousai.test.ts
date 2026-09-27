@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'bun:test';
 import listFixture from '../../../../tests/fixtures/tottori_bousai/list_2026-06-05-08-20.json';
-// Two of the hourly lists 鳥取県防災Web never completed: total=2 instead of 6,
-// with a zero-level placeholder in place of real telemetry.
+// Items that are not the dam's own telemetry, verbatim from 鳥取県防災Web:
+//   09-23-14-20 incomplete list (total=2), both items a 0 m placeholder
+//   09-27-05-20 complete list, 菅沢 carries 朝鍋's real values
+//   09-27-12-20 incomplete list (total=2), 朝鍋 a 0 m placeholder, 菅沢 real
 import partialCopied from '../../../../tests/fixtures/tottori_bousai/list_2026-09-23-14-20.json';
+import completeCopied from '../../../../tests/fixtures/tottori_bousai/list_2026-09-27-05-20.json';
 import partialPlaceholder from '../../../../tests/fixtures/tottori_bousai/list_2026-09-27-12-20.json';
 import {
   chooseMaster,
@@ -125,6 +128,22 @@ describe('parseTottoriItems', () => {
     // 09-23 14:20: both items are 0 m / 0 千m³ and 菅沢 carries 朝鍋's
     // 24 % / 0.08 / 0.07 verbatim — none of it is 菅沢's.
     expect(parseTottoriItems(partialCopied.items as Items)).toEqual([]);
+  });
+
+  it("drops a 菅沢 item carrying 朝鍋's real values, keeps the other five", () => {
+    // 09-27 05:20, total=6: 菅沢 reads 102.89 m / 280 千m³ / 24 % — 朝鍋's
+    // figures to the digit — against its own 最低水位 353.1 m.
+    const rows = parseTottoriItems(completeCopied.items as Items);
+    expect(rows.map((r) => r.observatoryName)).toEqual([
+      '百谷ダム',
+      '佐治川ダム',
+      '東郷ダム',
+      '賀祥ダム',
+      '朝鍋ダム',
+    ]);
+    const asanabe = rows.find((r) => r.observatoryName === '朝鍋ダム');
+    expect(asanabe?.waterLevelM).toBeCloseTo(102.89, 2);
+    expect(asanabe?.storageVolumeM3).toBe(280_000);
   });
 });
 
