@@ -20,7 +20,9 @@
 // the latest hour's observation plus a 22-hour rolling backfill window so
 // brief outages self-heal.
 
+import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
+import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
@@ -183,20 +185,22 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
   // published name is the key for every row.
   const universe: UniverseRow[] = [];
   for (const c of DAMS) {
-    const rows = await sql<{ id: bigint; name: string }[]>`
-      SELECT id, name FROM dams
+    // A redeveloped dam's twins share the ELSE rank, so chooseRanked picks the
+    // current one; a row already stamped with the station keeps it (#79).
+    const rows = await sql<(BindableMaster & { rank: number })[]>`
+      SELECT id, name, completed_year AS "completedYear",
+             external_ids->>'shiga-bousai' AS stamp,
+             CASE
+               WHEN name = ${c.masterName} THEN 0
+               WHEN name = ${`${c.masterName}ダム`} THEN 1
+               ELSE 5
+             END AS rank
+      FROM dams
       WHERE pref_code = ${PREF_CODE}
         AND name LIKE ${`%${c.masterName}%`}
-      ORDER BY
-        CASE
-          WHEN name = ${c.masterName} THEN 0
-          WHEN name = ${`${c.masterName}ダム`} THEN 1
-          ELSE 5
-        END,
-        id
-      LIMIT 1
+      ORDER BY rank, id
     `;
-    const r = rows[0];
+    const r = chooseRanked(rows, c.shigaName);
     universe.push({
       externalId: c.shigaName,
       name: c.shigaName,
@@ -208,13 +212,7 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
       continue;
     }
     matches.push({ cfg: c, damId: r.id });
-    await sql`
-      UPDATE dams
-      SET external_ids = COALESCE(external_ids, '{}'::jsonb)
-                       || jsonb_build_object('shiga-bousai', ${c.shigaName}::text)
-      WHERE id = ${r.id}
-        AND COALESCE(external_ids->>'shiga-bousai', '') <> ${c.shigaName}
-    `;
+    await bindExternalId(r.id, 'shiga-bousai', c.shigaName);
   }
   for (const name of UNINGESTED_STATIONS) {
     universe.push({ externalId: name, name, prefCode: PREF_CODE, resolvedDamId: null });
