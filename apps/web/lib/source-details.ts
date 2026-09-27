@@ -406,7 +406,7 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
       '長野県企業局 ダム情報 (naganoken-kigyokyoku.jp/dam) — /json/{takato,sugadaira}_new.json',
     license:
       '利用条件の記載なし (ページ表記は「Copyright © Nagano Prefecture. All Rights Reserved.」) — 観測値のみを出典明示で掲載',
-    cadence: '時次 (元データは 10 分粒度・直近 4 件; 取得は毎時 :54)',
+    cadence: '10 分 (元データは 10 分粒度・直近 4 件; 取得は毎時 :24 / :54 の 2 回で全 6 件を保存)',
     what: '長野県企業局管理の高遠ダム・菅平ダムの貯水位 (EL.m)・全流入量・全放流量。菅平は貯水率 (%) も公開 (貯水量は非公開)。菅平は本ソース唯一の観測源。',
     label: '長野県企業局',
   },
