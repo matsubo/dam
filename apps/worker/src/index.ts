@@ -31,7 +31,9 @@ import ingestIshikawa from './tasks/ingest_ishikawa_kasen.ts';
 import ingestIwate from './tasks/ingest_iwate_kasen.ts';
 import ingestJwaChiba from './tasks/ingest_jwa_chiba.ts';
 import ingestJwaChikugo from './tasks/ingest_jwa_chikugo.ts';
+import ingestJwaChikugoRt from './tasks/ingest_jwa_chikugo_rt.ts';
 import ingestJwaChubu from './tasks/ingest_jwa_chubu.ts';
+import ingestJwaFukudou from './tasks/ingest_jwa_fukudou.ts';
 import ingestJwaJunpo from './tasks/ingest_jwa_junpo.ts';
 import ingestJwaKisoRt from './tasks/ingest_jwa_kiso_rt.ts';
 import ingestJwaToneAra from './tasks/ingest_jwa_toneara.ts';
@@ -120,6 +122,8 @@ async function main(): Promise<void> {
       'ingest:jwa-chubu': ingestJwaChubu,
       'ingest:jwa-toyokawa': ingestJwaToyokawa,
       'ingest:jwa-kiso-rt': ingestJwaKisoRt,
+      'ingest:jwa-chikugo-rt': ingestJwaChikugoRt,
+      'ingest:jwa-fukudou': ingestJwaFukudou,
       'ingest:jwa-yoshino': ingestJwaYoshino,
       'ingest:aitoyo': ingestAitoyo,
       'ingest:jwa-chiba-bouso': ingestJwaChiba,
