@@ -14,7 +14,11 @@
 //
 // Across a prefecture border only an exact name within CROSS_PREF_MAX_DISTANCE_M
 // binds, and only at review confidence — see CROSS_PREF_EXACT_SCORE.
+//
+// The normalised name drops （元）/（再）, so a redeveloped dam's twin rows
+// score identically; the stamp, then preferMaster, decides between them (#79).
 
+import { type BindableMaster, preferMaster, stampedMaster, twinOf } from '@dam/core/dam_binding';
 import { normalizeJaName, trigramSimilarity } from '@dam/core/similarity';
 
 /** Minimum score that writes `external_ids.kasenbosai`. */
@@ -38,8 +42,7 @@ export const CROSS_PREF_MAX_DISTANCE_M = 2000;
  */
 export const CROSS_PREF_EXACT_SCORE = 0.75;
 
-export interface ScoreCandidate {
-  name: string;
+export interface ScoreCandidate extends BindableMaster {
   distanceM: number;
   /** JIS prefecture code of the master row; null when the master has none. */
   prefCode: string | null;
@@ -156,22 +159,53 @@ export function pickStationPerMaster<T extends MasterBinding>(
   return new Set(bestPerMaster.values());
 }
 
+/** True when `a` and `b` are the （元） and （再） rows of one redeveloped dam. */
+function isTwinPair(a: ScoreCandidate, b: ScoreCandidate): boolean {
+  const ta = twinOf(a.name);
+  const tb = twinOf(b.name);
+  return ta != null && tb != null && ta.base === tb.base && ta.marker !== tb.marker;
+}
+
+export interface PickOptions {
+  /** The station's obs_fcd: a twin already stamped with it keeps it. */
+  stationKey?: string | null;
+  year?: number;
+}
+
 /**
  * Highest score wins; ties break on distance so the ranking does not depend on
  * the order the caller happened to fetch candidates in.
+ *
+ * A winner whose twin scores the same does not fall back to distance. The twins
+ * usually share coordinates, so the pick used to follow the SQL row order and
+ * each run could stamp the other twin (#79). Instead the twin already stamped
+ * with this station keeps it; only when neither or both are does preferMaster
+ * decide. Stamp first because a blank （再） completion year means "under
+ * construction" or "not recorded" (新保川, 松川, 長柄, 五名), and preferMaster
+ * reads both as "（元）", which would move a stamp already confirmed on the （再）.
  */
 export function pickBest<T extends ScoreCandidate>(
   candidates: readonly T[],
   normStem: string,
   jisPref: string | null,
+  { stationKey = null, year = new Date().getFullYear() }: PickOptions = {},
 ): BestMatch<T> | null {
-  return candidates.reduce<BestMatch<T> | null>((best, candidate) => {
-    const scored = scoreCandidate(candidate, normStem, jisPref);
-    if (best == null) return { ...scored, candidate };
-    if (scored.score > best.score) return { ...scored, candidate };
-    if (scored.score === best.score && candidate.distanceM < best.candidate.distanceM) {
-      return { ...scored, candidate };
-    }
-    return best;
+  const scored = candidates.map((candidate) => ({
+    ...scoreCandidate(candidate, normStem, jisPref),
+    candidate,
+  }));
+  const best = scored.reduce<BestMatch<T> | null>((held, s) => {
+    if (held == null || s.score > held.score) return s;
+    if (s.score === held.score && s.candidate.distanceM < held.candidate.distanceM) return s;
+    return held;
   }, null);
+  if (best == null) return null;
+  const twin = scored.find(
+    (s) => s.score === best.score && isTwinPair(s.candidate, best.candidate),
+  );
+  if (twin == null) return best;
+  const stamped =
+    stationKey == null ? null : stampedMaster([best.candidate, twin.candidate], stationKey);
+  if (stamped != null) return stamped === twin.candidate ? twin : best;
+  return preferMaster(twin.candidate, best.candidate, year) ? twin : best;
 }
