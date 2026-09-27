@@ -402,7 +402,8 @@ export const CRONTAB = `
 # 山口県土木防災情報システム ダム観測局 — 23 ダム (小瀬川/生見川/御庄川/中山川/平瀬/
 # 今富/厚東川/真締川/末武川/木屋川/向道/菅野/川上/屋代/佐波川/荒谷/一の坂/湯免/
 # 大坊/見島/阿武川/黒杭川/黒杭川上流). UTF-8 ASPX HTML; one fetch per station;
-# table rows class="hour_XX"; waterLevel + storageRate + inflow + outflow (no volume).
+# writes all 24 on-the-hour rows (class="hour_XX") of the page's 24-hour table;
+# waterLevel + storageRate + inflow + outflow (no volume).
 # Priority 308. Cron at :46.
 46 * * * * ingest:yamaguchi-bousai
 

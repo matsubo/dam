@@ -1,9 +1,30 @@
+// Fixture: the データ table of the live smartphone page
+// sp/dam/spdmObserve.aspx?stncd=015 (厚東川ダム) captured 2026-09-27 21:40 JST
+// (観測日時 21:30), trimmed verbatim from <table class="tb-data"> through the
+// ダム局詳細 table. The page closes none of its data <tr>s; the first </tr>
+// after the data rows belongs to the ダム局詳細 table.
+
 import { describe, expect, test } from 'bun:test';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import {
   chooseMaster,
   parseYamaguchiHtml,
   parseYamaguchiTimestamp,
 } from './ingest_yamaguchi_bousai.ts';
+
+const FIXTURE = join(
+  import.meta.dir,
+  '..',
+  '..',
+  '..',
+  '..',
+  'tests/fixtures/yamaguchi_bousai/spdmObserve_015_2026-09-27T2130.html',
+);
+
+async function fixtureHtml(): Promise<string> {
+  return readFile(FIXTURE, 'utf8');
+}
 
 describe('parseYamaguchiTimestamp', () => {
   test('parses "YYYY/MM/DD HH:MM" (JST) → UTC', () => {
@@ -23,92 +44,53 @@ describe('parseYamaguchiTimestamp', () => {
   });
 });
 
-// Sample HTML with two hourly rows — second is more recent
-const SAMPLE_HTML = `
-<table>
-<tr class="hour_20 ">
-  <td class="plus-hour">2026/06/05<br />20:00</td>
-  <td>213.40</td>
-  <td>64.0</td>
-  <td>4.50</td>
-  <td>5.00</td>
-  <td>0.50</td>
-</tr>
-<tr class="dotted minute_20 ">
-  <td class="inner-date">2026/06/05<br />20:10</td>
-  <td>213.39</td>
-  <td>63.9</td>
-  <td>3.80</td>
-  <td>4.90</td>
-  <td>1.10</td>
-</tr>
-<tr class="hour_21 ">
-  <td class="plus-hour">2026/06/05<br />21:00</td>
-  <td>213.33</td>
-  <td>63.7</td>
-  <td>3.89</td>
-  <td>4.83</td>
-  <td>0.94</td>
-</tr>
-</table>
-`;
-
 describe('parseYamaguchiHtml', () => {
-  test('returns the most recent hourly row (last hour_XX)', () => {
-    const row = parseYamaguchiHtml(SAMPLE_HTML, '小瀬川ダム');
-    expect(row).toBeDefined();
-    expect(row?.yamaguchiName).toBe('小瀬川ダム');
-    expect(row?.observedAt.toISOString()).toBe('2026-06-05T12:00:00.000Z');
-    expect(row?.waterLevelM).toBeCloseTo(213.33);
-    expect(row?.storageRate).toBeCloseTo(0.637);
-    expect(row?.inflowM3s).toBeCloseTo(3.89);
-    expect(row?.outflowM3s).toBeCloseTo(4.83);
+  test('reads every on-the-hour row of the 24-hour table, oldest first', async () => {
+    const rows = parseYamaguchiHtml(await fixtureHtml(), '厚東川ダム');
+    // 2026-09-26 22:00 … 2026-09-27 21:00 JST. The leading 21:40 row
+    // (class hour_21b) opens the window but is not an hourly reading.
+    expect(rows).toHaveLength(24);
+    expect(rows[0]?.observedAt.toISOString()).toBe('2026-09-26T13:00:00.000Z');
+    expect(rows.at(-1)?.observedAt.toISOString()).toBe('2026-09-27T12:00:00.000Z');
   });
 
-  test('minute rows are not chosen as the latest', () => {
-    const row = parseYamaguchiHtml(SAMPLE_HTML, '小瀬川ダム');
-    // Latest hour row is hour_21 at 21:00, not the minute_20 at 20:10
-    expect(row?.observedAt.toISOString()).toBe('2026-06-05T12:00:00.000Z');
+  test('the newest row carries the 21:00 JST readings, not the day-old first row', async () => {
+    const newest = parseYamaguchiHtml(await fixtureHtml(), '厚東川ダム').at(-1);
+    expect(newest?.yamaguchiName).toBe('厚東川ダム');
+    expect(newest?.waterLevelM).toBe(30.9);
+    expect(newest?.storageRate).toBeCloseTo(0.366, 6);
+    expect(newest?.inflowM3s).toBe(5.91);
+    expect(newest?.outflowM3s).toBe(4.91);
   });
 
-  test('handles <br> without slash', () => {
-    const html = `
-      <tr class="hour_21 ">
-        <td>2026/06/05<br>21:30</td>
-        <td>210.00</td><td>55.0</td><td>2.0</td><td>3.0</td><td>1.0</td>
-      </tr>
-    `;
-    const row = parseYamaguchiHtml(html, 'テストダム');
-    expect(row?.observedAt.toISOString()).toBe('2026-06-05T12:30:00.000Z');
+  test('drops an outage row the page prints as 貯水位 0.00', async () => {
+    // Simulated: prod holds 283 yamaguchi-bousai rows (10 dams, 2026-06..09)
+    // with 貯水位/貯水率/流入量/放流量 all 0 (see migration 0086). Rewrite
+    // the fixture's 21:00 row into that shape.
+    const html = (await fixtureHtml()).replace(
+      '2026/09/27<br />21:00</td><td>30.90</td><td>36.6</td><td>5.91</td><td>4.91</td>',
+      '2026/09/27<br />21:00</td><td>0.00</td><td>0.0</td><td>0.00</td><td>0.00</td>',
+    );
+    const rows = parseYamaguchiHtml(html, '厚東川ダム');
+    expect(rows).toHaveLength(23);
+    expect(rows.at(-1)?.observedAt.toISOString()).toBe('2026-09-27T11:00:00.000Z');
   });
 
-  test('returns null for missing values when all measurements null', () => {
-    const html = `
-      <tr class="hour_21 ">
-        <td>2026/06/05<br />21:00</td>
-        <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
-      </tr>
-    `;
-    expect(parseYamaguchiHtml(html, 'テストダム')).toBeNull();
+  test('reads the legend markers **** (欠測) and blank (未観測) as null', async () => {
+    // Simulated: the site legend defines both markers; rewrite the 21:00 row.
+    const html = (await fixtureHtml()).replace(
+      '2026/09/27<br />21:00</td><td>30.90</td><td>36.6</td><td>5.91</td>',
+      '2026/09/27<br />21:00</td><td>30.90</td><td>****</td><td></td>',
+    );
+    const newest = parseYamaguchiHtml(html, '厚東川ダム').at(-1);
+    expect(newest?.waterLevelM).toBe(30.9);
+    expect(newest?.storageRate).toBeNull();
+    expect(newest?.inflowM3s).toBeNull();
+    expect(newest?.outflowM3s).toBe(4.91);
   });
 
-  test('returns null for empty HTML', () => {
-    expect(parseYamaguchiHtml('', 'テストダム')).toBeNull();
-    expect(parseYamaguchiHtml('<table></table>', 'テストダム')).toBeNull();
-  });
-
-  test('"-" values parse as null', () => {
-    const html = `
-      <tr class="hour_21 ">
-        <td>2026/06/05<br />21:00</td>
-        <td>213.33</td><td>-</td><td>-</td><td>4.83</td><td>-</td>
-      </tr>
-    `;
-    const row = parseYamaguchiHtml(html, 'テストダム');
-    expect(row?.waterLevelM).toBeCloseTo(213.33);
-    expect(row?.storageRate).toBeNull();
-    expect(row?.inflowM3s).toBeNull();
-    expect(row?.outflowM3s).toBeCloseTo(4.83);
+  test('returns nothing for a page without the data table', () => {
+    expect(parseYamaguchiHtml('', '厚東川ダム')).toEqual([]);
   });
 });
 
