@@ -49,6 +49,11 @@ export const CRONTAB = `
 # 02:00 UTC = 11:00 JST so we get fresh data for both branches.
 0 2 * * * ingest:aitoyo
 
+# 水資源機構 愛知用水総合管理所 水情報 — 牧尾 / 東郷調整池 / 前山池. Daily 0時
+# JST values, page updated ~10:00 JST; 02:20 UTC = 11:20 JST, retried 05:20
+# UTC for a late update (idempotent upsert on the 0時 timestamp).
+20 2,5 * * * ingest:jwa-aichi-yosui
+
 # JWA Chikugo (筑後川 7 dams: 松原/下筌/大山/合所/江川/寺内/小石原川). Page
 # shows today 0時 JST values, refreshed during business hours. Fetch at
 # 01:00 UTC = 10:00 JST.
