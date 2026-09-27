@@ -1,4 +1,5 @@
-// Parser tests for 香川県「降雨及び貯水率の状況」の主要ため池貯水率.
+// Parser tests for 香川県「降雨及び貯水率の状況」の主要ため池貯水率 and the
+// 宝山湖 block of the かがわの水 page.
 //
 // Runs against the real 令和8年9月25日 PDF and the かがわの水 page captured on
 // 2026-09-27 (tests/fixtures/kagawa_tameike), so the unpdf extraction is
@@ -6,7 +7,13 @@
 
 import { describe, expect, test } from 'bun:test';
 import type { BindableMaster } from '@dam/core/dam_binding';
-import { chooseMaster, findLatestPdfUrl, parseKagawaTameikeText } from './ingest_kagawa_tameike.ts';
+import {
+  chooseHozanko,
+  chooseMaster,
+  findLatestPdfUrl,
+  parseHozankoHtml,
+  parseKagawaTameikeText,
+} from './ingest_kagawa_tameike.ts';
 import { pdfToText } from './ingest_oita_nourin.ts';
 
 const DIR = new URL('../../../../tests/fixtures/kagawa_tameike/', import.meta.url).pathname;
@@ -69,6 +76,43 @@ describe('findLatestPdfUrl', () => {
   });
 });
 
+describe('parseHozankoHtml — 宝山湖 on the かがわの水 page', () => {
+  test('reads the 宝山湖 rate, stamped at the stated hour JST', async () => {
+    // Re-captured 2026-09-28: byte-identical to this fixture. The page's
+    // earlier blocks (早明浦 13.9%, 県内15ダム 92.2%, ため池 83%) must not leak in.
+    const html = await Bun.file(`${DIR}kfvn_20260927.html`).text();
+    expect(parseHozankoHtml(html)).toEqual({
+      observedAt: new Date('2026-09-25T00:00:00.000Z'), // 9時 JST
+      storageRate: 0.375,
+    });
+  });
+
+  const block = (heading: string, rate: string) =>
+    `<h2>早明浦ダム2026年9月25日（0時現在）</h2><table><tr><td>13.9%</td></tr></table>` +
+    `<h2>${heading}</h2><table><tr><th>貯水量（100％）</th><th>現在貯水率</th></tr>` +
+    `<tr><td><p>3百万立方メートル</p></td><td><p>${rate}<br /><img alt="w1_35.gif" /></p></td></tr></table>` +
+    `<ul><li><a href="http://www.water.go.jp/yoshino/kagawa/">宝山湖情報（外部サイトへリンク）</a></li></ul>`;
+
+  test('a heading without an hour is stamped at JST midnight', () => {
+    expect(parseHozankoHtml(block('宝山湖2026年1月5日現在', '100%'))).toEqual({
+      observedAt: new Date('2026-01-04T15:00:00.000Z'),
+      storageRate: 1,
+    });
+  });
+
+  test('a missing or zero figure is published but carries no rate', () => {
+    const heading = '宝山湖2026年9月25日（9時現在）';
+    const at = new Date('2026-09-25T00:00:00.000Z');
+    expect(parseHozankoHtml(block(heading, '－'))).toEqual({ observedAt: at, storageRate: null });
+    expect(parseHozankoHtml(block(heading, '0.0%'))).toEqual({ observedAt: at, storageRate: null });
+  });
+
+  test('a page without the 宝山湖 block yields nothing, not the link text', () => {
+    const html = block('県内15ダム2026年9月25日（0時現在）', '92.2%');
+    expect(parseHozankoHtml(html)).toBeNull();
+  });
+});
+
 describe('chooseMaster', () => {
   const m = (id: number, name: string, completedYear: number | null = null) =>
     ({ id: BigInt(id), name, completedYear, stamp: null }) as BindableMaster;
@@ -86,5 +130,27 @@ describe('chooseMaster', () => {
   test('a generic name binds only on an exact stem, never a prefix', () => {
     expect(chooseMaster('新池', [m(1, '新中山池'), m(2, '新池田')])).toBeNull();
     expect(chooseMaster('神内池', [m(1, '神内上池'), m(2, '神内池')])).toBe(2n);
+  });
+});
+
+describe('chooseHozanko', () => {
+  const m = (id: number, name: string, ndi: string | null, stamp: string | null = null) => ({
+    id: BigInt(id),
+    name,
+    completedYear: null,
+    stamp,
+    ndi,
+  });
+
+  test('binds 香川用水調整池 by its NDI id, not by name', () => {
+    expect(chooseHozanko([m(1, '宝山池', '9999'), m(2, '香川用水調整池', '2170')])).toBe(2n);
+  });
+
+  test('an existing stamp wins over the NDI pin', () => {
+    expect(chooseHozanko([m(1, '香川用水調整池', '2170'), m(3, 'x', null, '宝山湖')])).toBe(3n);
+  });
+
+  test('no NDI 2170 among the masters leaves it unbound', () => {
+    expect(chooseHozanko([m(1, '宝山湖', null)])).toBeNull();
   });
 });
