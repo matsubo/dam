@@ -147,14 +147,18 @@ export function extractYearFromResourceName(name: string): number | null {
 
 async function ensureSourcePriority(): Promise<void> {
   await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
+    INSERT INTO source_priorities (source_id, priority, description, active, historical_only)
     VALUES (${SOURCE_ID}, 296,
             '鹿児島県 BODIK ダム諸量 — 3 dams (大和/川辺/西之谷), 10-min, 2008+, CC-BY',
-            true)
+            true, true)
     ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
+      SET priority        = EXCLUDED.priority,
+          description     = EXCLUDED.description,
+          active          = EXCLUDED.active,
+          -- Backfill-only: this task has no crontab entry, so it never records
+          -- a recurring scan. Same reasoning as migration 0058 — kept here so a
+          -- fresh environment cannot recreate the row inside the gate.
+          historical_only = EXCLUDED.historical_only
   `;
 }
 

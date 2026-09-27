@@ -273,6 +273,13 @@ export default async function CoveragePage() {
             その担当地域の「提供元なし」には保留が残ります。
           </p>
         ) : null}
+        {triage.sourcesHistoricalOnly > 0 ? (
+          <p className="text-xs text-on-surface-variant mt-2 leading-relaxed">
+            定期スキャンを持たない提供元（一度きりの歴史ダンプなど）が{' '}
+            {triage.sourcesHistoricalOnly}{' '}
+            件あり、これもゲートから除外しています。該当ダムの過去データは「歴史データ含む」に数えています。
+          </p>
+        ) : null}
       </section>
 
       <section className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
