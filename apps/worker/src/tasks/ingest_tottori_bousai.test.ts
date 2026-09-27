@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'bun:test';
 import listFixture from '../../../../tests/fixtures/tottori_bousai/list_2026-06-05-08-20.json';
+// Two of the hourly lists 鳥取県防災Web never completed: total=2 instead of 6,
+// with a zero-level placeholder in place of real telemetry.
+import partialCopied from '../../../../tests/fixtures/tottori_bousai/list_2026-09-23-14-20.json';
+import partialPlaceholder from '../../../../tests/fixtures/tottori_bousai/list_2026-09-27-12-20.json';
 import {
   chooseMaster,
   normalizeName,
@@ -103,6 +107,24 @@ describe('parseTottoriItems', () => {
   it('observatoryId is stringified', () => {
     const rows = parseTottoriItems(listFixture.items as Parameters<typeof parseTottoriItems>[0]);
     expect(rows[0]?.observatoryId).toBe('71001');
+  });
+
+  type Items = Parameters<typeof parseTottoriItems>[0];
+
+  it('drops the zero-level placeholder of an incomplete list, keeps real rows', () => {
+    // 09-27 12:20: 朝鍋 reads 0 m / 0 千m³ against its own 最低水位 97.0 m,
+    // while 菅沢 carries real telemetry (356.2 m, between 11:20's 356.18 and
+    // 13:20's 356.22 in the complete lists).
+    const rows = parseTottoriItems(partialPlaceholder.items as Items);
+    expect(rows.map((r) => r.observatoryName)).toEqual(['菅沢ダム']);
+    expect(rows[0]?.waterLevelM).toBeCloseTo(356.2, 2);
+    expect(rows[0]?.storageVolumeM3).toBe(429_000);
+  });
+
+  it('drops placeholder rows even when their other fields look plausible', () => {
+    // 09-23 14:20: both items are 0 m / 0 千m³ and 菅沢 carries 朝鍋's
+    // 24 % / 0.08 / 0.07 verbatim — none of it is 菅沢's.
+    expect(parseTottoriItems(partialCopied.items as Items)).toEqual([]);
   });
 });
 
