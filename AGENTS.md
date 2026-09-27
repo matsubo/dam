@@ -142,7 +142,12 @@ bun run apps/web/bin/seed_synthetic_observations.ts     --hourly-days 30 --years
    `continue` that skips unmatched rows. `ingest_okayama.ts` (fetched list) and
    `ingest_cgr_mlit.ts` (hardcoded array) are the reference implementations.
    A task that genuinely cannot enumerate a list goes in the EXEMPT map in
-   `universe_instrumentation.test.ts` with a reason.
+   `universe_instrumentation.test.ts` with a reason. Where the parser can
+   see that a listed row carries no value because the provider marks it empty
+   (調査対象外, "---" in every column, a page with no readings), pass
+   `hasData: false` (and `true` for rows with values); /coverage then files
+   the dam under `published_no_data` instead of blaming ingestion. Leave it
+   unset when unsure: an unreadable cell may be our own parser breaking.
 
 8. **Test cleanup scoping**: see `packages/adapters/ndi/src/import_dams.test.ts`
    for the correct pattern (`WHERE external_ids ->> 'ndi' IN ('1234567890','9999999999')`).

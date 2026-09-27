@@ -1,0 +1,61 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=Shift_JIS">
+<meta http-equiv="Cache-Control" content="no-cache" />
+<title>滋賀県土木防災情報システム</title>
+</head>
+<body>
+<center>
+ダム観測情報<br>
+ダム諸量一覧
+</center>
+<hr>
+<p>◆犬上川ダム<br>
+</p>
+<!--
+［最新観測時刻］
+-->
+
+<form id="timeForm" name="timeForm" method="GET" action="/mobile/dam/dam_data.php"><select name="datetime" id="datetime">
+<option selected value="202609280810">09/28 08:10</option>
+<option value="202609280800">09/28 08:00</option>
+<option value="202609280750">09/28 07:50</option>
+<option value="202609280740">09/28 07:40</option>
+<option value="202609280730">09/28 07:30</option>
+<option value="202609280720">09/28 07:20</option>
+<option value="202609280710">09/28 07:10</option>
+<option value="202609280700">09/28 07:00</option>
+<option value="202609280650">09/28 06:50</option>
+<option value="202609280640">09/28 06:40</option>
+<option value="202609280630">09/28 06:30</option>
+<option value="202609280620">09/28 06:20</option>
+<option value="202609280610">09/28 06:10</option>
+<option value="202609280600">09/28 06:00</option>
+<option value="202609280550">09/28 05:50</option>
+<option value="202609280540">09/28 05:40</option>
+<option value="202609280530">09/28 05:30</option>
+<option value="202609280520">09/28 05:20</option>
+<option value="202609280510">09/28 05:10</option>
+</select>
+<input type="submit" name="timeSubmit" value="適用"><input type="submit" name="timeSubmit" value="最新"><input type="hidden" id="ID" name="ID" value="39999"></form>
+<p>09月28日 08時10分現在<br>
+
+
+<hr>
+<p><font color="#66CCFF">▼</font>洪水量未満<br>
+<font color="#cc9933">▼</font>洪水調節中<br>
+<font color="#bb0000">▼</font>洪水調節中<br>
+（容量8割超過※注）<br><font color="#666666">▼</font>利水ダムほか</p>
+<p> 
+※注：ただし、流入量が洪水量以上の場合<br>貯水位（m）<br>
+流入量（m3/s）<br>
+放流量（m3/s）<br>
+-：未観測<br>
+*：欠測<br>
+</p>
+<hr>
+<a href="dam_select.php?datetime=202609280810">「ダム観測局一覧」へ</a><a href="../index.php"> <br>
+「トップメニュー」へ</a>
+<img src="/mobile/ga4.php?title=%E6%BB%8B%E8%B3%80%E7%9C%8C%E5%9C%9F%E6%9C%A8%E9%98%B2%E7%81%BD%E6%83%85%E5%A0%B1%E3%82%B7%E3%82%B9%E3%83%86%E3%83%A0" /> 
+</body>
+</html>

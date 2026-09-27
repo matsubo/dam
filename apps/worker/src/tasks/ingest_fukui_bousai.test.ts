@@ -1,7 +1,7 @@
 // apps/worker/src/tasks/ingest_fukui_bousai.test.ts
 
 import { describe, expect, test } from 'bun:test';
-import { parseFukuiPage, parseFukuiTimestamp } from './ingest_fukui_bousai.ts';
+import { parseFukuiListing, parseFukuiPage, parseFukuiTimestamp } from './ingest_fukui_bousai.ts';
 
 describe('parseFukuiTimestamp', () => {
   test('parses "YYYY&nbsp;MM/DD&nbsp;HH:MM" JST → UTC', () => {
@@ -98,5 +98,29 @@ describe('parseFukuiPage', () => {
 
   test('returns empty array for empty string', () => {
     expect(parseFukuiPage('')).toHaveLength(0);
+  });
+});
+
+// 滝波ダム as the live 現況表 printed it on 2026-09-28: a timestamp, then "---"
+// and blanks in every value column.
+const TAKINAMI_ROW =
+  '<tr><td nowrap class="normal0"><a href="javascript:void(0)" onClick="myIn(\'16\',\'202609280820\',\'1\')">滝波ダム</a></td><td nowrap class="normal0">福井市清水町滝波</td><td nowrap class="normal0">2026&nbsp;09/28&nbsp;08:00</td><td nowrap class="normal0">---</td><td nowrap class="normal0">&nbsp;</td><td nowrap class="normal0">&nbsp;</td><td nowrap class="normal0">&nbsp;</td><td nowrap class="normal0">&nbsp;</td><td nowrap class="normal0">福井市</td>';
+
+describe('parseFukuiListing', () => {
+  test('lists every dam, marking the one whose value columns are all empty', () => {
+    const listing = parseFukuiListing(SAMPLE_PAGE.replace('</tbody>', `${TAKINAMI_ROW}</tbody>`));
+    expect(listing).toEqual([
+      { name: '永平寺ダム', hasData: true },
+      { name: '真名川ダム', hasData: true },
+      { name: '開谷ダム', hasData: true },
+      { name: '滝波ダム', hasData: false },
+    ]);
+  });
+
+  test('an unreadable value cell is unknown, not "no value"', () => {
+    // Garbage where a number belongs is more likely our parser than the
+    // provider publishing nothing.
+    const garbled = TAKINAMI_ROW.replace('>---<', '>12,3<');
+    expect(parseFukuiListing(garbled)).toEqual([{ name: '滝波ダム', hasData: null }]);
   });
 });

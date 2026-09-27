@@ -91,6 +91,17 @@ function parsePercent(cell: string): number | null {
 /** Dam-like names only — excludes the 県平均 summary row and the footnote row. */
 const NAME_RE = /(ダム|調整池|溜池|池|沼)$/;
 
+/** One dam the page lists, and whether its row carried a usable rate. */
+export interface PublishedRow {
+  name: string;
+  /**
+   * true = a rate we store; false = the page itself says there is none
+   * (調査対象外, or the annotated 0.0 % of a drained dam); null = a cell we
+   * could not read, which may be our parser rather than the page.
+   */
+  hasData: boolean | null;
+}
+
 export function parseFukushimaNourinHtml(html: string): {
   reportDate: Date | null;
   /** Rows with a usable 貯水率 — what we store. */
@@ -100,25 +111,32 @@ export function parseFukushimaNourinHtml(html: string): {
    * source's universe: 鉄山 / 坂下 (調査対象外) and 鴻の巣 (落水) are published
    * by 福島県, so /coverage must not read them as published by nobody.
    */
-  published: string[];
+  published: PublishedRow[];
 } {
   const reportDate = parseNourinReportDate(html);
   const rows: ParsedRow[] = [];
-  const published: string[] = [];
+  const published: PublishedRow[] = [];
 
   for (const cells of tableRows(html)) {
     if (cells.length < 4) continue;
     const name = cells[0] ?? '';
     if (!NAME_RE.test(name)) continue;
-    published.push(name);
 
-    const pct = parsePercent(cells[3] ?? '');
-    if (pct === null) continue;
+    const cell = cells[3] ?? '';
+    const pct = parsePercent(cell);
     // A published 0.0% here is never an operating value: the page annotates it
     // (鴻の巣ダム is drained for construction). Dropping it keeps us out of the
     // phantom-zero hole migrations 0038/0039 had to dig us out of.
-    if (pct <= 0 || pct > MAX_PLAUSIBLE_PCT) continue;
+    if (pct === 0 || (pct === null && cell.includes('調査対象外'))) {
+      published.push({ name, hasData: false });
+      continue;
+    }
+    if (pct === null || pct > MAX_PLAUSIBLE_PCT) {
+      published.push({ name, hasData: null });
+      continue;
+    }
 
+    published.push({ name, hasData: true });
     rows.push({ fukushimaName: name, storageRate: pct / 100 });
   }
 
@@ -228,11 +246,12 @@ const task: Task = async (_payload, helpers) => {
   // season is still published, and must not be read as published by nobody.
   // The page gives no station ids, so the printed name is the external id and
   // prefCode keeps it distinct from a same-named dam elsewhere.
-  const universe: UniverseRow[] = published.map((name) => ({
+  const universe: UniverseRow[] = published.map(({ name, hasData }) => ({
     externalId: name,
     name,
     prefCode: PREF_CODE,
     resolvedDamId: chooseMaster(name, masters),
+    hasData,
   }));
   await recordUniverse(SOURCE_ID, universe);
 

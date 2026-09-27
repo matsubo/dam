@@ -90,12 +90,34 @@ describe('parseFukushimaNourinHtml', () => {
     // 坂下 / 鴻の巣 are on the page, so /coverage must not read them as
     // "nobody publishes this dam".
     const { published, rows } = parseFukushimaNourinHtml(await fixtureHtml());
-    expect(published.length).toBe(29);
-    expect(published).toContain('鉄山ダム');
-    expect(published).toContain('坂下ダム');
-    expect(published).toContain('鴻の巣ダム');
-    expect(published).not.toContain('県平均');
+    const names = published.map((p) => p.name);
+    expect(names.length).toBe(29);
+    expect(names).toContain('鉄山ダム');
+    expect(names).toContain('坂下ダム');
+    expect(names).toContain('鴻の巣ダム');
+    expect(names).not.toContain('県平均');
     expect(rows.length).toBe(26);
+  });
+
+  test('marks the rows the page itself says carry no value', async () => {
+    // 調査対象外 (鉄山 / 坂下) and the drained 0.0% (鴻の巣) are the page telling
+    // us there is nothing to publish — /coverage must not call them our bug.
+    const { published } = parseFukushimaNourinHtml(await fixtureHtml());
+    const hasData = new Map(published.map((p) => [p.name, p.hasData]));
+    expect(hasData.get('鉄山ダム')).toBe(false);
+    expect(hasData.get('坂下ダム')).toBe(false);
+    expect(hasData.get('鴻の巣ダム')).toBe(false);
+    expect([...hasData.values()].filter((v) => v === true).length).toBe(26);
+  });
+
+  test('leaves a rate cell it cannot read as unknown, not as "no value"', async () => {
+    // An unrecognised cell may be a layout change on our side; reporting it as
+    // an empty upstream row would hide that bug under 提供元に値なし.
+    const html = (await fixtureHtml()).replace(/97\.9%/, '97,9 %');
+    const { published, rows } = parseFukushimaNourinHtml(html);
+    const unreadable = published.filter((p) => p.hasData === null);
+    expect(unreadable.length).toBe(1);
+    expect(rows.map((r) => r.fukushimaName)).not.toContain(unreadable[0]?.name);
   });
 
   test('skips the 県平均 summary row and the footnote row', async () => {

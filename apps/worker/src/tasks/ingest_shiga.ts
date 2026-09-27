@@ -11,7 +11,7 @@
 // 観測局一覧: "◆<a href="dam_data.php?ID=34191&datetime=…">青土ダム</a>" per
 // station. Published 2026-09-27: 青土 / 日野川 / 永源寺 / 野洲川 / 蔵王 / 犬上川 /
 // 宇曽川 / 姉川 / 余呉湖 / 石田川 / 天川. 余呉湖 and 天川 have no master dam;
-// 犬上川 is listed with a 0.00 placeholder and no rows.
+// 犬上川 is listed with a 0.00 placeholder and a page with no rows at all.
 //
 // dam_data.php: the latest 10-minute row then six hourly rows, newest first:
 //   <p>MM/DD HH:MM<br>［貯水位］369.23<br>［流入量］1.67<br>［放流量］2.19<br>
@@ -95,6 +95,21 @@ export function parseShigaDamData(html: string, reference: Date): ParsedRow[] {
   return out;
 }
 
+/**
+ * Whether a station page carries any reading: true = rows we store; false =
+ * a recognised station page whose every level / flow is "*" 欠測, "-" 未観測
+ * or absent (犬上川 prints no rows at all); null = anything else, which may
+ * be an error page or a redesign rather than the provider publishing nothing.
+ */
+export function shigaPageHasData(html: string): boolean | null {
+  if (!/\d{2}月\d{2}日 \d{2}時\d{2}分現在/.test(html)) return null;
+  if (parseShigaDamData(html, new Date()).length > 0) return true;
+  const cells = [...html.matchAll(/［(?:貯水位|流入量|放流量)］([^<]*)/g)].map((m) =>
+    (m[1] ?? '').trim(),
+  );
+  return cells.every((c) => c === '' || c === '*' || c === '-') ? false : null;
+}
+
 async function fetchShiftJis(url: string): Promise<string | null> {
   const r = await fetch(url, {
     headers: { 'user-agent': USER_AGENT },
@@ -120,7 +135,7 @@ async function ensureSourcePriority(): Promise<void> {
 async function matchMasters(
   stations: Station[],
   log: (s: string) => void,
-): Promise<Map<string, bigint>> {
+): Promise<{ damById: Map<string, bigint>; universe: UniverseRow[] }> {
   const damById = new Map<string, bigint>();
   // What this source publishes, matched or not — recorded so /coverage can
   // say "they publish it, we failed to link it" instead of guessing.
@@ -160,8 +175,7 @@ async function matchMasters(
     damById.set(s.id, r.id);
     await bindExternalId(r.id, SOURCE_ID, s.name);
   }
-  await recordUniverse(SOURCE_ID, universe);
-  return damById;
+  return { damById, universe };
 }
 
 const task: Task = async (_payload, helpers) => {
@@ -174,11 +188,15 @@ const task: Task = async (_payload, helpers) => {
     return;
   }
   const stations = parseShigaStationList(listHtml);
-  const damById = await matchMasters(stations, log);
+  const { damById, universe } = await matchMasters(stations, log);
   log(`${SOURCE_ID}: matched ${damById.size}/${stations.length} stations`);
 
   let parsed = 0;
   let written = 0;
+  // Keyed by the universe's external id (the printed name). Only matched
+  // stations are fetched, so an unmatched one stays unknown — it has no dam
+  // for /coverage to classify anyway.
+  const hasDataByName = new Map<string, boolean | null>();
   for (const s of stations) {
     const damId = damById.get(s.id);
     if (!damId) continue;
@@ -189,6 +207,7 @@ const task: Task = async (_payload, helpers) => {
         continue;
       }
       const rows = parseShigaDamData(html, new Date());
+      hasDataByName.set(s.name, shigaPageHasData(html));
       parsed += rows.length;
       const n = await upsertObservations(
         rows.map((row) => ({
@@ -212,6 +231,12 @@ const task: Task = async (_payload, helpers) => {
     }
   }
 
+  // Recorded after the station pages, which are what say whether a listed
+  // station carries any value.
+  await recordUniverse(
+    SOURCE_ID,
+    universe.map((u) => ({ ...u, hasData: hasDataByName.get(u.externalId) ?? null })),
+  );
   log(`${SOURCE_ID} done: parsed=${parsed} matched=${damById.size} written=${written}`);
 };
 
