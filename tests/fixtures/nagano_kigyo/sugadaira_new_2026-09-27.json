@@ -1,0 +1,60 @@
+{
+    "table": [
+        {
+            "v_time": "21:40",
+            "v_totalinflow11": "1.04",
+            "v_totaldischarge11": "1.42",
+            "v_reservoirlevel7": "15.31",
+            "v_reservoirlevel13": "1131.31",
+            "v_chor": "45.3",
+            "v_gatedischarge5": "0.00",
+            "v_wtrusedischarge1": "1.42",
+            "v_valvedischarge4": "0.00",
+            "v_rainhr6": "0.0",
+            "v_raininc6": "0.0",
+            "v_poweroutput7": "0.0"
+        },
+        {
+            "v_time": "21:30",
+            "v_totalinflow11": "0.84",
+            "v_totaldischarge11": "1.43",
+            "v_reservoirlevel7": "15.31",
+            "v_reservoirlevel13": "1131.31",
+            "v_chor": "45.3",
+            "v_gatedischarge5": "0.00",
+            "v_wtrusedischarge1": "1.43",
+            "v_valvedischarge4": "0.00",
+            "v_rainhr6": "0.0",
+            "v_raininc6": "0.0",
+            "v_poweroutput7": "98.5"
+        },
+        {
+            "v_time": "21:20",
+            "v_totalinflow11": "0.69",
+            "v_totaldischarge11": "1.41",
+            "v_reservoirlevel7": "15.31",
+            "v_reservoirlevel13": "1131.31",
+            "v_chor": "45.3",
+            "v_gatedischarge5": "0.00",
+            "v_wtrusedischarge1": "1.41",
+            "v_valvedischarge4": "0.00",
+            "v_rainhr6": "0.0",
+            "v_raininc6": "0.0",
+            "v_poweroutput7": "98.2"
+        },
+        {
+            "v_time": "21:10",
+            "v_totalinflow11": "1.03",
+            "v_totaldischarge11": "1.43",
+            "v_reservoirlevel7": "15.32",
+            "v_reservoirlevel13": "1131.32",
+            "v_chor": "45.3",
+            "v_gatedischarge5": "0.00",
+            "v_wtrusedischarge1": "1.43",
+            "v_valvedischarge4": "0.00",
+            "v_rainhr6": "0.0",
+            "v_raininc6": "0.0",
+            "v_poweroutput7": "100.5"
+        }
+    ]
+}
