@@ -17,7 +17,7 @@
 // The page labels the two rate columns 「貯水率 利水容量(％)」 and
 // 「貯水率 有効容量(％)」 and prints － for both where the shown flag is 0
 // (熊野川, 朝日小川). Missing values: 貯水位 -9999.99, flows -99999.99,
-// rates -99.9. Flows are not all in m³/s; see FLOW_SCALE.
+// rates -99.9. Three stations' flows are not stored in m³/s; see FLOW_FIX.
 //
 // This replaced the Salesforce 県内ダム情報実況表 (hourly, no 貯水率): the same
 // 16 dams under the same names, plus both rates and a per-dam time. Levels and
@@ -60,14 +60,19 @@ const DATA_BASE = process.env.TOYAMA_BOUSAI_DATA_BASE ?? 'https://kawa.pref.toya
 const PREF_CODE = '16';
 const SOURCE_ID = 'toyama-bousai';
 
-// Flow columns not stored in m³/s. The page itself multiplies 利賀川
-// (0090004) and 角川 (0020007) by 10 (角川 0.04 → 0.40, as MLIT 川の防災情報
-// reads). 舟川 (0030016) runs the other way and the page does not correct
-// it: on 2026-09-27 the CSV read 2.11 / 2.11 at 16:30 JST where MLIT read
-// 0.21 / 0.21 for the same station and minute (flat at 0.21 all day), the
-// Salesforce 実況表 read 0.21 at 16:00, and 2.11 m³/s off a 3.4 km²
-// catchment would be ten times the neighbours' specific discharge.
-const FLOW_SCALE: Record<string, number> = { '0090004': 10, '0020007': 10, '0030016': 0.1 };
+// Flow columns not stored in m³/s, converted exactly as the page's own
+// scripts do before rendering (both under kawa.pref.toyama.jp/camera/contents/):
+//
+// - 002_header.js DamListData(): 利賀川 (0090004) and 角川 (0020007) render
+//   as Math.round(v*100)/10 — 角川 0.04 → 0.40, as MLIT 川の防災情報 reads.
+// - fileaccess.js DAMZenryuunyuuCalc(), run from Make_GENSUICyuiKeikai() on
+//   02condlist.html: 舟川 (0030016) is rewritten to Math.floor(v*10)/100 —
+//   2.11 → 0.21 at 16:30 JST on 2026-09-27, as MLIT read for the same minute.
+const FLOW_FIX: Record<string, (v: number) => number> = {
+  '0090004': (v) => Math.round(v * 100) / 10,
+  '0020007': (v) => Math.round(v * 100) / 10,
+  '0030016': (v) => Math.floor(v * 10) / 100,
+};
 
 // --- types ------------------------------------------------------------------
 
@@ -131,10 +136,10 @@ export function parseToyamaDamData(csv: string, stations: ToyamaStation[]): Pars
     );
 
     const waterLevelM = reading(level, -9999.99);
-    const scale = FLOW_SCALE[station.code] ?? 1;
+    const fix = FLOW_FIX[station.code];
     const flow = (s: string | undefined): number | null => {
       const v = reading(s, -99999.99);
-      return v === null ? null : Math.round(v * scale * 1000) / 1000;
+      return v !== null && fix ? fix(v) : v;
     };
     const inflowM3s = flow(inflow);
     const outflowM3s = flow(outflow);
