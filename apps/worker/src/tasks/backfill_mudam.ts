@@ -201,14 +201,19 @@ async function downloadYearCsv(damsysId: number, year: number): Promise<CsvRow[]
 
 async function ensureSourcePriority(): Promise<void> {
   await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
+    INSERT INTO source_priorities (source_id, priority, description, active, historical_only)
     VALUES ('mudam', 280,
             'NILIM ダム諸量データベース (mudam.nilim.go.jp) — daily, ~600 dams, 1-2 year lag (confirmed historical)',
-            true)
+            true, true)
     ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
+      SET priority        = EXCLUDED.priority,
+          description     = EXCLUDED.description,
+          active          = EXCLUDED.active,
+          -- Declared here as well as in migration 0058 so a fresh environment
+          -- does not recreate the row inside the source_universe gate: a dump
+          -- with no recurring scan would hold the gate open forever and no dam
+          -- could ever be classified 提供元なし.
+          historical_only = EXCLUDED.historical_only
   `;
 }
 

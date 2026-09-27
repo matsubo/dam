@@ -17,6 +17,7 @@ import { type BindableMaster, preferMaster } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
 import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const BASE_URL = process.env.NAGASAKI_KASEN_BASE_URL ?? 'https://dam.pref.nagasaki.jp';
@@ -42,7 +43,7 @@ interface DtRange {
   max_dt: string;
 }
 
-interface DamMaster {
+export interface DamMaster {
   dam_cd: number;
   dam_nm: string;
 }
@@ -224,6 +225,27 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
   return out;
 }
 
+/**
+ * What 長崎県 publishes, built from `dam_m.json` — the provider's own
+ * catalogue — rather than from the snapshot rows that happened to carry a
+ * reading. A dam whose gauge is silent this run is still published, and
+ * recording only the readable ones would let it read as published by nobody.
+ *
+ * `dam_cd` is the upstream's stable id, so it is the external id; unmatched
+ * dams stay in the list with a null `resolvedDamId` as matching backlog.
+ */
+export function buildNagasakiUniverse(
+  catalogue: DamMaster[],
+  resolve: (damCd: number) => bigint | undefined,
+): UniverseRow[] {
+  return catalogue.map((m) => ({
+    externalId: String(m.dam_cd),
+    name: m.dam_nm,
+    prefCode: PREF_CODE,
+    resolvedDamId: resolve(m.dam_cd) ?? null,
+  }));
+}
+
 // --- task -------------------------------------------------------------------
 
 const task: Task = async (_payload, helpers) => {
@@ -271,6 +293,11 @@ const task: Task = async (_payload, helpers) => {
 
   const matches = await matchMaster(rows, log);
   const damByCd = new Map(matches.map((m) => [m.damCd, m.damId]));
+
+  await recordUniverse(
+    SOURCE_ID,
+    buildNagasakiUniverse(masterList, (damCd) => damByCd.get(damCd)),
+  );
 
   const inputs = [] as Parameters<typeof upsertObservations>[0];
   for (const p of rows) {
