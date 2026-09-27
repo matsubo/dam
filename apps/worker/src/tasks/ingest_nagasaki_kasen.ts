@@ -13,7 +13,9 @@
 // (tank_risui_d / tank_ecapa), and this site's 貯水率 is the 利水 one.
 // Priority 308, matching other prefectural sources.
 
+import { type BindableMaster, preferMaster } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
+import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
 import type { Task } from 'graphile-worker';
 
@@ -178,8 +180,9 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
   `;
   const byExternalId = new Map<number, bigint>(seeded.map((r) => [r.damCd, r.id]));
 
-  const masters = await sql<{ id: bigint; name: string }[]>`
-    SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
+  const masters = await sql<BindableMaster[]>`
+    SELECT id, name, completed_year AS "completedYear"
+    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out: DamMatch[] = [];
 
@@ -194,7 +197,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
     const stem = normalizeName(r.damName);
     if (!stem) continue;
 
-    let best: { id: bigint; rank: number } | null = null;
+    let best: { m: BindableMaster; rank: number } | null = null;
     for (const m of masters) {
       const mStem = normalizeName(m.name);
       let rank: number;
@@ -204,8 +207,8 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
       else if (mStem.startsWith(stem)) rank = 3;
       else if (mStem.includes(stem)) rank = 4;
       else continue;
-      if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-        best = { id: m.id, rank };
+      if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
+        best = { m, rank };
       }
     }
 
@@ -214,14 +217,8 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
       continue;
     }
 
-    out.push({ damCd: r.damCd, damId: best.id });
-    await sql`
-      UPDATE dams
-      SET external_ids = COALESCE(external_ids, '{}'::jsonb)
-                       || jsonb_build_object(${SOURCE_ID}::text, ${String(r.damCd)}::text)
-      WHERE id = ${best.id}
-        AND COALESCE(external_ids->>${SOURCE_ID}, '') <> ${String(r.damCd)}
-    `;
+    out.push({ damCd: r.damCd, damId: best.m.id });
+    await bindExternalId(best.m.id, SOURCE_ID, String(r.damCd));
   }
 
   return out;

@@ -27,7 +27,9 @@
 // Priority 313 (lower than cgr-mlit-dam 304, so CGR wins for 尾原/志津見).
 // Cron: hourly at :37.
 
+import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
+import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
@@ -189,8 +191,9 @@ interface DamMatch {
 }
 
 async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<{ id: bigint; name: string }[]>`
-    SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
+  const masters = await sql<BindableMaster[]>`
+    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
+    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out: DamMatch[] = [];
   // What this source publishes, matched or not — recorded so /coverage can
@@ -208,8 +211,12 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
   for (const r of rows) {
     const stem = normalizeName(r.shimaneName);
 
-    let best: { id: bigint; rank: number } | null = null;
-    if (stem) {
+    // A row already stamped with this station keeps it (#57).
+    const stamped = stampedMaster(masters, r.stationId);
+    let best: { m: BindableMaster; rank: number } | null = stamped
+      ? { m: stamped, rank: -1 }
+      : null;
+    if (stem && !stamped) {
       for (const m of masters) {
         const mStem = normalizeName(m.name);
         let rank: number;
@@ -219,8 +226,8 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
         else if (mStem.startsWith(stem)) rank = 3;
         else if (mStem.includes(stem)) rank = 4;
         else continue;
-        if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-          best = { id: m.id, rank };
+        if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
+          best = { m, rank };
         }
       }
     }
@@ -229,7 +236,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
       externalId: r.stationId,
       name: r.shimaneName,
       prefCode: PREF_CODE,
-      resolvedDamId: best?.id ?? null,
+      resolvedDamId: best?.m.id ?? null,
     });
 
     if (!best) {
@@ -237,14 +244,8 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
       continue;
     }
 
-    out.push({ stationId: r.stationId, damId: best.id });
-    await sql`
-      UPDATE dams
-      SET external_ids = COALESCE(external_ids, '{}'::jsonb)
-                       || jsonb_build_object(${SOURCE_ID}::text, ${r.stationId}::text)
-      WHERE id = ${best.id}
-        AND COALESCE(external_ids->>${SOURCE_ID}, '') <> ${r.stationId}
-    `;
+    out.push({ stationId: r.stationId, damId: best.m.id });
+    await bindExternalId(best.m.id, SOURCE_ID, r.stationId);
   }
 
   await recordUniverse(SOURCE_ID, universe);
