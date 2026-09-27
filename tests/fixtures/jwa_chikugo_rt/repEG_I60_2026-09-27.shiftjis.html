@@ -1,0 +1,473 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=Shift_JIS">
+<meta http-equiv="Content-Script-Type" content="text/javascript">
+<meta http-equiv="Content-Style-Type"  content="text/css">
+<meta http-equiv="Pragma"  content="no-cache">
+<meta http-equiv="Expires" content="-1">
+<title>筑後川－水管理情報ＷＥＢ【江川ダム】</title>
+
+<link rel="stylesheet" href="../css/rep.css">
+
+<SCRIPT language="JavaScript" src="../script/comnSub.js"></SCRIPT>
+<SCRIPT language="JavaScript" src="../script/timeSub.js"></SCRIPT>
+<SCRIPT language="JavaScript" src="../script/toolSub.js"></SCRIPT>
+<script language="JavaScript">
+// ツール情報
+ToolTime     = -1;	// 時刻関連
+ToolInterval = 10;	// 表示間隔指定
+
+Gmn = 'repEG';	// 画面識別
+Prg = '';	// 処理部名
+DspInterval = 60;	// 表示間隔
+PageCnt  = 1;	// 項目ページ数
+DspPage  = 1;	// 項目ページ
+StationPoint = 1;	// 局位置
+DspStonMax = 1;	// １頁の最大局数
+DspTimeMax = 24;	// １頁の最大時刻数
+DspTime  = '2026-09-27-21-00';	// 表示時刻
+OldTime  = '2021-04-06-01-00';	// 最古時刻
+NewTime  = '2026-09-27-21-00';	// 最新時刻
+CheckNewTime = 1;	// 最新時刻チェック
+
+</script>
+</head>
+
+<body topmargin="0" leftmargin="0" marginwidth="0" marginheight="0"
+ onLoad="StartTool();ScrollEnd('hyo')" onUnload="EndTool()">
+<FORM name="TOOL">
+<table border="0" cellpadding="0" cellspacing="0" width="100%" height="100%">
+ <!-- 操作帯 -->
+ <tr><td height="53" background="../images/bg_tate.gif" bgcolor="#DEFBA7">
+  <script language="JavaScript">DisplayTool()</script>
+ </td></tr>
+ <tr height="5"><td></td></tr>
+
+ <!-- ↓画面タイトル -->
+ <tr><td align="center" valign="top">
+  <table border="0" cellpadding="0" cellspacing="0" width="1100">
+   <tr><td height="30" align="center" valign="top">
+    <table border="0" cellpadding="0" cellspacing="0" width="1100">
+     <tr>
+      <td class="FntTitle" height= "30" valign="top">江川ダム</td>
+      <td class="FrameTime" width="242" valign="top">
+       <table border="0" cellpadding="1" cellspacing="0" width="242" height="30">
+        <tr>
+         <td width="100"></td>
+         <td class="FntTime" NOWRAP>2026/09/27 21:00</td>
+        </tr>
+       </table>
+      </td>
+     </tr>
+    </table>
+   </td></tr>
+  </table>
+ </td></tr>
+ <!-- ↑画面タイトル -->
+
+ <tr>
+  <td align="center" valign="top">
+   <table border="0" cellpadding="0" cellspacing="0">
+    <tr>
+     <td width="10" rowspan="2"></td>
+     <td>
+      <table border="0" cellpadding="1" cellspacing="1" height="60" width="1100" style="background-color:#000000">
+<tr>
+<td class="item" align="center" width="12.5%" rowspan="2">観測時刻<br>年/月/日 時：分</td>
+<td class="name" align="center" colspan="12">江川ダム</td>
+</tr>
+<tr>
+<td class="item" width="7.2%" align="center">貯水位<br><br>[EL.m]</td>
+<td class="item" width="7.2%" align="center">有効<br>貯水量<br>[千m&sup3;]</td>
+<td class="item" width="7.2%" align="center">空容量<br><br>[千m&sup3;]</td>
+<td class="item" width="7.2%" align="center">貯水率<br><br>[%]</td>
+<td class="item" width="7.2%" align="center">流入量<br><br>[m&sup3;/s]</td>
+<td class="item" width="7.2%" align="center">ゲート<br>放流量<br>[m&sup3;/s]</td>
+<td class="item" width="7.2%" align="center">利水<br>放流量<br>[m&sup3;/s]</td>
+<td class="item" width="7.2%" align="center">総放流量<br><br>[m&sup3;/s]</td>
+<td class="item" width="7.2%" align="center">流域平均<br>時間雨量<br>[mm/H]</td>
+<td class="item" width="7.2%" align="center">&nbsp;</td>
+<td class="item" width="7.2%" align="center">&nbsp;</td>
+<td class="item" width="7.2%" align="center">&nbsp;</td>
+</tr>
+
+      </table>
+     </td>
+     <td width="20"></td>
+    </tr>
+    <tr>
+     <td colspan="2">
+      <script language="JavaScript">ScrollHyo(170)</script>
+       <table border="0" cellpadding="1" cellspacing="1" height="450" width="1100" style="background-color:#000000">
+<tr class="line1">
+<td class="time" align="right" width="12.5%">2026/09/26&nbsp;&nbsp;22:00&nbsp;</td>
+<td class="data" align="right" width="7.2%">188.21&nbsp;</td>
+<td class="data" align="right" width="7.2%">3011&nbsp;</td>
+<td class="data" align="right" width="7.2%">21043&nbsp;</td>
+<td class="data" align="right" width="7.2%">12.5&nbsp;</td>
+<td class="data" align="right" width="7.2%">2.15&nbsp;</td>
+<td class="data" align="right" width="7.2%">0.00&nbsp;</td>
+<td class="data" align="right" width="7.2%">0.23&nbsp;</td>
+<td class="data" align="right" width="7.2%">0.23&nbsp;</td>
+<td class="data" align="right" width="7.2%">***&nbsp;</td>
+<td class="data" align="right" width="7.2%">&nbsp;</td>
+<td class="data" align="right" width="7.2%">&nbsp;</td>
+<td class="data" align="right" width="7.2%">&nbsp;</td>
+</tr>
+<tr class="line2">
+<td class="time" align="right">23:00&nbsp;</td>
+<td class="data" align="right">188.23&nbsp;</td>
+<td class="data" align="right">3018&nbsp;</td>
+<td class="data" align="right">21036&nbsp;</td>
+<td class="data" align="right">12.6&nbsp;</td>
+<td class="data" align="right">1.54&nbsp;</td>
+<td class="data" align="right">0.00&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">***&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+</tr>
+<tr class="line1">
+<td class="time" align="right">24:00&nbsp;</td>
+<td class="data" align="right">188.24&nbsp;</td>
+<td class="data" align="right">3021&nbsp;</td>
+<td class="data" align="right">21033&nbsp;</td>
+<td class="data" align="right">12.6&nbsp;</td>
+<td class="data" align="right">1.43&nbsp;</td>
+<td class="data" align="right">0.00&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">***&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+</tr>
+<tr class="line2">
+<td class="time" align="right">2026/09/27&nbsp;&nbsp;01:00&nbsp;</td>
+<td class="data" align="right">188.26&nbsp;</td>
+<td class="data" align="right">3027&nbsp;</td>
+<td class="data" align="right">21027&nbsp;</td>
+<td class="data" align="right">12.6&nbsp;</td>
+<td class="data" align="right">1.54&nbsp;</td>
+<td class="data" align="right">0.00&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">***&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+</tr>
+<tr class="line1">
+<td class="time" align="right">02:00&nbsp;</td>
+<td class="data" align="right">188.27&nbsp;</td>
+<td class="data" align="right">3031&nbsp;</td>
+<td class="data" align="right">21023&nbsp;</td>
+<td class="data" align="right">12.6&nbsp;</td>
+<td class="data" align="right">1.14&nbsp;</td>
+<td class="data" align="right">0.00&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">***&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+</tr>
+<tr class="line2">
+<td class="time" align="right">03:00&nbsp;</td>
+<td class="data" align="right">188.29&nbsp;</td>
+<td class="data" align="right">3037&nbsp;</td>
+<td class="data" align="right">21017&nbsp;</td>
+<td class="data" align="right">12.7&nbsp;</td>
+<td class="data" align="right">1.58&nbsp;</td>
+<td class="data" align="right">0.00&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">***&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+</tr>
+<tr class="line1">
+<td class="time" align="right">04:00&nbsp;</td>
+<td class="data" align="right">188.30&nbsp;</td>
+<td class="data" align="right">3040&nbsp;</td>
+<td class="data" align="right">21014&nbsp;</td>
+<td class="data" align="right">12.7&nbsp;</td>
+<td class="data" align="right">1.58&nbsp;</td>
+<td class="data" align="right">0.00&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">***&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+</tr>
+<tr class="line2">
+<td class="time" align="right">05:00&nbsp;</td>
+<td class="data" align="right">188.31&nbsp;</td>
+<td class="data" align="right">3044&nbsp;</td>
+<td class="data" align="right">21010&nbsp;</td>
+<td class="data" align="right">12.7&nbsp;</td>
+<td class="data" align="right">1.27&nbsp;</td>
+<td class="data" align="right">0.00&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">***&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+</tr>
+<tr class="line1">
+<td class="time" align="right">06:00&nbsp;</td>
+<td class="data" align="right">188.33&nbsp;</td>
+<td class="data" align="right">3050&nbsp;</td>
+<td class="data" align="right">21004&nbsp;</td>
+<td class="data" align="right">12.7&nbsp;</td>
+<td class="data" align="right">2.79&nbsp;</td>
+<td class="data" align="right">0.00&nbsp;</td>
+<td class="data" align="right">0.22&nbsp;</td>
+<td class="data" align="right">0.22&nbsp;</td>
+<td class="data" align="right">***&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+</tr>
+<tr class="line2">
+<td class="time" align="right">07:00&nbsp;</td>
+<td class="data" align="right">188.34&nbsp;</td>
+<td class="data" align="right">3053&nbsp;</td>
+<td class="data" align="right">21001&nbsp;</td>
+<td class="data" align="right">12.7&nbsp;</td>
+<td class="data" align="right">1.38&nbsp;</td>
+<td class="data" align="right">0.00&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">***&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+</tr>
+<tr class="line1">
+<td class="time" align="right">08:00&nbsp;</td>
+<td class="data" align="right">188.35&nbsp;</td>
+<td class="data" align="right">3057&nbsp;</td>
+<td class="data" align="right">20997&nbsp;</td>
+<td class="data" align="right">12.7&nbsp;</td>
+<td class="data" align="right">1.25&nbsp;</td>
+<td class="data" align="right">0.00&nbsp;</td>
+<td class="data" align="right">0.22&nbsp;</td>
+<td class="data" align="right">0.22&nbsp;</td>
+<td class="data" align="right">***&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+</tr>
+<tr class="line2">
+<td class="time" align="right">09:00&nbsp;</td>
+<td class="data" align="right">188.36&nbsp;</td>
+<td class="data" align="right">3060&nbsp;</td>
+<td class="data" align="right">20994&nbsp;</td>
+<td class="data" align="right">12.8&nbsp;</td>
+<td class="data" align="right">1.27&nbsp;</td>
+<td class="data" align="right">0.00&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">***&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+</tr>
+<tr class="line1">
+<td class="time" align="right">10:00&nbsp;</td>
+<td class="data" align="right">188.38&nbsp;</td>
+<td class="data" align="right">3066&nbsp;</td>
+<td class="data" align="right">20988&nbsp;</td>
+<td class="data" align="right">12.8&nbsp;</td>
+<td class="data" align="right">1.97&nbsp;</td>
+<td class="data" align="right">0.00&nbsp;</td>
+<td class="data" align="right">0.24&nbsp;</td>
+<td class="data" align="right">0.24&nbsp;</td>
+<td class="data" align="right">***&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+</tr>
+<tr class="line2">
+<td class="time" align="right">11:00&nbsp;</td>
+<td class="data" align="right">188.39&nbsp;</td>
+<td class="data" align="right">3069&nbsp;</td>
+<td class="data" align="right">20985&nbsp;</td>
+<td class="data" align="right">12.8&nbsp;</td>
+<td class="data" align="right">1.35&nbsp;</td>
+<td class="data" align="right">0.00&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">***&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+</tr>
+<tr class="line1">
+<td class="time" align="right">12:00&nbsp;</td>
+<td class="data" align="right">188.41&nbsp;</td>
+<td class="data" align="right">3076&nbsp;</td>
+<td class="data" align="right">20978&nbsp;</td>
+<td class="data" align="right">12.8&nbsp;</td>
+<td class="data" align="right">1.69&nbsp;</td>
+<td class="data" align="right">0.00&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">***&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+</tr>
+<tr class="line2">
+<td class="time" align="right">13:00&nbsp;</td>
+<td class="data" align="right">188.44&nbsp;</td>
+<td class="data" align="right">3086&nbsp;</td>
+<td class="data" align="right">20968&nbsp;</td>
+<td class="data" align="right">12.9&nbsp;</td>
+<td class="data" align="right">3.60&nbsp;</td>
+<td class="data" align="right">0.00&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">***&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+</tr>
+<tr class="line1">
+<td class="time" align="right">14:00&nbsp;</td>
+<td class="data" align="right">188.47&nbsp;</td>
+<td class="data" align="right">3095&nbsp;</td>
+<td class="data" align="right">20959&nbsp;</td>
+<td class="data" align="right">12.9&nbsp;</td>
+<td class="data" align="right">2.68&nbsp;</td>
+<td class="data" align="right">0.00&nbsp;</td>
+<td class="data" align="right">0.22&nbsp;</td>
+<td class="data" align="right">0.22&nbsp;</td>
+<td class="data" align="right">***&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+</tr>
+<tr class="line2">
+<td class="time" align="right">15:00&nbsp;</td>
+<td class="data" align="right">188.51&nbsp;</td>
+<td class="data" align="right">3108&nbsp;</td>
+<td class="data" align="right">20946&nbsp;</td>
+<td class="data" align="right">13.0&nbsp;</td>
+<td class="data" align="right">4.37&nbsp;</td>
+<td class="data" align="right">0.00&nbsp;</td>
+<td class="data" align="right">0.24&nbsp;</td>
+<td class="data" align="right">0.24&nbsp;</td>
+<td class="data" align="right">***&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+</tr>
+<tr class="line1">
+<td class="time" align="right">16:00&nbsp;</td>
+<td class="data" align="right">188.56&nbsp;</td>
+<td class="data" align="right">3124&nbsp;</td>
+<td class="data" align="right">20930&nbsp;</td>
+<td class="data" align="right">13.0&nbsp;</td>
+<td class="data" align="right">4.38&nbsp;</td>
+<td class="data" align="right">0.00&nbsp;</td>
+<td class="data" align="right">0.24&nbsp;</td>
+<td class="data" align="right">0.24&nbsp;</td>
+<td class="data" align="right">***&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+</tr>
+<tr class="line2">
+<td class="time" align="right">17:00&nbsp;</td>
+<td class="data" align="right">188.60&nbsp;</td>
+<td class="data" align="right">3137&nbsp;</td>
+<td class="data" align="right">20917&nbsp;</td>
+<td class="data" align="right">13.1&nbsp;</td>
+<td class="data" align="right">3.82&nbsp;</td>
+<td class="data" align="right">0.00&nbsp;</td>
+<td class="data" align="right">0.24&nbsp;</td>
+<td class="data" align="right">0.24&nbsp;</td>
+<td class="data" align="right">***&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+</tr>
+<tr class="line1">
+<td class="time" align="right">18:00&nbsp;</td>
+<td class="data" align="right">188.63&nbsp;</td>
+<td class="data" align="right">3147&nbsp;</td>
+<td class="data" align="right">20907&nbsp;</td>
+<td class="data" align="right">13.1&nbsp;</td>
+<td class="data" align="right">3.07&nbsp;</td>
+<td class="data" align="right">0.00&nbsp;</td>
+<td class="data" align="right">0.24&nbsp;</td>
+<td class="data" align="right">0.24&nbsp;</td>
+<td class="data" align="right">***&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+</tr>
+<tr class="line2">
+<td class="time" align="right">19:00&nbsp;</td>
+<td class="data" align="right">188.67&nbsp;</td>
+<td class="data" align="right">3160&nbsp;</td>
+<td class="data" align="right">20894&nbsp;</td>
+<td class="data" align="right">13.2&nbsp;</td>
+<td class="data" align="right">3.07&nbsp;</td>
+<td class="data" align="right">0.00&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">***&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+</tr>
+<tr class="line1">
+<td class="time" align="right">20:00&nbsp;</td>
+<td class="data" align="right">188.70&nbsp;</td>
+<td class="data" align="right">3170&nbsp;</td>
+<td class="data" align="right">20884&nbsp;</td>
+<td class="data" align="right">13.2&nbsp;</td>
+<td class="data" align="right">2.80&nbsp;</td>
+<td class="data" align="right">0.00&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">***&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+</tr>
+<tr class="line2">
+<td class="time" align="right">21:00&nbsp;</td>
+<td class="data" align="right">188.72&nbsp;</td>
+<td class="data" align="right">3176&nbsp;</td>
+<td class="data" align="right">20878&nbsp;</td>
+<td class="data" align="right">13.2&nbsp;</td>
+<td class="data" align="right">2.58&nbsp;</td>
+<td class="data" align="right">0.00&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">0.23&nbsp;</td>
+<td class="data" align="right">***&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+<td class="data" align="right">&nbsp;</td>
+</tr>
+
+       </table>
+      </div>
+     </td>
+    </tr>
+   </table>
+  </td>
+ </tr>
+</table>
+</FORM>
+</body>
+</html>
