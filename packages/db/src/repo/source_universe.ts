@@ -139,6 +139,9 @@ export interface DamCoverageRow {
  *  - `sourcesNotEnumerable` — providers that publish no station list at all
  *    (a portal that lists dams only during a flood event). They are excluded
  *    from the gate, so `not_published` stays provisional for their areas.
+ *  - `sourcesHistoricalOnly` — one-off dumps and backfill-only sources, which
+ *    have no recurring scan to record. Excluded for the same reason, and for
+ *    the same price.
  *  - A handful of HTML-scraped providers (nara / niigata / miyagi) have no
  *    catalogue constant to iterate, so their universe is whatever parsed on
  *    the last good run. A station that reports even once ever is recorded and
@@ -152,6 +155,7 @@ export async function classifyDamCoverage(): Promise<DamCoverageRow[]> {
       WHERE sp.active
         AND sp.provides_observations
         AND sp.universe_enumerable
+        AND NOT sp.historical_only
         AND NOT EXISTS (
           SELECT 1 FROM source_universe_runs r WHERE r.source_id = sp.source_id
         )
@@ -201,21 +205,34 @@ export interface CoverageSummary {
    * so `not_published` carries a residual caveat for the areas they cover.
    */
   sourcesNotEnumerable: number;
+  /**
+   * One-off historical dumps and backfill-only sources (mudam,
+   * kagoshima-bodik). They have no recurring scan to record, so they are
+   * excluded from the gate rather than holding it open forever; their dams
+   * are reported by the 歴史データ含む metric instead.
+   */
+  sourcesHistoricalOnly: number;
 }
 
 export async function coverageSummary(): Promise<CoverageSummary> {
   const rows = await classifyDamCoverage();
   const count = (s: DamCoverageStatus): number => rows.filter((r) => r.status === s).length;
-  const [extra] = await sql<{ unresolved: bigint; pending: bigint; not_enumerable: bigint }[]>`
+  const [extra] = await sql<
+    { unresolved: bigint; pending: bigint; not_enumerable: bigint; historical_only: bigint }[]
+  >`
     SELECT
       (SELECT COUNT(*) FROM source_universe WHERE resolved_dam_id IS NULL)::BIGINT AS unresolved,
       (SELECT COUNT(*) FROM source_priorities sp
         WHERE sp.active AND sp.provides_observations AND sp.universe_enumerable
+          AND NOT sp.historical_only
           AND NOT EXISTS (SELECT 1 FROM source_universe_runs r WHERE r.source_id = sp.source_id)
       )::BIGINT AS pending,
       (SELECT COUNT(*) FROM source_priorities sp
         WHERE sp.active AND sp.provides_observations AND NOT sp.universe_enumerable
-      )::BIGINT AS not_enumerable
+      )::BIGINT AS not_enumerable,
+      (SELECT COUNT(*) FROM source_priorities sp
+        WHERE sp.active AND sp.provides_observations AND sp.historical_only
+      )::BIGINT AS historical_only
   `;
   return {
     covered: count('covered'),
@@ -225,6 +242,7 @@ export async function coverageSummary(): Promise<CoverageSummary> {
     unmatchedStations: Number(extra?.unresolved ?? 0),
     sourcesPendingScan: Number(extra?.pending ?? 0),
     sourcesNotEnumerable: Number(extra?.not_enumerable ?? 0),
+    sourcesHistoricalOnly: Number(extra?.historical_only ?? 0),
   };
 }
 
@@ -237,6 +255,7 @@ export async function classifyOneDam(damId: bigint): Promise<DamCoverageRow | nu
       WHERE sp.active
         AND sp.provides_observations
         AND sp.universe_enumerable
+        AND NOT sp.historical_only
         AND NOT EXISTS (
           SELECT 1 FROM source_universe_runs r WHERE r.source_id = sp.source_id
         )
