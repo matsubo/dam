@@ -126,7 +126,7 @@ bun run apps/web/bin/seed_synthetic_observations.ts     --hourly-days 30 --years
 
 6. **Real source restrictions**: `www.river.go.jp/kawabou/` returns
    `403 — Access Restrictions — This site prohibits data acquisition using tools`
-   for any direct API access. ~70 other upstreams now feed the realtime
+   for any direct API access. ~90 other upstreams now feed the realtime
    pipeline instead (see `/coverage`).
 
 7. **Adding a new ingest task**: it must call `recordUniverse(SOURCE_ID, rows)`

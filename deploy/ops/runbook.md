@@ -313,7 +313,38 @@ psql -U dam -d dam -c "select * from timescaledb_information.chunks order by ran
 
 ---
 
-## 9. Escalation
+## 9. One-off data fixes (`deploy/ops/oneoff/`)
+
+`observations` is a compressed hypertable. An `UPDATE` / `DELETE` / re-dating
+`INSERT` that reaches compressed chunks has to decompress them, and
+TimescaleDB caps that per transaction
+(`timescaledb.max_tuples_decompressed_per_dml_transaction`). Rules:
+
+- DML on compressed `observations` rows **never goes in a migration**: the web
+  boot runs migrations on every deploy, and lifting the cap there stalls or
+  bloats the migrate run (see the header of migration 0045). Write a dated
+  file `deploy/ops/oneoff/YYYY-MM-DD_<what>.sql` whose header states when to
+  run it, the command and any follow-up.
+- Run it once, by hand, as a single transaction with the cap lifted for that
+  transaction only:
+  `SET LOCAL timescaledb.max_tuples_decompressed_per_dml_transaction = 0;`
+  (`SET LOCAL` ends with the transaction and never leaks into other sessions).
+- Make it idempotent: a second run finds nothing to change.
+
+Run from the `db` container's terminal with the file copied into the working
+directory. `-1` wraps every `-c` / `-f` in one transaction, so the `-c`
+below supplies the `SET LOCAL` for the two scripts that do not carry it.
+
+| Script | Run when | Command, then follow-up |
+| --- | --- | --- |
+| `2026-09-28_nakazato_stub.sql` | Once on prod, after `feat/n4-mie-nara-wakayama` (jwa-chubu per-block parser, migration 0083) is deployed. Moves 中里's JWA rows off the invented 長野 stub to NDI 940, drops the stub, clears the old parser's volumes and rates. Aborts if 0083 is not applied. | First check `SELECT applied_at FROM _migrations WHERE name = '0083_drop_fabricated_nakazato_nagano.sql';` then `psql -U dam -d dam -v ON_ERROR_STOP=1 -1 -f 2026-09-28_nakazato_stub.sql`, then `SELECT graphile_worker.add_job('ingest:jwa-chubu');` and `SELECT graphile_worker.add_job('aggregates:refresh');` |
+| `2026-09-28_redate_chiba_suisei.sql` | Once on prod, after the ingest_chiba heading fix (dates chiba-suisei by the table heading, not the chart alt) is deployed. Moves six weeks of rows to their survey date; guarded per date, so re-runs move nothing. The final `SELECT` lists dams per survey date. | `psql -U dam -d dam -v ON_ERROR_STOP=1 -1 -c "SET LOCAL timescaledb.max_tuples_decompressed_per_dml_transaction = 0" -f 2026-09-28_redate_chiba_suisei.sql` |
+| `2026-09-28_tottori_bousai_placeholders.sql` | Once on prod, after ingest_tottori_bousai's skip of items more than 20 m below their own 最低水位 is deployed. Deletes the stored placeholder / copied rows (423 in the 2026-09-28 dry run). Idempotent. | `psql -U dam -d dam -v ON_ERROR_STOP=1 -1 -c "SET LOCAL timescaledb.max_tuples_decompressed_per_dml_transaction = 0" -f 2026-09-28_tottori_bousai_placeholders.sql`, then, outside a transaction: `CALL refresh_continuous_aggregate('obs_daily', '2026-06-01', now() - interval '59 days');` and `CALL refresh_continuous_aggregate('obs_monthly', '2026-06-01', '2026-08-01');` |
+| `2026-09-28_yamaguchi_bousai_outage_zeros.sql` | Once on prod, after the ingest_yamaguchi_bousai fix that skips 貯水位 0.00 outage rows is deployed. Deletes the 283 stored zero rows on 10 dams; idempotent. The final `SELECT` should report 0. | `psql -U dam -d dam -v ON_ERROR_STOP=1 -1 -f 2026-09-28_yamaguchi_bousai_outage_zeros.sql` |
+
+---
+
+## 10. Escalation
 
 If the runbook doesn't get you out of the hole within ~30 min, page
 **matsubokkuri@gmail.com** with:
