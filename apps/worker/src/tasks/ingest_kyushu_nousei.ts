@@ -291,11 +291,16 @@ export function parseKyushuNouseiPdfText(text: string): {
     // are the same number, but for multi-purpose dams sharing the table
     // (寺内ダム 16,000/8,230 etc.) they differ, and using the wrong one fails
     // the consistency check below for no reason.
+    // In the new layout the first survey column may itself be a 「－ －」
+    // missing pair (教良木ダム 1,371 - - 1,153 84.1% …), so a dash in second
+    // place also means "no 利水容量 column" rather than "not a row".
     const effCapTok = tokens[0];
     const secondTok = tokens[1];
-    if (effCapTok?.kind !== 'num' || secondTok?.kind !== 'num') continue;
-    const hasWaterRightColumn = tokens[2]?.kind !== 'pct';
-    const initialCapacity = hasWaterRightColumn ? secondTok.value : effCapTok.value;
+    if (effCapTok?.kind !== 'num') continue;
+    if (secondTok?.kind !== 'num' && secondTok?.kind !== 'dash') continue;
+    const hasWaterRightColumn = secondTok.kind === 'num' && tokens[2]?.kind !== 'pct';
+    const initialCapacity =
+      secondTok.kind === 'num' && hasWaterRightColumn ? secondTok.value : effCapTok.value;
     if (initialCapacity <= 0) continue;
 
     // A real row, even if the rest of it turns out unusable below — recorded
