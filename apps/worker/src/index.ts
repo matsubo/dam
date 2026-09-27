@@ -28,6 +28,7 @@ import ingestHiroshima from './tasks/ingest_hiroshima.ts';
 import ingestHkdMlit from './tasks/ingest_hkd_mlit.ts';
 import ingestHrrMlit from './tasks/ingest_hrr_mlit.ts';
 import ingestHyogo from './tasks/ingest_hyogo.ts';
+import ingestHyogoKigyo from './tasks/ingest_hyogo_kigyo.ts';
 import ingestIbaraki from './tasks/ingest_ibaraki_bousai.ts';
 import ingestIshikawa from './tasks/ingest_ishikawa_kasen.ts';
 import ingestIwate from './tasks/ingest_iwate_kasen.ts';
@@ -214,6 +215,7 @@ async function main(): Promise<void> {
       'ingest:matsue-suido': ingestMatsueSuido,
       'ingest:mc-tottori-hydro': ingestMcTottoriHydro,
       'ingest:nagano-kigyo': ingestNaganoKigyo,
+      'ingest:hyogo-kigyo': ingestHyogoKigyo,
       'backfill:kagoshima-bodik': backfillKagoshima,
       'backfill:suimon:enqueue': backfillEnqueue,
       'backfill:suimon:run': backfillRun,

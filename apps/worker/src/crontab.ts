@@ -448,6 +448,13 @@ export const CRONTAB = `
 # One run an hour would keep only four of the six.
 24,54 * * * * ingest:nagano-kigyo
 
+# 兵庫県企業庁 貯水状況 — 県営水道 / 県営工業用水道の 10 水源, 「YYYY年M月D日現在」
+# (weekly, the Monday figures once compiled). Writes 神谷 only (volume + rate);
+# 黒川 is the 企業庁 share of a pumped-storage reservoir, 平荘 / 権現 are
+# reservoir totals, the rest have live feeds. Priority 289. Daily at 03:40 UTC
+# (12:40 JST).
+40 3 * * * ingest:hyogo-kigyo ?jobKey=ingest:hyogo-kigyo
+
 # 佐賀県河川砂防情報システム ダム現況表 — 19 県管理ダム (岸川/庭木/繁昌/天ヶ瀬/
 # 平木場/伊岐佐/都川内/井手口川/竜門/有田/古木場/本部/矢筈/狩立日ノ峯/中木庭/
 # 岩屋川内/横竹/深浦/河内). Transposed Shift_JIS HTML table; 3 pages (7+7+5
