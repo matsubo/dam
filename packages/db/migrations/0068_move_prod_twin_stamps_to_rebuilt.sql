@@ -1,13 +1,14 @@
 -- 0068: move stamps that pin live stations to a （元） onto the completed （再） (#79).
 --
--- fukuoka-bodik, qsr-toukan-dam and match_kasenbosai now keep a twin that
--- alone holds a station's stamp. The stamps prod already has on these （元）
--- rows would therefore keep the station on the old structure for good. Each
--- （再） below was completed before 2026-05-19, where every one of these
--- stations' prod history starts. The value is copied, not restated. Keyed by
--- NDI id. A row is only changed where the （元） has the key and the （再） has
--- none (or already has the same value), so this is idempotent and a no-op on
--- a fresh database.
+-- fukuoka-bodik, qsr-toukan-dam, match_kasenbosai and backfill:mudam now keep
+-- a twin that alone holds a station's stamp. The stamps prod already has on
+-- these （元） rows would therefore keep the station on the old structure for
+-- good. Each （再） below except 松川's was completed before the station's
+-- prod history starts (2026-05-19 for the live sources, 2019-12-31 for
+-- mudam). The value is copied, not restated. Keyed by NDI id. A row is only
+-- changed where the （元） has the key and the （再） has none (or already
+-- has the same value), so this is idempotent and a no-op on a fresh
+-- database.
 --
 -- Evidence (prod read 2026-09-27; kawabou = river.go.jp/kawabou/file/files/
 -- {tmlist,master/obs}/dam/<obs_fcd>.json; ダム便覧 =
@@ -50,6 +51,26 @@
 --       body just upstream (ダム便覧 2570), with the old one kept. The
 --       station's 有効 rate gives 385.6–386.8 千m³: （再） 386, not （元）
 --       335.
+--   mudam (NILIM ダム諸量, daily 2019-12-31..2024-12-30 on prod), each
+--   damsysId alone on the （元）, （再） completed before 2019:
+--     242 中禅寺  633 → 634 （再, 1998）  as for kasenbosai above.
+--     484 南畑   2453 → 2454 （再, 1985）  as for fukuoka-bodik above.
+--     271 笠堀   1014 → 1013 （再, 2017）  kasenbosai and niigata-bousai
+--       are on 笠堀（再）.
+--     81  鶴田   2698 → 2697 （再, 2017）  kasenbosai is on 鶴田（再）.
+--     79  鹿野川 2235 → 2234 （再, 2018）  0066 moves ehime-bousai the same
+--       way; kasenbosai is on 鹿野川（再）.
+--   mudam on both twins: the old matcher sorted by distance alone, so the
+--   2026-09-27 retry of the monthly run stamped the twin its predecessor had
+--   not. The copies on 花山 181 (269/270), 美和 50 (794/793), 横山 55
+--   (934/935), 天ヶ瀬 59 (1496/1495) and 萱瀬 509 (2578/2579) come off the
+--   （元）; each （再） is completed. 天ヶ瀬（再） (2022) and 美和（再） (2023)
+--   are works on the same dam and reservoir, so one level series stays on
+--   one row. 松川 296 keeps 松川（再） (NDI 799) although its year is blank:
+--   0065 pins nagano-kasen there, the five years of mudam history are there,
+--   and 0067 keeps kasenbosai there too. Without a single stamp the new
+--   matcher's preferMaster would read the blank year as unfinished and take
+--   松川（元）.
 --
 -- Not moved here:
 --   長安口 kasenbosai (（再） due 2028). 佐久間, 木屋川, 新保川 and 五名: the
@@ -59,12 +80,7 @@
 --   野洲川). Replaying match_kasenbosai's scoring on prod's rows against the
 --   full 2026-09-27 catalogue puts every one on its completed （再） with an
 --   exact name. bindStation then takes the key off the （元）.
---   mudam. backfill:mudam matches by name and distance every month and never
---   reads its stamp. It only adds stamps, so a move here would be written
---   back on the 20th, and its rows would still land on whichever twin is
---   nearer. Its 2019–2024 rows postdate most of these （再） completions, but
---   fixing that needs the task to bind like the others, followed by an
---   observations:rebind.
+--   長安口 mudam (（再） due 2028); 新保川, 五名 and 長柄 mudam (blank year).
 --
 -- Past observations move with the `observations:rebind` task, not here.
 
@@ -80,21 +96,44 @@ INSERT INTO station_move VALUES
   ('kasenbosai',     '2668', '2669'),
   ('kasenbosai',     '1693', '1694'),
   ('kasenbosai',     '2603', '2604'),
-  ('kasenbosai',     '2605', '2606');
+  ('kasenbosai',     '2605', '2606'),
+  ('mudam',          '633',  '634'),
+  ('mudam',          '2453', '2454'),
+  ('mudam',          '1014', '1013'),
+  ('mudam',          '2698', '2697'),
+  ('mudam',          '2235', '2234'),
+  ('mudam',          '269',  '270'),
+  ('mudam',          '794',  '793'),
+  ('mudam',          '934',  '935'),
+  ('mudam',          '1496', '1495'),
+  ('mudam',          '2578', '2579'),
+  ('mudam',          '800',  '799');
 
+-- UPDATE … FROM applies one joined row per target, and 中禅寺 and 南畑 move
+-- two sources each, so the keys are gathered per row first.
 UPDATE dams t
-SET external_ids = t.external_ids || jsonb_build_object(m.source, f.external_ids->>m.source)
-FROM station_move m
-JOIN dams f ON f.external_ids->>'ndi' = m.from_ndi
-WHERE t.external_ids->>'ndi' = m.to_ndi
-  AND f.external_ids ? m.source
-  AND NOT t.external_ids ? m.source;
+SET external_ids = t.external_ids || c.stamps
+FROM (
+  SELECT m.to_ndi, jsonb_object_agg(m.source, src.external_ids->>m.source) AS stamps
+  FROM station_move m
+  JOIN dams src ON src.external_ids->>'ndi' = m.from_ndi
+  JOIN dams dst ON dst.external_ids->>'ndi' = m.to_ndi
+  WHERE src.external_ids ? m.source
+    AND NOT dst.external_ids ? m.source
+  GROUP BY m.to_ndi
+) c
+WHERE t.external_ids->>'ndi' = c.to_ndi;
 
 UPDATE dams f
-SET external_ids = f.external_ids - m.source
-FROM station_move m
-JOIN dams t ON t.external_ids->>'ndi' = m.to_ndi
-WHERE f.external_ids->>'ndi' = m.from_ndi
-  AND t.external_ids->>m.source = f.external_ids->>m.source;
+SET external_ids = f.external_ids - c.sources
+FROM (
+  SELECT m.from_ndi, array_agg(m.source) AS sources
+  FROM station_move m
+  JOIN dams src ON src.external_ids->>'ndi' = m.from_ndi
+  JOIN dams dst ON dst.external_ids->>'ndi' = m.to_ndi
+  WHERE dst.external_ids->>m.source = src.external_ids->>m.source
+  GROUP BY m.from_ndi
+) c
+WHERE f.external_ids->>'ndi' = c.from_ndi;
 
 DROP TABLE station_move;
