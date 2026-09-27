@@ -80,6 +80,7 @@
 // number, so the multi-purpose-dam capacity caveat above never changes their
 // denominator.
 
+import { type BindableMaster, preferMaster } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
@@ -373,16 +374,13 @@ export function normalizeName(s: string): string {
 const KIND_SUFFIX_RE = /(調整池|貯水池|ため池|溜池)$/;
 
 /** Best master dam for a feed name; exact beats stem beats substring. */
-export function chooseMaster(
-  feedName: string,
-  masters: { id: bigint; name: string }[],
-): bigint | null {
+export function chooseMaster(feedName: string, masters: BindableMaster[]): bigint | null {
   const stem = normalizeName(feedName);
   if (!stem) return null;
   const bareStem = stem.replace(KIND_SUFFIX_RE, '');
   const hasBareStem = bareStem.length >= 2 && bareStem !== stem;
 
-  let best: { id: bigint; rank: number } | null = null;
+  let best: { m: BindableMaster; rank: number } | null = null;
   for (const m of masters) {
     const mStem = normalizeName(m.name);
     let rank: number;
@@ -393,11 +391,11 @@ export function chooseMaster(
     else if (mStem.includes(stem)) rank = 4;
     else if (hasBareStem && mStem === bareStem) rank = 5;
     else continue;
-    if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-      best = { id: m.id, rank };
+    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
+      best = { m, rank };
     }
   }
-  return best?.id ?? null;
+  return best?.m.id ?? null;
 }
 
 // --- DB helpers -------------------------------------------------------------
@@ -454,14 +452,14 @@ const task: Task = async (_payload, helpers) => {
   log(`${SOURCE_ID}: parsed ${rows.length} dam rows for ${reportDate.toISOString()}`);
 
   const prefCodes = Object.values(PREF_NAME_TO_CODE);
-  const masterRows = await sql<{ id: bigint; name: string; prefCode: string }[]>`
-    SELECT id, name, pref_code AS "prefCode" FROM dams
+  const masterRows = await sql<(BindableMaster & { prefCode: string })[]>`
+    SELECT id, name, completed_year AS "completedYear", pref_code AS "prefCode" FROM dams
     WHERE pref_code = ANY(${prefCodes}) ORDER BY id
   `;
-  const mastersByPref = new Map<string, { id: bigint; name: string }[]>();
+  const mastersByPref = new Map<string, BindableMaster[]>();
   for (const m of masterRows) {
     const list = mastersByPref.get(m.prefCode) ?? [];
-    list.push({ id: m.id, name: m.name });
+    list.push(m);
     mastersByPref.set(m.prefCode, list);
   }
 
