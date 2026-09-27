@@ -9,7 +9,10 @@
 // Source:
 //   https://y-bousai.pref.yamaguchi.lg.jp/sp/dam/spdmObserve.aspx?stncd=NNN
 //   One ASPX page per station (redirects to add current obsdt).
-//   UTF-8 HTML; data in HTML table rows with class "hour_XX".
+//   UTF-8 HTML; the データ table lists the last 24 hours at 10-minute steps,
+//   oldest first. On-the-hour rows carry class "hour_HH", the others
+//   "dotted minute_HH"; the window opens with a partial-hour row
+//   (class "hour_HHb", e.g. 21:40). None of the data <tr>s is closed.
 //
 // Table columns per row:
 //   col[0] 観測時刻 "YYYY/MM/DD<br />HH:MM" JST
@@ -18,8 +21,12 @@
 //   col[3] 流入量 [m³/s]
 //   col[4] 全放流量 [m³/s]
 //   col[5] 調整流量 [m³/s] — skip
-//   Missing values: "-" or empty.
+//   Missing values: "****" (欠測) or empty (未観測), per the site legend.
+//   An outage can also print as 貯水位 0.00 with every other column 0.
 //   No storageVolumeM3 available in this system.
+//
+// Every run writes all 24 hourly rows of the window, so an outage shorter
+// than a day heals on the next successful run.
 //
 // Priority 308. Cron hourly at :46.
 
@@ -92,33 +99,45 @@ function parseVal(s: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Extract the most recent hourly row from a dam's ASPX page. */
-export function parseYamaguchiHtml(html: string, name: string): ParsedRow | null {
-  const hourRows = Array.from(html.matchAll(/<tr\s+class="hour_\w+\s*">([\s\S]*?)<\/tr>/gi));
-  if (!hourRows.length) return null;
+/**
+ * Every on-the-hour row of a dam's 24-hour データ table, oldest first.
+ *
+ * The page never closes its data <tr>s, so a row runs up to the next <tr> or
+ * the end of the table body. Matching up to </tr> instead swallowed the whole
+ * table into its first row and stored the reading from 24 hours earlier.
+ */
+export function parseYamaguchiHtml(html: string, name: string): ParsedRow[] {
+  const out: ParsedRow[] = [];
+  for (const row of html.matchAll(
+    /<tr\s+class="hour_\w+\s*">([\s\S]*?)(?=<tr[\s>]|<\/tbody>|<\/table>)/gi,
+  )) {
+    const cells = Array.from((row[1] ?? '').matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)).map(
+      (c) => c[1] ?? '',
+    );
+    if (cells.length < 5) continue;
 
-  // The table is sorted oldest → newest; take the last hourly row
-  const lastRow = hourRows[hourRows.length - 1];
-  if (!lastRow) return null;
-  const cells = Array.from((lastRow[1] ?? '').matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)).map(
-    (c) => c[1] ?? '',
-  );
-  if (cells.length < 5) return null;
+    // Timestamp cell: "YYYY/MM/DD<br />HH:MM" (also handles <br> and <br/>)
+    const tsRaw = (cells[0] ?? '').replace(/<br\s*\/?>/gi, ' ').trim();
+    const observedAt = parseYamaguchiTimestamp(tsRaw);
+    // hour_HHb opens the window at HH:40 or so; only HH:00 is an hourly reading.
+    if (observedAt?.getUTCMinutes() !== 0) continue;
 
-  // Timestamp cell: "YYYY/MM/DD<br />HH:MM" (also handles <br> and <br/>)
-  const tsRaw = (cells[0] ?? '').replace(/<br\s*\/?>/gi, ' ').trim();
-  const observedAt = parseYamaguchiTimestamp(tsRaw);
-  if (!observedAt) return null;
+    const waterLevelM = parseVal(cells[1] ?? '');
+    // No reservoir here sits at EL 0 m (the lowest, 見島, holds ~19 m). The
+    // page prints outages as 0.00 with every other column 0 (see deploy/ops/
+    // oneoff/2026-09-28_yamaguchi_bousai_outage_zeros.sql), so the whole row
+    // is a placeholder.
+    if (waterLevelM === 0) continue;
+    const storageRatePct = parseVal(cells[2] ?? '');
+    const storageRate = storageRatePct !== null ? storageRatePct / 100 : null;
+    const inflowM3s = parseVal(cells[3] ?? '');
+    const outflowM3s = parseVal(cells[4] ?? '');
 
-  const waterLevelM = parseVal(cells[1] ?? '');
-  const storageRatePct = parseVal(cells[2] ?? '');
-  const storageRate = storageRatePct !== null ? storageRatePct / 100 : null;
-  const inflowM3s = parseVal(cells[3] ?? '');
-  const outflowM3s = parseVal(cells[4] ?? '');
+    if (waterLevelM === null && inflowM3s === null && outflowM3s === null) continue;
 
-  if (waterLevelM === null && inflowM3s === null && outflowM3s === null) return null;
-
-  return { yamaguchiName: name, observedAt, waterLevelM, storageRate, inflowM3s, outflowM3s };
+    out.push({ yamaguchiName: name, observedAt, waterLevelM, storageRate, inflowM3s, outflowM3s });
+  }
+  return out;
 }
 
 // --- DB helpers -------------------------------------------------------------
@@ -175,7 +194,7 @@ export function chooseMaster(name: string, masters: BindableMaster[]): bigint | 
   return best?.m.id ?? null;
 }
 
-async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
+async function matchMaster(names: string[], log: (s: string) => void): Promise<DamMatch[]> {
   // Include Hiroshima (34) alongside Yamaguchi (35): 小瀬川ダム sits on the
   // prefectural boundary and is registered under pref_code='34' in the master.
   const masters = await sql<BindableMaster[]>`
@@ -184,13 +203,13 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
   `;
   const out: DamMatch[] = [];
 
-  for (const r of rows) {
-    const damId = chooseMaster(r.yamaguchiName, masters);
+  for (const name of names) {
+    const damId = chooseMaster(name, masters);
     if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${r.yamaguchiName}"`);
+      log(`${SOURCE_ID}: no master match for "${name}"`);
       continue;
     }
-    out.push({ yamaguchiName: r.yamaguchiName, damId });
+    out.push({ yamaguchiName: name, damId });
   }
 
   // What this source publishes, matched or not — taken from the station
@@ -231,21 +250,19 @@ const task: Task = async (_payload, helpers) => {
       });
       if (r.status !== 200) {
         log(`${SOURCE_ID}: stncd=${code} HTTP ${r.status}`);
-        return null;
+        return [];
       }
       const html = await r.text();
       return parseYamaguchiHtml(html, name);
     }),
   );
 
-  const rows: ParsedRow[] = results
-    .filter((r): r is PromiseFulfilledResult<ParsedRow | null> => r.status === 'fulfilled')
-    .map((r) => r.value)
-    .filter((v): v is ParsedRow => v !== null);
+  const rows: ParsedRow[] = results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
+  const names = [...new Set(rows.map((r) => r.yamaguchiName))];
 
-  log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
+  log(`${SOURCE_ID}: parsed ${rows.length} hourly rows from ${names.length} dams`);
 
-  const matches = await matchMaster(rows, log);
+  const matches = await matchMaster(names, log);
   const damByName = new Map(matches.map((m) => [m.yamaguchiName, m.damId]));
 
   const inputs = [] as Parameters<typeof upsertObservations>[0];

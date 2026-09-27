@@ -12,7 +12,9 @@ import ingestAichiKasen from './tasks/ingest_aichi_kasen.ts';
 import ingestAitoyo from './tasks/ingest_aitoyo.ts';
 import ingestAkita from './tasks/ingest_akita_kasen.ts';
 import ingestAomori from './tasks/ingest_aomori.ts';
+import ingestCgrAshidaSeki from './tasks/ingest_cgr_ashida_seki.ts';
 import ingestCgrMlit from './tasks/ingest_cgr_mlit.ts';
+import ingestCgrOkakawa from './tasks/ingest_cgr_okakawa.ts';
 import ingestChiba from './tasks/ingest_chiba.ts';
 import ingestChibaNourin from './tasks/ingest_chiba_nourin.ts';
 import ingestEhimeBousai from './tasks/ingest_ehime_bousai.ts';
@@ -29,33 +31,44 @@ import ingestHyogo from './tasks/ingest_hyogo.ts';
 import ingestIbaraki from './tasks/ingest_ibaraki_bousai.ts';
 import ingestIshikawa from './tasks/ingest_ishikawa_kasen.ts';
 import ingestIwate from './tasks/ingest_iwate_kasen.ts';
+import ingestJwaAichiYosui from './tasks/ingest_jwa_aichi_yosui.ts';
+import ingestJwaBiwako from './tasks/ingest_jwa_biwako.ts';
 import ingestJwaChiba from './tasks/ingest_jwa_chiba.ts';
 import ingestJwaChikugo from './tasks/ingest_jwa_chikugo.ts';
+import ingestJwaChikugoRt from './tasks/ingest_jwa_chikugo_rt.ts';
 import ingestJwaChubu from './tasks/ingest_jwa_chubu.ts';
+import ingestJwaFukudou from './tasks/ingest_jwa_fukudou.ts';
 import ingestJwaJunpo from './tasks/ingest_jwa_junpo.ts';
 import ingestJwaKisoRt from './tasks/ingest_jwa_kiso_rt.ts';
 import ingestJwaToneAra from './tasks/ingest_jwa_toneara.ts';
+import ingestJwaTonekako from './tasks/ingest_jwa_tonekako.ts';
 import ingestJwaToyokawa from './tasks/ingest_jwa_toyokawa.ts';
 import ingestJwaYoshino from './tasks/ingest_jwa_yoshino.ts';
 import ingestKagawa from './tasks/ingest_kagawa_bousai.ts';
+import ingestKagawaTameike from './tasks/ingest_kagawa_tameike.ts';
 import ingestKagoshimaBousai from './tasks/ingest_kagoshima_bousai.ts';
 import ingestKagoshimaKasen from './tasks/ingest_kagoshima_kasen.ts';
 import ingestKanagawa from './tasks/ingest_kanagawa.ts';
 import ingestKasenbosai from './tasks/ingest_kasenbosai.ts';
 import ingestKasenbosaiV2 from './tasks/ingest_kasenbosai_v2.ts';
+import ingestKitakyushuSuido from './tasks/ingest_kitakyushu_suido.ts';
 import ingestKkrMlit from './tasks/ingest_kkr_mlit.ts';
 import ingestKochi from './tasks/ingest_kochi_bousai.ts';
+import ingestKochiKigyo from './tasks/ingest_kochi_kigyo.ts';
 import ingestKtrKinu from './tasks/ingest_ktr_kinu.ts';
 import ingestKtrTone from './tasks/ingest_ktr_tone_dam.ts';
 import ingestKumamoto from './tasks/ingest_kumamoto_bousai.ts';
 import ingestKyoto from './tasks/ingest_kyoto_bousai.ts';
 import ingestKyushuNousei from './tasks/ingest_kyushu_nousei.ts';
+import ingestMatsueSuido from './tasks/ingest_matsue_suido.ts';
+import ingestMcTottoriHydro from './tasks/ingest_mc_tottori_hydro.ts';
 import ingestMiyagi from './tasks/ingest_miyagi_kasen.ts';
+import ingestMiyagiNousei from './tasks/ingest_miyagi_nousei.ts';
 import ingestMiyazaki from './tasks/ingest_miyazaki_bousai.ts';
 import ingestNagano from './tasks/ingest_nagano_kasen.ts';
+import ingestNaganoKigyo from './tasks/ingest_nagano_kigyo.ts';
 import ingestNagasaki from './tasks/ingest_nagasaki_kasen.ts';
 import ingestNaraKasen from './tasks/ingest_nara_kasen.ts';
-import ingestNiigata from './tasks/ingest_niigata.ts';
 import ingestOita from './tasks/ingest_oita_bousai.ts';
 import ingestOitaNourin from './tasks/ingest_oita_nourin.ts';
 import ingestOkayama from './tasks/ingest_okayama.ts';
@@ -64,12 +77,13 @@ import ingestOsaka from './tasks/ingest_osaka.ts';
 import ingestQsrRyumon from './tasks/ingest_qsr_ryumon.ts';
 import ingestQsrToukan from './tasks/ingest_qsr_toukan.ts';
 import ingestQsrTuruta from './tasks/ingest_qsr_turuta.ts';
+import ingestSadoNourin from './tasks/ingest_sado_nourin.ts';
 import ingestSagaBousai from './tasks/ingest_saga_bousai.ts';
 import ingestSaitama from './tasks/ingest_saitama_suibo.ts';
+import ingestSaseboSuido from './tasks/ingest_sasebo_suido.ts';
 import ingestShiga from './tasks/ingest_shiga.ts';
 import ingestShimaneBousai from './tasks/ingest_shimane_bousai.ts';
 import ingestShimokubo from './tasks/ingest_shimokubo.ts';
-import ingestShizuokaBousai from './tasks/ingest_shizuoka_bousai.ts';
 import ingestSkrHiji from './tasks/ingest_skr_hiji.ts';
 import ingestTndamHyogo from './tasks/ingest_tndam_hyogo.ts';
 import ingestTochigi from './tasks/ingest_tochigi.ts';
@@ -117,11 +131,16 @@ async function main(): Promise<void> {
       'ingest:tokyo-waterworks': ingestTokyoWaterworks,
       'ingest:jwa-junpo': ingestJwaJunpo,
       'ingest:jwa-toneara': ingestJwaToneAra,
+      'ingest:jwa-tonekako': ingestJwaTonekako,
       'ingest:jwa-chubu': ingestJwaChubu,
       'ingest:jwa-toyokawa': ingestJwaToyokawa,
       'ingest:jwa-kiso-rt': ingestJwaKisoRt,
+      'ingest:jwa-chikugo-rt': ingestJwaChikugoRt,
+      'ingest:jwa-fukudou': ingestJwaFukudou,
       'ingest:jwa-yoshino': ingestJwaYoshino,
+      'ingest:jwa-biwako': ingestJwaBiwako,
       'ingest:aitoyo': ingestAitoyo,
+      'ingest:jwa-aichi-yosui': ingestJwaAichiYosui,
       'ingest:jwa-chiba-bouso': ingestJwaChiba,
       'ingest:jwa-chikugo': ingestJwaChikugo,
       'ingest:kanagawa-dam': ingestKanagawa,
@@ -133,6 +152,8 @@ async function main(): Promise<void> {
       'ingest:aomori-dam': ingestAomori,
       'ingest:hkd-mlit-dam': ingestHkdMlit,
       'ingest:cgr-mlit-dam': ingestCgrMlit,
+      'ingest:cgr-okakawa-dam': ingestCgrOkakawa,
+      'ingest:cgr-ashida-seki': ingestCgrAshidaSeki,
       'ingest:ktr-kinu-dam': ingestKtrKinu,
       'ingest:ktr-tone-dam': ingestKtrTone,
       'ingest:qsr-ryumon-dam': ingestQsrRyumon,
@@ -143,7 +164,6 @@ async function main(): Promise<void> {
       'ingest:chiba-suisei': ingestChiba,
       'ingest:okinawa-eb': ingestOkinawaEb,
       'ingest:okayama-bousai': ingestOkayama,
-      'ingest:niigata-bousai': ingestNiigata,
       'ingest:oita-bousai': ingestOita,
       'ingest:hyogo-bodik': ingestHyogo,
       'ingest:tochigi-bodik': ingestTochigi,
@@ -155,6 +175,7 @@ async function main(): Promise<void> {
       'ingest:shimokubo': ingestShimokubo,
       'ingest:ibaraki-bousai': ingestIbaraki,
       'ingest:kochi-bousai': ingestKochi,
+      'ingest:kochi-kigyo': ingestKochiKigyo,
       'ingest:kyoto-bousai': ingestKyoto,
       'ingest:kagawa-bousai': ingestKagawa,
       'ingest:nagano-kasen': ingestNagano,
@@ -176,16 +197,23 @@ async function main(): Promise<void> {
       'ingest:chiba-nourin': ingestChibaNourin,
       'ingest:oita-nourin': ingestOitaNourin,
       'ingest:kyushu-nousei': ingestKyushuNousei,
+      'ingest:miyagi-nousei': ingestMiyagiNousei,
+      'ingest:kagawa-tameike': ingestKagawaTameike,
+      'ingest:sado-nourin': ingestSadoNourin,
       'ingest:gifu-kasen': ingestGifuKasen,
       'ingest:aichi-kasen': ingestAichiKasen,
       'ingest:fukui-bousai': ingestFukuiBousai,
-      'ingest:shizuoka-bousai': ingestShizuokaBousai,
       'ingest:ehime-bousai': ingestEhimeBousai,
       'ingest:toyama-bousai': ingestToyamaBousai,
       'ingest:nara-kasen': ingestNaraKasen,
       'ingest:tndam-hyogo': ingestTndamHyogo,
       'ingest:kagoshima-bousai': ingestKagoshimaBousai,
       'ingest:kagoshima-kasen': ingestKagoshimaKasen,
+      'ingest:kitakyushu-suido': ingestKitakyushuSuido,
+      'ingest:sasebo-suido': ingestSaseboSuido,
+      'ingest:matsue-suido': ingestMatsueSuido,
+      'ingest:mc-tottori-hydro': ingestMcTottoriHydro,
+      'ingest:nagano-kigyo': ingestNaganoKigyo,
       'backfill:kagoshima-bodik': backfillKagoshima,
       'backfill:suimon:enqueue': backfillEnqueue,
       'backfill:suimon:run': backfillRun,

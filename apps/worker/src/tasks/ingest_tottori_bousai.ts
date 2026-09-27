@@ -12,11 +12,24 @@
 //   百谷/佐治川/東郷/賀祥/朝鍋 → already in tottori-dam (priority 307)
 //   菅沢                        → new coverage (not in tottoridam.jp)
 //
-// source_priorities: tottori-dam=307 wins for the 5 overlapping dams;
-// tottori-bousai=312 becomes preferredSource only for 菅沢.
+// source_priorities: tottori-bousai=312 outranks tottori-dam=307 and
+// cgr-mlit-dam=304 (priority DESC wins), so it is the chart source for all 6.
 //
 // damEffectiveStorageQuantities is in 千m³ (× 1000 → m³); confirmed by
 // 菅沢: 10,604 千m³ = 61.7% of 17,200,000 m³ effective capacity.
+//
+// Some items are not the dam's own telemetry, and all carry flag "0" (normal):
+//   - incomplete hourly lists (total=2 — 朝鍋 + 菅沢 — instead of 6, ~2 a day
+//     in September 2026) hold a 朝鍋 placeholder reading 0 m / 0 千m³, and at
+//     times a 菅沢 item copying it field for field;
+//   - complete lists sometimes hold a 菅沢 item copying 朝鍋's real values
+//     (list 2026-09-27-05-20: both 102.89 m / 280 千m³ / 24 %).
+// Each such item prints its own 最低水位 (97.0 m for 朝鍋, 353.1 m for 菅沢),
+// and its level sits far below it. Stored as-is they were 423 prod rows of
+// plunges on the chart (cleaned by deploy/ops/oneoff/
+// 2026-09-28_tottori_bousai_placeholders.sql), so an item whose level is more
+// than MIN_LEVEL_MARGIN_M below its own 最低水位 is skipped whole — its rate
+// and flows are another dam's too.
 //
 // Cron: hourly at :33.
 
@@ -48,6 +61,8 @@ interface TottoriBousaiItem {
   storageRateEffectiveCapacityFlg: string;
   storageRateWaterUseCapacity: number | null;
   storageRateWaterUseCapacityFlg: string;
+  /** 最低水位 [EL.m] of the dam, printed on every item. */
+  minWaterLevel: number | null;
 }
 
 export interface ParsedRow {
@@ -89,12 +104,25 @@ function gated(value: number | null, flg: string): number | null {
   return flg === '0' && typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-/** Convert feed items to observation rows, dropping all-null dams. */
+/** How far below its own 最低水位 a level may read before the item is taken
+ *  for another dam's data. Every real prod reading since 2026-06-05 is above
+ *  最低水位 (closest: 百谷 62.37 vs 60.4 m); the placeholders and copies sit
+ *  97–353 m below it. */
+const MIN_LEVEL_MARGIN_M = 20;
+
+/** Convert feed items to observation rows, dropping all-null dams and items
+ *  that carry another dam's (or placeholder) values (see header). */
 export function parseTottoriItems(items: TottoriBousaiItem[]): ParsedRow[] {
   const out: ParsedRow[] = [];
   for (const it of items) {
     const observedAt = parseTottoriTimestamp(it.dataTimestamp ?? '');
     if (!observedAt) continue;
+    if (
+      it.damQuantitiesLevel != null &&
+      it.minWaterLevel != null &&
+      it.damQuantitiesLevel < it.minWaterLevel - MIN_LEVEL_MARGIN_M
+    )
+      continue;
 
     const level = gated(it.damQuantitiesLevel, it.damQuantitiesLevelFlg);
     const inflow = gated(it.damInflowQuantities, it.damInflowQuantitiesFlg);

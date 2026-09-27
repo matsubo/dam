@@ -1,16 +1,24 @@
 // apps/worker/src/tasks/ingest_jwa_kiso_rt.ts
 //
 // 水資源機構 中部支社 木曽川水系 — real-time data for 6 dams.
-// Updated every ~10 minutes; fetched hourly.
+// Updated every ~10 minutes; one page fetched hourly.
 //
 //   木曽川水系: 牧尾 (長野) / 味噌川 (長野) / 阿木川 (岐阜) / 岩屋 (岐阜)
-//              徳山 (岐阜) / 中里貯水池 (長野)
+//              徳山 (岐阜) / 中里貯水池 (三重, 三重用水 — いなべ市)
 //
 // Source: https://www.water.go.jp/mizu/chubu/realtime/index.html
 // Format: Static HTML with <h4>-delimited blocks; "観測時刻：YYYY年MM月DD日 HH時MM分" (JST).
 //         Storage in 10³m³ (= 千m³); stored as m³ after × 1000.  Water level in EL.m.
 //         "cc" = sensor communication cut; treat as null.
-// License: 水資源機構 published; 出典明示で再配布可.
+// License: 水資源機構「著作権・リンク等について」(honsya/honsya/policy/copyright):
+//         「数値データ、簡単な表・グラフ等は著作権の対象ではありませんので、これらに
+//         ついては本利用ルールの適用はなく、自由に利用できます。」 The 中部支社
+//         リアルタイム情報 note (mizu/chubu/res/description/description.pdf) asks:
+//         「ツール等による、自動的なデータ収集等はサーバに負荷がかかり、情報提供
+//         できなくなる恐れがありますのでご遠慮頂くよう、ご理解・ご協力をお願い
+//         いたします。」 Kept on that basis (user decision, 2026-09-28): only the
+//         observed numbers are stored, with the source named, and the fetch is one
+//         page an hour (the page itself refreshes every 10 minutes).
 //
 // Upgrades jwa-chubu (daily, priority 296) to hourly cadence.
 // Priority 297 > 296 so this becomes preferredSource for all 6 dams.
@@ -31,7 +39,7 @@ const NAME_MAP: Array<{ kisoName: string; masterName: string; prefCodes: string[
   { kisoName: '阿木川ダム', masterName: '阿木川', prefCodes: ['21'] }, // 岐阜
   { kisoName: '岩屋ダム', masterName: '岩屋', prefCodes: ['21'] },
   { kisoName: '徳山ダム', masterName: '徳山', prefCodes: ['21'] },
-  { kisoName: '中里貯水池', masterName: '中里', prefCodes: ['20'] },
+  { kisoName: '中里貯水池', masterName: '中里', prefCodes: ['24'] }, // 三重 (三重用水)
 ];
 
 interface ParsedRow {
@@ -139,7 +147,7 @@ async function ensureSourcePriority(): Promise<void> {
   `;
 }
 
-async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
+export async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
   const matches: DamMatch[] = [];
   // What this source publishes, matched or not — recorded so /coverage can
   // say "they publish it, we failed to link it" instead of guessing.

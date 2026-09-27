@@ -265,20 +265,21 @@ describe('（元）/（再） twins share one station', () => {
     expect(await stampOf(moto)).toBeNull();
   });
 
-  test('a stamp on a （再） with no completion year stays put', async () => {
-    // 松川（再）: ダム便覧 has no year, so preferMaster alone reads it as
-    // unfinished and would move the station to the （元）.
+  test('the stamp 0071 puts on 松川（元）holds even once a （再）year is recorded', async () => {
+    // 松川（再） is not finished (長野県), so the station is stamped on the （元）.
+    // The （再） year here is hypothetical: with it preferMaster alone would
+    // take the （再）, but moving the station then takes a migration.
     const key = 'TEST-KB79-MATSUKAWA';
-    const moto = await insertTwin(SLUGS[0] as string, '松川（元）', 1974, null);
-    const sai = await insertTwin(SLUGS[1] as string, '松川（再）', null, key);
+    const moto = await insertTwin(SLUGS[0] as string, '松川（元）', 1974, key);
+    const sai = await insertTwin(SLUGS[1] as string, '松川（再）', 2025, null);
     const station = await isolatedStation('2183100700010', key);
     expect(station.obsNm).toBe('松川ダム');
 
     const m = await matchOne(station);
-    expect(String(m.damId)).toBe(String(sai));
+    expect(String(m.damId)).toBe(String(moto));
     if (m.damId == null) throw new Error('unmatched');
     expect(await bindStation(m.damId, key)).toBe(false);
-    expect(await stampOf(moto)).toBeNull();
+    expect(await stampOf(sai)).toBeNull();
   });
 });
 

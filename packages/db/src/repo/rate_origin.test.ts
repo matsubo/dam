@@ -7,8 +7,8 @@ import { upsertObservations } from './observations.ts';
 // one we computed from 貯水量 ÷ 有効貯水容量.
 
 const EXT_IDS = ['ORIGIN-TEST-A', 'ORIGIN-TEST-B', 'ORIGIN-TEST-C', 'ORIGIN-TEST-D'];
-// 'niigata-bousai' is one of the sources migration 0040 marks trusted_rate_basis.
-const TRUSTED_SOURCE = 'niigata-bousai';
+// 'okayama-bousai' is one of the sources migration 0040 marks trusted_rate_basis.
+const TRUSTED_SOURCE = 'okayama-bousai';
 const UNTRUSTED_SOURCE = 'test';
 const DERIVED_RATE = 32;
 

@@ -20,6 +20,14 @@ const FIXTURE = new URL('../../../../tests/fixtures/kyushu_nousei/r8_0901.pdf', 
 const text = await pdfToText(new Uint8Array(await Bun.file(FIXTURE).arrayBuffer()));
 const parsed = parseKyushuNouseiPdfText(text);
 
+const FIXTURE_0915 = new URL(
+  '../../../../tests/fixtures/kyushu_nousei/r8_0915.pdf',
+  import.meta.url,
+).pathname;
+const parsed0915 = parseKyushuNouseiPdfText(
+  await pdfToText(new Uint8Array(await Bun.file(FIXTURE_0915).arrayBuffer())),
+);
+
 describe('parseKyushuNouseiDate', () => {
   test('reads the full-width 令和 survey date as JST midnight', () => {
     // 「令和８年９月１日現在」→ 2026-09-01 00:00 JST → 2026-08-31T15:00:00Z.
@@ -138,11 +146,54 @@ describe('findLatestPdfUrl', () => {
   });
 });
 
+describe('parseKyushuNouseiPdfText — the R8.9.15 PDF (no leading 利水容量 column)', () => {
+  // From R8.9.15 the table's date window starts at 4/15 and a row reads
+  // 有効貯水量 → (貯水量, 貯水率)… with no 利水容量 column in between; the
+  // R8.9.1 parser read the first volume as 利水容量 and kept 0 of 59 rows.
+  const p = parsed0915;
+
+  test('dates the survey 令和8年9月15日', () => {
+    expect(p.reportDate?.toISOString()).toBe('2026-09-14T15:00:00.000Z');
+  });
+
+  test('keeps the same 58 of 59 rows as the old layout', () => {
+    expect(p.published.length).toBe(59);
+    expect(p.rows.length).toBe(58);
+  });
+
+  test('reads the 9/15 column: 石場 886 千m³ 41.1 %, 花宗ため池 1,499 千m³ 58.1 %', () => {
+    const row = (name: string) => p.rows.find((r) => r.kyushuName === name);
+    expect(row('石場ダム')?.storageVolumeM3).toBe(886_000);
+    expect(row('石場ダム')?.storageRate).toBeCloseTo(0.411, 3);
+    expect(row('花宗ため池')?.storageVolumeM3).toBe(1_499_000);
+  });
+
+  test('keeps a row whose first survey column is a 「－ －」 missing pair', () => {
+    // 教良木ダム printed 「－ －」 for 8/1; once the window reaches that column
+    // it is the first pair after 有効貯水量, where no 利水容量 column precedes it.
+    const p2 = parseKyushuNouseiPdfText(
+      '熊本 教良木川 教良木ダム 1,371 - - 1,153 84.1% 1,064 77.6% 1,200 87.5% 90.0%',
+    );
+    expect(p2.published).toEqual([{ name: '教良木ダム', prefCode: '43' }]);
+    expect(p2.rows).toHaveLength(1);
+    expect(p2.rows[0]?.storageVolumeM3).toBe(1_064_000);
+    expect(p2.rows[0]?.storageRate).toBeCloseTo(0.776, 3);
+  });
+
+  test('checks a multi-purpose dam against its reprinted 利水容量, not 有効貯水量', () => {
+    // 寺内ダム 有効 16,000 / 利水 8,230: 1,937 / 8,230 = 23.5 %.
+    const r = p.rows.find((x) => x.kyushuName === '寺内ダム');
+    expect(r?.storageVolumeM3).toBe(1_937_000);
+    expect(r?.storageRate).toBeCloseTo(0.235, 3);
+  });
+});
+
 describe('chooseMaster', () => {
   const masters = [
     { id: 1n, name: '石場' },
     { id: 2n, name: '耶馬溪' },
     { id: 3n, name: '東原調整池' },
+    { id: 4n, name: '花宗溜池' },
   ];
 
   test('matches the feed name minus its ダム suffix', () => {
@@ -155,6 +206,10 @@ describe('chooseMaster', () => {
 
   test('matches a 調整池-suffixed name exactly', () => {
     expect(chooseMaster('東原調整池', masters)).toBe(3n);
+  });
+
+  test('folds ため池/溜池 so 花宗ため池 matches master 花宗溜池', () => {
+    expect(chooseMaster('花宗ため池', masters)).toBe(4n);
   });
 
   test('returns null for a dam the master does not hold', () => {

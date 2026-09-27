@@ -1,15 +1,28 @@
 // apps/worker/src/tasks/ingest_jwa_toyokawa.ts
 //
 // 水資源機構 中部支社 豊川水系 — 宇連ダム / 大島ダム.
-// Real-time page updated every ~10 minutes; fetched hourly.
+// Real-time page updated every ~10 minutes; one page fetched hourly.
 //
 //   豊川水系: 宇連 (愛知) / 大島 (愛知)
 //
 // Source: https://www.water.go.jp/mizu/chubu/realtime/index_2.html
-// Format: Static HTML with tabular blocks; "観測時刻：YYYY年MM月DD日 HH時MM分" (JST).
-//         Storage in m³ (有効貯水量); water level in EL.m.
+// Format: Static HTML, one <h4>-headed table per facility; "観測時刻：YYYY年MM月DD日
+//         HH時MM分" (JST). 貯水位 in EL.m; 有効貯水量 in 10³m³ (stored × 1000);
+//         流入量 in m³/s. Each value is the text before the unit's markup
+//         (`18158<span class="unit">10<sup>3</sup>m<sup>3</sup></span>`).
 //         "cc" = sensor communication cut; treat as null.
-// License: 水資源機構 published; 出典明示で再配布可.
+//         The only outflow printed is 放流量（利水）, the water-supply release, not
+//         the total (大島: 0.00 here while kasenbosai's total was > 0 at 49 of 61
+//         shared timestamps), so no outflow is stored.
+// License: 水資源機構「著作権・リンク等について」(honsya/honsya/policy/copyright):
+//         「数値データ、簡単な表・グラフ等は著作権の対象ではありませんので、これらに
+//         ついては本利用ルールの適用はなく、自由に利用できます。」 The 中部支社
+//         リアルタイム情報 note (mizu/chubu/res/description/description.pdf) asks:
+//         「ツール等による、自動的なデータ収集等はサーバに負荷がかかり、情報提供
+//         できなくなる恐れがありますのでご遠慮頂くよう、ご理解・ご協力をお願い
+//         いたします。」 Kept on that basis (user decision, 2026-09-28): only the
+//         observed numbers are stored, with the source named, and the fetch is one
+//         page an hour (the page itself refreshes every 10 minutes).
 //
 // These two dams are in jwa-junpo (10-day) and aitoyo (daily). This adapter
 // upgrades them to real-time cadence and adds 水位 (EL.m) not available from
@@ -35,18 +48,6 @@ interface ParsedRow {
   waterLevelM: number | null;
   storageVolumeM3: number | null;
   inflowM3s: number | null;
-  outflowM3s: number | null;
-}
-
-function textOf(s: string): string {
-  return s
-    .replace(/<[^>]*>/g, '')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/　/g, ' ')
-    .trim();
 }
 
 function parseNum(s: string): number | null {
@@ -75,31 +76,23 @@ export function parseTokyokawaTimestamp(text: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/**
- * Extract section of HTML from damName to the next known dam name.
- * Used to isolate each dam's data block from the rest of the page.
- */
-function extractSection(html: string, damName: string, allNames: string[]): string {
-  const start = html.indexOf(damName);
+/** The dam's table: from its `<h4>` heading to the table's end. */
+function extractSection(html: string, damName: string): string {
+  const start = html.indexOf(`<h4>${damName}</h4>`);
   if (start < 0) return '';
-  let end = html.length;
-  for (const other of allNames) {
-    if (other === damName) continue;
-    const idx = html.indexOf(other, start + damName.length);
-    if (idx > start && idx < end) end = idx;
-  }
-  return html.slice(start, end);
+  const end = html.indexOf('</table>', start);
+  return html.slice(start, end < 0 ? html.length : end);
 }
 
-function extractLabeled(section: string, label: string): number | null {
-  const labelIdx = section.indexOf(label);
-  if (labelIdx < 0) return null;
-  const context = textOf(section.slice(labelIdx, labelIdx + 300));
-  // Skip the label text itself, then find the first number.
-  const afterLabel = context.slice(label.length);
-  const m = afterLabel.match(/([\d,]+(?:\.\d+)?)/);
-  if (!m) return null;
-  return parseNum(m[1] ?? '');
+// The text of the <td class="data"> after <th>LABEL</th>, up to its first tag.
+// Reading the raw HTML keeps the value apart from the unit markup that follows
+// it (`18158<span class="unit">10<sup>3</sup>m<sup>3</sup></span>`), which
+// reads as "18158103m3" once the tags are stripped.
+function extractLabeledValue(section: string, label: string): number | null {
+  const pos = section.indexOf(`<th>${label}</th>`);
+  if (pos < 0) return null;
+  const m = section.slice(pos).match(/<td[^>]*class="data"[^>]*>([^<]*)/);
+  return m ? parseNum(m[1] ?? '') : null;
 }
 
 export function parseToyokawaHtml(html: string): {
@@ -108,27 +101,24 @@ export function parseToyokawaHtml(html: string): {
 } {
   const observedAt = parseTokyokawaTimestamp(html);
   const rows: ParsedRow[] = [];
-  const allNames = NAME_MAP.map((m) => m.toyoName);
 
   for (const m of NAME_MAP) {
-    const section = extractSection(html, m.toyoName, allNames);
+    const section = extractSection(html, m.toyoName);
     if (!section) continue;
 
-    // Extract each labeled field; "cc" values produce null via parseNum.
-    const waterLevel = extractLabeled(section, '貯水位');
-    const storage = extractLabeled(section, '有効貯水量');
-    const inflow = extractLabeled(section, '流入量');
-    const outflow = extractLabeled(section, '放流量');
+    // "cc" (communication cut) and other non-numeric cells produce null.
+    const waterLevel = extractLabeledValue(section, '貯水位');
+    const storageThou = extractLabeledValue(section, '有効貯水量');
+    const inflow = extractLabeledValue(section, '流入量');
 
     // Skip if both primary metrics are unavailable (full cc outage).
-    if (waterLevel == null && storage == null) continue;
+    if (waterLevel == null && storageThou == null) continue;
 
     rows.push({
       toyoName: m.toyoName,
       waterLevelM: waterLevel,
-      storageVolumeM3: storage,
+      storageVolumeM3: storageThou == null ? null : storageThou * 1000,
       inflowM3s: inflow,
-      outflowM3s: outflow,
     });
   }
   return { observedAt, rows };
@@ -230,9 +220,9 @@ const task: Task = async (_payload, helpers) => {
       damId,
       sourceId: 'jwa-toyokawa',
       storageVolumeM3: row.storageVolumeM3,
-      storageRate: null, // 有効貯水量 in m³; no rate denominator on page
+      storageRate: null, // no rate on the page; the trigger derives one from the volume
       inflowM3s: row.inflowM3s,
-      outflowM3s: row.outflowM3s,
+      outflowM3s: null, // only 放流量（利水） is published, not the total release
       waterLevelM: row.waterLevelM,
       rainfallMm: null,
       rawSnapshotId: null,

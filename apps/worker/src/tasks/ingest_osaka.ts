@@ -20,13 +20,12 @@
 // No level, inflow, or outflow fields are published.
 //
 // Master match note: 狭山池（再）and 狭山池（元）both normalize to the same stem.
-// chooseMaster breaks the tie by preferring （再）over （元）since rebuilt dams
-// are the operational ones (confirmed: 狭山池（再）total_capacity_m3 = 2,800,000
-// matches the API's storageCapacity exactly). This rank deliberately comes
-// before preferMaster, as a defensive hold for #79's "leave 狭山池 where it
-// is": ダム便覧 has no record matching the master name 狭山池（再）, so its
-// completion year cannot be refreshed from there, and if it were ever blank,
-// preferMaster alone would fall back to the （元）.
+// 狭山池（再） is the dam in service, completed 2001 (pref.osaka.lg.jp
+// /o130100/damusabo/dam/sayama.html 「完成した狭山池ダム」; ダム便覧 1440),
+// and its total_capacity_m3 = 2,800,000 matches the API's storageCapacity.
+// preferMaster picks it on that year; chooseMaster also ranks （再）over （元）
+// first, because the master row carries no ダム便覧 link, so the year is
+// never refreshed and the binding must not depend on it.
 //
 // Cron: hourly at :31.
 
@@ -105,10 +104,14 @@ export function parseOsakaItems(res: OsakaResponse): ParsedRow[] {
   return out;
 }
 
+// 308, one below kasenbosai (310): 川の防災情報 publishes all three dams
+// with 貯水位/流入量/放流量 on top of the volume this feed carries, so it
+// should win the chart. At an equal 310 the chart source for 安威川/箕面川/
+// 狭山池 was whichever row the planner returned first.
 async function ensureSourcePriority(): Promise<void> {
   await sql`
     INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 310,
+    VALUES (${SOURCE_ID}, 308,
             '大阪府河川防災情報 — hourly, 3 県管理ダム (JSON feed, 1分更新)',
             true)
     ON CONFLICT (source_id) DO UPDATE

@@ -24,7 +24,8 @@
 // Master matching strategy: by name proximity. For each mudam entry we have
 // (id, lat, lng, name); we find the master dam whose name CONTAINS the mudam
 // name (or vice-versa) AND whose location is within 10 km of (lat, lng). If
-// no match within that window, the mudam entry is logged and skipped.
+// no match within that window, the mudam entry is logged and skipped. The
+// listings that rule gets wrong are pinned in MUDAM_OVERRIDES.
 
 import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
@@ -224,16 +225,75 @@ interface MatchResult {
 }
 
 /**
+ * Listings the name/distance rule binds to the wrong row, pinned to the right
+ * row's NDI id. Evidence is mudam's own 諸元 table
+ * (/chronology/form01/<id>/2024: 堤高, 総/有効貯水容量), which matches the
+ * pinned row exactly and not the one the rule picks, compared with prod's
+ * rows on 2026-09-27.
+ *
+ * - 3 桂沢 → 新桂沢（再）. The names differ, so twinOf does not pair them and
+ *   the old stamp kept the listing on 桂沢（元）. 新桂沢 is 桂沢 raised on the
+ *   same axis (同軸嵩上げ, 63.6 → 75.5 m), completed 2024-03-31
+ *   (https://www.hkd.mlit.go.jp/sp/ikushunbetu_damu/kluhh4000000byma.html).
+ *   mudam keeps one listing and dam code; its 諸元 switch to the new body
+ *   (75.5 m, 総 147,300 千m³) from 2024. The level first passes the old
+ *   常時満水位 187.0 in 2023-11, when test impoundment began. One reservoir,
+ *   one series: the whole history sits with the live sources on the （再）.
+ * - 180 遠野第二 → 遠野第2 (23.1 m, 総 248), 310 上市川第二 → 上市川第2
+ *   (67.0 m, 総 7,800). "遠野第二" contains "遠野" while the master spells
+ *   第2, so the listing took 遠野 from 172 遠野 (and 310 took 上市川 from 309
+ *   上市川).
+ * - 54 丸山 → 丸山（元） (98.2 m, 総 79,520). 新丸山（再） is a new, higher
+ *   body still being built (https://www.cbr.mlit.go.jp/shinmaru/), and
+ *   its name does not pair with 丸山（元）.
+ * - 435 木屋川 → 木屋川（元） (41.0 m, 総 21,750). The （再） is the 10 m
+ *   raising Yamaguchi started in 2021
+ *   (https://www.pref.yamaguchi.lg.jp/soshiki/132/23891.html).
+ * - 369 大日 → 大日 (36.0 m, 総 1,100), not the nearer 大日川 whose name
+ *   contains it (42.8 m, 総 2,099).
+ * - 447 黒杭川上流 → 黒杭川上流 (48.0 m, 総 450), not the nearer 黒杭 whose
+ *   name it contains (16.9 m, 総 246).
+ * - 366 長谷（兵庫県） → Hyogo's 長谷 on 千種川水系長谷川 (30.3 m, 総 240).
+ *   The district-map marker sits on Kansai Electric's 102 m 長谷 in 神河,
+ *   30 km away; mudam's 諸元 give 34°56'23" 134°26'40", Hyogo's 長谷.
+ * - 524 小ヶ倉 → Nagasaki City's 小ヶ倉 on 鹿尾川 (41.2 m, 総 2,040). The
+ *   marker sits on the prefecture's 21.1 m 小ヶ倉 22 km away; mudam's 諸元
+ *   give 32°42'58" 129°52'35", Nagasaki City's.
+ */
+export const MUDAM_OVERRIDES: Readonly<Record<number, string>> = {
+  3: '156',
+  54: '901',
+  180: '257',
+  310: '1108',
+  366: '1573',
+  369: '1593',
+  435: '2025',
+  447: '1991',
+  524: '2609',
+};
+
+/**
  * Match a mudam dam to a master dam by (a) name overlap and (b) location
  * proximity. Returns the closest match within `radiusM` whose name contains
  * the mudam name (or vice-versa, allowing the 「ダム」 suffix to be omitted
  * either side). Null if no acceptable match.
  *
- * A row already stamped with this damsysId keeps it. The （元） and （再） of
- * one dam rank at the nearer twin's distance (花山's share coordinates), so
- * the current structure wins instead of whichever row the sort met first.
+ * A listing in MUDAM_OVERRIDES goes to that NDI row and nowhere else. Other
+ * than that, a row already stamped with this damsysId keeps it. The （元） and
+ * （再） of one dam rank at the nearer twin's distance (花山's share
+ * coordinates), so the current structure wins instead of whichever row the
+ * sort met first.
  */
 export async function matchMaster(mudam: MudamDam, radiusM = 10_000): Promise<MatchResult | null> {
+  const point = sql`ST_SetSRID(ST_MakePoint(${mudam.lng}, ${mudam.lat}), 4326)::geography`;
+  const ndi = MUDAM_OVERRIDES[mudam.damsysId];
+  if (ndi) {
+    const [pinned] = await sql<{ id: bigint; name: string; dist: number }[]>`
+      SELECT id, name, ST_Distance(location, ${point})::FLOAT8 AS dist
+      FROM dams WHERE external_ids->>'ndi' = ${ndi}
+    `;
+    return pinned ? { damId: pinned.id, distanceM: pinned.dist, damName: pinned.name } : null;
+  }
   const rows = await sql<(BindableMaster & { rank: number; dist: number })[]>`
     SELECT id, name, completed_year AS "completedYear", stamp, dist,
            CASE WHEN twin
@@ -243,16 +303,9 @@ export async function matchMaster(mudam: MudamDam, radiusM = 10_000): Promise<Ma
     FROM (
       SELECT id, name, completed_year, external_ids->>'mudam' AS stamp,
              name ~ '（(元|再)）$' AS twin,
-             ST_Distance(
-               location,
-               ST_SetSRID(ST_MakePoint(${mudam.lng}, ${mudam.lat}), 4326)::geography
-             )::FLOAT8 AS dist
+             ST_Distance(location, ${point})::FLOAT8 AS dist
       FROM dams
-      WHERE ST_DWithin(
-        location,
-        ST_SetSRID(ST_MakePoint(${mudam.lng}, ${mudam.lat}), 4326)::geography,
-        ${radiusM}
-      )
+      WHERE ST_DWithin(location, ${point}, ${radiusM})
         AND (
           name LIKE ${`%${mudam.name}%`}
           OR ${mudam.name}::text LIKE ('%' || REPLACE(REPLACE(name, 'ダム', ''), '貯水池', '') || '%')
@@ -294,7 +347,7 @@ const task: Task = async (rawPayload, helpers) => {
       const match = await matchMaster(m);
       if (!match) {
         totalMissed += 1;
-        log(`  miss "${m.name}" (id=${m.damsysId}) — no master within 10 km`);
+        log(`  miss "${m.name}" (id=${m.damsysId}) — no master matched`);
         continue;
       }
       totalMatched += 1;

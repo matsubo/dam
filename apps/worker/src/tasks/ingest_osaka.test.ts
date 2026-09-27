@@ -75,8 +75,8 @@ describe('chooseMaster', () => {
   });
 
   it('keeps 狭山池（再）even if its completion year were blank (#79)', () => {
-    // Hypothetical: ダム便覧 has no record matching 狭山池（再）, so its year
-    // may be blank. preferMaster alone would then pick the （元）.
+    // 狭山池（再） was completed in 2001, but its row has no ダム便覧 link to
+    // refresh the year from; the binding must not depend on it.
     const withYears = [
       { id: 10171n, name: '狭山池（元）', completedYear: 616 },
       { id: 10172n, name: '狭山池（再）', completedYear: null },

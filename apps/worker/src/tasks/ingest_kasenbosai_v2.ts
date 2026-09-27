@@ -183,14 +183,30 @@ export function parseKasenbosaiObsValue(ov: ApiObsValue): ParsedKasenbosaiObs | 
   // rate alongside the 0, so keep it only when the rate corroborates.
   const storageVolumeM3 =
     storCap == null || (storCap === 0 && storageRate == null) ? null : storCap * 1000;
+  const inflowM3s = validOrNull(ov.allSink, ov.allSinkCcd);
+  const outflowM3s = validOrNull(ov.allDisch, ov.allDischCcd);
+  const waterLevelM = validOrNull(ov.storLvl, ov.storLvlCcd);
+  // A station whose every quantity is flagged invalid (高遠: Ccd 140/160 on
+  // all six since 2026-07) still publishes an obsTime each hour. Stored, that
+  // empty row is the dam's newest observation and display_observation(dam,
+  // FALSE) shows it over other sources' real values — so it is no reading.
+  if (
+    storageVolumeM3 == null &&
+    storageRate == null &&
+    inflowM3s == null &&
+    outflowM3s == null &&
+    waterLevelM == null
+  ) {
+    return null;
+  }
   return {
     observedAt,
     storageVolumeM3,
     storageRate,
     rateBasis,
-    inflowM3s: validOrNull(ov.allSink, ov.allSinkCcd),
-    outflowM3s: validOrNull(ov.allDisch, ov.allDischCcd),
-    waterLevelM: validOrNull(ov.storLvl, ov.storLvlCcd),
+    inflowM3s,
+    outflowM3s,
+    waterLevelM,
   };
 }
 

@@ -313,7 +313,42 @@ psql -U dam -d dam -c "select * from timescaledb_information.chunks order by ran
 
 ---
 
-## 9. Escalation
+## 9. One-off data fixes (`deploy/ops/oneoff/`)
+
+`observations` is a compressed hypertable. An `UPDATE` / `DELETE` / re-dating
+`INSERT` that reaches compressed chunks has to decompress them, and
+TimescaleDB caps that per transaction
+(`timescaledb.max_tuples_decompressed_per_dml_transaction`). Rules:
+
+- DML on compressed `observations` rows **never goes in a migration**: the web
+  boot runs migrations on every deploy, and lifting the cap there stalls or
+  bloats the migrate run (see the header of migration 0045). Write a dated
+  file `deploy/ops/oneoff/YYYY-MM-DD_<what>.sql` whose header states when to
+  run it, the command and any follow-up.
+- The script is its own transaction: it opens with `BEGIN;` and
+  `SET LOCAL timescaledb.max_tuples_decompressed_per_dml_transaction = 0;`
+  and ends with `COMMIT;`, so the cap is lifted for that transaction only
+  (`SET LOCAL` never leaks into other sessions). Follow-ups that cannot run
+  in a transaction (`CALL refresh_continuous_aggregate`) stay outside it, as
+  post-steps in the header.
+- Run it once, by hand, and make it idempotent: a second run finds nothing
+  to change.
+
+Run from the `db` container's terminal with the file copied into the working
+directory, always as `psql -U dam -d dam -v ON_ERROR_STOP=1 -f <file>`.
+
+| Script | Run when | Command, then follow-up |
+| --- | --- | --- |
+| `2026-09-28_jwa_toyokawa_units.sql` | Once on prod, after `fix(jwa-toyokawa)` (reads 有効貯水量 as 10³m³, stores no outflow) is deployed. Subtracts the 103 m³ the old parser read from the unit's "10³" on every 宇連/大島 volume, re-derives their rates, nulls the 放流量（利水） stored as outflow, deletes the 53 communication-cut rows made of unit digits (dry run: DELETE 53, UPDATE 5,583). Idempotent; the final `SELECT` should report 0, 0, 0. | `psql -U dam -d dam -v ON_ERROR_STOP=1 -f 2026-09-28_jwa_toyokawa_units.sql`, then `SELECT graphile_worker.add_job('aggregates:refresh');` |
+| `2026-09-28_nakazato_stub.sql` | Once on prod, after `feat/n4-mie-nara-wakayama` (jwa-chubu per-block parser, migration 0083) is deployed. Moves 中里's JWA rows off the invented 長野 stub to NDI 940, drops the stub, clears the old parser's volumes and rates. Aborts if 0083 is not applied. | First check `SELECT applied_at FROM _migrations WHERE name = '0083_drop_fabricated_nakazato_nagano.sql';` then `psql -U dam -d dam -v ON_ERROR_STOP=1 -f 2026-09-28_nakazato_stub.sql`, then `SELECT graphile_worker.add_job('ingest:jwa-chubu');` and `SELECT graphile_worker.add_job('aggregates:refresh');` |
+| `2026-09-28_dedupe_observations.sql` | Once on prod, after the `observations:rebind` fix (INSERT … ON CONFLICT instead of DELETE … USING + UPDATE) is deployed and BEFORE any further `observations:rebind` job. Drops the second copy of the 33,219 keys the round-2 rebind stored twice in compressed chunks (0 differing groups in the 2026-09-28 dry run); a group whose copies differ is skipped and listed. Needs a superuser. Holds EXCLUSIVE locks on the 35 chunks involved for the transaction (reads continue). Idempotent; the final `SELECT` should report 0. Run it again after the round-3 rebind as a check. | `psql -U dam -d dam -v ON_ERROR_STOP=1 -f 2026-09-28_dedupe_observations.sql`, then, outside a transaction: `CALL refresh_continuous_aggregate('obs_daily', '2023-12-31', '2026-08-28', force => true);` and `CALL refresh_continuous_aggregate('obs_monthly', '2023-12-01', '2026-09-01', force => true);` |
+| `2026-09-28_redate_chiba_suisei.sql` | Once on prod, after the ingest_chiba heading fix (dates chiba-suisei by the table heading, not the chart alt) is deployed. Moves six weeks of rows to their survey date; guarded per date, so re-runs move nothing. The final `SELECT` lists dams per survey date. | `psql -U dam -d dam -v ON_ERROR_STOP=1 -f 2026-09-28_redate_chiba_suisei.sql` |
+| `2026-09-28_tottori_bousai_placeholders.sql` | Once on prod, after ingest_tottori_bousai's skip of items more than 20 m below their own 最低水位 is deployed. Deletes the stored placeholder / copied rows (423 in the 2026-09-28 dry run). Idempotent. | `psql -U dam -d dam -v ON_ERROR_STOP=1 -f 2026-09-28_tottori_bousai_placeholders.sql`, then, outside a transaction: `CALL refresh_continuous_aggregate('obs_daily', '2026-06-01', now() - interval '59 days');` and `CALL refresh_continuous_aggregate('obs_monthly', '2026-06-01', '2026-08-01');` |
+| `2026-09-28_yamaguchi_bousai_outage_zeros.sql` | Once on prod, after the ingest_yamaguchi_bousai fix that skips 貯水位 0.00 outage rows is deployed. Deletes the 283 stored zero rows on 10 dams; idempotent. The final `SELECT` should report 0. | `psql -U dam -d dam -v ON_ERROR_STOP=1 -f 2026-09-28_yamaguchi_bousai_outage_zeros.sql` |
+
+---
+
+## 10. Escalation
 
 If the runbook doesn't get you out of the hole within ~30 min, page
 **<redacted>** with:
