@@ -12,31 +12,43 @@
 //   sqlLines           git ls-files '*.sql' | xargs wc -l | tail -1
 //   testFiles          git ls-files '*.test.ts' '*.test.tsx' '*.spec.ts' | wc -l
 //   migrations         ls packages/db/migrations | wc -l
-//   workspaces         ls -d apps/*/ packages/*/ packages/adapters/*/ | wc -l
+//   workspaces         git ls-files 'apps/*/package.json' 'packages/*/package.json' | wc -l
 //   workerTasks        ls apps/worker/src/tasks | grep -v '\.test\.' | wc -l
 //   ingestTasks        ls apps/worker/src/tasks | grep '^ingest_' | grep -v '\.test\.' | wc -l
 //   cronEntries        grep -cE '^[0-9*]' apps/worker/src/crontab.ts
 //   apiRoutes          find apps/web/app/api -name route.ts | wc -l
 //   pageRoutes         find apps/web/app -name page.tsx | wc -l
+//   tables             grep -hoiE '^CREATE TABLE( IF NOT EXISTS)? [a-z_]+' packages/db/migrations/*.sql
+//                        | awk '{print $NF}' | sort -u | grep -vx observations | wc -l
+//   continuousAggregates
+//                      grep -hoiE '^CREATE MATERIALIZED VIEW( IF NOT EXISTS)? [a-z_]+' packages/db/migrations/*.sql
+//                        | awk '{print $NF}' | sort -u | wc -l
 //
-// Last regenerated: 2026-09-09 (c562c7d).
+// `workspaces` counts package.json files (git's `*` crosses `/`, so this also
+// finds packages/adapters/*); listing directories would count packages/adapters/
+// itself, which is not a workspace. `tables` leaves out
+// `observations`, which the page adds on its own as "+ hypertable 1".
+//
+// Last regenerated: 2026-09-28 on develop 92bb22e, counted as if the retired
+// niigata-bousai / shizuoka-bousai tasks were already gone (task files, tests,
+// fixture, cron entries and task registrations removed).
 export const PROJECT_STATS = {
-  measuredOn: '2026-09-09',
-  commits: 329,
+  measuredOn: '2026-09-28',
+  commits: 596,
   firstCommit: '2026-05-01',
-  tsLines: 50_253,
-  tsFiles: 385,
-  sqlLines: 1_276,
-  testFiles: 120,
-  migrations: 35,
+  tsLines: 67_460,
+  tsFiles: 480,
+  sqlLines: 3_416,
+  testFiles: 177,
+  migrations: 67,
   workspaces: 11,
-  workerTasks: 86,
-  ingestTasks: 69,
-  cronEntries: 80,
-  apiRoutes: 16,
-  pageRoutes: 20,
-  /** Base tables in packages/db/migrations. `observations` is a hypertable. */
-  tables: 10,
+  workerTasks: 105,
+  ingestTasks: 88,
+  cronEntries: 98,
+  apiRoutes: 18,
+  pageRoutes: 22,
+  /** Base tables in packages/db/migrations, not counting the `observations` hypertable. */
+  tables: 11,
   /** obs_daily + obs_monthly. */
   continuousAggregates: 2,
 } as const;
