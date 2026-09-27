@@ -105,6 +105,40 @@ describe('source universe coverage triage', () => {
     }
   });
 
+  test('a historical-only source does not hold the gate open', async () => {
+    // `mudam` (NILIM dump, latest observation 2024-12-30) and
+    // `kagoshima-bodik` (backfill-only, no crontab entry) publish no recurring
+    // list to scan, so counting them in the gate keeps it open forever and the
+    // whole feature never answers. Recording their dumps instead would label
+    // ~500 dams 「取り込み側の不具合」 for data that is one to two years behind
+    // by design — a false accusation against ourselves.
+    await sql`UPDATE source_priorities SET historical_only = TRUE WHERE source_id = ${SRC_B}`;
+    await recordUniverse(SRC_A, [
+      { externalId: 'a-1', name: 'univ-covered', resolvedDamId: covered },
+      { externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale },
+    ]);
+
+    const remaining = await sql<{ source_id: string }[]>`
+      SELECT sp.source_id FROM source_priorities sp
+      WHERE sp.active AND sp.provides_observations AND sp.universe_enumerable
+        AND NOT sp.historical_only
+        AND NOT EXISTS (SELECT 1 FROM source_universe_runs r WHERE r.source_id = sp.source_id)
+    `;
+    // SRC_B is historical-only, so it must not appear in the gate's backlog.
+    expect(remaining.map((r) => r.source_id)).not.toContain(SRC_B);
+
+    for (const r of remaining)
+      await recordUniverse(r.source_id, [
+        { externalId: `stub-${r.source_id}`, name: 'stub', resolvedDamId: null },
+      ]);
+    try {
+      // SRC_B still has no run, and the answer lands anyway.
+      expect(only(await classifyDamCoverage(), absent)).toBe('not_published');
+    } finally {
+      await sql`DELETE FROM source_universe_runs WHERE source_id IN ${sql(remaining.map((r) => r.source_id))}`;
+    }
+  });
+
   test('separates "we have data" from "published but we are not ingesting it"', async () => {
     await recordUniverse(SRC_A, [
       { externalId: 'a-1', name: 'univ-covered', resolvedDamId: covered },
