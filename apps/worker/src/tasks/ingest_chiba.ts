@@ -15,7 +15,9 @@
 // Cron: daily at 02:00 UTC = 11:00 JST (gives upstream 2h headroom after
 // its 9 AM publish).
 
+import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
+import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
@@ -104,6 +106,10 @@ interface DamMatch {
 }
 
 async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
+  const masters = await sql<BindableMaster[]>`
+    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
+    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
+  `;
   const out: DamMatch[] = [];
   // What this source publishes, matched or not — recorded so /coverage can
   // say "they publish it, we failed to link it" instead of guessing. Keyed by
@@ -113,18 +119,15 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
   for (const r of rows) {
     const stem = normalizeName(r.pageName);
     if (!stem) continue;
-    // Match against master, normalizing the master name the same way.
-    const cands = await sql<{ id: bigint; name: string }[]>`
-      SELECT id, name FROM dams
-      WHERE pref_code = ${PREF_CODE}
-        AND (
-          REPLACE(REPLACE(REPLACE(REGEXP_REPLACE(name, 'ダム$', ''), '一', '1'), '二', '2'), '三', '3') = ${stem}
-          OR REGEXP_REPLACE(name, 'ダム$', '') = ${r.pageName}
-        )
-      ORDER BY id
-      LIMIT 1
-    `;
-    const r0 = cands[0];
+    // A row already stamped with this station keeps it (#57); otherwise the
+    // master name normalized the same way, or minus ダム, must equal it.
+    let r0 = stampedMaster(masters, r.pageName);
+    if (!r0) {
+      for (const m of masters) {
+        if (normalizeName(m.name) !== stem && m.name.replace(/ダム$/, '') !== r.pageName) continue;
+        if (!r0 || preferMaster(m, r0)) r0 = m;
+      }
+    }
     universe.set(r.pageName, {
       externalId: r.pageName,
       name: r.pageName,
@@ -136,13 +139,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
       continue;
     }
     out.push({ pageName: r.pageName, damId: r0.id });
-    await sql`
-      UPDATE dams
-      SET external_ids = COALESCE(external_ids, '{}'::jsonb)
-                       || jsonb_build_object(${SOURCE_ID}::text, ${r.pageName}::text)
-      WHERE id = ${r0.id}
-        AND COALESCE(external_ids->>${SOURCE_ID}, '') <> ${r.pageName}
-    `;
+    await bindExternalId(r0.id, SOURCE_ID, r.pageName);
   }
   await recordUniverse(SOURCE_ID, [...universe.values()]);
   return out;

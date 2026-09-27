@@ -11,6 +11,7 @@
 //   "**" = 欠測, "--" = 未収集 → null. Storage in 千m³.
 // Priority 308.
 
+import { type BindableMaster, preferMaster } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
@@ -179,14 +180,11 @@ interface DamMatch {
 
 /**
  * Pick the best master dam for a published name: an exact raw-name hit beats a
- * stem hit beats a prefix/substring hit, ties going to the lower id.
+ * stem hit beats a prefix/substring hit, ties going to the current （元）/（再）
+ * twin, else the lower id.
  */
-function chooseMaster(
-  rawName: string,
-  stem: string,
-  masters: { id: bigint; name: string }[],
-): bigint | null {
-  let best: { id: bigint; rank: number } | null = null;
+function chooseMaster(rawName: string, stem: string, masters: BindableMaster[]): bigint | null {
+  let best: { m: BindableMaster; rank: number } | null = null;
   for (const m of masters) {
     const mStem = normalizeName(m.name);
     let rank: number;
@@ -196,16 +194,17 @@ function chooseMaster(
     else if (mStem.startsWith(stem)) rank = 3;
     else if (mStem.includes(stem)) rank = 4;
     else continue;
-    if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-      best = { id: m.id, rank };
+    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
+      best = { m, rank };
     }
   }
-  return best?.id ?? null;
+  return best?.m.id ?? null;
 }
 
 async function matchMaster(names: string[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<{ id: bigint; name: string }[]>`
-    SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
+  const masters = await sql<BindableMaster[]>`
+    SELECT id, name, completed_year AS "completedYear"
+    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out: DamMatch[] = [];
 
