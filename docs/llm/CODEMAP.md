@@ -154,7 +154,7 @@ the file for detail.
 | `src/tasks/ingest_iwate_kasen.ts` | `iwate-kasen`: 岩手県河川情報システム ダム諸量経過表, one page per dam, hourly (10 県管理ダム) |
 | `src/tasks/ingest_jwa_chiba.ts` | `jwa-chiba-bouso`: JWA 房総導水路管理所 取水情報, daily 0時 (長柄 / 東金; level + rate) |
 | `src/tasks/ingest_jwa_chikugo.ts` | `jwa-chikugo`: JWA 筑後川 water-source page, daily 0時 (7 dams incl. 松原 / 下筌 / 合所) |
-| `src/tasks/ingest_jwa_chubu.ts` | `jwa-chubu`: JWA 中部支社 水源状況 daily report, polled hourly (木曽川水系 5 dams + 三重用水 中里) |
+| `src/tasks/ingest_jwa_chubu.ts` | `jwa-chubu`: JWA 中部支社 水源状況 report, published once per weekday (木曽川水系 5 dams + 三重用水 中里); poll times in crontab.ts |
 | `src/tasks/ingest_jwa_junpo.ts` | `jwa-junpo`: JWA 旬報 (10-day report), polled daily (26 JWA dams across 7 water systems) |
 | `src/tasks/ingest_jwa_kiso_rt.ts` | `jwa-kiso-rt`: JWA 中部支社 木曽川水系 realtime page, hourly (6 dams) |
 | `src/tasks/ingest_jwa_toneara.ts` | `jwa-toneara`: JWA 関東支社 利根川 / 荒川 daily 0時 table, polled hourly (13 facilities) |
