@@ -433,6 +433,11 @@ export const CRONTAB = `
 # per page, edited on weekday late mornings. Daily at 04:58 UTC (13:58 JST).
 58 4 * * * ingest:matsue-suido
 
+# 下松市上下水道局 水源情報 — 県営温見ダム (水位 + 貯水量 + 貯水率 at the stated
+# 「…時現在」; 末武川 is universe-only). Edited about monthly, early in the
+# month. Priority 293. Daily at 02:47 UTC (11:47 JST).
+47 2 * * * ingest:kudamatsu-suido ?jobKey=ingest:kudamatsu-suido
+
 # M&C鳥取水力発電 発電所・ダム運転情報 — 鳥取県営発電 4 ダム (茗荷谷/三朝調整池/
 # 中津 + 菅沢). One current value per dam (refreshed every minute): 10分間流入量
 # and ゲート放流量 only — the published ダム水位 is a gauge height, not EL.
