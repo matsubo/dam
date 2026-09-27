@@ -29,7 +29,7 @@
 // is a sluice gate and is not listed in the universe.
 //
 // Priority 298 (JWA realtime tier, cf. jwa-toyokawa). Nothing else carries
-// live data for 利根川河口堰; mudam's rows are historical. Cron hourly at :54.
+// live data for 利根川河口堰; mudam's rows are historical. Cron hourly at :30.
 
 import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';

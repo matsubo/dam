@@ -22,7 +22,7 @@
 // Licence: 中国地方整備局 site terms — 公共データ利用規約（第1.0版）(PDL1.0),
 // 出典記載のうえ利用可 (www.cgr.mlit.go.jp/about_manual/).
 //
-// Priority 303 (MLIT office source, same as qsr-ryumon-dam). Cron hourly at :54.
+// Priority 303 (MLIT office source, same as qsr-ryumon-dam). Cron hourly at :02.
 
 import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';

@@ -24,7 +24,7 @@
 // trusted_rate_basis). Missing values: any blank / non-numeric cell → null.
 //
 // Priority 297 (JWA realtime siblings: jwa-yoshino / jwa-chikugo). The only
-// other source on this dam is mudam (280). Cron hourly at :54; each run
+// other source on this dam is mudam (280). Cron hourly at :58; each run
 // re-upserts the 24-hour window so an outage self-heals.
 
 import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';

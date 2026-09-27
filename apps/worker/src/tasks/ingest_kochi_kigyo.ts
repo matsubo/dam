@@ -22,7 +22,7 @@
 // otherwise overwrite an hour already stored with values.
 //
 // Priority 308, the prefectural tier; no other source covers either dam.
-// Cron hourly at :54.
+// Cron hourly at :44.
 
 import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
