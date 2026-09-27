@@ -4,10 +4,10 @@
 // The values asserted below are eyeballed against the page, so changing
 // them on a parser refactor should fail loudly.
 //
-// ensureExternalIds is exercised against the real 牧尾 （元）/（再） pair
-// (the backfill binds through it too).
+// ensureExternalIds runs against synthetic 牧尾 （元）/（再） rows modelled on
+// NDI 905/906 (the backfill binds through it too).
 
-import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { sql } from '@dam/db/client';
@@ -84,9 +84,9 @@ describe('parseJwaJunpoHtml', () => {
 });
 
 describe('ensureExternalIds binds 牧尾ダム to the dam in service (#79)', () => {
-  // Master rows as in production: 牧尾（元） (NDI 905, 1961) and 牧尾（再）
-  // (NDI 906, 2006), both in 長野. The （元） is inserted first so it has the
-  // lower id, which used to decide ties.
+  // Synthetic fixtures modelled on production's 牧尾（元） (NDI 905, 1961) and
+  // 牧尾（再） (NDI 906, 2006), both in 長野. The （元） is inserted first so
+  // it has the lower id.
   const SLUGS = ['jwa-junpo-t79-makio-moto', 'jwa-junpo-t79-makio-sai'];
   const KEY = '牧尾ダム';
 
@@ -120,14 +120,33 @@ describe('ensureExternalIds binds 牧尾ダム to the dam in service (#79)', () 
     return matches.find((m) => m.jwaName === KEY)?.damId.toString();
   }
 
+  // ensureExternalIds records the jwa-junpo universe; remove only the rows
+  // and scan stamp this file created, never ones that were already there.
+  let universeBefore: string[] = [];
+  let runBefore = false;
+  beforeAll(async () => {
+    const rows = await sql<{ k: string }[]>`
+      SELECT source_external_id AS k FROM source_universe WHERE source_id = 'jwa-junpo'
+    `;
+    universeBefore = rows.map((r) => r.k);
+    const runs = await sql`SELECT 1 FROM source_universe_runs WHERE source_id = 'jwa-junpo'`;
+    runBefore = runs.length > 0;
+  });
   beforeEach(async () => {
     await sql`DELETE FROM dams WHERE slug = ANY(${SLUGS})`;
   });
   afterAll(async () => {
     await sql`DELETE FROM dams WHERE slug = ANY(${SLUGS})`;
+    await sql`
+      DELETE FROM source_universe
+      WHERE source_id = 'jwa-junpo' AND NOT (source_external_id = ANY(${universeBefore}))
+    `;
+    if (!runBefore) await sql`DELETE FROM source_universe_runs WHERE source_id = 'jwa-junpo'`;
   });
 
-  test('an unstamped pair binds the completed （再）, not the lower-id （元）', async () => {
+  // The old query already ranked （再） 2 and （元） 9, so this held before
+  // #79 too; it pins that equal ranks still resolve to the completed （再）.
+  test('an unstamped pair binds the completed （再）', async () => {
     const moto = await insertDam(SLUGS[0] as string, '牧尾（元）', 1961, false);
     const sai = await insertDam(SLUGS[1] as string, '牧尾（再）', 2006, false);
 
@@ -136,6 +155,7 @@ describe('ensureExternalIds binds 牧尾ダム to the dam in service (#79)', () 
     expect(await stampOf(moto)).toBeNull();
   });
 
+  // The regression: the add-only UPDATE left the （元）'s copy in place.
   test('a copy of the stamp on the （元） is taken off', async () => {
     const moto = await insertDam(SLUGS[0] as string, '牧尾（元）', 1961, true);
     const sai = await insertDam(SLUGS[1] as string, '牧尾（再）', 2006, true);
