@@ -2,6 +2,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import {
+  buildNagasakiUniverse,
   buildSnapshotUrl,
   parseAllDamsJson,
   parseNagasakiDatetime,
@@ -215,5 +216,46 @@ describe('parseAllDamsJson', () => {
     };
     const rows = parseAllDamsJson(json, masters);
     expect(rows[0]?.storageVolumeM3).toBeCloseTo(1_938_000);
+  });
+});
+
+describe('buildNagasakiUniverse', () => {
+  // dam_m.json is 長崎県's own catalogue, so it is what the source publishes —
+  // not the subset that carried a reading in this run's snapshot.
+  const catalogue = [
+    { dam_cd: 1928, dam_nm: '永田ダム' },
+    { dam_cd: 1927, dam_nm: '勝本ダム' },
+    { dam_cd: 1101, dam_nm: '式見ダム' },
+  ];
+  const resolved = new Map<number, bigint>([
+    [1928, 11n],
+    [1927, 12n],
+  ]);
+  const universe = buildNagasakiUniverse(catalogue, (cd) => resolved.get(cd));
+
+  test('records the whole published catalogue, matched or not', () => {
+    expect(universe).toHaveLength(3);
+  });
+
+  test('uses dam_cd as the external id and tags the prefecture', () => {
+    expect(universe[0]).toEqual({
+      externalId: '1928',
+      name: '永田ダム',
+      prefCode: '42',
+      resolvedDamId: 11n,
+    });
+  });
+
+  test('keeps an unmatched dam with resolvedDamId null', () => {
+    // A published dam we cannot tie to a master is the matching backlog —
+    // dropping it would read as "nobody publishes this dam".
+    const shikimi = universe.find((u) => u.externalId === '1101');
+    expect(shikimi?.resolvedDamId).toBeNull();
+  });
+
+  test('records nothing extra for an empty catalogue', () => {
+    // An empty list is how recordUniverse recognises a failed fetch, so the
+    // builder must not invent rows.
+    expect(buildNagasakiUniverse([], () => undefined)).toEqual([]);
   });
 });
