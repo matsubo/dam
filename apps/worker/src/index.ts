@@ -30,6 +30,7 @@ import ingestHyogo from './tasks/ingest_hyogo.ts';
 import ingestIbaraki from './tasks/ingest_ibaraki_bousai.ts';
 import ingestIshikawa from './tasks/ingest_ishikawa_kasen.ts';
 import ingestIwate from './tasks/ingest_iwate_kasen.ts';
+import ingestJwaAichiYosui from './tasks/ingest_jwa_aichi_yosui.ts';
 import ingestJwaBiwako from './tasks/ingest_jwa_biwako.ts';
 import ingestJwaChiba from './tasks/ingest_jwa_chiba.ts';
 import ingestJwaChikugo from './tasks/ingest_jwa_chikugo.ts';
@@ -132,6 +133,7 @@ async function main(): Promise<void> {
       'ingest:jwa-yoshino': ingestJwaYoshino,
       'ingest:jwa-biwako': ingestJwaBiwako,
       'ingest:aitoyo': ingestAitoyo,
+      'ingest:jwa-aichi-yosui': ingestJwaAichiYosui,
       'ingest:jwa-chiba-bouso': ingestJwaChiba,
       'ingest:jwa-chikugo': ingestJwaChikugo,
       'ingest:kanagawa-dam': ingestKanagawa,
