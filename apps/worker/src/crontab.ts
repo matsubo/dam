@@ -461,6 +461,11 @@ export const CRONTAB = `
 # Priority 308. Cron at :38.
 38 * * * * ingest:kochi-bousai
 
+# 高知県公営企業局 発電所集中監視制御Webシステム ダム水文量表 — 物部川の発電専用
+# 吉野/杉田ダム (no other feed covers them). UTF-8 HTML, last 48 hourly rows of
+# 貯水位 + 流入量 + 放流量 + 雨量; no volume or rate. Priority 308. Cron at :54.
+54 * * * * ingest:kochi-kigyo
+
 # 島根県防災Web — 14 県管理ダム (布部/山佐/三瓶/波積/八戸/浜田/第二浜田/大長見/
 # 御部/益田川/笹倉/大峠/銚子/美田). Same Remix SPA framework as 広島/鳥取県防災Web;
 # pointer + list JSON; storage in 千m³. 国直轄 (尾原/志津見) also appear but
