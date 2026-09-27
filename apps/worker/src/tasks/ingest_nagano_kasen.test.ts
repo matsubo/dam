@@ -126,21 +126,23 @@ describe('parseNaganoJson', () => {
 });
 
 describe('chooseMaster (#79)', () => {
-  // 松川ダム is station 2001_7_1 (/dps/map/map.html, 2026-09-27). ダム便覧 has
-  // no completion year for 松川（再） (NDI 799; 0056 cleared it), so the name
-  // rule alone picks 松川（元）. Ids are real local ones: （再） 9770 < （元） 9771.
+  // 松川ダム is station 2001_7_1 (/dps/map/map.html, 2026-09-27). 松川（再）
+  // (NDI 799) is not finished (長野県 松川ダム管理事務所: 再開発事業を進め),
+  // so it has no completion year and 0071 stamps the station on 松川（元）.
+  // Ids are real local ones: （再） 9770 < （元） 9771.
   const saiNoYear = { id: 9770n, name: '松川（再）', completedYear: null };
   const gen = { id: 9771n, name: '松川（元）', completedYear: 1974 };
 
-  test('keeps 松川ダム on the stamped （再） even though its year is blank', () => {
+  test('keeps 松川ダム on the stamped （元） even once a （再） year is recorded', () => {
+    // Hypothetical year: moving the station then takes a migration.
     const masters = [
-      { ...saiNoYear, stamp: '2001_7_1' },
-      { ...gen, stamp: null },
+      { ...saiNoYear, completedYear: 2025, stamp: null },
+      { ...gen, stamp: '2001_7_1' },
     ];
-    expect(chooseMaster('松川ダム', masters, '2001_7_1')).toBe(9770n);
+    expect(chooseMaster('松川ダム', masters, '2001_7_1')).toBe(9771n);
   });
 
-  test('unstamped, a （再） with no completion year loses to its （元）', () => {
+  test('unstamped, the unfinished 松川（再）loses to its （元）', () => {
     const masters = [
       { ...saiNoYear, stamp: null },
       { ...gen, stamp: null },
