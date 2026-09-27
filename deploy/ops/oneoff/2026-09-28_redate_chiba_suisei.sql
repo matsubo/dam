@@ -1,4 +1,10 @@
--- 0093: move six weeks of chiba-suisei rows to the survey date they belong to.
+-- One-off (prod, after the ingest_chiba heading fix is deployed): move six
+-- weeks of chiba-suisei rows to the survey date they belong to.
+--
+-- Run once, as a single transaction:
+--   psql -U dam -d dam -v ON_ERROR_STOP=1 -1 -f 2026-09-28_redate_chiba_suisei.sql
+-- Not a migration: it rewrites 132 rows of observations, most of them in
+-- compressed chunks, which does not belong in the migrate path.
 --
 -- ingest_chiba.ts dated the 県内ダムの貯水状況 page by the first
 -- 「令和X年M月D日H時」 in the HTML, which is the alt text of the chart image
@@ -6,7 +12,7 @@
 -- 千葉県 updates the heading and table every week but the alt text only every
 -- other week, so on alternate weeks the new figures were UPSERTed onto the
 -- previous week's rows: that week's real values were overwritten and the new
--- week never got a row. The adapter now reads the heading (same commit).
+-- week never got a row. The adapter now reads the heading.
 --
 -- Evidence (prod, 2026-09-27). The chart images are archived per survey date
 -- (/suisei/chosui/images/r08MMDD.jpg) and print the 工業用水 total, i.e.
@@ -28,10 +34,10 @@
 -- are not recoverable; only their totals survive in the images.
 --
 -- Guarded per date by that 工業用水 sum, so a database whose rows were fetched
--- in the right week (and so hold that week's own figures) is not touched, a
--- second run finds nothing to move, and a fresh database is a no-op. A row
--- already present at the survey date (the fixed adapter re-reading 09-14)
--- wins over the moved copy; the values are identical.
+-- in the right week (and so hold that week's own figures) is not touched and a
+-- second run finds nothing to move. A row already present at the survey date
+-- (the fixed adapter re-reading 09-14) wins over the moved copy; the values
+-- are identical. The final SELECT reports what remains per date.
 
 CREATE TEMP TABLE chiba_suisei_lagged (stored_at, survey_at, industrial_m3) AS
 VALUES
@@ -69,3 +75,8 @@ WHERE o.source_id = 'chiba-suisei'
   AND o.observed_at = l.stored_at;
 
 DROP TABLE chiba_suisei_lagged;
+
+SELECT observed_at::date AS survey_date, count(*) AS dams
+FROM observations
+WHERE source_id = 'chiba-suisei' AND observed_at >= '2026-05-25'
+GROUP BY 1 ORDER BY 1;

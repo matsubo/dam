@@ -38,8 +38,9 @@ const FRESHNESS_HOURS: Record<string, number> = {
   'jwa-chikugo': 30,
   // 10-day cadence — flag if older than 14 days.
   'jwa-junpo': 14 * 24,
-  // Weekly survey that can skip a week: 9/14 was still the latest on 9/27.
-  'chiba-suisei': 15 * 24,
+  // Weekly survey that can skip a week (9/14 was still the latest on 9/27),
+  // plus a day or two before the page's 更新日.
+  'chiba-suisei': 17 * 24,
   // Survey-date source: 福島県 publishes 隔週 in かんがい期 but only monthly
   // Oct–Mar, so the window has to clear a full winter gap plus publish lag.
   'fukushima-nourin': 45 * 24,
