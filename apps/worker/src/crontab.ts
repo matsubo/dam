@@ -242,8 +242,8 @@ export const CRONTAB = `
 # Overlap dams (矢木沢/奈良俣/下久保/草木/浦山/滝沢) get daily cadence. Cron at :39.
 39 * * * * ingest:jwa-toneara
 
-# 水資源機構 中部支社 木曽川水系 — 6 dams (牧尾/阿木川/味噌川/岩屋/中里/徳山).
-# Daily static HTML; 千m³ storage + inflow/outflow. New: 中里ダム. Cron at :41.
+# 水資源機構 中部支社 — 木曽川水系 5 dams (牧尾/阿木川/味噌川/岩屋/徳山) + 三重用水 中里.
+# Daily static HTML; 0時 EL + 千m³ storage + 利水 rate + inflow/outflow. New: 中里ダム. Cron at :41.
 41 * * * * ingest:jwa-chubu
 
 # 水資源機構 中部支社 豊川水系 — 2 dams (宇連/大島). Real-time page updated
@@ -256,7 +256,7 @@ export const CRONTAB = `
 # 早明浦ダムのみ利水貯水率[速報値]あり (四国の水不足指標). Cron at :45.
 45 * * * * ingest:jwa-yoshino
 
-# 水資源機構 中部支社 木曽川水系 実時計 — 6 dams (牧尾/味噌川/阿木川/岩屋/徳山/中里).
+# 水資源機構 中部支社 木曽川水系 実時計 — 6 dams (牧尾/味噌川/阿木川/岩屋/徳山 + 三重用水 中里).
 # Real-time page (~10 min cadence); 貯水位(EL.m) + 有効貯水量(10³m³) + inflow/outflow.
 # Upgrades jwa-chubu (daily, priority 296) to hourly. Priority 297. Cron at :47.
 47 * * * * ingest:jwa-kiso-rt

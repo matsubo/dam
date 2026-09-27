@@ -52,7 +52,7 @@ const FIXTURES: readonly FixtureWatershed[] = [
     ndiCode: '830303',
     // North Kanto, clear of the Tokyo probe point above.
     polygon: 'POLYGON((138.8 36.2, 139.6 36.2, 139.6 36.9, 138.8 36.9, 138.8 36.2))',
-    damSlug: 'nakazato-20',
+    damSlug: 'tanano-36',
   },
   {
     code: 'W01-堤川',
