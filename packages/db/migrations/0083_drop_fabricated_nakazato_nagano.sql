@@ -22,9 +22,11 @@
 -- + 67 jwa-chubu rows, 2026-06-11 … 2026-09-27), and observations reference
 -- dams ON DELETE RESTRICT. Moving them is a compressed-hypertable write,
 -- which 0045 keeps out of migrations, so here the row goes only once nothing
--- references it: at once on a fresh database, and on production after the
--- one-off move that ships with this change. source_universe and match_review
--- references are ON DELETE SET NULL; backfill_progress cascades.
+-- references it: at once on a fresh database. On production this is a no-op;
+-- deploy/ops/oneoff/2026-09-28_nakazato_stub.sql, run by hand after this
+-- migration is recorded, moves the readings and deletes the stub.
+-- source_universe and match_review references are ON DELETE SET NULL;
+-- backfill_progress cascades.
 DELETE FROM dams d
 WHERE d.slug = 'nakazato-20'
   AND NOT (d.external_ids ? 'ndi')
