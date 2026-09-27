@@ -1,97 +1,150 @@
 // apps/worker/src/tasks/ingest_nara_kasen.test.ts
+//
+// Fixtures are verbatim Shift_JIS captures of the PC ダム現況表
+// (servletBousaiTableStatus?dk=4): the latest table on 2026-09-27 16:30 and
+// the 2026-01-15 10:00 table, where 天理ダム's row is blank (未入力).
 
 import { describe, expect, test } from 'bun:test';
-import { parseNaraPage, parseNaraTimestamp } from './ingest_nara_kasen.ts';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import {
+  chooseMaster,
+  type ParsedRow,
+  parseNaraTable,
+  usableVolumeM3,
+} from './ingest_nara_kasen.ts';
 
-// refDt = 2026-06-05 08:10 UTC (= 17:10 JST, same as page timestamp)
-const REF_DT = new Date('2026-06-05T08:10:00.000Z');
+const FIXTURES = join(import.meta.dir, '..', '..', '..', '..', 'tests/fixtures/nara');
 
-describe('parseNaraTimestamp', () => {
-  test('parses "06/05 17:10" (JST) → UTC', () => {
-    const d = parseNaraTimestamp('06/05 17:10', REF_DT);
-    expect(d?.toISOString()).toBe('2026-06-05T08:10:00.000Z');
+async function fixture(name: string): Promise<ParsedRow[]> {
+  const buf = await readFile(join(FIXTURES, name));
+  return parseNaraTable(new TextDecoder('shift_jis').decode(buf));
+}
+
+function row(rows: ParsedRow[], name: string): ParsedRow {
+  const r = rows.find((x) => x.naraName === name);
+  if (!r) throw new Error(`${name} not parsed`);
+  return r;
+}
+
+describe('parseNaraTable', () => {
+  test('parses all five dams with the year-bearing JST stamp', async () => {
+    const rows = await fixture('dam_table_2026-09-27.shiftjis.html');
+    expect(rows.map((r) => r.naraName)).toEqual([
+      '初瀬ダム',
+      '岩井川ダム',
+      '天理ダム',
+      '白川ダム',
+      '大門ダム',
+    ]);
+    for (const r of rows) expect(r.observedAt.toISOString()).toBe('2026-09-27T07:30:00.000Z');
   });
 
-  test('handles midnight crossover (JST 01:00 → previous UTC day)', () => {
-    const d = parseNaraTimestamp('06/05 01:00', REF_DT);
-    expect(d?.toISOString()).toBe('2026-06-04T16:00:00.000Z');
+  test('reads level, 貯水容量 / 空容量 in 10³ m³ as m³, and flows', async () => {
+    const hase = row(await fixture('dam_table_2026-09-27.shiftjis.html'), '初瀬ダム');
+    expect(hase.waterLevelM).toBeCloseTo(221.7);
+    expect(hase.storedVolumeM3).toBe(2_015_000);
+    expect(hase.emptyVolumeM3).toBe(2_375_000);
+    expect(hase.inflowM3s).toBeCloseTo(0.32);
+    expect(hase.outflowM3s).toBeCloseTo(0.32);
   });
 
-  test('year rollover: Dec 31 timestamp seen in early Jan → uses previous year', () => {
-    const janRef = new Date('2026-01-01T01:00:00.000Z'); // 2026-01-01 10:00 JST
-    const d = parseNaraTimestamp('12/31 23:50', janRef);
-    expect(d?.toISOString()).toBe('2025-12-31T14:50:00.000Z');
+  test('strips the trend arrow and padding from short values', async () => {
+    const daimon = row(await fixture('dam_table_2026-09-27.shiftjis.html'), '大門ダム');
+    expect(daimon.waterLevelM).toBeCloseTo(262.56);
+    expect(daimon.storedVolumeM3).toBe(146_000);
+    expect(daimon.emptyVolumeM3).toBe(3_000);
+    expect(daimon.outflowM3s).toBe(0);
   });
 
-  test('returns null for malformed input', () => {
-    expect(parseNaraTimestamp('', REF_DT)).toBeNull();
-    expect(parseNaraTimestamp('bad', REF_DT)).toBeNull();
-    expect(parseNaraTimestamp('06/05', REF_DT)).toBeNull();
+  test('drops a blank (未入力) row and keeps the others', async () => {
+    const rows = await fixture('dam_table_2026-01-15.shiftjis.html');
+    expect(rows.map((r) => r.naraName).sort()).toEqual(
+      ['初瀬ダム', '大門ダム', '岩井川ダム', '白川ダム'].sort(),
+    );
+    expect(row(rows, '初瀬ダム').observedAt.toISOString()).toBe('2026-01-15T01:00:00.000Z');
+    expect(row(rows, '初瀬ダム').storedVolumeM3).toBe(1_504_000);
+  });
+
+  test('returns nothing for a page without the table', () => {
+    expect(parseNaraTable('<html><body>no data</body></html>')).toHaveLength(0);
   });
 });
 
-// Minimal sample page: 3 tables (天理/初瀬 with data, 岩井川 all-null/stale)
-// Encoded as Shift_JIS source but we pass decoded string to the parser.
-const SAMPLE_PAGE = `<html><body>
-<table cellspacing="0" cellpadding="0" class="datatable bf">
-<tr class="site">
-<td colspan="4" class="ui-bar-f site"><span class="sitename">天理ダム</span></td>
-</tr>
-<th class="ui-bar-d">時刻</th><th class="ui-bar-d">貯水位</th><th class="ui-bar-d">流入量</th><th class="ui-bar-d">放流量</th>
-<tr>
-<td class="ui-bar-g">06/05&nbsp;17:10</td><td class="ui-bar-g cenval "><img height="13" width="13" src="../img/arrow/arw_d.gif">&nbsp;253.05</td><td class="ui-bar-g cenval "><img height="13" width="13" src="../img/arrow/arw_d.gif">&nbsp;&nbsp;&nbsp;&nbsp;0.210</td><td class="ui-bar-g cenval "><img height="13" width="13" src="../img/arrow/arw_r.gif">&nbsp;&nbsp;&nbsp;&nbsp;0.380</td>
-</tr>
-</table>
-<table cellspacing="0" cellpadding="0" class="datatable bf">
-<tr class="site">
-<td colspan="4" class="ui-bar-f site"><span class="sitename">初瀬ダム</span></td>
-</tr>
-<th class="ui-bar-d">時刻</th><th class="ui-bar-d">貯水位</th><th class="ui-bar-d">流入量</th><th class="ui-bar-d">放流量</th>
-<tr>
-<td class="ui-bar-g">06/05&nbsp;17:10</td><td class="ui-bar-g cenval "><img height="13" width="13" src="../img/arrow/arw_d.gif">&nbsp;221.72</td><td class="ui-bar-g cenval "><img height="13" width="13" src="../img/arrow/arw_d.gif">&nbsp;&nbsp;&nbsp;&nbsp;0.390</td><td class="ui-bar-g cenval "><img height="13" width="13" src="../img/arrow/arw_r.gif">&nbsp;&nbsp;&nbsp;&nbsp;0.700</td>
-</tr>
-</table>
-<table cellspacing="0" cellpadding="0" class="datatable bf">
-<tr class="site">
-<td colspan="4" class="ui-bar-f site"><span class="sitename">岩井川ダム</span></td>
-</tr>
-<th class="ui-bar-d">時刻</th><th class="ui-bar-d">貯水位</th><th class="ui-bar-d">流入量</th><th class="ui-bar-d">放流量</th>
-<tr>
-<td class="ui-bar-g">03/23&nbsp;14:40</td><td class="ui-bar-g">&nbsp;</td><td class="ui-bar-g">&nbsp;</td><td class="ui-bar-g">&nbsp;</td>
-</tr>
-</table>
-</body></html>`;
-
-describe('parseNaraPage', () => {
-  test('parses 2 dams with data (岩井川 all-null skipped)', () => {
-    const rows = parseNaraPage(SAMPLE_PAGE, REF_DT);
-    expect(rows).toHaveLength(2);
-    expect(rows.map((r) => r.naraName)).toEqual(['天理ダム', '初瀬ダム']);
+// Master capacities are the dams rows (ダム便覧) for pref 29.
+describe('usableVolumeM3', () => {
+  test('subtracts 堆砂容量 when 貯水容量 + 空容量 equals the master 総貯水容量', async () => {
+    const rows = await fixture('dam_table_2026-09-27.shiftjis.html');
+    // 初瀬 2,015 + 2,375 = 4,390 千m³ = total; dead = 4,390 − 3,740 = 650 千m³.
+    expect(
+      usableVolumeM3(row(rows, '初瀬ダム'), {
+        totalCapacityM3: 4_390_000,
+        activeCapacityM3: 3_740_000,
+      }),
+    ).toBe(1_365_000);
+    // 天理 1,037 + 1,463 = 2,500 = total; dead 250.
+    expect(
+      usableVolumeM3(row(rows, '天理ダム'), {
+        totalCapacityM3: 2_500_000,
+        activeCapacityM3: 2_250_000,
+      }),
+    ).toBe(787_000);
+    // 岩井川 179 + 631 = 810 = total; dead 120.
+    expect(
+      usableVolumeM3(row(rows, '岩井川ダム'), {
+        totalCapacityM3: 810_000,
+        activeCapacityM3: 690_000,
+      }),
+    ).toBe(59_000);
   });
 
-  test('天理ダム: all fields parsed correctly', () => {
-    const r = parseNaraPage(SAMPLE_PAGE, REF_DT).find((x) => x.naraName === '天理ダム');
-    expect(r).toBeDefined();
-    expect(r?.observedAt.toISOString()).toBe('2026-06-05T08:10:00.000Z');
-    expect(r?.waterLevelM).toBeCloseTo(253.05);
-    expect(r?.inflowM3s).toBeCloseTo(0.21);
-    expect(r?.outflowM3s).toBeCloseTo(0.38);
+  test('stores nothing when the printed sum does not match the master total', async () => {
+    const rows = await fixture('dam_table_2026-09-27.shiftjis.html');
+    // 白川 338 + 1,222 = 1,560 千m³ (the prefecture's 総貯水容量) against
+    // ダム便覧's 1,360, which leaves out the 200 千m³ 堆砂容量.
+    expect(
+      usableVolumeM3(row(rows, '白川ダム'), {
+        totalCapacityM3: 1_360_000,
+        activeCapacityM3: 1_360_000,
+      }),
+    ).toBeNull();
+    // 大門 146 + 3 = 149 千m³: 空容量 is measured to 常時満水位, not サーチャージ, so the
+    // zero of 貯水容量 cannot be tied to the master 177 / 148.
+    expect(
+      usableVolumeM3(row(rows, '大門ダム'), {
+        totalCapacityM3: 177_000,
+        activeCapacityM3: 148_000,
+      }),
+    ).toBeNull();
   });
 
-  test('初瀬ダム: all fields parsed correctly', () => {
-    const r = parseNaraPage(SAMPLE_PAGE, REF_DT).find((x) => x.naraName === '初瀬ダム');
-    expect(r).toBeDefined();
-    expect(r?.waterLevelM).toBeCloseTo(221.72);
-    expect(r?.inflowM3s).toBeCloseTo(0.39);
-    expect(r?.outflowM3s).toBeCloseTo(0.7);
+  test('stores nothing without both master capacities', async () => {
+    const hase = row(await fixture('dam_table_2026-09-27.shiftjis.html'), '初瀬ダム');
+    expect(usableVolumeM3(hase, { totalCapacityM3: 4_390_000, activeCapacityM3: null })).toBeNull();
   });
 
-  test('岩井川ダム: all-null row excluded from results', () => {
-    const rows = parseNaraPage(SAMPLE_PAGE, REF_DT);
-    expect(rows.find((r) => r.naraName === '岩井川ダム')).toBeUndefined();
+  test('reads zero, not a negative volume, below 最低水位', () => {
+    const drawnDown = { storedVolumeM3: 600_000, emptyVolumeM3: 3_790_000 };
+    expect(
+      usableVolumeM3(drawnDown, { totalCapacityM3: 4_390_000, activeCapacityM3: 3_740_000 }),
+    ).toBe(0);
+  });
+});
+
+describe('chooseMaster (#79)', () => {
+  test('keeps the row already stamped with the station over a better name match', () => {
+    const masters = [
+      { id: 10307n, name: '白川（再）', completedYear: 1996, stamp: null },
+      { id: 10308n, name: '白川溜池（元）', completedYear: 1933, stamp: '白川ダム' },
+    ];
+    expect(chooseMaster('白川', masters, '白川ダム')).toBe(10308n);
   });
 
-  test('returns empty array for page without tables', () => {
-    expect(parseNaraPage('<html><body>no data</body></html>', REF_DT)).toHaveLength(0);
+  test('binds an equal-rank （元）/（再） pair to the completed （再）, not the lower id', () => {
+    const masters = [
+      { id: 10n, name: '天理（元）', completedYear: 1950, stamp: null },
+      { id: 20n, name: '天理（再）', completedYear: 1978, stamp: null },
+    ];
+    expect(chooseMaster('天理', masters, '天理ダム')).toBe(20n);
   });
 });

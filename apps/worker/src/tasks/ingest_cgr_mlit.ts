@@ -22,7 +22,9 @@
 //               data: { ryunyu, houryu, chosuii, risui, chisui, uryou, ruika } } }
 // Each `data.<metric>.<id>` is a string (numeric) or "ー" for missing.
 
+import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
+import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
@@ -114,21 +116,24 @@ async function matchMaster(log: (s: string) => void): Promise<DamMatch[]> {
   // say "they publish it, we failed to link it" instead of guessing.
   const universe: UniverseRow[] = [];
   for (const c of DAMS) {
-    const rows = await sql<{ id: bigint }[]>`
-      SELECT id FROM dams
+    // All candidates, ranked by name; chooseRanked keeps a row already
+    // stamped with this station, and lets a （元）/（再） pair tie so the
+    // current structure wins.
+    const rows = await sql<(BindableMaster & { rank: number })[]>`
+      SELECT id, name, completed_year AS "completedYear",
+             external_ids->>${SOURCE_ID} AS stamp,
+             CASE
+               WHEN name = ${c.masterName} THEN 0
+               WHEN name = ${`${c.masterName}ダム`} THEN 1
+               WHEN name LIKE ${`${c.masterName}（再）%`}
+                 OR name LIKE ${`${c.masterName}（元）%`} THEN 2
+               ELSE 5
+             END AS rank
+      FROM dams
       WHERE pref_code = ${c.prefCode}
         AND name LIKE ${`%${c.masterName}%`}
-      ORDER BY
-        CASE
-          WHEN name = ${c.masterName} THEN 0
-          WHEN name = ${`${c.masterName}ダム`} THEN 1
-          WHEN name LIKE ${`${c.masterName}（再）%`} THEN 2
-          ELSE 5
-        END,
-        id
-      LIMIT 1
     `;
-    const r = rows[0];
+    const r = chooseRanked(rows, c.apiId);
     universe.push({
       externalId: c.apiId,
       name: c.apiName,
@@ -140,13 +145,7 @@ async function matchMaster(log: (s: string) => void): Promise<DamMatch[]> {
       continue;
     }
     matches.push({ cfg: c, damId: r.id });
-    await sql`
-      UPDATE dams
-      SET external_ids = COALESCE(external_ids, '{}'::jsonb)
-                       || jsonb_build_object(${SOURCE_ID}::text, ${c.apiId}::text)
-      WHERE id = ${r.id}
-        AND COALESCE(external_ids->>${SOURCE_ID}, '') <> ${c.apiId}
-    `;
+    await bindExternalId(r.id, SOURCE_ID, c.apiId);
   }
   await recordUniverse(SOURCE_ID, universe);
   return matches;

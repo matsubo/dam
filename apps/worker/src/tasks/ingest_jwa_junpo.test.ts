@@ -1,17 +1,17 @@
 // apps/worker/src/tasks/ingest_jwa_junpo.test.ts
 //
-// Pure-function tests for the JWA junpo HTML parser. The DB-touching parts
-// (ensureSourcePriority, ensureExternalIds, the upsert) are out of scope
-// here — they're exercised end-to-end by the worker integration suite.
-//
-// The fixture is a verbatim capture of the live page from 2026-04-21.
+// Parser tests against a verbatim capture of the live page from 2026-04-21.
 // The values asserted below are eyeballed against the page, so changing
 // them on a parser refactor should fail loudly.
+//
+// ensureExternalIds runs against synthetic 牧尾 （元）/（再） rows modelled on
+// NDI 905/906 (the backfill binds through it too).
 
-import { describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { parseJwaJunpoHtml, parseReportDate } from './ingest_jwa_junpo.ts';
+import { sql } from '@dam/db/client';
+import { ensureExternalIds, parseJwaJunpoHtml, parseReportDate } from './ingest_jwa_junpo.ts';
 
 const FIXTURE_PATH = join(
   import.meta.dir,
@@ -80,5 +80,88 @@ describe('parseJwaJunpoHtml', () => {
     expect(rows).toEqual([]);
     // The date header still parses even when the table is absent.
     expect(reportDate?.toISOString()).toBe('2026-04-20T15:00:00.000Z');
+  });
+});
+
+describe('ensureExternalIds binds 牧尾ダム to the dam in service (#79)', () => {
+  // Synthetic fixtures modelled on production's 牧尾（元） (NDI 905, 1961) and
+  // 牧尾（再） (NDI 906, 2006), both in 長野. The （元） is inserted first so
+  // it has the lower id.
+  const SLUGS = ['jwa-junpo-t79-makio-moto', 'jwa-junpo-t79-makio-sai'];
+  const KEY = '牧尾ダム';
+
+  async function insertDam(
+    slug: string,
+    name: string,
+    completedYear: number,
+    stamped: boolean,
+  ): Promise<bigint> {
+    const ids = stamped ? { 'jwa-junpo': KEY } : {};
+    const rows = await sql<{ id: bigint }[]>`
+      INSERT INTO dams (slug, name, pref_code, completed_year, location, external_ids)
+      VALUES (${slug}, ${name}, '20', ${completedYear},
+              ST_SetSRID(ST_MakePoint(137.6, 35.8), 4326)::geography, ${sql.json(ids)})
+      RETURNING id
+    `;
+    const id = rows[0]?.id;
+    if (!id) throw new Error('insert dam failed');
+    return id;
+  }
+
+  async function stampOf(id: bigint): Promise<string | null> {
+    const rows = await sql<{ k: string | null }[]>`
+      SELECT external_ids->>'jwa-junpo' AS k FROM dams WHERE id = ${id}
+    `;
+    return rows[0]?.k ?? null;
+  }
+
+  async function boundId(): Promise<string | undefined> {
+    const matches = await ensureExternalIds(() => {});
+    return matches.find((m) => m.jwaName === KEY)?.damId.toString();
+  }
+
+  // ensureExternalIds records the jwa-junpo universe; remove only the rows
+  // and scan stamp this file created, never ones that were already there.
+  let universeBefore: string[] = [];
+  let runBefore = false;
+  beforeAll(async () => {
+    const rows = await sql<{ k: string }[]>`
+      SELECT source_external_id AS k FROM source_universe WHERE source_id = 'jwa-junpo'
+    `;
+    universeBefore = rows.map((r) => r.k);
+    const runs = await sql`SELECT 1 FROM source_universe_runs WHERE source_id = 'jwa-junpo'`;
+    runBefore = runs.length > 0;
+  });
+  beforeEach(async () => {
+    await sql`DELETE FROM dams WHERE slug = ANY(${SLUGS})`;
+  });
+  afterAll(async () => {
+    await sql`DELETE FROM dams WHERE slug = ANY(${SLUGS})`;
+    await sql`
+      DELETE FROM source_universe
+      WHERE source_id = 'jwa-junpo' AND NOT (source_external_id = ANY(${universeBefore}))
+    `;
+    if (!runBefore) await sql`DELETE FROM source_universe_runs WHERE source_id = 'jwa-junpo'`;
+  });
+
+  // The old query already ranked （再） 2 and （元） 9, so this held before
+  // #79 too; it pins that equal ranks still resolve to the completed （再）.
+  test('an unstamped pair binds the completed （再）', async () => {
+    const moto = await insertDam(SLUGS[0] as string, '牧尾（元）', 1961, false);
+    const sai = await insertDam(SLUGS[1] as string, '牧尾（再）', 2006, false);
+
+    expect(await boundId()).toBe(sai.toString());
+    expect(await stampOf(sai)).toBe(KEY);
+    expect(await stampOf(moto)).toBeNull();
+  });
+
+  // The regression: the add-only UPDATE left the （元）'s copy in place.
+  test('a copy of the stamp on the （元） is taken off', async () => {
+    const moto = await insertDam(SLUGS[0] as string, '牧尾（元）', 1961, true);
+    const sai = await insertDam(SLUGS[1] as string, '牧尾（再）', 2006, true);
+
+    expect(await boundId()).toBe(sai.toString());
+    expect(await stampOf(sai)).toBe(KEY);
+    expect(await stampOf(moto)).toBeNull();
   });
 });

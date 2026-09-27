@@ -17,7 +17,9 @@
 //
 // Priority 303 (MLIT-managed dam). Cron hourly at :24.
 
+import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
+import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
@@ -73,18 +75,22 @@ async function ensureSourcePriority(): Promise<void> {
 }
 
 async function findDamId(log: (s: string) => void): Promise<bigint | null> {
-  const rows = await sql<{ id: bigint }[]>`
-    SELECT id FROM dams
+  // Twins of a redeveloped dam tie on rank, so chooseRanked picks the current
+  // one; a row already stamped with the station keeps it (#79).
+  const rows = await sql<(BindableMaster & { rank: number })[]>`
+    SELECT id, name, completed_year AS "completedYear",
+           external_ids->>${SOURCE_ID} AS stamp,
+           CASE
+             WHEN name = '竜門ダム' THEN 0
+             WHEN name LIKE '%竜門%' THEN 1
+             ELSE 5
+           END AS rank
+    FROM dams
     WHERE pref_code = ${PREF_CODE}
       AND name LIKE '%竜門%'
-    ORDER BY
-      CASE
-        WHEN name = '竜門ダム' THEN 0
-        WHEN name LIKE '%竜門%' THEN 1
-        ELSE 5
-      END, id
-    LIMIT 1
+    ORDER BY rank, id
   `;
+  const dam = chooseRanked(rows, '竜門ダム');
   // The one dam this source publishes, matched or not — recorded so /coverage
   // can say "they publish it, we failed to link it" instead of guessing. The
   // endpoint exposes metric keys rather than a station id, so the published
@@ -94,22 +100,16 @@ async function findDamId(log: (s: string) => void): Promise<bigint | null> {
       externalId: '竜門ダム',
       name: '竜門ダム',
       prefCode: PREF_CODE,
-      resolvedDamId: rows[0]?.id ?? null,
+      resolvedDamId: dam?.id ?? null,
     },
   ];
   await recordUniverse(SOURCE_ID, universe);
-  if (!rows[0]) {
+  if (!dam) {
     log(`${SOURCE_ID}: no master match for 竜門ダム (pref ${PREF_CODE})`);
     return null;
   }
-  await sql`
-    UPDATE dams
-    SET external_ids = COALESCE(external_ids, '{}'::jsonb)
-                     || jsonb_build_object(${SOURCE_ID}::text, ${'竜門ダム'}::text)
-    WHERE id = ${rows[0].id}
-      AND COALESCE(external_ids->>${SOURCE_ID}, '') <> ${'竜門ダム'}
-  `;
-  return rows[0].id;
+  await bindExternalId(dam.id, SOURCE_ID, '竜門ダム');
+  return dam.id;
 }
 
 // --- task -------------------------------------------------------------------

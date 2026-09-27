@@ -117,8 +117,8 @@ describe('chooseMaster', () => {
     { id: 3n, name: '金沢調整池' },
     { id: 4n, name: '金沢調整池副堤' },
     { id: 5n, name: '新宮川' },
-    { id: 6n, name: '千五沢（再）' },
-    { id: 7n, name: '千五沢（元）' },
+    { id: 6n, name: '千五沢（元）' },
+    { id: 7n, name: '千五沢（再）', completedYear: 2023 },
   ];
 
   test('matches a feed name that carries a 調整池 suffix the master omits', () => {
@@ -136,7 +136,7 @@ describe('chooseMaster', () => {
     expect(chooseMaster('半田沼', masters)).toBeNull();
   });
 
-  test('resolves a （元）/（再） pair deterministically to the lower id', () => {
-    expect(chooseMaster('千五沢ダム', masters)).toBe(6n);
+  test('binds 千五沢 to the completed （再）, not the lower-id （元） (#79)', () => {
+    expect(chooseMaster('千五沢ダム', masters)).toBe(7n);
   });
 });

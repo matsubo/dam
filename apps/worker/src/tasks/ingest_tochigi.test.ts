@@ -7,7 +7,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { parseTochigiCsv, splitCsvLine } from './ingest_tochigi.ts';
+import { chooseMaster, parseTochigiCsv, splitCsvLine } from './ingest_tochigi.ts';
 
 const FIXTURE = join(
   import.meta.dir,
@@ -67,5 +67,24 @@ describe('parseTochigiCsv', () => {
   test('returns empty array for header-only / empty input', () => {
     expect(parseTochigiCsv('"id","type","pointName"\n')).toEqual([]);
     expect(parseTochigiCsv('')).toEqual([]);
+  });
+});
+
+describe('chooseMaster (#79)', () => {
+  // 中禅寺 has a （元） (NDI 633) and a （再） (NDI 634) master row; both carry
+  // completed_year 1998 in the dam master.
+  const masters = [
+    { id: 9314n, name: '中禅寺（元）', completedYear: 1998, stamp: null },
+    { id: 9315n, name: '中禅寺（再）', completedYear: 1998, stamp: null },
+    { id: 9295n, name: '寺山', completedYear: 1984, stamp: null },
+  ];
+
+  test('binds an unstamped 中禅寺ダム to the completed （再）, not the lower-id （元）', () => {
+    expect(chooseMaster('中禅寺', masters, '中禅寺ダム')).toBe(9315n);
+  });
+
+  test('keeps the row already stamped with the station', () => {
+    const stamped = masters.map((m) => (m.id === 9314n ? { ...m, stamp: '中禅寺ダム' } : m));
+    expect(chooseMaster('中禅寺', stamped, '中禅寺ダム')).toBe(9314n);
   });
 });

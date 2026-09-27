@@ -74,6 +74,24 @@ describe('chooseMaster', () => {
     expect(chooseMaster('狭山池', masters)).toBe(10172n);
   });
 
+  it('keeps 狭山池（再）even if its completion year were blank (#79)', () => {
+    // Hypothetical: ダム便覧 has no record matching 狭山池（再）, so its year
+    // may be blank. preferMaster alone would then pick the （元）.
+    const withYears = [
+      { id: 10171n, name: '狭山池（元）', completedYear: 616 },
+      { id: 10172n, name: '狭山池（再）', completedYear: null },
+    ];
+    expect(chooseMaster('狭山池', withYears, '37')).toBe(10172n);
+  });
+
+  it('keeps the row already stamped with the facility over the name rank', () => {
+    const stamped = [
+      { id: 10171n, name: '狭山池（元）', stamp: '37' },
+      { id: 10172n, name: '狭山池（再）', stamp: null },
+    ];
+    expect(chooseMaster('狭山池', stamped, '37')).toBe(10171n);
+  });
+
   it('matches 安威川 exactly', () => {
     expect(chooseMaster('安威川', masters)).toBe(10175n);
   });

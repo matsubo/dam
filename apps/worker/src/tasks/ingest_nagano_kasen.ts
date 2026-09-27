@@ -23,7 +23,9 @@
 //
 // Priority 308. Cron hourly at :33.
 
+import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
+import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
@@ -178,9 +180,42 @@ interface DamMatch {
   damId: bigint;
 }
 
+/**
+ * Best master dam for a station; a row already stamped with its station id
+ * wins, then exact name, stem, and substring matches.
+ */
+export function chooseMaster(
+  naganoName: string,
+  masters: BindableMaster[],
+  stationId?: string,
+): bigint | null {
+  // A row already stamped with this station keeps it; names alone cannot
+  // separate same-name dams (#57).
+  const stamped = stationId ? stampedMaster(masters, stationId) : null;
+  if (stamped) return stamped.id;
+  const stem = normalizeName(naganoName);
+  if (!stem) return null;
+  let best: { m: BindableMaster; rank: number } | null = null;
+  for (const m of masters) {
+    const mStem = normalizeName(m.name);
+    let rank: number;
+    if (m.name === naganoName) rank = 0;
+    else if (mStem === stem) rank = 1;
+    else if (m.name === `${stem}ダム`) rank = 2;
+    else if (mStem.startsWith(stem)) rank = 3;
+    else if (mStem.includes(stem)) rank = 4;
+    else continue;
+    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
+      best = { m, rank };
+    }
+  }
+  return best?.m.id ?? null;
+}
+
 async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<{ id: bigint; name: string }[]>`
-    SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
+  const masters = await sql<BindableMaster[]>`
+    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
+    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out: DamMatch[] = [];
   // What this source publishes, matched or not — recorded so /coverage can
@@ -193,36 +228,22 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
   const reported = new Set(rows.map((r) => r.naganoName));
 
   for (const [stationId, naganoName] of Object.entries(STATION_MAP)) {
-    const stem = normalizeName(naganoName);
-    if (!stem) continue;
-
-    let best: { id: bigint; rank: number } | null = null;
-    for (const m of masters) {
-      const mStem = normalizeName(m.name);
-      let rank: number;
-      if (m.name === naganoName) rank = 0;
-      else if (mStem === stem) rank = 1;
-      else if (m.name === `${stem}ダム`) rank = 2;
-      else if (mStem.startsWith(stem)) rank = 3;
-      else if (mStem.includes(stem)) rank = 4;
-      else continue;
-      if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-        best = { id: m.id, rank };
-      }
-    }
+    if (!normalizeName(naganoName)) continue;
+    const damId = chooseMaster(naganoName, masters, stationId);
 
     universe.push({
       externalId: stationId,
       name: naganoName,
       prefCode: PREF_CODE,
-      resolvedDamId: best?.id ?? null,
+      resolvedDamId: damId,
     });
 
-    if (!best) {
+    if (!damId) {
       log(`${SOURCE_ID}: no master match for "${naganoName}"`);
       continue;
     }
-    if (reported.has(naganoName)) out.push({ naganoName, damId: best.id });
+    await bindExternalId(damId, SOURCE_ID, stationId);
+    if (reported.has(naganoName)) out.push({ naganoName, damId });
   }
 
   await recordUniverse(SOURCE_ID, universe);

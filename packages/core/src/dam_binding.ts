@@ -49,3 +49,25 @@ export function stampedMaster<M extends BindableMaster>(masters: M[], key: strin
   const hits = masters.filter((m) => m.stamp === key);
   return hits.length === 1 ? (hits[0] ?? null) : null;
 }
+
+/**
+ * Pick from candidates a curated SQL query already ranked by name (lower is
+ * better): the row stamped with `key` first, then the lowest rank, with
+ * preferMaster settling equal ranks. A query that ranks the （元） and （再）
+ * alike lets the tie-break choose the current twin.
+ */
+export function chooseRanked<M extends BindableMaster & { rank: number }>(
+  candidates: M[],
+  key: string,
+  year = new Date().getFullYear(),
+): M | null {
+  const stamped = stampedMaster(candidates, key);
+  if (stamped) return stamped;
+  let best: M | null = null;
+  for (const c of candidates) {
+    if (!best || c.rank < best.rank || (c.rank === best.rank && preferMaster(c, best, year))) {
+      best = c;
+    }
+  }
+  return best;
+}

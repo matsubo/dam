@@ -20,7 +20,9 @@
 //
 // Priority 308. Cron hourly at :39.
 
+import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
+import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
@@ -127,9 +129,40 @@ interface DamMatch {
   damId: bigint;
 }
 
+/**
+ * Best master dam for a published station name. The row already stamped with
+ * the name keeps it: 長柄 and 五名 have （元）/（再） twins whose （再） has no
+ * completion year on record, so the name alone cannot settle them (#79).
+ * Otherwise an exact raw-name hit beats stem equality, then the `〜ダム`
+ * spelling, a prefix, a substring; ties go to the current twin, else the
+ * lower id.
+ */
+export function chooseMaster(kagawaName: string, masters: BindableMaster[]): bigint | null {
+  const stamped = stampedMaster(masters, kagawaName);
+  if (stamped) return stamped.id;
+  const stem = normalizeName(kagawaName);
+  if (!stem) return null;
+  let best: { m: BindableMaster; rank: number } | null = null;
+  for (const m of masters) {
+    const mStem = normalizeName(m.name);
+    let rank: number;
+    if (m.name === kagawaName) rank = 0;
+    else if (mStem === stem) rank = 1;
+    else if (m.name === `${stem}ダム`) rank = 2;
+    else if (mStem.startsWith(stem)) rank = 3;
+    else if (mStem.includes(stem)) rank = 4;
+    else continue;
+    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
+      best = { m, rank };
+    }
+  }
+  return best?.m.id ?? null;
+}
+
 async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<{ id: bigint; name: string }[]>`
-    SELECT id, name FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
+  const masters = await sql<BindableMaster[]>`
+    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
+    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
   const out: DamMatch[] = [];
   // What this source publishes, matched or not — recorded so /coverage can
@@ -137,38 +170,23 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
   const universe: UniverseRow[] = [];
 
   for (const r of rows) {
-    const stem = normalizeName(r.kagawaName);
-    if (!stem) continue;
-
-    let best: { id: bigint; rank: number } | null = null;
-    for (const m of masters) {
-      const mStem = normalizeName(m.name);
-      let rank: number;
-      if (m.name === r.kagawaName) rank = 0;
-      else if (mStem === stem) rank = 1;
-      else if (m.name === `${stem}ダム`) rank = 2;
-      else if (mStem.startsWith(stem)) rank = 3;
-      else if (mStem.includes(stem)) rank = 4;
-      else continue;
-      if (!best || rank < best.rank || (rank === best.rank && m.id < best.id)) {
-        best = { id: m.id, rank };
-      }
-    }
-
+    if (!normalizeName(r.kagawaName)) continue;
+    const damId = chooseMaster(r.kagawaName, masters);
     // The feed publishes no station id, so the published name plus the
     // prefecture is the stable key.
     universe.push({
       externalId: r.kagawaName,
       name: r.kagawaName,
       prefCode: PREF_CODE,
-      resolvedDamId: best?.id ?? null,
+      resolvedDamId: damId,
     });
 
-    if (!best) {
+    if (!damId) {
       log(`${SOURCE_ID}: no master match for "${r.kagawaName}"`);
       continue;
     }
-    out.push({ kagawaName: r.kagawaName, damId: best.id });
+    out.push({ kagawaName: r.kagawaName, damId });
+    await bindExternalId(damId, SOURCE_ID, r.kagawaName);
   }
 
   await recordUniverse(SOURCE_ID, universe);

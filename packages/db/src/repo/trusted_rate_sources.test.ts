@@ -26,3 +26,11 @@ describe('trusted_rate_basis after issue #55', () => {
     expect(await trusted('tndam-hyogo')).not.toBe(true);
   });
 });
+
+describe('trusted_rate_basis after issue #71', () => {
+  // 貯水率（利水）: 川辺 volume/rate = 660 千m³, 大和 204, against annual 有効
+  // 2,460 / 721 (0063).
+  test('kagoshima-kasen publishes a 利水容量-based rate and is trusted', async () => {
+    expect(await trusted('kagoshima-kasen')).toBe(true);
+  });
+});

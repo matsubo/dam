@@ -1,0 +1,197 @@
+<!DOCTYPE html SYSTEM "about:legacy-compat">
+<html lang="ja">
+<head>
+<META http-equiv="Content-Type" content="text/html; charset=SHIFT_JIS">
+<meta content="text/html; charset=Shift_JIS" http-equiv="content-type">
+<title>鹿児島県河川砂防情報システム</title>
+<link href="../css/common.css" rel="stylesheet" type="text/css">
+<link href="../css/common-dataArea.css" rel="stylesheet" type="text/css">
+<link href="../css/redmond/jquery-ui-1.14.0.min.css" type="text/css" rel="stylesheet">
+<link href="../css/menu.css" type="text/css" rel="stylesheet">
+<link href="../css/common101.css" type="text/css" rel="stylesheet">
+<link href="../css/tableStatus.css" type="text/css" rel="stylesheet">
+<link href="../css/dialog/hanrei.css" type="text/css" rel="stylesheet">
+<script src="../js/commons.js" type="text/javascript"></script><script src="../js/tm_common.js" type="text/javascript"></script><script src="../js/jquery/jquery-3.7.1.min.js" type="text/javascript"></script><script src="../js/jquery/jquery.cookie.js" type="text/javascript"></script><script charset="UTF-8" src="../js/jquery/jquery-ui-1.14.0.min.js" type="text/javascript"></script><script charset="UTF-8" src="../js/jquery/jquery.ui.datepicker-ja.js" type="text/javascript"></script><script src="../js/jquery/jquery.tile.js" type="text/javascript"></script><script src="../js/menu.js" type="text/javascript"></script><script src="../js/myarea_river.js" type="text/javascript"></script><script src="../js/init_telemeter.js" type="text/javascript"></script><script src="../js/static/changeUrl.js" type="text/javascript"></script><script type="text/javascript">
+<!--
+          var totalPage = 1;
+          var pg_back = 1;
+          var pg_next = 1;
+          var noPage = 1;
+          var tm = "20260927164000";
+          var officeNo = "0";
+          
+            $(function() {
+              /* menu.htmlファイルの読み込み */
+              $.ajaxSetup({
+                beforeSend: function(xhr) {
+                  //xhr.overrideMimeType("text/html;charset=Shift_JIS");
+                }
+              });
+              $("#menu").load("../html/menu.html", function() {
+                setMenu();
+                selectMenu("m6"); // メニュー選択
+              });
+              /* 地域情報セット */
+              setPlace('0');
+
+              // 時刻選択コンボ設定
+              //setDateselForStatus(); // カレンダーから設定
+
+              //観測時刻＞押下
+              $("#nextbtn2").click(function(){
+                moveNextTimeForStatus();
+              });
+
+              //カレンダーダイアログ初期化
+              $("#datepicker").dialog({
+                autoOpen: false,
+                resizable: false,
+                width: 270
+              });
+              //カレンダーボタンクリックイベント
+              $("#specifybtn").click(function() {
+                $("#datepicker").dialog('open');
+              });
+
+              // 水位一覧表用マイエリア表示ボタンクリックイベント
+              $("#myarea_view").click(function() {
+                if ($.cookie(MYAREA_COOKIE_RIVER_NAME)) {
+                  if (window.confirm("マイエリアに移動しますか？")) {
+                    var myArea = $.cookie(MYAREA_COOKIE_RIVER_NAME);
+                    myArea = myArea.split(",");
+                    var office = (myArea[0].split(":"))[1];
+                    var city;
+                    if(myArea[1]) city = (myArea[1].split(":"))[1];
+
+                    // 表示エリアの状態に合わせてパラメータを設定
+                    var param = "";
+                    if(office > 0 && city > 0) param += "fn="+office+"&no="+city+"&cn="+city+"&mp=4&pg=1";
+                    else if(office > 0) param += "fn="+office+"&no="+office+"&cn=0&mp=1&pg=1";
+                    var url = margeParams(location.href,param);
+                    if(param) location.replace(url);
+                  }
+                } else {
+                  alert("マイエリアは登録されていません。");
+                }
+              });
+            });
+            /* カレンダーから呼び出し用 */
+            function setDaresel(newesttime, it){
+              // 時刻選択コンボ設定
+              setDateselForStatus(newesttime, it);
+            }
+          
+          --></script>
+</head>
+<body>
+<div class="mainContainer">
+<div style="display:none;" id="datepicker">
+<iframe style="margin-left: 4px;" height="250" width="236" frameborder="no" name="calfr" src="../servlet/bousaiweb.servletBousaiTopMenu?sv=4&dk=1&nw=1&tm=20260927164000"></iframe>
+</div>
+<div id="menu"></div>
+<div>
+<div id="header_content">
+<div>
+<table class="kind_line">
+<tr>
+<th style="width:75px;">データ種別</th><td style="width:320px;" class="datakind"><span class="span_sct span_sct_off" id="data1">雨量</span>&nbsp;/
+        <span class="span_sct span_sct_off" id="data2">水位</span>&nbsp;/
+        <span class="span_sct span_sct_off" id="data3">潮位</span>&nbsp;/
+        <span class="span_sct span_sct_off" id="data4">風向風速</span>&nbsp;/
+        <span class="span_sct span_sct_on" id="data5">ダム</span>&nbsp;/
+      </td><th style="width:66px;">表示形式</th><td style="width:575px;" class="padding"><span class="span_sct span_sct_on" id="kdDam1">一覧表</span><span class="span_sct span_sct_off" id="kdDam2">経過表</span><span class="span_sct span_sct_off" id="kdDam3">ダム地震検知履歴</span><span class="span_sct span_sct_off" id="kdDam4">ダム地震検知履歴（気象庁）</span></td>
+</tr>
+</table>
+</div>
+<div style="width:1060px;" class="title_bar">
+<div>
+<div class="titlepart">ダム一覧表(全県)</div>
+</div>
+<div class="select_bar">
+<div class="select_menu time_choice">
+<div>観測時刻選択</div>
+<div id="prevbtn2">&nbsp;</div>
+<select style="width:132px;" class="padleft" id="datesel"></select>
+<div class="padleft" id="nextbtn2">&nbsp;</div>
+<input class="padleft" value="最新" type="button" id="latestbtn"><img height="20" width="20" alt="カレンダー" src="../img/icon/cal.gif" class="cal" id="specifybtn"></div>
+<div class="select_menu area_menu">
+<div>表示エリア</div>
+<select id="psel-1"><option selected value="-1">地域を選択</option><option value="0">全県</option><option value="1">鹿児島・日置</option><option value="2">出水・伊佐</option><option value="3">川薩・姶良</option><option value="4">甑島</option><option value="5">指宿・川辺</option><option value="6">曽於</option><option value="7">肝属</option><option value="8">種子島地方</option><option value="9">屋久島地方</option><option value="10">奄美地方北部</option><option value="11">奄美地方南部</option><option value="12">十島村</option></select>
+<div>&rarr;</div>
+<select id="psel-2"><option value="0,-1">市町村を選択
+                </option><option value="1,1">鹿児島市</option><option value="7,2">鹿屋市</option><option value="5,3">枕崎市</option><option value="2,4">阿久根市</option><option value="2,5">出水市</option><option value="5,6">指宿市</option><option value="8,7">西之表市</option><option value="7,8">垂水市</option><option value="3,9">薩摩川内市</option><option value="4,10">薩摩川内市甑島</option><option value="1,11">日置市</option><option value="6,12">曽於市</option><option value="3,13">霧島市</option><option value="1,14">いちき串木野市</option><option value="5,15">南さつま市</option><option value="6,16">志布志市</option><option value="10,17">奄美市</option><option value="5,18">南九州市</option><option value="2,19">伊佐市</option><option value="3,20">姶良市</option><option value="8,21">三島村</option><option value="12,22">十島村</option><option value="3,23">さつま町</option><option value="2,24">長島町</option><option value="3,25">湧水町</option><option value="6,26">大崎町</option><option value="7,27">東串良町</option><option value="7,28">錦江町</option><option value="7,29">南大隅町</option><option value="7,30">肝付町</option><option value="8,31">中種子町</option><option value="8,32">南種子町</option><option value="9,33">屋久島町</option><option value="10,34">大和村</option><option value="10,35">宇検村</option><option value="10,36">瀬戸内町</option><option value="10,37">龍郷町</option><option value="10,38">喜界町</option><option value="11,39">徳之島町</option><option value="11,40">天城町</option><option value="11,41">伊仙町</option><option value="11,42">和泊町</option><option value="11,43">知名町</option><option value="11,44">与論町</option></select>
+</div>
+</div>
+</div>
+</div>
+<div class="center_content">
+<div class="datatime">2026年09月27日16時40分&nbsp;現在</div>
+<div class="guide">
+<div>局名をクリックするとグラフが表示されます。</div>
+<div class="sort">並べ替え：</div>
+<select style="width:100px;" id="sortsel"><option value="0">
+                 登録順
+            </option><option value="1" selected>
+                 警報順
+            </option></select>
+<div class="legend_btn">
+<input value="凡例" class="hanreibtn" type="button">
+</div>
+</div>
+<table class="data">
+<tr class="th1">
+<th style="width:120px;" rowspan="2">局名</th><th style="width:120px;" rowspan="2">所在地</th><th style="width:120px;" rowspan="2">最新観測時刻</th><th style="width:100px;">貯水位</th><th style="width:100px;">貯水量</th><th style="width:100px;">全流入量</th><th style="width:100px;">全放流量</th><th style="width:100px;">空容量</th><th style="width:100px;">貯水率（治水）</th><th style="width:100px;">貯水率（利水）</th>
+</tr>
+<tr class="th2">
+<th>[EL.m]</th><th>[10<sup>3</sup>m<sup>3</sup>]</th><th>[m<sup>3</sup>/s]</th><th>[m<sup>3</sup>/s]</th><th>[10<sup>3</sup>m<sup>3</sup>]</th><th>[%]</th><th>[%]</th>
+</tr>
+<tr>
+<td align="center" class="odd "><A class="menu" href="javascript:void(0)" onClick="myInDam('2','202609271640','1',0,0)">大和ダム</A></td><td align="center" class="odd ">大島郡大和村</td><td align="center" class="odd ">2026/09/27&nbsp;16:30</td><td align="center" class="odd ">&rarr;&nbsp;&nbsp;&nbsp;37.25</td><td align="center" class="odd ">&rarr;&nbsp;&nbsp;&nbsp;&nbsp;210</td><td align="center" class="odd ">&rarr;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.217</td><td align="center" class="odd ">&rarr;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.217</td><td align="center" class="odd ">---</td><td align="center" class="odd ">&rarr;&nbsp;&nbsp;29.2</td><td align="center" class="odd ">&rarr;&nbsp;100.0</td>
+</tr>
+<tr>
+<td align="center" class=" "><A class="menu" href="javascript:void(0)" onClick="myInDam('3','202609271640','1',0,0)">西之谷ダム</A></td><td align="center" class=" ">鹿児島市</td><td align="center" class=" ">2026/09/27&nbsp;16:30</td><td align="center" class=" ">&rarr;&nbsp;&nbsp;&nbsp;43.72</td><td align="center" class=" ">&rarr;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;6</td><td align="center" class=" ">&rarr;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2.106</td><td align="center" class=" ">&rarr;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2.106</td><td align="center" class=" "></td><td align="center" class=" ">&rarr;&nbsp;&nbsp;&nbsp;0.8</td><td align="center" class=" "></td>
+</tr>
+<tr>
+<td align="center" class="odd "><A class="menu" href="javascript:void(0)" onClick="myInDam('1','202609271640','1',0,0)">川辺ダム</A></td><td align="center" class="odd ">南九州市</td><td align="center" class="odd ">2026/09/27&nbsp;16:30</td><td align="center" class="odd ">&rarr;&nbsp;&nbsp;149.86</td><td align="center" class="odd ">&rarr;&nbsp;&nbsp;&nbsp;&nbsp;645</td><td align="center" class="odd ">&darr;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.977</td><td align="center" class="odd ">&rarr;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.981</td><td align="center" class="odd "></td><td align="center" class="odd "></td><td align="center" class="odd ">&rarr;&nbsp;&nbsp;97.7</td>
+</tr>
+</table>
+</div>
+</div>
+<div style="display:none;" title="凡例" id="hanreidialog">
+<table class="hanrei">
+<tr>
+<td style="color:#ff8242;" class="icon">■</td><td>流入量基準値超過</td>
+</tr>
+</table>
+<table class="hanrei">
+<tr>
+<td class="string">***</td><td>欠測</td>
+</tr>
+<tr>
+<td class="string">---</td><td>無効</td>
+</tr>
+<tr>
+<td class="string">###</td><td>範囲異常</td>
+</tr>
+<tr>
+<td class="string">ブランク</td><td>未入力</td>
+</tr>
+</table>
+</div>
+<div style="display:none;" title="マイエリア登録" id="myareadialog">
+<div id="myarea_ctrl">
+<p>現在の地域をマイエリアに登録する場合は登録ボタンを、解除する場合は解除ボタンをクリックして下さい。</p>
+<div style="width:100%;text-align:center;">
+<input value="登録" id="signup_ctrl" type="button"><input value="解除" id="signoff_ctrl" type="button">
+</div>
+</div>
+<div id="signaon_msg">
+<p>マイエリアの登録が完了しました。</p>
+</div>
+<div id="signoff_msg">
+<p>マイエリアを解除しました。</p>
+</div>
+</div>
+</div>
+</body>
+</html>
