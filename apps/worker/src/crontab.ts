@@ -413,10 +413,9 @@ export const CRONTAB = `
 # Priority 308. Cron at :38.
 38 * * * * ingest:kochi-bousai
 
-# 島根県防災Web — 14 県管理ダム (布部/山佐/三瓶/波積/八戸/浜田/第二浜田/大長見/
-# 御部/益田川/笹倉/大峠/銚子/美田). Same Remix SPA framework as 広島/鳥取県防災Web;
-# pointer + list JSON; storage in 千m³. 国直轄 (尾原/志津見) also appear but
-# cgr-mlit-dam (priority 304) wins preferredSource for those. Cron at :37.
+# 島根県水防情報システム (suibou-shimane.jp) — 19 ダム, one dam60.json per JST
+# day with every hourly snapshot; each run re-reads yesterday's and today's
+# file because the copy served at :37 lags ~2 h. Storage in 千m³. Cron at :37.
 37 * * * * ingest:shimane-bousai
 
 # 鹿児島県 BODIK ダム諸量 — 3 dams (大和/川辺/西之谷), 10-min, 2008+, CC-BY.
