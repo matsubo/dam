@@ -145,6 +145,45 @@ describe('parseKasenbosaiObsValue quality codes', () => {
   test('unparseable obsTime → null', () => {
     expect(parseKasenbosaiObsValue({ storCap: 1, obsTime: 'garbage' })).toBeNull();
   });
+
+  test('a reading with every quantity flagged invalid is not an observation', () => {
+    // 高遠ダム (2183100700009) as tests/fixtures/kasenbosai/obs_dam_2001_2026-09-27.json
+    // lists it at 2026/09/27 16:10: stor_lvl/all_sink/all_disch Ccd 140,
+    // stor_cap/stor_pcnt_irr/stor_pcnt_eff Ccd 160. Stored, such rows are the
+    // newest for the dam and hide other sources' real values on its page.
+    const parsed = parseKasenbosaiObsValue({
+      storLvl: 0,
+      storLvlCcd: 140,
+      storCap: 0,
+      storCapCcd: 160,
+      storPcntIrr: 0,
+      storPcntIrrCcd: 160,
+      storPcntEff: 0,
+      storPcntEffCcd: 160,
+      allSink: 0,
+      allSinkCcd: 140,
+      allDisch: 0,
+      allDischCcd: 140,
+      obsTime: '2026/09/27 16:10',
+    });
+    expect(parsed).toBeNull();
+  });
+
+  test('one valid quantity is enough to keep the reading', () => {
+    const parsed = parseKasenbosaiObsValue({
+      storLvl: 0,
+      storLvlCcd: 140,
+      storCap: 0,
+      storCapCcd: 160,
+      allSink: 0,
+      allSinkCcd: 140,
+      allDisch: 3.2,
+      allDischCcd: 0,
+      obsTime: '2026/09/27 16:10',
+    });
+    expect(parsed?.outflowM3s).toBe(3.2);
+    expect(parsed?.waterLevelM).toBeNull();
+  });
 });
 
 describe('phantom 利水/有効 rate rejection', () => {

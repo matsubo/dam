@@ -1,0 +1,56 @@
+{
+    "table": [
+        {
+            "v_totalinflow1": "16.29",
+            "v_totaldischarge11": "20.09",
+            "v_reservoirlevel10": "753.75",
+            "v_reservoirlevel1": "9.25",
+            "v_pgdischarge1": "0",
+            "v_valvedischarge1": "0.97",
+            "v_gatedischarge9": "0.00",
+            "v_waterintake2": "18.69",
+            "v_waterintake1": "0.43",
+            "v_time": "21:40",
+            "poweroutput1": null
+        },
+        {
+            "v_totalinflow1": "16.27",
+            "v_totaldischarge11": "19.98",
+            "v_reservoirlevel10": "753.76",
+            "v_reservoirlevel1": "9.26",
+            "v_pgdischarge1": "0.96",
+            "v_valvedischarge1": "0",
+            "v_gatedischarge9": "0.00",
+            "v_waterintake2": "18.59",
+            "v_waterintake1": "0.43",
+            "v_time": "21:30",
+            "poweroutput1": 157
+        },
+        {
+            "v_totalinflow1": "16.28",
+            "v_totaldischarge11": "19.98",
+            "v_reservoirlevel10": "753.78",
+            "v_reservoirlevel1": "9.28",
+            "v_pgdischarge1": "0.97",
+            "v_valvedischarge1": "0",
+            "v_gatedischarge9": "0.00",
+            "v_waterintake2": "18.59",
+            "v_waterintake1": "0.43",
+            "v_time": "21:20",
+            "poweroutput1": 159
+        },
+        {
+            "v_totalinflow1": "16.28",
+            "v_totaldischarge11": "20.01",
+            "v_reservoirlevel10": "753.78",
+            "v_reservoirlevel1": "9.29",
+            "v_pgdischarge1": "0.98",
+            "v_valvedischarge1": "0",
+            "v_gatedischarge9": "0.00",
+            "v_waterintake2": "18.59",
+            "v_waterintake1": "0.45",
+            "v_time": "21:10",
+            "poweroutput1": 161
+        }
+    ]
+}
