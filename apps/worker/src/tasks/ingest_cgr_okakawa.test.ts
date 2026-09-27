@@ -9,6 +9,7 @@
 import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import {
+  assertUsableRows,
   chooseMaster,
   parseOkakawaDate,
   parseOkakawaPdfText,
@@ -114,6 +115,20 @@ describe('parseOkakawaPdfText — row guards', () => {
     const r = parseOkakawaPdfText(`${header}千 屋 ダ ム 14,200 14,910 105.0 20\n`);
     expect(r.rows[0]?.storageVolumeM3).toBe(14_910_000);
     expect(r.rows[0]?.storageRate).toBe(1);
+  });
+});
+
+describe('assertUsableRows', () => {
+  test('fails a run where no dam name matched at all', () => {
+    // A notice or re-typeset PDF: nothing matches NAME_RE, so 0 names and 0 rows.
+    const notice = parseOkakawaPdfText('お知らせ\n本日の貯水状況の掲載は休止しています。\n');
+    expect(() => assertUsableRows(notice)).toThrow('0 usable rows from 0 published names');
+  });
+
+  test('fails a run where names matched but no row passed the rate check', () => {
+    const header = '高梁川水系 主要ダム貯水量 (2026年9月25日 午前９時現在）\n';
+    const misread = parseOkakawaPdfText(`${header}千 屋 ダ ム 14,200 7,392 12.1 -102\n`);
+    expect(() => assertUsableRows(misread)).toThrow('0 usable rows from 1 published names');
   });
 });
 
