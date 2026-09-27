@@ -22,7 +22,9 @@
 // from the most recent observed value, so a 10-day step is fine for the
 // storage-volume timeline.
 
+import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
+import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
@@ -184,11 +186,12 @@ export async function ensureSourcePriority(): Promise<void> {
 }
 
 /**
- * Idempotent: stamp external_ids->>'jwa-junpo' on the 21 master dams the
- * first time the task runs. Match by (prefCode IN list) AND name LIKE
- * '%<masterName>%', preferring 「<masterName>ダム」, then 「再」/「貯水池」
- * over 「元」 to pick the currently-operating dam when redevelopment has
- * left both versions in the master.
+ * Idempotent: bind each listed station to one master dam and stamp
+ * external_ids->>'jwa-junpo' there (and nowhere else). Match by (prefCode IN
+ * list) AND name LIKE '%<masterName>%', preferring 「<masterName>ダム」, then
+ * the bare name, then 「再」/「元」/「再開発」, then 「貯水池」. A row already
+ * stamped keeps the station; a （元）/（再） pair goes to whichever structure
+ * is in service (chooseRanked).
  */
 export async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
   const matches: DamMatch[] = [];
@@ -196,24 +199,23 @@ export async function ensureExternalIds(log: (s: string) => void): Promise<DamMa
   // say "they publish it, we failed to link it" instead of guessing.
   const universe: UniverseRow[] = [];
   for (const m of NAME_MAP) {
-    const rows = await sql<{ id: bigint; name: string }[]>`
-      SELECT id, name FROM dams
+    const candidates = await sql<(BindableMaster & { rank: number })[]>`
+      SELECT id, name, completed_year AS "completedYear",
+             external_ids->>'jwa-junpo' AS stamp,
+             CASE
+               WHEN name = ${`${m.masterName}ダム`} THEN 0
+               WHEN name = ${m.masterName} THEN 1
+               WHEN name LIKE ${`${m.masterName}（再）%`} THEN 2
+               WHEN name LIKE ${`${m.masterName}（元）%`} THEN 2
+               WHEN name LIKE ${`${m.masterName}（再開発）%`} THEN 2
+               WHEN name = ${`${m.masterName}貯水池`} THEN 3
+               ELSE 5
+             END AS rank
+      FROM dams
       WHERE pref_code = ANY(${m.prefCodes}::text[])
         AND name LIKE ${`%${m.masterName}%`}
-      ORDER BY
-        CASE
-          WHEN name = ${`${m.masterName}ダム`} THEN 0
-          WHEN name = ${m.masterName} THEN 1
-          WHEN name LIKE ${`${m.masterName}（再）%`} THEN 2
-          WHEN name LIKE ${`${m.masterName}（再開発）%`} THEN 2
-          WHEN name = ${`${m.masterName}貯水池`} THEN 3
-          WHEN name LIKE ${`${m.masterName}（元）%`} THEN 9
-          ELSE 5
-        END,
-        id
-      LIMIT 1
     `;
-    const r = rows[0];
+    const r = chooseRanked(candidates, m.jwaName);
     universe.push({
       externalId: m.jwaName,
       name: m.jwaName,
@@ -228,13 +230,7 @@ export async function ensureExternalIds(log: (s: string) => void): Promise<DamMa
       continue;
     }
     matches.push({ jwaName: m.jwaName, damId: r.id });
-    await sql`
-      UPDATE dams
-      SET external_ids = COALESCE(external_ids, '{}'::jsonb)
-                       || jsonb_build_object('jwa-junpo', ${m.jwaName}::text)
-      WHERE id = ${r.id}
-        AND COALESCE(external_ids->>'jwa-junpo', '') <> ${m.jwaName}
-    `;
+    await bindExternalId(r.id, 'jwa-junpo', m.jwaName);
   }
   await recordUniverse('jwa-junpo', universe);
   return matches;
