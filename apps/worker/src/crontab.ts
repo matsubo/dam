@@ -249,6 +249,12 @@ export const CRONTAB = `
 # 下久保ダム. Priority 297. Cron at :49.
 49 * * * * ingest:shimokubo
 
+# 水資源機構 利根川河口堰管理所 利根河口堰 情報提供 — 1 weir (茨城/千葉境).
+# 正時水位表 + 正時流量表 script files (24 h rolling); 堰上流水位 (新宿 19.0km,
+# Y.P.m) + 堰流入量 + 堰通過流量. All 24 hours re-upserted each run, so a
+# missed hour back-fills. Priority 298. Cron at :54.
+54 * * * * ingest:jwa-tonekako
+
 # 山形県河川・砂防情報 — ~17 ダム (県管理13 + 国管理4: 長井/寒河江/白川/月山).
 # 防災Web JSON feed (dk=4, Shift_JIS), 10分更新. Level + storage (千m³) + rate +
 # inflow + outflow. Priority 308, matching other 防災Web prefectural sources.
