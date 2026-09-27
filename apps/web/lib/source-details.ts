@@ -149,10 +149,10 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     label: '鳥取県ダム情報',
   },
   'aomori-dam': {
-    upstream: '青森県砂防ダム情報 (kasensabo.bousai.pref.aomori.jp)',
+    upstream: '青森県河川砂防情報提供システム ダム諸量グラフ (kasensabo.bousai.pref.aomori.jp)',
     license: '青森県オープンデータ — 出典明示で再配布可 (推定)',
-    cadence: '時次 (リアルタイム; 取得は毎時 :11)',
-    what: '青森県 7 ダム (下湯/浅虫/久吉/遠部/浅瀬石川/津軽/清水目) の貯水位・流入量・全放流量。',
+    cadence: '時次 (元データは 10 分粒度; 取得は毎時 :11)',
+    what: '青森県 7 ダム (下湯/浅虫/久吉/遠部/浅瀬石川/津軽/清水目) の貯水位・流入量・全放流量・貯水量 (有効容量)・貯水率 (利水容量; 利水容量のない遠部/清水目は有効容量)。',
     label: '青森県砂防ダム',
   },
   'hkd-mlit-dam': {
