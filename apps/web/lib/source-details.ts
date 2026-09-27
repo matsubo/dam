@@ -137,6 +137,14 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '木曽川水系 6 dams (牧尾/味噌川/阿木川/岩屋/徳山/中里貯水池) の貯水位(EL.m)・有効貯水量(千m³→m³)・流入量・放流量。jwa-chubu (日次, 優先度 296) を時次に格上げ。',
     label: 'JWA 木曽川 実時計',
   },
+  'jwa-biwako': {
+    upstream: '水資源機構 琵琶湖総合管理所 堰諸量 (biwako-mizukanri.jp/daminfo1_h.html)',
+    license:
+      '水資源機構ウェブサイト利用ルール (政府標準利用規約 第2.0版準拠、CC BY 4.0 互換): 出典記載のうえ複製・加工・商用利用可。数値データは著作権の対象外として自由に利用可。',
+    cadence: '時次 (直近 25 時間分の 1 時間値; 取得は毎時 :54)',
+    what: '琵琶湖 (琵琶湖開発) の琵琶湖水位 (B.S.L. を T.P. 標高 = B.S.L. + 84.371 m に換算)・総流入量・総流出量。貯水量・貯水率は非公開。',
+    label: 'JWA 琵琶湖',
+  },
   'kanagawa-dam': {
     upstream: 'かながわの水がめ (kanagawa-dam.jp) — JSON API `summary.php`',
     license: '神奈川県企業庁 — 出典明示で再配布可 (推定)',
@@ -152,10 +160,11 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     label: 'NILIM ダム諸量 DB',
   },
   'shiga-bousai': {
-    upstream: '滋賀県土木防災情報システム (shiga-bousai.jp/dam)',
+    upstream:
+      '滋賀県土木防災情報システム モバイル版 ダム観測情報 (shiga-bousai.jp/mobile/dam/dam_select.php)',
     license: '滋賀県オープンデータ — 出典明示で再配布可 (推定)',
-    cadence: '時次 (1 時間粒度; 取得は毎時 :07)',
-    what: '滋賀県 6 ダム (日野川/石田川/宇曽川/青土/姉川/永源寺) の貯水位・流入量・放流量・60分雨量。',
+    cadence: '時次 (最新 10 分値 + 直近 6 時間の 1 時間値; 取得は毎時 :07)',
+    what: '滋賀県 8 ダム (青土/日野川/永源寺/野洲川/蔵王/宇曽川/姉川/石田川) の貯水位・流入量・放流量・60分間雨量。',
     label: '滋賀県土木防災',
   },
   'tottori-dam': {

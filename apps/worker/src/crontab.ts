@@ -72,9 +72,9 @@ export const CRONTAB = `
 # source's update.
 5 * * * * ingest:kanagawa-dam
 
-# 滋賀県土木防災 — 6 prefectural dams, hourly. Page exposes a 23-hour
-# window per fetch; cron at every hour :07 catches today's freshest
-# value + 22 hours of context for self-healing.
+# 滋賀県土木防災 (mobile pages; robots.txt disallows /dam/, allows /mobile/) —
+# 8 dams, the latest 10-minute value + six hourly rows per station. Cron at
+# every hour :07 re-upserts the six-hour window for self-healing.
 7 * * * * ingest:shiga-bousai
 
 # 鳥取県ダム諸量情報システム — 5 prefectural dams (賀祥/朝鍋/佐治川/
@@ -385,6 +385,11 @@ export const CRONTAB = `
 # Shift_JIS HTML, 10-min values; 貯水率（利水） is the stored rate.
 # Priority 309 (above the flood-only kagoshima-bousai at 308). Cron at :52.
 52 * * * * ingest:kagoshima-kasen
+
+# 水資源機構 琵琶湖総合管理所 堰諸量 — 琵琶湖 (master 琵琶湖開発). daminfo1_h.json,
+# 25 hourly rows: B.S.L. level (stored as T.P. = B.S.L. + 84.371 m), lake
+# 総流入量 / 総流出量. Priority 297. Cron at :54.
+54 * * * * ingest:jwa-biwako
 
 # 佐賀県河川砂防情報システム ダム現況表 — 19 県管理ダム (岸川/庭木/繁昌/天ヶ瀬/
 # 平木場/伊岐佐/都川内/井手口川/竜門/有田/古木場/本部/矢筈/狩立日ノ峯/中木庭/
