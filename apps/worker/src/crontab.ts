@@ -407,6 +407,11 @@ export const CRONTAB = `
 # Priority 308. Cron at :46.
 46 * * * * ingest:yamaguchi-bousai
 
+# 国土交通省 中国地方整備局 福山河川国道事務所 — 芦田川河口堰 (芦田川水系, 広島/34).
+# mobile_ashidagawa/sekisyoryou.php, one 10分更新 snapshot: 堰上水位 + 貯水量(千m³)
+# + 流入量 + 放流量 (no rate). Priority 303. Cron at :54.
+54 * * * * ingest:cgr-ashida-seki
+
 # 高知県水防情報システム ダム諸量現況表 — 11 ダム (和食/永瀬/鎌井谷/鏡/桐見/坂本/
 # 以布利川 [pref] + 早明浦/大渡/中筋川/横瀬川 [国交省]). Pre-generated static
 # Shift_JIS HTML (tableStatusDam_0_1_0_now.html); no servlet call needed.
