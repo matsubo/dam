@@ -28,7 +28,9 @@
 -- cascades. Its page 404s from then on, like nakazato-20's.
 --
 -- With `ndi` = 1368 on kurisugara-28 nothing re-creates the row: the boot-time
--- seed (master_upsert.sql) and upsertDamByNdi both match by the NDI key.
+-- seed (master_upsert.sql) and upsertDamByNdi both match by the NDI key, and
+-- neither rewrites an existing row's name or location, so a W01 re-import
+-- leaves it 栗柄 at the point set below.
 --
 -- Location: 0034 put 栗柄 at 135.072 E 35.082 N, 15 km west of the dam. It
 -- goes to ダム便覧's point, 117 m from kasenbosai station 0716900700021. NDI's
