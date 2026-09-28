@@ -1,0 +1,364 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+	<!-- out : 2026-09-28-12-04 -->
+	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+	<meta charset="utf-8">
+	<meta http-equiv="Cache-Control" content="no-cache" />
+	<meta http-equiv="Pragma" content="no-cache" />
+	<meta http-equiv="Expires" content="0">
+	<meta name="description" content="水管理情報｜吉野川上流総管" />
+	<title>水管理情報｜吉野川上流総管</title>
+	<script type="text/javascript">
+	var LINK_FLG = true;
+	var DOC_ROOT = "../../../../";
+	RELOAD_FLG = true;
+	RELOAD_TIME = 5 * 60 * 1000 ;
+	</script>
+	<link rel="stylesheet" type="text/css" href="../../../../res/js/lib/magnific-popup.css?dummy=2026-09-28-12-04">
+	<link rel="stylesheet" type="text/css" href="../../../../res/css/common.css?dummy=2026-09-28-12-04">
+	<link rel="stylesheet" type="text/css" href="../../../../res/css/color.css?dummy=2026-09-28-12-04">
+	<script type="text/javascript" src="../../../../res/js/lib/jquery.js?dummy=2026-09-28-12-04"></script>
+	<script type="text/javascript" src="../../../../res/js/lib/jquery.magnific-popup.min.js?dummy=2026-09-28-12-04"></script>
+	<script type="text/javascript" src="../../../../res/js/lib/jquery.marquee/jquery.marquee.js?dummy=2026-09-28-12-04"></script>
+	<script type="text/javascript" src="../../../../res/js/contentsConfig.js?dummy=2026-09-28-12-04"></script>
+	<script type="text/javascript" src="../../../../res/js/common_utils.js?dummy=2026-09-28-12-04"></script>
+	<script type="text/javascript" src="../../../../res/js/AjaxManager.js?dummy=2026-09-28-12-04"></script>
+	<script type="text/javascript" src="../../../../res/js/common.js?dummy=2026-09-28-12-04"></script>
+
+	<link rel="stylesheet" type="text/css" href="../../../../res/css/map2.css?dummy=2026-09-28-12-04">
+	<link rel="stylesheet" type="text/css" href="../../../../res/css/list2.css?dummy=2026-09-28-12-04">
+	<link rel="stylesheet" type="text/css" href="../../../../res/css/disp/p0001.css?dummy=2026-09-28-12-04">
+
+<script type="text/javascript">
+<!--
+var shiftunit = 1 ;
+  -->
+</script>
+<style type="text/css">
+div.area-data
+{
+  background-image: url('../../../../res/img/map/map-g000100.jpg');
+}
+</style>
+</head>
+<body>
+	<form id="param" name="param" method="get" target="_self" action="">
+		<input type="hidden" name="disp" value="p0001" />
+		<input type="hidden" name="etim" value="2026-09-28-12-00" />
+		<input type="hidden" name="last" value="0" />
+		<input type="hidden" name="mode" value="60" />
+	</form>
+
+
+
+
+
+
+
+<script>
+<!-- 
+const contextPath = "/dps";
+//-->
+</script>
+	<div class="header">
+		<div id="system-name">水資源機構　吉野川上流総合管理所<br/>ダム情報掲示板</div>
+		<div id="glonavi">
+			<div id="gnav-dam" class="gnav1-item selected">ダム・堰情報</div>
+			<div id="gnav-rain" class="gnav1-item" onclick="changeParams('disp','p0201',this);">雨量情報</div>
+			<div id="gnav-wter" class="gnav1-item" onclick="changeParams('disp','p0301',this);">水位情報</div>
+			<div id="gnav-wql" class="gnav1-item" onclick="changeParams('disp','p0401',this);">水質情報</div>
+			<div id="gnav-cam" class="gnav1-item" onclick="changeParams('disp','p0501',this);">画像情報</div>
+			<div id="gnav-notc" class="gnav1-item" onclick="changeParams('disp','p5101',this);">お知らせ</div>
+			<div id="gnav-ikd" class="gnav1-item-long" onclick="window.open('https://www.water.go.jp/yoshino/ikeda/','_blank');">吉野川上流HP</div>
+		</div>
+		<div id="user-ctrl">
+			<div id="help"   title="操作マニュアル" onclick="openHelp();"></div>
+			<div id="logout" class=" disabled" title="ログアウト"></div>
+		</div>
+	</div>
+	<div class="header2">
+		<div class="gnav2 selected" id="gnav2-dam">
+			<div id="p0001" class="gnav2-item selected">流域概況図</div>
+			<div id="p0101" class="gnav2-item" onclick="changeParams('disp','p0101',this);" data-inherit-param="mode,page">ダム諸量グラフ</div>
+			<div id="p0102" class="gnav2-item" onclick="changeParams('disp','p0102',this);" data-inherit-param="mode,page">ダム状況グラフ</div>
+		</div>
+		<div class="gnav2" id="gnav2-rain">
+			<div id="p0201" class="gnav2-item" onclick="changeParams('disp','p0201',this);" data-inherit-param="mode">雨量概況図</div>
+			<div id="p0202" class="gnav2-item" onclick="changeParams('disp','p0202',this);" data-inherit-param="mode">雨量一覧表</div>
+		</div>
+		<div class="gnav2" id="gnav2-wter">
+			<div id="p0301" class="gnav2-item" onclick="changeParams('disp','p0301',this);" data-inherit-param="mode">水位概況図</div>
+			<div id="p0302" class="gnav2-item" onclick="changeParams('disp','p0302',this);" data-inherit-param="mode">水位グラフ</div>
+		</div>
+		<div class="gnav2" id="gnav2-wql">
+			<div id="p0401" class="gnav2-item" onclick="changeParams('disp','p0401',this);" data-inherit-param="mode">水質概況図</div>
+			<div id="p0402" class="gnav2-item" onclick="changeParams('disp','p0402',this);" data-inherit-param="mode">水質一覧表</div>
+		</div>
+		<div class="gnav2" id="gnav2-cam">
+			<div id="p0501" class="gnav2-item" onclick="changeParams('disp','p0501',this);" data-inherit-param="">カメラ選択</div>
+			<div id="p0502" class="gnav2-item" onclick="changeParams('disp','p0502',this);" data-inherit-param="">カメラ画像</div>
+		</div>
+		<div class="gnav2" id="gnav2-notc">
+			<div id="p5101" class="gnav2-item" onclick="changeParams('disp','p5101',this);" data-inherit-param="">お知らせ</div>
+		</div>
+	</div>
+
+	<div class="header3">
+		<div id="gname">流域概況図</div>
+
+
+
+
+
+
+		<div id="telop" data-url="../../../../dyn/json/telop.json"></div>
+
+	</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+	<div class="control">
+
+		<div class="on"  id="disp-time">
+			<div>観測日時：<span id="data-time">2026年09月28日 12時00分</span></div>
+			<input type="hidden" id="obsTime" name="obsTime" value="2026-09-28-12-00" />
+		</div>
+		<div class="on"  id="ctrl-mode">
+
+			<div><div class="ctrl-btn" id="ctrl-mode-10" onclick="changeParams('mode','10',this);" data-inherit-param="page">10分</div></div>
+			<div><div class="ctrl-btn selected" id="ctrl-mode-60" onclick="changeParams('mode','60',this);" data-inherit-param="page">時間</div></div>
+		</div>
+		<div class="off"  id="ctrl-obsp">
+		</div>
+	</div>
+
+	<div class="area-data">
+		<div class="list-data" id="list-01">
+			<table><colgroup><col width="210px" /><col width="060px" /></colgroup><thead></thead>
+				<tbody>
+					<tr><th class="">本日０時の早明浦ダム利水貯水率(<span class='unit'>％</span>)</th><td class="">14.5</td></tr>
+					<tr><th class="">本日０時の早明浦ダム利水貯水量(<span class='unit'>千m<sup>3</sup></span>)</th><td class="">21310</td></tr>
+					<tr><th class="">早明浦ダム利水貯水率[速報値](<span class='unit'>％</span>)</th><td class="">15.0</td></tr>
+				</tbody>
+			</table>
+		</div>
+		<div class="list-data" id="list-02">
+			<table><colgroup><col width="225px" /><col width="060px" /></colgroup><thead></thead>
+				<tbody>
+					<tr><th class="">本日０時の銅山川３ダム合計貯水率(<span class='unit'>％</span>)</th><td class="">70.3</td></tr>
+					<tr><th class="">本日０時の銅山川３ダム合計貯水量(<span class='unit'>千m<sup>3</sup></span>)</th><td class="">46607</td></tr>
+					<tr><th class="">銅山川３ダム合計利水貯水率[速報値](<span class='unit'>％</span>)</th><td class="">71.2</td></tr>
+				</tbody>
+			</table>
+		</div>
+		<div class="str-data2" id="str-1001_7_1">池田ダム</div>
+		<div class="list-data" id="list-1001_7_1">
+			<table><colgroup><col width="100px" /><col width="080px" /></colgroup><thead></thead>
+				<tbody>
+					<tr><th class="">貯水位(<span class='unit'>EL.m</span>)</th><td class="">88.59<span class="down">↓</span></td></tr>
+					<tr><th class="">流入量(<span class='unit'>m<sup>3</sup>/s</span>)</th><td class="">71.55<span class="up">↑</span></td></tr>
+					<tr><th class="">全放流量(<span class='unit'>m<sup>3</sup>/s</span>)</th><td class="">75.14<span class="down">↓</span></td></tr>
+				</tbody>
+			</table>
+		</div>
+		<div class="str-data1" id="str-1000_2_7">池田ダム上流域平均雨量</div>
+		<div class="list-data" id="list-1000_2_7">
+			<table><colgroup><col width="100px" /><col width="080px" /></colgroup><thead></thead>
+				<tbody>
+					<tr><th class="">時間雨量(<span class='unit'>mm/h</span>)</th><td class="rain ">3.0</td></tr>
+					<tr><th class="">累計雨量(<span class='unit'>mm</span>)</th><td class="rain ">71.1</td></tr>
+				</tbody>
+			</table>
+		</div>
+		<div class="str-data2" id="str-1002_7_2">早明浦ダム</div>
+		<div class="list-data" id="list-1002_7_2">
+			<table><colgroup><col width="100px" /><col width="080px" /></colgroup><thead></thead>
+				<tbody>
+					<tr><th class="">貯水位(<span class='unit'>EL.m</span>)</th><td class="">293.00<span class="up">↑</span></td></tr>
+					<tr><th class="">流入量(<span class='unit'>m<sup>3</sup>/s</span>)</th><td class="">20.45<span class="up">↑</span></td></tr>
+					<tr><th class="">全放流量(<span class='unit'>m<sup>3</sup>/s</span>)</th><td class="">0.00<span class="same">→</span></td></tr>
+				</tbody>
+			</table>
+		</div>
+		<div class="str-data1" id="str-1000_2_1">早明浦ダム上流域平均雨量</div>
+		<div class="list-data" id="list-1000_2_1">
+			<table><colgroup><col width="100px" /><col width="080px" /></colgroup><thead></thead>
+				<tbody>
+					<tr><th class="">時間雨量(<span class='unit'>mm/h</span>)</th><td class="rain ">4.2</td></tr>
+					<tr><th class="">累計雨量(<span class='unit'>mm</span>)</th><td class="rain ">65.5</td></tr>
+				</tbody>
+			</table>
+		</div>
+		<div class="str-data2" id="str-1006_7_6">新宮ダム</div>
+		<div class="list-data" id="list-1006_7_6">
+			<table><colgroup><col width="100px" /><col width="080px" /></colgroup><thead></thead>
+				<tbody>
+					<tr><th class="">貯水位(<span class='unit'>EL.m</span>)</th><td class="">220.77<span class="up">↑</span></td></tr>
+					<tr><th class="">流入量(<span class='unit'>m<sup>3</sup>/s</span>)</th><td class="">4.84<span class="up">↑</span></td></tr>
+					<tr><th class="">全放流量(<span class='unit'>m<sup>3</sup>/s</span>)</th><td class="">1.57<span class="up">↑</span></td></tr>
+				</tbody>
+			</table>
+		</div>
+		<div class="str-data1" id="str-1000_2_5">柳瀬～新宮流域平均雨量</div>
+		<div class="list-data" id="list-1000_2_5">
+			<table><colgroup><col width="100px" /><col width="080px" /></colgroup><thead></thead>
+				<tbody>
+					<tr><th class="">時間雨量(<span class='unit'>mm/h</span>)</th><td class="rain ">3.5</td></tr>
+					<tr><th class="">累計雨量(<span class='unit'>mm</span>)</th><td class="rain ">6.7</td></tr>
+				</tbody>
+			</table>
+		</div>
+		<div class="str-data2" id="str-1005_7_5">富郷ダム</div>
+		<div class="list-data" id="list-1005_7_5">
+			<table><colgroup><col width="100px" /><col width="080px" /></colgroup><thead></thead>
+				<tbody>
+					<tr><th class="">貯水位(<span class='unit'>EL.m</span>)</th><td class="">442.41<span class="up">↑</span></td></tr>
+					<tr><th class="">流入量(<span class='unit'>m<sup>3</sup>/s</span>)</th><td class="">4.96<span class="same">→</span></td></tr>
+					<tr><th class="">全放流量(<span class='unit'>m<sup>3</sup>/s</span>)</th><td class="">4.00<span class="same">→</span></td></tr>
+				</tbody>
+			</table>
+		</div>
+		<div class="str-data1" id="str-1000_2_8">富郷ダム上流域平均雨量</div>
+		<div class="list-data" id="list-1000_2_8">
+			<table><colgroup><col width="100px" /><col width="080px" /></colgroup><thead></thead>
+				<tbody>
+					<tr><th class="">時間雨量(<span class='unit'>mm/h</span>)</th><td class="rain ">3.2</td></tr>
+					<tr><th class="">累計雨量(<span class='unit'>mm</span>)</th><td class="rain ">7.8</td></tr>
+				</tbody>
+			</table>
+		</div>
+		<div class="str-data2" id="str-1004_7_4">柳瀬ダム</div>
+		<div class="list-data" id="list-1004_7_4">
+			<table><colgroup><col width="100px" /><col width="080px" /></colgroup><thead></thead>
+				<tbody>
+					<tr><th class="">貯水位(<span class='unit'>EL.m</span>)</th><td class="">279.18<span class="same">→</span></td></tr>
+					<tr><th class="">流入量(<span class='unit'>m<sup>3</sup>/s</span>)</th><td class="">6.94<span class="same">→</span></td></tr>
+					<tr><th class="">全放流量(<span class='unit'>m<sup>3</sup>/s</span>)</th><td class="">6.43<span class="same">→</span></td></tr>
+				</tbody>
+			</table>
+		</div>
+		<div class="str-data1" id="str-1000_2_3">富郷～柳瀬流域平均雨量</div>
+		<div class="list-data" id="list-1000_2_3">
+			<table><colgroup><col width="100px" /><col width="080px" /></colgroup><thead></thead>
+				<tbody>
+					<tr><th class="">時間雨量(<span class='unit'>mm/h</span>)</th><td class="rain ">3.7</td></tr>
+					<tr><th class="">累計雨量(<span class='unit'>mm</span>)</th><td class="rain ">7.0</td></tr>
+				</tbody>
+			</table>
+		</div>
+		<div class="str-data2" id="str-1000_4_9">新井堰(床鍋)</div>
+		<div class="list-data" id="list-1000_4_9">
+			<table><colgroup><col width="080px" /><col width="080px" /></colgroup><thead></thead>
+				<tbody>
+					<tr><th class="">水位(<span class='unit'>m</span>)</th><td class="stage ">0.30<span class="same">→</span></td></tr>
+					<tr><th class="">流量(<span class='unit'>m<sup>3</sup>/s</span>)</th><td class="stage ">2.223<span class="same">→</span></td></tr>
+				</tbody>
+			</table>
+		</div>
+		<div class="str-data2" id="str-1008_8_1">影井堰</div>
+		<div class="list-data" id="list-1008_8_1">
+			<table><colgroup><col width="080px" /><col width="080px" /></colgroup><thead></thead>
+				<tbody>
+					<tr><th class="">水位(<span class='unit'>m</span>)</th><td class="">191.13<span class="up">↑</span></td></tr>
+					<tr><th class="">流入量(<span class='unit'>m<sup>3</sup>/s</span>)</th><td class="">2.14<span class="up">↑</span></td></tr>
+					<tr><th class="">放流量(<span class='unit'>m<sup>3</sup>/s</span>)</th><td class="">0.17<span class="up">↑</span></td></tr>
+				</tbody>
+			</table>
+		</div>
+		<div class="list-data" id="list-32">
+			<table><colgroup><col width="080px" /><col width="080px" /></colgroup><thead></thead>
+				<tbody>
+					<tr><th class="">放流量(<span class='unit'>m<sup>3</sup>/s</span>)</th><td class="">0.00<span class="same">→</span></td></tr>
+					<tr><th class="">取水量(<span class='unit'>m<sup>3</sup>/s</span>)</th><td class="">2.96<span class="down">↓</span></td></tr>
+				</tbody>
+			</table>
+		</div>
+		<div class="str-data2" id="str-31">瀬戸川取水堰</div>
+		<div class="list-data" id="list-31">
+			<table><colgroup><col width="085px" /><col width="080px" /></colgroup><thead></thead>
+				<tbody>
+					<tr><th class="">自流量(<span class='unit'>m<sup>3</sup>/s</span>)</th><td class="">2.96<span class="down">↓</span></td></tr>
+				</tbody>
+			</table>
+		</div>
+		<div class="str-data2" id="str-35">地蔵寺川取水堰</div>
+		<div class="list-data" id="list-35">
+			<table><colgroup><col width="080px" /><col width="080px" /></colgroup><thead></thead>
+				<tbody>
+					<tr><th class="">放流量(<span class='unit'>m<sup>3</sup>/s</span>)</th><td class="">0.302<span class="same">→</span></td></tr>
+					<tr><th class="">取水量(<span class='unit'>m<sup>3</sup>/s</span>)</th><td class="">4.20<span class="down">↓</span></td></tr>
+				</tbody>
+			</table>
+		</div>
+		<div class="str-data2" id="str-34">鏡ダム</div>
+		<div class="list-data" id="list-34">
+			<table><colgroup><col width="085px" /><col width="080px" /></colgroup><thead></thead>
+				<tbody>
+					<tr><th class="">自流量(<span class='unit'>m<sup>3</sup>/s</span>)</th><td class="">1.542<span class="down">↓</span></td></tr>
+				</tbody>
+			</table>
+		</div>
+		<div id="hanrei">
+			<div>凡例</div>
+			<div>前回観測値と比べて</div>
+			<div></div>
+			<table>
+				<tbody>
+					<tr><td class="up"   >↑</td><td>：</td><td>上昇</td></tr>
+					<tr><td class="same" >→</td><td>：</td><td>同値</td></tr>
+					<tr><td class="down" >↓</td><td>：</td><td>下降</td></tr>
+					<tr><td class="dtval miss" >**</td><td>：</td><td>調整中</td></tr>
+					<tr><td class="dtval close">CC</td><td>：</td><td>閉局</td></tr>
+				</tbody>
+			</table>
+		</div>
+
+		<div class="symbol-dam" id="symbol-1" title="池田ダム" onclick="changeParams('disp,page','p0101,1',this)" data-inherit-param="mode,last,etim"></div>
+
+		<div class="symbol-dam" id="symbol-2" title="早明浦ダム" onclick="changeParams('disp,page','p0101,2',this)" data-inherit-param="mode,last,etim"></div>
+
+		<div class="symbol-dam" id="symbol-3" title="柳瀬ダム" onclick="changeParams('disp,page','p0101,5',this)" data-inherit-param="mode,last,etim"></div>
+
+		<div class="symbol-dam" id="symbol-4" title="富郷ダム" onclick="changeParams('disp,page','p0101,4',this)" data-inherit-param="mode,last,etim"></div>
+
+		<div class="symbol-dam" id="symbol-5" title="新宮ダム" onclick="changeParams('disp,page','p0101,3',this)" data-inherit-param="mode,last,etim"></div>
+
+		<div class="symbol-dam" id="symbol-6" title="影井堰" onclick="changeParams('disp,page','p0101,7',this)" data-inherit-param="mode,last,etim"></div>
+
+		<div class="symbol-dam" id="symbol-7" title="瀬戸川取水堰" onclick="changeParams('disp,page','p0101,6',this)" data-inherit-param="mode,last,etim"></div>
+
+		<div class="symbol-dam" id="symbol-8" title="地蔵寺川取水堰" onclick="changeParams('disp,page','p0101,6',this)" data-inherit-param="mode,last,etim"></div>
+
+
+	</div>
+</body>
+</html>
