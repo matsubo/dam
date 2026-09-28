@@ -35,10 +35,12 @@ const FRESHNESS_HOURS: Record<string, number> = {
   // 30-day daily window stamped at 24:00 JST, rolled over at ~01:00 JST.
   'kanagawa-dam': 30,
   'tokyo-waterworks': 30,
-  aitoyo: 30,
   'jwa-chikugo': 30,
   // 10-day cadence — flag if older than 14 days.
   'jwa-junpo': 14 * 24,
+  // Business-day page: Friday's shows Thursday 24:00, the next is Monday's
+  // (Sunday 24:00, often after 11:00 JST) — ~85 h; a Monday holiday adds a day.
+  aitoyo: 5 * 24,
   // Weekly survey that can skip a week (9/14 was still the latest on 9/27),
   // plus a day or two before the page's 更新日.
   'chiba-suisei': 17 * 24,
