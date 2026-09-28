@@ -97,6 +97,11 @@ export const CRONTAB = `
 # (01:35 JST) run catches the rollover, the rest cover a late one.
 35 1,4,7,10,13,16,19,22 * * * ingest:kanagawa-dam ?jobKey=ingest:kanagawa-dam
 
+# 上田市塩田平土地改良区 沢山池の状況図 — one CSV line (貯水位, 貯水量, 貯水率,
+# 流入量, 時間雨量) re-uploaded a minute past every 10-minute mark; stamped at
+# its Last-Modified floored to 10 min. Hourly at :05.
+5 * * * * ingest:shioda-sayamaike ?jobKey=ingest:shioda-sayamaike
+
 # 滋賀県土木防災 (mobile pages; robots.txt disallows /dam/, allows /mobile/) —
 # 8 dams, the latest 10-minute value + six hourly rows per station. Cron at
 # every hour :07 re-upserts the six-hour window for self-healing.
@@ -265,10 +270,10 @@ export const CRONTAB = `
 # = 10:41 / 12:41 / 15:41 JST — instead of 24 a day.
 41 1,3,6 * * 1-5 ingest:jwa-chubu ?jobKey=ingest:jwa-chubu
 
-# 水資源機構 中部支社 豊川水系 — 2 dams (宇連/大島). Real-time page updated
-# every ~10 min; water level (EL.m) + 有効貯水量(10³m³) + inflow; no outflow (the
-# page prints only 放流量（利水）). Upgrades 宇連/大島 from daily (aitoyo) to
-# hourly cadence. One page per run; cron at :43.
+# 水資源機構 中部支社 豊川水系 — all 14 facilities on the map: 宇連/大島, the
+# 豊川用水 調整池 and 頭首工. Real-time page updated every ~10 min; water level
+# (EL.m) + 有効貯水量(10³m³) + inflow; no outflow (the page prints only
+# 放流量（利水）). One page per run; cron at :43.
 43 * * * * ingest:jwa-toyokawa ?jobKey=ingest:jwa-toyokawa
 
 # 水資源機構 吉野川上流総合管理所 — 5 dams (池田/早明浦/新宮/富郷/柳瀬).
@@ -276,10 +281,10 @@ export const CRONTAB = `
 # 早明浦ダムのみ利水貯水率[速報値]あり (四国の水不足指標). Cron at :45.
 45 * * * * ingest:jwa-yoshino ?jobKey=ingest:jwa-yoshino
 
-# 水資源機構 中部支社 木曽川水系 実時計 — 6 dams (牧尾/味噌川/阿木川/岩屋/徳山 + 三重用水 中里).
-# Real-time page (~10 min cadence); 貯水位(EL.m) + 有効貯水量(10³m³) + inflow/outflow.
-# Upgrades jwa-chubu (daily, priority 296) to hourly. Priority 297. One page per
-# run; cron at :47.
+# 水資源機構 中部支社 木曽川水系 実時計 — all 12 facilities on the map: 牧尾/味噌川/
+# 阿木川/岩屋/徳山, 三重用水 中里 + 調整池, 長良川河口堰, 木曽川大堰. Real-time page
+# (~10 min cadence); 貯水位(EL.m) or 堰上流水位 + 有効貯水量(10³m³) + inflow/outflow.
+# Priority 297, above jwa-chubu (296, daily). One page per run; cron at :47.
 47 * * * * ingest:jwa-kiso-rt ?jobKey=ingest:jwa-kiso-rt
 
 # 群馬県水位雨量情報システム ダム現況表 — 7 県管理ダム hourly (Shift_JIS HTML,
