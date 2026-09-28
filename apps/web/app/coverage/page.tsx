@@ -17,11 +17,11 @@ import {
   realtimeCoveragePct,
   storageRateCoveragePct,
 } from '@dam/db/repo/coverage';
-import { coverageSummary } from '@dam/db/repo/source_universe';
+import { coverageSummary, type PendingScanReason } from '@dam/db/repo/source_universe';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
-import { SOURCE_DETAILS } from '../../lib/source-details.ts';
+import { sourceLabel } from '../../lib/source-details.ts';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 900;
@@ -94,9 +94,10 @@ function pct(n: bigint, d: bigint): number {
   return Number((n * 10000n) / d) / 100;
 }
 
-function sourceLabel(id: string): string {
-  return SOURCE_DETAILS[id]?.label ?? id;
-}
+const PENDING_REASON: Record<PendingScanReason, string> = {
+  no_recent_observations: '直近 30 日に観測値が入っていない（初回実行待ち、または取り込み失敗）',
+  ingesting_without_list: '観測値は入っているが、公開一覧を記録していない',
+};
 
 function CoverageBar({ value }: { value: number }) {
   const w = Math.max(2, Math.min(100, value));
@@ -265,17 +266,30 @@ export default async function CoveragePage() {
           />
         </div>
         {triage.sourcesPendingScan > 0 ? (
-          <p className="text-xs text-on-surface-variant mt-3 leading-relaxed">
-            <strong>判定は途中です。</strong> 公開一覧を記録済みのデータ提供元はまだ一部で、残り{' '}
-            {triage.sourcesPendingScan} 件が未記録です。そのため大半のダムは「未調査」に入り、
-            「提供元なし」は全提供元を記録し終えるまで確定しません。 提供元は公開しているのに
-            マスタと紐付いていない観測所は現在 {triage.unmatchedStations.toLocaleString()}{' '}
-            件で、これが手を付けられる作業対象です
-            {triage.notDamStations > 0
-              ? `（堰や諸元外の調整池など、ダムではないと確認済みの ${triage.notDamStations.toLocaleString()} 件は除く）`
-              : ''}
-            。
-          </p>
+          <>
+            <p className="text-xs text-on-surface-variant mt-3 leading-relaxed">
+              <strong>判定は途中です。</strong> 公開一覧を記録済みのデータ提供元はまだ一部で、残り{' '}
+              {triage.sourcesPendingScan}{' '}
+              件（下記）が未記録です。そのため大半のダムは「未調査」に入り、
+              「提供元なし」は全提供元を記録し終えるまで確定しません。 提供元は公開しているのに
+              マスタと紐付いていない観測所は現在 {triage.unmatchedStations.toLocaleString()}{' '}
+              件で、これが手を付けられる作業対象です
+              {triage.notDamStations > 0
+                ? `（堰や諸元外の調整池など、ダムではないと確認済みの ${triage.notDamStations.toLocaleString()} 件は除く）`
+                : ''}
+              。
+            </p>
+            <ul className="text-xs text-on-surface-variant mt-2 space-y-1 list-disc pl-5">
+              {triage.pendingScanSources.map((p) => (
+                <li key={p.sourceId}>
+                  <Link className="text-primary hover:underline" href={`/sources/${p.sourceId}`}>
+                    {sourceLabel(p.sourceId)}
+                  </Link>{' '}
+                  — {PENDING_REASON[p.reason]}
+                </li>
+              ))}
+            </ul>
+          </>
         ) : null}
         {triage.sourcesNotEnumerable > 0 ? (
           <p className="text-xs text-on-surface-variant mt-2 leading-relaxed">

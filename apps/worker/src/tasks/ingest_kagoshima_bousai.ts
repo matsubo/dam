@@ -10,22 +10,26 @@
 //   During normal conditions the "items" array is empty. The adapter handles
 //   this gracefully and exits early when no dam data is present.
 //
-// Response shape (when items are present):
+// Response shape (when items are present). The Kagoshima feed has never been
+// seen populated; this is the vendor's shape as served live by its Kagawa
+// portal (bousai-kagawa.jp/bousai_data/tm/dam_station.json, 2026-09-28):
 //   {
 //     "result": 0, "message": "", "ret_time": "YYYY/MM/DD HH:MM",
 //     "items": [
 //       {
-//         "station_name": "椛川ダム",
-//         "station_no":   "013707018000000000",
-//         "point":        {"lon": 130.xxx, "lat": 31.xxx},
+//         "station_name": "門入ダム",
+//         "station_no":   "013707007000000000",
+//         "point":        "POINT(134.21909 34.24903)",  // WKT lon lat; POINT(0 0) = unlocated
 //         "obs_datetime": "YYYY/MM/DD HH:MM",
-//         "store":        234.56,  // 貯水位 [EL.m]
-//         "stored":       1234,    // 貯水量 [千m³]
-//         "inflow":       12.3,    // 流入量 [m³/s]
-//         "discharge":    8.5      // 放流量 [m³/s]
+//         "store":        97.09,   // 貯水位 [EL.m]
+//         "stored":       1731,    // 貯水量 [千m³]
+//         "inflow":       0.05,    // 流入量 [m³/s]
+//         "discharge":    0.02     // 放流量 [m³/s]
 //       }
 //     ]
 //   }
+// A station may be listed with every value null (Kagawa's 粟井ダム); it is
+// recorded in the universe but writes no observation.
 //
 // Priority 308 (hourly pref-managed). Cron :56 (spaced from other sources).
 
@@ -48,7 +52,7 @@ const SOURCE_ID = 'kagoshima-bousai';
 export interface BousaiItem {
   station_name: string;
   station_no: string;
-  point?: { lon: number; lat: number };
+  point?: string;
   obs_datetime: string;
   store?: number | null;
   stored?: number | null;
@@ -94,18 +98,65 @@ function toNum(v: number | null | undefined): number | null {
 }
 
 export function parseItems(items: BousaiItem[]): ParsedRow[] {
-  return items.map((item) => ({
-    stationName: item.station_name,
-    stationNo: item.station_no,
-    lat: toNum(item.point?.lat),
-    lng: toNum(item.point?.lon),
-    observedAt: parseKagoshimaTimestamp(item.obs_datetime),
-    waterLevelM: toNum(item.store),
-    // stored is in 千m³; convert to m³
-    storageVolumeM3: toNum(item.stored) !== null ? (toNum(item.stored) as number) * 1_000 : null,
-    inflowM3s: toNum(item.inflow),
-    outflowM3s: toNum(item.discharge),
-  }));
+  return items.map((item) => {
+    // WKT "POINT(lon lat)"; the vendor prints POINT(0 0) for an unlocated station.
+    const wkt = item.point?.match(/^POINT\((-?[\d.]+) (-?[\d.]+)\)$/);
+    const lng = wkt ? Number(wkt[1]) : 0;
+    const lat = wkt ? Number(wkt[2]) : 0;
+    const located = Number.isFinite(lng) && Number.isFinite(lat) && (lng !== 0 || lat !== 0);
+    return {
+      stationName: item.station_name,
+      stationNo: item.station_no,
+      lat: located ? lat : null,
+      lng: located ? lng : null,
+      observedAt: parseKagoshimaTimestamp(item.obs_datetime),
+      waterLevelM: toNum(item.store),
+      // stored is in 千m³; convert to m³
+      storageVolumeM3: toNum(item.stored) !== null ? (toNum(item.stored) as number) * 1_000 : null,
+      inflowM3s: toNum(item.inflow),
+      outflowM3s: toNum(item.discharge),
+    };
+  });
+}
+
+/** Observation inputs for the matched stations with a timestamp and any value. */
+export function toObservations(
+  rows: ParsedRow[],
+  damByName: Map<string, bigint>,
+  log: (s: string) => void,
+): Parameters<typeof upsertObservations>[0] {
+  const inputs = [] as Parameters<typeof upsertObservations>[0];
+  for (const p of rows) {
+    const damId = damByName.get(p.stationName);
+    if (!damId) continue;
+    if (!p.observedAt) {
+      log(`${SOURCE_ID}: missing timestamp for "${p.stationName}"; skipping`);
+      continue;
+    }
+    if (
+      p.waterLevelM === null &&
+      p.storageVolumeM3 === null &&
+      p.inflowM3s === null &&
+      p.outflowM3s === null
+    ) {
+      log(`${SOURCE_ID}: "${p.stationName}" has no values; skipping`);
+      continue;
+    }
+    inputs.push({
+      observedAt: p.observedAt,
+      damId,
+      sourceId: SOURCE_ID,
+      storageVolumeM3: p.storageVolumeM3,
+      storageRate: null,
+      inflowM3s: p.inflowM3s,
+      outflowM3s: p.outflowM3s,
+      waterLevelM: p.waterLevelM,
+      rainfallMm: null,
+      rawSnapshotId: null,
+      qualityFlag: 0,
+    });
+  }
+  return inputs;
 }
 
 // --- DB helpers -------------------------------------------------------------
@@ -240,32 +291,7 @@ const task: Task = async (_payload, helpers) => {
   log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
 
   const matches = await matchMaster(rows, log);
-  const damByName = new Map(matches.map((m) => [m.stationName, m.damId]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = damByName.get(p.stationName);
-    if (!damId) continue;
-    if (!p.observedAt) {
-      log(`${SOURCE_ID}: missing timestamp for "${p.stationName}"; skipping`);
-      continue;
-    }
-
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: null,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
+  const inputs = toObservations(rows, new Map(matches.map((m) => [m.stationName, m.damId])), log);
   const written = await upsertObservations(inputs);
   log(`${SOURCE_ID} done: parsed=${rows.length} matched=${matches.length} written=${written}`);
 };
