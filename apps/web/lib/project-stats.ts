@@ -29,22 +29,20 @@
 // itself, which is not a workspace. `tables` leaves out
 // `observations`, which the page adds on its own as "+ hypertable 1".
 //
-// Last regenerated: 2026-09-28 on develop 92bb22e, counted as if the retired
-// niigata-bousai / shizuoka-bousai tasks were already gone (task files, tests,
-// fixture, cron entries and task registrations removed).
+// Last regenerated: 2026-09-28 on develop 8d7d1d8 (round 5 merged).
 export const PROJECT_STATS = {
   measuredOn: '2026-09-28',
-  commits: 596,
+  commits: 643,
   firstCommit: '2026-05-01',
-  tsLines: 67_460,
-  tsFiles: 480,
-  sqlLines: 3_416,
-  testFiles: 177,
-  migrations: 67,
+  tsLines: 71_141,
+  tsFiles: 497,
+  sqlLines: 3_790,
+  testFiles: 186,
+  migrations: 70,
   workspaces: 11,
-  workerTasks: 105,
-  ingestTasks: 88,
-  cronEntries: 98,
+  workerTasks: 113,
+  ingestTasks: 96,
+  cronEntries: 106,
   apiRoutes: 18,
   pageRoutes: 22,
   /** Base tables in packages/db/migrations, not counting the `observations` hypertable. */
