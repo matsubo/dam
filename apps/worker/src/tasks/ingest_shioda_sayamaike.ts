@@ -29,7 +29,7 @@
 // 「copyright © 上田市塩田平土地改良区 All Rights Reserved.」 robots.txt returns 404.
 // Only the observed numbers are stored, with the source named.
 //
-// Priority 285. No other source publishes 沢山池. Cron hourly at :03.
+// Priority 285. No other source publishes 沢山池. Cron hourly at :05.
 
 import { type BindableMaster, stampedMaster } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
