@@ -206,6 +206,27 @@ describe('source universe coverage triage', () => {
     expect(only(rows, stale)).toBe('published_not_ingested');
   });
 
+  test('an observation row with every quantity NULL is not coverage', async () => {
+    // kasenbosai-v2 used to store an all-NULL row per hour for stations whose
+    // every reading is flagged 欠測, and 21 dams were "covered" by nothing but
+    // those rows. A row carrying no value is not data we have.
+    await recordUniverse(SRC_A, [
+      { externalId: 'a-1', name: 'univ-covered', resolvedDamId: covered },
+      { externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale },
+    ]);
+    await recordUniverse(SRC_B, [{ externalId: 'b-stub', name: 'stub', resolvedDamId: null }]);
+    await upsertObservations([{ observedAt: new Date(), damId: stale, sourceId: SRC_A }]);
+    expect(only(await classifyDamCoverage(), stale)).toBe('published_not_ingested');
+    expect((await classifyOneDam(stale))?.status).toBe('published_not_ingested');
+
+    // Any one non-NULL quantity, rainfall included, is coverage.
+    await upsertObservations([
+      { observedAt: new Date(Date.now() - 3600_000), damId: stale, sourceId: SRC_A, rainfallMm: 0 },
+    ]);
+    expect(only(await classifyDamCoverage(), stale)).toBe('covered');
+    expect((await classifyOneDam(stale))?.status).toBe('covered');
+  });
+
   test('a dam its publishers list with no value is 提供元に値なし, not an ingestion bug', async () => {
     // 鉄山 / 坂下 (調査対象外) and 滝波 (every column "---") are on their
     // provider's page with nothing in the value cells. Calling that
