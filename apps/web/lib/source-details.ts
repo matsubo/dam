@@ -118,6 +118,24 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '佐渡の県営農業用ダム 7 基 (羽茂・竹田川・小倉川・藤津川・新穂・新穂第2・佐和田) の貯水量と貯水率 (各ページの有効貯水量に対する整数 %)。',
     label: '佐渡 農業用ダム',
   },
+  'yonezawa-heiya': {
+    upstream: '米沢平野土地改良区「用水状況」 (yonezawa-heiya.or.jp/pages/150/ と当年度アーカイブ)',
+    license:
+      '利用条件の記載なし (サイト表記は「Copyright© 米沢平野土地改良区 All Rights Reserved.」のみ)。本サイトは観測値 (事実データ) のみを出典明示のうえ掲載。',
+    cadence:
+      '週次 (毎週月曜・祝日は翌日の「Y.M.D現在」値, 冬期は間隔が空く; 時刻非公表のため 00:00 JST で記録; 取得は毎日 16:13 JST)',
+    what: '水窪ダム (東北農政局の農業用ダム, 米沢平野土地改良区管理) の貯水量(千m³)。水位・貯水率・流量は非公開。当年度の週次値を毎回取り込み。',
+    label: '米沢平野土地改良区',
+  },
+  sannoukai: {
+    upstream: '山王海土地改良区「ダムの状況」 (sannoukai.jp/condition/)',
+    license:
+      '利用条件の記載なし (サイト表記は「©2017-2025 Sannoukai LID foundation」のみ)。本サイトは観測値 (事実データ) のみを出典明示のうえ掲載。',
+    cadence:
+      '週次 (「毎週月曜日に更新します。」; 調査日はページの更新日 (WordPress の modified) の 00:00 JST で記録; 取得は毎日 12:22 JST)',
+    what: '山王海ダム・葛丸ダム (東北農政局の国営親子ダム, 山王海土地改良区管理) の貯水量(万m³)。ページの貯水率は総貯水容量に対する画面上の計算値のため保存しない。',
+    label: '山王海土地改良区',
+  },
   aitoyo: {
     upstream: 'あいとよネット 公益財団法人 愛知・豊川用水振興協会 (aitoyo.or.jp)',
     license: '公益財団法人発行 — 出典明示で再配布可',
