@@ -125,6 +125,7 @@ the file for detail.
 | `src/tasks/ingest_kagawa_tameike.ts` | `kagawa-tameike`: 香川県「かがわの水」daily PDF, ため池貯水率 of 26 named ponds (rate only, dated by survey), plus the page's 宝山湖 block (香川用水調整池, NDI 2170; rate only, stamped at the stated 時) |
 | `src/tasks/ingest_kitakyushu_suido.ts` | `kitakyushu-suido`: 北九州市上下水道局 水源状況, daily (10 sources; rate trusted, 0098) |
 | `src/tasks/ingest_kochi_kigyo.ts` | `kochi-kigyo`: 高知県公営企業局 ダム水文量表, hourly 48 h window (吉野 / 杉田 level + flows; empty hours dropped) |
+| `src/tasks/ingest_jpower_naharigawa.ts` | `jpower-naharigawa`: 電源開発 奈半利川ダム情報公開サイト, hourly 6 h window of 30-min columns (魚梁瀬 / 久木 / 平鍋 level + flows) |
 | `src/tasks/ingest_kudamatsu_suido.ts` | `kudamatsu-suido`: 下松市上下水道局 水源情報, edited about monthly, polled daily (県営温見 level + volume + rate; 末武川 universe only) |
 | `src/tasks/ingest_matsue_suido.ts` | `matsue-suido`: 松江市上下水道局 千本 / 大谷 daily 貯水量・貯水率 table |
 | `src/tasks/ingest_mc_tottori_hydro.ts` | `mc-tottori-hydro`: M&C鳥取水力発電 運転情報, hourly (茗荷谷/三朝調整池/中津/菅沢 flows; gauge heights not stored) |

@@ -368,6 +368,14 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '高知県公営企業局の発電専用 2 ダム (物部川: 吉野/杉田) の貯水位・流入量・放流量・時間雨量。貯水量・貯水率は非公開。両ダムとも本ソース唯一の観測源。',
     label: '高知県公営企業局',
   },
+  'jpower-naharigawa': {
+    upstream:
+      '電源開発株式会社 (J-POWER) 奈半利川ダム情報公開サイト (jpower-naharigawa-daminfo.jp) — Pages/DamGraph01.aspx',
+    license: '利用条件の記載なし (サイトに利用規約・著作権表記なし) — 観測値のみを出典明示で掲載',
+    cadence: '30 分 (直近 6 時間の 30 分値; 取得は毎時 :48)',
+    what: '電源開発管理の奈半利川 3 ダム (魚梁瀬/久木/平鍋) の貯水位 (EL.m)・全流入量・全放流量。全流入量は逆算値で負値もそのまま公開。雨量は流域平均のため保存せず、貯水量・貯水率は非公開。3 ダムとも本ソース唯一の観測源。',
+    label: '電源開発 奈半利川',
+  },
   'fukuoka-bodik': {
     upstream:
       '福岡市関連9ダム貯水量 — BODIK オープンデータ (data.bodik.jp/dataset/401307_mizukanri)',

@@ -37,6 +37,7 @@ import ingestIbaraki from './tasks/ingest_ibaraki_bousai.ts';
 import ingestIbarakiKasumigaura from './tasks/ingest_ibaraki_kasumigaura.ts';
 import ingestIshikawa from './tasks/ingest_ishikawa_kasen.ts';
 import ingestIwate from './tasks/ingest_iwate_kasen.ts';
+import ingestJpowerNaharigawa from './tasks/ingest_jpower_naharigawa.ts';
 import ingestJwaAichiYosui from './tasks/ingest_jwa_aichi_yosui.ts';
 import ingestJwaBiwako from './tasks/ingest_jwa_biwako.ts';
 import ingestJwaChiba from './tasks/ingest_jwa_chiba.ts';
@@ -193,6 +194,7 @@ async function main(): Promise<void> {
       'ingest:ibaraki-kasumigaura': ingestIbarakiKasumigaura,
       'ingest:kochi-bousai': ingestKochi,
       'ingest:kochi-kigyo': ingestKochiKigyo,
+      'ingest:jpower-naharigawa': ingestJpowerNaharigawa,
       'ingest:kyoto-bousai': ingestKyoto,
       'ingest:kagawa-bousai': ingestKagawa,
       'ingest:nagano-kasen': ingestNagano,
