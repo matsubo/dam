@@ -16,7 +16,8 @@
 // adapter in this codebase, master lookup CANNOT filter on one fixed
 // pref_code — the row's own 県名 cell (printed once per prefecture block, see
 // below) is read and mapped to a JIS code, and chooseMaster() is run against
-// only that prefecture's masters. 佐賀 appears in the PDF but has none of our
+// only that prefecture's masters (NDI_PINS reaches the two 大分-listed dams the
+// master files under 熊本). 佐賀 appears in the PDF but has none of our
 // 12 target dams — it is skipped implicitly (its rows just won't match).
 //
 // Format: PDF, one wide table titled 「...の貯水状況（令和８年）」. Columns:
@@ -102,6 +103,21 @@ const PREF_NAME_TO_CODE: Record<string, string> = {
   大分: '44',
   宮崎: '45',
   鹿児島: '46',
+};
+
+/**
+ * Rows whose master sits outside the printed prefecture, pinned to its NDI row
+ * (keyed by feedKey below).
+ *
+ * 大蘇ダム and 大谷ダム are on the 大野川 headwaters at the 大分/熊本 line and
+ * serve 大分 (竹田市荻町): the PDF lists them in the 大分 block, the master files
+ * both under 熊本, as ダム便覧 does (2681 大蘇, 熊本県阿蘇郡産山村, 九州農政局;
+ * 2657 大谷, 熊本県阿蘇郡高森町, 荻柏原土地改良区). The PDF's 有効 3,890 and
+ * 1,500 千m³ are the master's (and ダム便覧's) 有効貯水容量 exactly.
+ */
+export const NDI_PINS: Readonly<Record<string, { prefCode: string; ndi: string }>> = {
+  '44:大蘇ダム': { prefCode: '43', ndi: '2306' },
+  '44:大谷ダム': { prefCode: '43', ndi: '2307' },
 };
 
 /** Upper sanity bound for a published 貯水率, in percent. */
@@ -415,6 +431,26 @@ export function chooseMaster(feedName: string, masters: BindableMaster[]): bigin
   return best?.m.id ?? null;
 }
 
+/** The universe key: the PDF has no ids, and names repeat across prefectures. */
+export function feedKey(name: string, prefCode: string | null): string {
+  return `${prefCode ?? 'unknown'}:${name}`;
+}
+
+/**
+ * Master for a published row: its NDI pin (`pinnedIds`: NDI → dam id), else
+ * the best name match among its own prefecture's masters.
+ */
+export function masterFor(
+  name: string,
+  prefCode: string | null,
+  mastersByPref: ReadonlyMap<string, BindableMaster[]>,
+  pinnedIds: ReadonlyMap<string, bigint>,
+): bigint | null {
+  const pin = NDI_PINS[feedKey(name, prefCode)];
+  const pinned = pin ? pinnedIds.get(pin.ndi) : undefined;
+  return pinned ?? chooseMaster(name, mastersByPref.get(prefCode ?? '') ?? []);
+}
+
 // --- DB helpers -------------------------------------------------------------
 
 async function ensureSourcePriority(): Promise<void> {
@@ -469,29 +505,35 @@ const task: Task = async (_payload, helpers) => {
   log(`${SOURCE_ID}: parsed ${rows.length} dam rows for ${reportDate.toISOString()}`);
 
   const prefCodes = Object.values(PREF_NAME_TO_CODE);
-  const masterRows = await sql<(BindableMaster & { prefCode: string })[]>`
-    SELECT id, name, completed_year AS "completedYear", pref_code AS "prefCode" FROM dams
-    WHERE pref_code = ANY(${prefCodes}) ORDER BY id
+  const masterRows = await sql<(BindableMaster & { prefCode: string; ndi: string | null })[]>`
+    SELECT id, name, completed_year AS "completedYear", pref_code AS "prefCode",
+           external_ids->>'ndi' AS ndi
+    FROM dams WHERE pref_code = ANY(${prefCodes}) ORDER BY id
   `;
   const mastersByPref = new Map<string, BindableMaster[]>();
+  const pinnedIds = new Map<string, bigint>();
+  const pins = Object.values(NDI_PINS);
   for (const m of masterRows) {
     const list = mastersByPref.get(m.prefCode) ?? [];
     list.push(m);
     mastersByPref.set(m.prefCode, list);
+    if (m.ndi && pins.some((p) => p.ndi === m.ndi && p.prefCode === m.prefCode)) {
+      pinnedIds.set(m.ndi, m.id);
+    }
   }
 
   const universe: UniverseRow[] = published.map((p) => ({
-    externalId: `${p.prefCode ?? 'unknown'}:${p.name}`,
+    externalId: feedKey(p.name, p.prefCode),
     name: p.name,
     prefCode: p.prefCode,
-    resolvedDamId: chooseMaster(p.name, mastersByPref.get(p.prefCode ?? '') ?? []),
+    resolvedDamId: masterFor(p.name, p.prefCode, mastersByPref, pinnedIds),
   }));
   await recordUniverse(SOURCE_ID, universe);
 
   const inputs = [] as Parameters<typeof upsertObservations>[0];
   let unmatched = 0;
   for (const p of rows) {
-    const damId = chooseMaster(p.kyushuName, mastersByPref.get(p.prefCode) ?? []);
+    const damId = masterFor(p.kyushuName, p.prefCode, mastersByPref, pinnedIds);
     if (!damId) {
       unmatched += 1;
       log(`${SOURCE_ID}: no master match for "${p.kyushuName}" (pref ${p.prefCode})`);
