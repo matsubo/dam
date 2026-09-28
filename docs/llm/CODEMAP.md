@@ -324,6 +324,8 @@ the file for detail.
 | `tests/e2e/dams.spec.ts` | list + detail + 404 + structured data |
 | `tests/e2e/watersheds.spec.ts` | list + detail + prefecture |
 | `tests/e2e/qa-walk.spec.ts` | full-page screenshot + console-error scan over 12 pages |
+| `tests/e2e/coverage-triage.spec.ts` | /coverage triage vs `/api/v1/coverage`: 提供元に値なし count, not-dam count, pending-scan providers linked to /sources |
+| `tests/e2e/fixtures/seed.ts` | fixture rows for a fresh migrated DB (CI / scratch only; never cleaned up) |
 
 ## docs
 
