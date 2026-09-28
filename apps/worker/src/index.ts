@@ -19,6 +19,7 @@ import ingestCgrMlit from './tasks/ingest_cgr_mlit.ts';
 import ingestCgrOkakawa from './tasks/ingest_cgr_okakawa.ts';
 import ingestChiba from './tasks/ingest_chiba.ts';
 import ingestChibaNourin from './tasks/ingest_chiba_nourin.ts';
+import ingestDainichigawaLid from './tasks/ingest_dainichigawa_lid.ts';
 import ingestEhimeBousai from './tasks/ingest_ehime_bousai.ts';
 import ingestFukuiBousai from './tasks/ingest_fukui_bousai.ts';
 import ingestFukuokaBodik from './tasks/ingest_fukuoka_bodik.ts';
@@ -26,6 +27,7 @@ import ingestFukushimaKasen from './tasks/ingest_fukushima_kasen.ts';
 import ingestFukushimaNourin from './tasks/ingest_fukushima_nourin.ts';
 import ingestGifuKasen from './tasks/ingest_gifu_kasen.ts';
 import ingestGunmaKasen from './tasks/ingest_gunma_kasen.ts';
+import ingestHiradoSuido from './tasks/ingest_hirado_suido.ts';
 import ingestHiroshima from './tasks/ingest_hiroshima.ts';
 import ingestHkdMlit from './tasks/ingest_hkd_mlit.ts';
 import ingestHrrMlit from './tasks/ingest_hrr_mlit.ts';
@@ -33,8 +35,10 @@ import ingestHyogo from './tasks/ingest_hyogo.ts';
 import ingestHyogoKigyo from './tasks/ingest_hyogo_kigyo.ts';
 import ingestHyogoSuigen from './tasks/ingest_hyogo_suigen.ts';
 import ingestIbaraki from './tasks/ingest_ibaraki_bousai.ts';
+import ingestIbarakiKasumigaura from './tasks/ingest_ibaraki_kasumigaura.ts';
 import ingestIshikawa from './tasks/ingest_ishikawa_kasen.ts';
 import ingestIwate from './tasks/ingest_iwate_kasen.ts';
+import ingestJpowerNaharigawa from './tasks/ingest_jpower_naharigawa.ts';
 import ingestJwaAichiYosui from './tasks/ingest_jwa_aichi_yosui.ts';
 import ingestJwaBiwako from './tasks/ingest_jwa_biwako.ts';
 import ingestJwaChiba from './tasks/ingest_jwa_chiba.ts';
@@ -53,6 +57,8 @@ import ingestKagawaTameike from './tasks/ingest_kagawa_tameike.ts';
 import ingestKagoshimaBousai from './tasks/ingest_kagoshima_bousai.ts';
 import ingestKagoshimaKasen from './tasks/ingest_kagoshima_kasen.ts';
 import ingestKanagawa from './tasks/ingest_kanagawa.ts';
+import ingestKanagawaSuibou from './tasks/ingest_kanagawa_suibou.ts';
+import ingestKandaSuido from './tasks/ingest_kanda_suido.ts';
 import ingestKasenbosai from './tasks/ingest_kasenbosai.ts';
 import ingestKasenbosaiV2 from './tasks/ingest_kasenbosai_v2.ts';
 import ingestKitakyushuSuido from './tasks/ingest_kitakyushu_suido.ts';
@@ -80,6 +86,7 @@ import ingestOita from './tasks/ingest_oita_bousai.ts';
 import ingestOitaNourin from './tasks/ingest_oita_nourin.ts';
 import ingestOkayama from './tasks/ingest_okayama.ts';
 import ingestOkinawaEb from './tasks/ingest_okinawa_eb.ts';
+import ingestOmuraSuido from './tasks/ingest_omura_suido.ts';
 import ingestOsaka from './tasks/ingest_osaka.ts';
 import ingestQsrRyumon from './tasks/ingest_qsr_ryumon.ts';
 import ingestQsrToukan from './tasks/ingest_qsr_toukan.ts';
@@ -87,12 +94,16 @@ import ingestQsrTuruta from './tasks/ingest_qsr_turuta.ts';
 import ingestSadoNourin from './tasks/ingest_sado_nourin.ts';
 import ingestSagaBousai from './tasks/ingest_saga_bousai.ts';
 import ingestSaitama from './tasks/ingest_saitama_suibo.ts';
+import ingestSannoukai from './tasks/ingest_sannoukai.ts';
 import ingestSaseboSuido from './tasks/ingest_sasebo_suido.ts';
 import ingestShiga from './tasks/ingest_shiga.ts';
 import ingestShimaneBousai from './tasks/ingest_shimane_bousai.ts';
 import ingestShimokubo from './tasks/ingest_shimokubo.ts';
 import ingestShimonosekiSuido from './tasks/ingest_shimonoseki_suido.ts';
+import ingestShiodaSayamaike from './tasks/ingest_shioda_sayamaike.ts';
 import ingestSkrHiji from './tasks/ingest_skr_hiji.ts';
+import ingestSokobaruDam from './tasks/ingest_sokobaru_dam.ts';
+import ingestSueSuido from './tasks/ingest_sue_suido.ts';
 import ingestSyowaike from './tasks/ingest_syowaike.ts';
 import ingestTndamHyogo from './tasks/ingest_tndam_hyogo.ts';
 import ingestTochigi from './tasks/ingest_tochigi.ts';
@@ -105,6 +116,7 @@ import ingestWakayama from './tasks/ingest_wakayama_kasen.ts';
 import ingestYamagata from './tasks/ingest_yamagata_bousai.ts';
 import ingestYamaguchi from './tasks/ingest_yamaguchi_bousai.ts';
 import ingestYamanashi from './tasks/ingest_yamanashi_dam.ts';
+import ingestYonezawaHeiya from './tasks/ingest_yonezawa_heiya.ts';
 import match from './tasks/master_match.ts';
 import refreshDamnet from './tasks/master_refresh_damnet.ts';
 import refreshNdi from './tasks/master_refresh_ndi.ts';
@@ -153,6 +165,7 @@ async function main(): Promise<void> {
       'ingest:jwa-chiba-bouso': ingestJwaChiba,
       'ingest:jwa-chikugo': ingestJwaChikugo,
       'ingest:kanagawa-dam': ingestKanagawa,
+      'ingest:kanagawa-suibou': ingestKanagawaSuibou,
       'ingest:kumamoto-bousai': ingestKumamoto,
       'ingest:kkr-mlit-dam': ingestKkrMlit,
       'ingest:shiga-bousai': ingestShiga,
@@ -183,8 +196,10 @@ async function main(): Promise<void> {
       'ingest:shimane-bousai': ingestShimaneBousai,
       'ingest:shimokubo': ingestShimokubo,
       'ingest:ibaraki-bousai': ingestIbaraki,
+      'ingest:ibaraki-kasumigaura': ingestIbarakiKasumigaura,
       'ingest:kochi-bousai': ingestKochi,
       'ingest:kochi-kigyo': ingestKochiKigyo,
+      'ingest:jpower-naharigawa': ingestJpowerNaharigawa,
       'ingest:kyoto-bousai': ingestKyoto,
       'ingest:kagawa-bousai': ingestKagawa,
       'ingest:nagano-kasen': ingestNagano,
@@ -210,6 +225,8 @@ async function main(): Promise<void> {
       'ingest:kagawa-tameike': ingestKagawaTameike,
       'ingest:hyogo-suigen': ingestHyogoSuigen,
       'ingest:sado-nourin': ingestSadoNourin,
+      'ingest:yonezawa-heiya': ingestYonezawaHeiya,
+      'ingest:sannoukai': ingestSannoukai,
       'ingest:gifu-kasen': ingestGifuKasen,
       'ingest:aichi-kasen': ingestAichiKasen,
       'ingest:fukui-bousai': ingestFukuiBousai,
@@ -228,9 +245,16 @@ async function main(): Promise<void> {
       'ingest:mc-tottori-hydro': ingestMcTottoriHydro,
       'ingest:mie-kigyo': ingestMieKigyo,
       'ingest:nagano-kigyo': ingestNaganoKigyo,
+      'ingest:shioda-sayamaike': ingestShiodaSayamaike,
       'ingest:syowaike': ingestSyowaike,
       'ingest:hyogo-kigyo': ingestHyogoKigyo,
       'ingest:awaji-suido': ingestAwajiSuido,
+      'ingest:dainichigawa-lid': ingestDainichigawaLid,
+      'ingest:omura-suido': ingestOmuraSuido,
+      'ingest:hirado-suido': ingestHiradoSuido,
+      'ingest:kanda-suido': ingestKandaSuido,
+      'ingest:sue-suido': ingestSueSuido,
+      'ingest:sokobaru-dam': ingestSokobaruDam,
       'backfill:kagoshima-bodik': backfillKagoshima,
       'backfill:suimon:enqueue': backfillEnqueue,
       'backfill:suimon:run': backfillRun,

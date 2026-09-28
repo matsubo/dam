@@ -112,7 +112,9 @@ the file for detail.
 | `src/tasks/backfill_mudam.ts` | `backfill:mudam`: NILIM ダム諸量DB daily history (monthly tail + on demand); name + 10 km match, `MUDAM_OVERRIDES` pins mis-bound listings to an NDI id |
 | `src/tasks/ingest_cgr_ashida_seki.ts` | `cgr-ashida-seki`: 福山河川国道事務所 芦田川河口堰 mobile page, hourly (level, volume, flows) |
 | `src/tasks/ingest_cgr_okakawa.ts` | `cgr-okakawa-dam`: 岡山河川事務所 三水系主要ダム貯水状況 PDF, daily 9時 edition (11 dams + 2 weirs; only source for 小阪部川 / 坂根堰) |
-| `src/tasks/ingest_awaji_suido.ts` | `awaji-suido`: 淡路広域水道企業団 各水源地の貯水状況, hand-edited about monthly, polled daily (淡路島 utility reservoirs; volume only, written when its comma grouping — or, for a pair sharing a 合計, the 合計 minus its partner — and volume / 貯水率 basis check out) |
+| `src/tasks/ingest_awaji_suido.ts` | `awaji-suido`: 淡路広域水道企業団 各水源地の貯水状況, hand-edited about monthly, polled daily (淡路島 utility reservoirs; volume only, written when its comma grouping — or, for a pair sharing a 合計, the 合計 minus its partner — and volume / 貯水率 basis check out; 天川第2's gross 貯水量 stored less master 総 − 有効) |
+| `src/tasks/ingest_dainichigawa_lid.ts` | `dainichigawa-lid`: 大日川土地改良区 大日川ダム情報, monthly 日別ダム情報 PDFs (daily 9時 rows; current + previous month re-read daily); 大日川 (NDI 1594 pinned) volume + rate on the printed 最大貯水量 (trusted, 0213); the depth-gauge 水位 not stored |
+| `src/tasks/ingest_hirado_suido.ts` | `hirado-suido`: 平戸市水道局 市内水道用ダムの貯水状況, re-issued about every 10 days, polled daily (神曽根第2 (NDI pin) / 箕坪 / 阿奈田 / 神の川 / 桜川 volume + rate; rate trusted, 0219; pond + two 砂防ダム universe only, not_dam_reason) |
 | `src/tasks/ingest_hyogo_kigyo.ts` | `hyogo-kigyo`: 兵庫県企業庁 貯水状況, weekly 「M月D日現在」 table polled daily (神谷 volume + rate only; 黒川 企業庁 share, 平荘 / 権現 totals and live-covered rows universe-only) |
 | `src/tasks/ingest_hyogo_suigen.ts` | `hyogo-suigen`: 兵庫県 県内の水源の状況, monthly 1日 survey (more often in a 渇水) polled daily; rate only, written for 千苅 / 丸山 / 加古川大堰 / 鴨川 (plus 呑吐 / 大川瀬 / 但東 when listed apart), dams with a volume feed elsewhere universe-only |
 | `src/tasks/ingest_jwa_aichi_yosui.ts` | `jwa-aichi-yosui`: 愛知用水総合管理所 水情報, daily 0時 (牧尾 + 東郷調整池 / 前山池; 牧尾's daily-mean flows not stored) |
@@ -121,8 +123,10 @@ the file for detail.
 | `src/tasks/ingest_jwa_fukudou.ts` | `jwa-fukudou`: 福岡導水 山口調整池, daily 0時 (volume stored as 総 − 堆砂; rate null) |
 | `src/tasks/ingest_jwa_tonekako.ts` | `jwa-tonekako`: 利根川河口堰 水位/流量 scripts, hourly 24 h window (Y.P. level + flows; only hours both tables carry) |
 | `src/tasks/ingest_kagawa_tameike.ts` | `kagawa-tameike`: 香川県「かがわの水」daily PDF, ため池貯水率 of 26 named ponds (rate only, dated by survey), plus the page's 宝山湖 block (香川用水調整池, NDI 2170; rate only, stamped at the stated 時) |
+| `src/tasks/ingest_kanda_suido.ts` | `kanda-suido`: 苅田町水道課 水源の状況, daily 「…現在」 (山口 (NDI pin, not 山口調整池) + 油木 volume + rate; rate trusted, 0219; 井ノ口池 universe only) |
 | `src/tasks/ingest_kitakyushu_suido.ts` | `kitakyushu-suido`: 北九州市上下水道局 水源状況, daily (10 sources; rate trusted, 0098) |
 | `src/tasks/ingest_kochi_kigyo.ts` | `kochi-kigyo`: 高知県公営企業局 ダム水文量表, hourly 48 h window (吉野 / 杉田 level + flows; empty hours dropped) |
+| `src/tasks/ingest_jpower_naharigawa.ts` | `jpower-naharigawa`: 電源開発 奈半利川ダム情報公開サイト, hourly 6 h window of 30-min columns (魚梁瀬 / 久木 / 平鍋 level + flows) |
 | `src/tasks/ingest_kudamatsu_suido.ts` | `kudamatsu-suido`: 下松市上下水道局 水源情報, edited about monthly, polled daily (県営温見 level + volume + rate; 末武川 universe only) |
 | `src/tasks/ingest_matsue_suido.ts` | `matsue-suido`: 松江市上下水道局 千本 / 大谷 daily 貯水量・貯水率 table |
 | `src/tasks/ingest_mc_tottori_hydro.ts` | `mc-tottori-hydro`: M&C鳥取水力発電 運転情報, hourly (茗荷谷/三朝調整池/中津/菅沢 flows; gauge heights not stored) |
@@ -130,9 +134,13 @@ the file for detail.
 | `src/tasks/ingest_miyagi_nousei.ts` | `miyagi-nousei`: 宮城県農政部「農業用水の状況」PDF, surveyed 1日・15日 (monthly off-season), polled daily (17 dams + 9 ため池; rate trusted, 0097) |
 | `src/tasks/ingest_nagano_kigyo.ts` | `nagano-kigyo`: 長野県企業局 10分諸量 JSON, :24 and :54 (4-row files; together all six 10-min rows) (高遠 / 菅平; priority 311 over kasenbosai's empty 高遠) |
 | `src/tasks/ingest_nagasaki_city_suido.ts` | `nagasaki-city-suido`: 長崎市上下水道局 ダム貯水量一覧表, weekly, polled daily (浦上 volume + rate, pinned to 浦上（元） NDI 2602; other 12 rows universe only) |
+| `src/tasks/ingest_omura_suido.ts` | `omura-suido`: 大村市上下水道局 ダム（水源）情報, daily 07:00 (池田（再） volume + rate on its 利水 200,000 m³, trusted 0219; the 萱瀬 city-share row universe only) |
 | `src/tasks/ingest_sado_nourin.ts` | `sado-nourin`: 佐渡地域振興局 農業用ダム pages, polled daily (7 県営農業用ダム; volume + rate, trusted in 0097) |
+| `src/tasks/ingest_sannoukai.ts` | `sannoukai`: 山王海土地改良区 ダムの状況, weekly, polled daily (山王海（再）/ 葛丸 volume from inline script; date = the page's WordPress `modified_gmt`) |
 | `src/tasks/ingest_sasebo_suido.ts` | `sasebo-suido`: 佐世保市水道局 daily 貯水状況 PDF (6 reservoirs; rate trusted, 0098) |
 | `src/tasks/ingest_shimonoseki_suido.ts` | `shimonoseki-suido`: 下関市上下水道局 水源状況, daily poll of a 0時 table updated a few times a week (湯の原 written, rate trusted, 0107; 木屋川 / combined 内日貯水池 universe only) |
+| `src/tasks/ingest_yonezawa_heiya.ts` | `yonezawa-heiya`: 米沢平野土地改良区 用水状況, weekly, polled daily (水窪 volume; the current page plus the discovered 年度 archive) |
+| `src/tasks/ingest_sue_suido.ts` | `sue-suido`: 須恵町上下水道課 貯水率, about monthly, dated by the page's 更新日, polled daily (須恵 whole-percent rate only; 3 ponds universe only) |
 | `src/tasks/backfill_suimon_enqueue.ts` | `backfill:suimon:enqueue`: populate backfill_progress for 水文水質DB (manual) |
 | `src/tasks/backfill_suimon_run.ts` | `backfill:suimon:run`: drain one batch of the suimon backfill queue (manual, not on the cron) |
 | `src/tasks/quality_recompute.ts` | `quality:recompute`: nightly missing/mismatch flagging; nulls phantom zero-storage series |
@@ -157,20 +165,23 @@ the file for detail.
 | `src/tasks/ingest_hrr_mlit.ts` | `hrr-mlit-dam`: 北陸地方整備局 `tmDam.txt`, hourly (7 dams; level + flows) |
 | `src/tasks/ingest_hyogo.ts` | `hyogo-bodik`: 兵庫県 ダム諸量 BODIK CSV, hourly (22 stations) |
 | `src/tasks/ingest_ibaraki_bousai.ts` | `ibaraki-bousai`: 茨城県河川防災情報 ダム諸量現況表, hourly (7 県管理ダム; no rate) |
+| `src/tasks/ingest_ibaraki_kasumigaura.ts` | `ibaraki-kasumigaura`: 茨城県河川情報 出島 水位グラフ as 霞ヶ浦開発's lake level, hourly 24-row window (gauge + 零点高 → Y.P.) |
 | `src/tasks/ingest_ishikawa_kasen.ts` | `ishikawa-kasen`: 石川県河川総合情報システム dam JSON, hourly (11 県管理ダム) |
 | `src/tasks/ingest_iwate_kasen.ts` | `iwate-kasen`: 岩手県河川情報システム ダム諸量経過表, one page per dam, hourly (10 県管理ダム) |
 | `src/tasks/ingest_jwa_chiba.ts` | `jwa-chiba-bouso`: JWA 房総導水路管理所 取水情報, daily 0時 (長柄 / 東金; level + rate) |
 | `src/tasks/ingest_jwa_chikugo.ts` | `jwa-chikugo`: JWA 筑後川 water-source page, daily 0時 (7 dams incl. 松原 / 下筌 / 合所) |
 | `src/tasks/ingest_jwa_chubu.ts` | `jwa-chubu`: JWA 中部支社 水源状況 report, published once per weekday (木曽川水系 5 dams + 三重用水 中里); poll times in `packages/core/src/crontab.ts` |
 | `src/tasks/ingest_jwa_junpo.ts` | `jwa-junpo`: JWA 旬報 (10-day report), polled daily (26 JWA dams across 7 water systems) |
-| `src/tasks/ingest_jwa_kiso_rt.ts` | `jwa-kiso-rt`: JWA 中部支社 木曽川水系 realtime page, hourly (6 dams) |
+| `src/tasks/ingest_jwa_kiso_rt.ts` | `jwa-kiso-rt`: JWA 中部支社 木曽川水系 realtime page, hourly (12 facilities: 5 dams, 三重用水 調整池, 長良川河口堰, 木曽川大堰) |
 | `src/tasks/ingest_jwa_toneara.ts` | `jwa-toneara`: JWA 関東支社 利根川 / 荒川 daily 0時 table, polled hourly (13 facilities) |
-| `src/tasks/ingest_jwa_toyokawa.ts` | `jwa-toyokawa`: JWA 中部支社 豊川水系 realtime page, hourly (宇連 / 大島) |
+| `src/tasks/ingest_jwa_toyokawa.ts` | `jwa-toyokawa`: JWA 中部支社 豊川水系 realtime page, hourly (14 facilities: 宇連 / 大島, 豊川用水 調整池 and 頭首工) |
+| `src/tasks/jwa_chubu_realtime.ts` | Parser and name/prefecture binding shared by `jwa-kiso-rt` and `jwa-toyokawa` (中部支社 realtime overview maps) |
 | `src/tasks/ingest_jwa_yoshino.ts` | `jwa-yoshino`: JWA 吉野川上流総合管理所 realtime page, hourly (5 dams; rate for 早明浦 only) |
 | `src/tasks/ingest_kagawa_bousai.ts` | `kagawa-bousai`: かがわ防災Webポータル `dam_station.json`, hourly (18 dams) |
 | `src/tasks/ingest_kagoshima_bousai.ts` | `kagoshima-bousai`: 鹿児島県防災ポータル `dam_station.json`, hourly; items only during flood events |
 | `src/tasks/ingest_kagoshima_kasen.ts` | `kagoshima-kasen`: 鹿児島県河川砂防情報システム ダム一覧表, hourly (西之谷 / 川辺 / 大和) |
 | `src/tasks/ingest_kanagawa.ts` | `kanagawa-dam`: かながわの水がめ `summary.php` JSON, a 30-day daily window stamped at 24:00 JST (5 dams) |
+| `src/tasks/ingest_kanagawa_suibou.ts` | `kanagawa-suibou`: 神奈川県雨量水位情報 飯泉取水堰 15分水位, hourly 6 h window (level only, as published) |
 | `src/tasks/ingest_kkr_mlit.ts` | `kkr-mlit-dam`: 近畿地方整備局 貯水率 JSON feed, daily (12 国管理ダム) |
 | `src/tasks/ingest_kochi_bousai.ts` | `kochi-bousai`: 高知県水防情報システム ダム諸量現況表, hourly (11 dams: 7 県 + 4 MLIT) |
 | `src/tasks/ingest_ktr_kinu.ts` | `ktr-kinu-dam`: 関東地方整備局 鬼怒川ダム統合管理事務所 realtime page, hourly (4 dams) |
@@ -194,7 +205,9 @@ the file for detail.
 | `src/tasks/ingest_saitama_suibo.ts` | `saitama-suibo`: 埼玉県 川の防災情報 `dinfo.csv`, hourly (9 dams / 調節池) |
 | `src/tasks/ingest_shimane_bousai.ts` | `shimane-bousai`: 島根県水防情報システム `dam60.json`, hourly (19 dams) |
 | `src/tasks/ingest_shimokubo.ts` | `shimokubo`: JWA 下久保ダム `table.json`, hourly (10-min readings) |
+| `src/tasks/ingest_shioda_sayamaike.ts` | `shioda-sayamaike`: 上田市塩田平土地改良区 沢山池の状況図 CSV (10-min upload, stamped at its Last-Modified), hourly (沢山池: level + m³ volume + rate + inflow + rain) |
 | `src/tasks/ingest_skr_hiji.ts` | `skr-hiji-dam`: 四国地方整備局 肱川 dams via www1.river.go.jp DspDamData, hourly (野村 / 鹿野川) |
+| `src/tasks/ingest_sokobaru_dam.ts` | `sokobaru-dam`: 底原ダム管理システム i-mode pages, hourly, last 13 hours (石垣島 底原/真栄里/石垣, NDI pinned; level + outflow; 底原 also rate + inflow + 総貯水量 less 堆砂, only where the printed rate ties) |
 | `src/tasks/ingest_syowaike.ts` | `syowaike`: 兵庫県 昭和池防災情報管理システム テレメータ snapshot, hourly (昭和池, NDI 1539 pinned; level + m³ volume + inflow + rain) |
 | `src/tasks/ingest_tndam_hyogo.ts` | `tndam-hyogo`: 兵庫県 丹波農林振興事務所 ダムテレメータ, latest reading per dam, hourly (6 dams) |
 | `src/tasks/ingest_tochigi.ts` | `tochigi-bodik`: 栃木県 ダム諸量 BODIK CSV (NGSI-v2 shape), hourly |

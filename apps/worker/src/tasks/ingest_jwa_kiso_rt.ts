@@ -1,15 +1,21 @@
 // apps/worker/src/tasks/ingest_jwa_kiso_rt.ts
 //
-// 水資源機構 中部支社 木曽川水系 — real-time data for 6 dams.
-// Updated every ~10 minutes; one page fetched hourly.
+// 水資源機構 中部支社 木曽川水系 — every facility on the 木曽川 real-time map.
+// The page updates every ~10 minutes; one page is fetched hourly.
 //
-//   木曽川水系: 牧尾 (長野) / 味噌川 (長野) / 阿木川 (岐阜) / 岩屋 (岐阜)
-//              徳山 (岐阜) / 中里貯水池 (三重, 三重用水 — いなべ市)
+//   dams     牧尾 (長野) / 味噌川 (長野) / 阿木川 / 岩屋 / 徳山 (岐阜)
+//            貯水位 (EL.m), 有効貯水量 (10³m³), 流入量, 放流量
+//   調整池    打上 (岐阜, 貯水位 only) / 中里貯水池 / 宮川 / 菰野 / 加佐登 (三重,
+//            三重用水; 貯水位, 有効貯水量)
+//   堰       長良川河口堰 (三重) 堰上流水位, 堰下流水位, 流入量, 流出量
+//            木曽川大堰 (愛知) 堰上流水位, 流入量, 放流量
 //
-// Source: https://www.water.go.jp/mizu/chubu/realtime/index.html
-// Format: Static HTML with <h4>-delimited blocks; "観測時刻：YYYY年MM月DD日 HH時MM分" (JST).
-//         Storage in 10³m³ (= 千m³); stored as m³ after × 1000.  Water level in EL.m.
-//         "cc" = sensor communication cut; treat as null.
+// Source: https://www.water.go.jp/mizu/chubu/realtime/index.html, parsed by
+// jwa_chubu_realtime.ts. 有効貯水量 is stored as the volume (× 1000); the page
+// prints no rate, so the trigger derives one from the master's capacity. A
+// weir's 堰上流水位 is stored as its level, as jwa-tonekako does for 利根川河口堰,
+// and its 流出量 / 放流量 as the outflow.
+//
 // License: 水資源機構「著作権・リンク等について」(honsya/honsya/policy/copyright):
 //         「数値データ、簡単な表・グラフ等は著作権の対象ではありませんので、これらに
 //         ついては本利用ルールの適用はなく、自由に利用できます。」 The 中部支社
@@ -20,121 +26,87 @@
 //         observed numbers are stored, with the source named, and the fetch is one
 //         page an hour (the page itself refreshes every 10 minutes).
 //
-// Upgrades jwa-chubu (daily, priority 296) to hourly cadence.
-// Priority 297 > 296 so this becomes preferredSource for all 6 dams.
+// Priority 297: above jwa-chubu (296, daily) on the five dams and 中里, and
+// above mie-kigyo (291, weekly) on 菰野調整池; below kasenbosai (310) on
+// 打上調整池 / 加佐登調整池 / 木曽川大堰. 宮川調整池 and 長良川河口堰 have no
+// other source.
 
-import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
+import { recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
+import {
+  matchFacilities,
+  parseJwaChubuRealtime,
+  type RealtimeFacility,
+} from './jwa_chubu_realtime.ts';
 
+const SOURCE_ID = 'jwa-kiso-rt';
 const PAGE_URL =
   process.env.JWA_KISO_RT_URL ?? 'https://www.water.go.jp/mizu/chubu/realtime/index.html';
 
-const NAME_MAP: Array<{ kisoName: string; masterName: string; prefCodes: string[] }> = [
-  { kisoName: '牧尾ダム', masterName: '牧尾', prefCodes: ['20'] }, // 長野
-  { kisoName: '味噌川ダム', masterName: '味噌川', prefCodes: ['20'] },
-  { kisoName: '阿木川ダム', masterName: '阿木川', prefCodes: ['21'] }, // 岐阜
-  { kisoName: '岩屋ダム', masterName: '岩屋', prefCodes: ['21'] },
-  { kisoName: '徳山ダム', masterName: '徳山', prefCodes: ['21'] },
-  { kisoName: '中里貯水池', masterName: '中里', prefCodes: ['24'] }, // 三重 (三重用水)
-];
+/**
+ * Every facility on the map as of 2026-09-28. The prefecture is what keeps
+ * 中里貯水池 (三重用水, いなべ市) off a 長野 '中里' that once held its stamp.
+ */
+const PREF_BY_NAME: Record<string, string> = {
+  牧尾ダム: '20',
+  味噌川ダム: '20',
+  阿木川ダム: '21',
+  岩屋ダム: '21',
+  徳山ダム: '21',
+  打上調整池: '21',
+  中里貯水池: '24',
+  宮川調整池: '24',
+  菰野調整池: '24',
+  加佐登調整池: '24',
+  長良川河口堰: '24',
+  木曽川大堰: '23',
+};
 
-interface ParsedRow {
-  kisoName: string;
+export interface KisoReading {
+  name: string;
   waterLevelM: number | null;
   storageVolumeM3: number | null;
   inflowM3s: number | null;
   outflowM3s: number | null;
 }
 
-function parseNum(s: string): number | null {
-  const cleaned = s.replace(/[,\s　]/g, '');
-  if (!cleaned || cleaned === '―' || cleaned === '-' || cleaned === '—' || cleaned === 'cc') {
-    return null;
+/** The stored quantities of each facility; one with none of them is dropped. */
+export function kisoReadings(facilities: RealtimeFacility[]): KisoReading[] {
+  const rows: KisoReading[] = [];
+  for (const f of facilities) {
+    const v = f.values;
+    const volumeThou = v.有効貯水量 ?? null;
+    const row = {
+      name: f.name,
+      waterLevelM: v.貯水位 ?? v.堰上流水位 ?? null,
+      storageVolumeM3: volumeThou === null ? null : volumeThou * 1000,
+      inflowM3s: v.流入量 ?? null,
+      outflowM3s: v.放流量 ?? v.流出量 ?? null,
+    };
+    if (
+      row.waterLevelM === null &&
+      row.storageVolumeM3 === null &&
+      row.inflowM3s === null &&
+      row.outflowM3s === null
+    ) {
+      continue;
+    }
+    rows.push(row);
   }
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? n : null;
+  return rows;
 }
 
-/**
- * Parse "観測時刻：YYYY年MM月DD日 HH時MM分" → UTC Date.
- * The page timestamp is JST; subtract 9 hours to get UTC.
- */
-export function parseKisoRtTimestamp(text: string): Date | null {
-  const m = text.match(/(\d{4})年(\d{2})月(\d{2})日\s+(\d{1,2})時(\d{2})分/);
-  if (!m) return null;
-  const yr = Number(m[1]);
-  const mo = Number(m[2]);
-  const day = Number(m[3]);
-  const hr = Number(m[4]);
-  const mi = Number(m[5]);
-  // JST = UTC+9; Date.UTC handles out-of-range hours via normalization.
-  const d = new Date(Date.UTC(yr, mo - 1, day, hr - 9, mi, 0, 0));
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-// A dam's section is its own table: the page goes on after 中里貯水池 with
-// unmapped blocks (調整池, 長良川河口堰, 木曽川大堰) whose rows share its labels.
-function extractSection(html: string, damName: string): string {
-  const start = html.indexOf(`<h4>${damName}</h4>`);
-  if (start < 0) return '';
-  const end = html.indexOf('</table>', start);
-  return html.slice(start, end < 0 ? html.length : end);
-}
-
-// Extract the first text node of the <td class="data"> following <th>LABEL</th>.
-// An empty cell yields null; it must not fall through to the next row's value.
-// Using a regex on the raw HTML avoids conflating the value with the superscript
-// unit text (e.g. 10³m³ rendered as "103m3" when stripped of tags).
-function extractLabeledValue(section: string, label: string): number | null {
-  const pos = section.indexOf(`${label}</th>`);
-  if (pos < 0) return null;
-  const after = section.slice(pos);
-  const m = after.match(/<td[^>]*class="data"[^>]*>([^<]*)/);
-  if (!m) return null;
-  return parseNum((m[1] ?? '').trim());
-}
-
-export function parseKisoRtHtml(html: string): { observedAt: Date | null; rows: ParsedRow[] } {
-  const observedAt = parseKisoRtTimestamp(html);
-  const rows: ParsedRow[] = [];
-
-  for (const m of NAME_MAP) {
-    const section = extractSection(html, m.kisoName);
-    if (!section) continue;
-
-    const waterLevel = extractLabeledValue(section, '貯水位');
-    const storageThou = extractLabeledValue(section, '有効貯水量');
-    const inflow = extractLabeledValue(section, '流入量');
-    const outflow = extractLabeledValue(section, '放流量');
-
-    // Skip if both primary metrics are unavailable (full cc outage).
-    if (waterLevel === null && storageThou === null) continue;
-
-    rows.push({
-      kisoName: m.kisoName,
-      waterLevelM: waterLevel,
-      storageVolumeM3: storageThou !== null ? storageThou * 1000 : null,
-      inflowM3s: inflow,
-      outflowM3s: outflow,
-    });
-  }
-  return { observedAt, rows };
-}
-
-interface DamMatch {
-  kisoName: string;
-  damId: bigint;
+export function matchKiso(facilities: RealtimeFacility[], log: (s: string) => void) {
+  return matchFacilities(SOURCE_ID, facilities, PREF_BY_NAME, log);
 }
 
 async function ensureSourcePriority(): Promise<void> {
   await sql`
     INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES ('jwa-kiso-rt', 297,
-            '水資源機構 中部支社 木曽川水系 実時計 — hourly, 6 dams (牧尾/阿木川/味噌川/岩屋/中里/徳山)',
+    VALUES (${SOURCE_ID}, 297,
+            '水資源機構 中部支社 木曽川水系 実時計 — hourly, 12 facilities (5 dams, 三重用水 中里 + 調整池, 長良川河口堰, 木曽川大堰)',
             true)
     ON CONFLICT (source_id) DO UPDATE
       SET priority    = EXCLUDED.priority,
@@ -143,51 +115,9 @@ async function ensureSourcePriority(): Promise<void> {
   `;
 }
 
-export async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
-  const matches: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  for (const m of NAME_MAP) {
-    // （元） and （再） rank alike so chooseRanked binds the current twin.
-    const candidates = await sql<(BindableMaster & { rank: number })[]>`
-      SELECT id, name, completed_year AS "completedYear",
-             external_ids->>'jwa-kiso-rt' AS stamp,
-             CASE
-               WHEN name = ${`${m.masterName}ダム`}      THEN 0
-               WHEN name = ${`${m.masterName}貯水池`}     THEN 1
-               WHEN name = ${m.masterName}                THEN 2
-               WHEN name LIKE ${`${m.masterName}（再）%`} THEN 3
-               WHEN name LIKE ${`${m.masterName}（元）%`} THEN 3
-               ELSE 5
-             END AS rank
-      FROM dams
-      WHERE pref_code = ANY(${m.prefCodes}::text[])
-        AND name LIKE ${`%${m.masterName}%`}
-    `;
-    const r = chooseRanked(candidates, m.kisoName);
-    universe.push({
-      externalId: m.kisoName,
-      name: m.kisoName,
-      prefCode: m.prefCodes[0] ?? null,
-      resolvedDamId: r?.id ?? null,
-    });
-    if (!r) {
-      log(`jwa-kiso-rt: no master match for "${m.kisoName}" (${m.masterName})`);
-      continue;
-    }
-    matches.push({ kisoName: m.kisoName, damId: r.id });
-    await bindExternalId(r.id, 'jwa-kiso-rt', m.kisoName);
-  }
-  await recordUniverse('jwa-kiso-rt', universe);
-  return matches;
-}
-
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
   await ensureSourcePriority();
-  const matches = await ensureExternalIds(log);
-  log(`jwa-kiso-rt: matched ${matches.length}/${NAME_MAP.length} master dams`);
 
   const r = await fetch(PAGE_URL, {
     headers: {
@@ -198,31 +128,31 @@ const task: Task = async (_payload, helpers) => {
     signal: AbortSignal.timeout(20_000),
   });
   if (r.status !== 200) {
-    log(`jwa-kiso-rt: HTTP ${r.status}; aborting`);
+    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
     return;
   }
-  const html = await r.text();
-  const { observedAt, rows: parsed } = parseKisoRtHtml(html);
-  log(
-    `jwa-kiso-rt: parsed ${parsed.length} rows, observedAt=${observedAt?.toISOString() ?? '(missing)'}`,
-  );
-
-  if (!observedAt) {
-    log('jwa-kiso-rt: no timestamp found; aborting');
-    return;
+  const { observedAt, facilities } = parseJwaChubuRealtime(await r.text());
+  if (!observedAt || facilities.length === 0) {
+    throw new Error(
+      `${SOURCE_ID}: no 観測時刻 or no facility blocks on ${PAGE_URL} — layout change?`,
+    );
   }
 
-  const matchByName = new Map(matches.map((m) => [m.kisoName, m.damId]));
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing.
+  const { damByName, universe } = await matchKiso(facilities, log);
+  await recordUniverse(SOURCE_ID, universe);
+
   const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const row of parsed) {
-    const damId = matchByName.get(row.kisoName);
+  for (const row of kisoReadings(facilities)) {
+    const damId = damByName.get(row.name);
     if (!damId) continue;
     inputs.push({
       observedAt,
       damId,
-      sourceId: 'jwa-kiso-rt',
+      sourceId: SOURCE_ID,
       storageVolumeM3: row.storageVolumeM3,
-      storageRate: null,
+      storageRate: null, // no rate on the page; the trigger derives one from the volume
       inflowM3s: row.inflowM3s,
       outflowM3s: row.outflowM3s,
       waterLevelM: row.waterLevelM,
@@ -232,7 +162,10 @@ const task: Task = async (_payload, helpers) => {
     });
   }
   const written = await upsertObservations(inputs);
-  log(`jwa-kiso-rt done: parsed=${parsed.length} matched=${matches.length} written=${written}`);
+  log(
+    `${SOURCE_ID} done at ${observedAt.toISOString()}: parsed=${facilities.length} ` +
+      `matched=${damByName.size} written=${written}`,
+  );
 };
 
 export default task;
