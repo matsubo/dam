@@ -12,8 +12,9 @@
 // malformed 貯水量 (below). No time of day is printed, so a reading is stamped
 // 00:00 JST on the 現在 date.
 //
-// Volume: 貯水量 is the whole reservoir's 有効 volume, the basis the 0036
-// trigger divides by 有効貯水容量. Checked against 兵庫県's telemetry on
+// Volume: 貯水量 is the whole reservoir's volume on the utility's own
+// capacity table. For all but 天川第２ that is the 有効 volume, the basis the
+// 0036 trigger divides by 有効貯水容量. Checked against 兵庫県's telemetry on
 // 2026-08-20 (hyogo-bodik, 09:10 JST): 牛内 529,321 vs 530,000; 成相・北富士
 // 1,890,150 vs 1,501,000 + 394,000.
 //
@@ -24,10 +25,22 @@
 // (1,610), the last two the 利水 share of a 多目的 dam. The trigger derives
 // volume / 有効 instead, which for 猪鼻第２ is the same figure.
 //
+// 天川第２ is counted from the bed, as ingest_jwa_fukudou's 山口調整池 is: its
+// 111.2 千m³ basis is the 総貯水容量 (NDI W01-14 damCode 1556 totalPondage 112;
+// ダム便覧 No.1528 総/有効 112 / 53 千m³, checked 2026-09-28 — the only published
+// 有効, so master:refresh:damnet would put 53 back over any correction). The
+// utility's own history agrees (web.archive.org captures 2013–2026): it sits at
+// 111,000–111,700 nearly always, and its one deep drawdown (令和5年3月19日,
+// 58,000 at 52.2 %) stopped at the 59 千m³ that 総 − 有効 puts below 最低水位.
+// So what is stored is 貯水量 − (master 総 − 有効), floored at 0 (storedVolume).
+// Other figures for the dam do not fit the page: 洲本市「広報すもと」's 総
+// 122,000 m³ and 兵庫県's 126 千m³ (淡路地域総合治水推進計画 表26, from ダム年鑑
+// 2011) sit 10–13 % above the basis every capture since 2013 ties to.
+//
 // The table is typed by hand. The 9/23 edit printed 猪鼻第２ as 「479,2000」 at
 // 100.0 %, so a 貯水量 is read only when its comma grouping is well formed,
 // and written only when volume / 貯水率 lands near that dam's back-solved
-// basis and the volume stays under 1.2× the master 有効 (implausibleVolume).
+// basis and the stored volume stays under 1.2× the master 有効 (storedVolume).
 // A malformed 貯水量 in a pair sharing a 合計 is read back as 合計 minus the
 // partner's own volume (783,200 − 304,000 = 479,200 for that edit), both
 // well formed, and then faces the same check against its own 貯水率.
@@ -46,35 +59,45 @@ const PAGE_URL = process.env.AWAJI_SUIDO_URL ?? 'http://www.awaji-suido.jp/osira
 const PREF_CODE = '28';
 const SOURCE_ID = 'awaji-suido';
 
+/** A page row's pinned master and the basis its 貯水量 is counted on. */
+export interface Pin {
+  ndi: string;
+  /** The utility capacity its 貯水率 is taken against (back-solved above, m³). */
+  basisM3: number;
+  /** Whether its 貯水量 is written. */
+  write: boolean;
+  /** 貯水量 counts from the bed: basisM3 is the master 総貯水容量, not 有効. */
+  gross?: true;
+}
+
 /**
- * Page row (NFKC-folded ダム名称) → master NDI id, the utility capacity its
- * 貯水率 is taken against (back-solved above, m³), and whether its 貯水量 is
- * written. Pinned rather than matched by name: the page says 猪鼻第１ダム for
- * the master 猪ノ鼻, and the list is the utility's fixed set of reservoirs.
+ * Page row (NFKC-folded ダム名称) → Pin. Pinned rather than matched by name:
+ * the page says 猪鼻第１ダム for the master 猪ノ鼻, and the list is the
+ * utility's fixed set of reservoirs.
  *
- * - 天川第２ is bound but not written: its 111,000 m³ at 99.8 % (9/23) is
- *   twice the master 有効 53,000 (総 112,000), so it is not on the master's
- *   basis and the trigger would read 209 %. Either the master 有効 is short or
- *   the page counts the dead storage; until that is settled nothing is stored.
  * - 牛内 is bound but not written: kasenbosai and hyogo-bodik carry it hourly
  *   with the same volume.
  * - Not listed, so unresolved in the universe: 天川第１ダム (no master row) and
  *   成相・北富士ダム (one figure for 成相 NDI 1592 and 北富士 NDI 1596).
  */
-export const PINNED: Readonly<Record<string, { ndi: string; basisM3: number; write: boolean }>> = {
+export const PINNED: Readonly<Record<string, Pin>> = {
   猪鼻第1ダム: { ndi: '1588', basisM3: 311_000, write: true },
   猪鼻第2ダム: { ndi: '1589', basisM3: 479_000, write: true },
   竹原ダム: { ndi: '1586', basisM3: 525_000, write: true },
-  天川第2ダム: { ndi: '1556', basisM3: 111_000, write: false },
+  天川第2ダム: { ndi: '1556', basisM3: 111_000, write: true, gross: true },
   牛内ダム: { ndi: '1598', basisM3: 1_100_000, write: false },
   本庄川ダム: { ndi: '1591', basisM3: 710_000, write: true },
 };
 
 // volume / 貯水率 may stray this far from basisM3 (a one-decimal rate near 1 %
-// is off by 5 %), and the volume may reach this multiple of the master 有効
-// (猪鼻第１'s basis is 1.02× it, and a reservoir can spill over the top).
+// is off by 5 %), and the stored volume may reach this multiple of the master
+// 有効 (猪鼻第１'s basis is 1.02× it, and a reservoir can spill over the top).
 const BASIS_TOLERANCE = 0.15;
 const MAX_ACTIVE_MULTIPLE = 1.2;
+// A gross pin's basis may stray this far from the master 総貯水容量 (天川第２:
+// 111 / 112). Any further and 総 − 有効 no longer marks the page's 最低水位:
+// 兵庫県's 126 in place of 112 would move it by a quarter of 有効.
+const GROSS_TIE = 0.02;
 
 // --- parsing ----------------------------------------------------------------
 
@@ -174,28 +197,57 @@ export function parseAwajiChosui(html: string): ParsedPage {
   return { observedAt, rows };
 }
 
+export interface MasterCapacity {
+  totalM3: number | null;
+  activeM3: number | null;
+}
+
+/** The volume to write (m³, on the master's 有効 basis), or why none is. */
+export type StoredVolume = { volumeM3: number } | { problem: string };
+
 /**
- * Why a parsed volume must not be written, or null when it is plausible: the
- * capacity volume / 貯水率 implies is within BASIS_TOLERANCE of the dam's
- * pinned basis, and the volume is at most MAX_ACTIVE_MULTIPLE × the master 有効.
- * A row without a positive 貯水率 cannot be checked and is not written.
+ * The row's volume on the basis the trigger divides by 有効貯水容量: the
+ * printed 貯水量, or for a gross pin 貯水量 less the master 総 − 有効 (the water
+ * below 最低水位), floored at 0. Written only when the capacity volume / 貯水率
+ * implies is within BASIS_TOLERANCE of the pinned basis and the stored volume
+ * is at most MAX_ACTIVE_MULTIPLE × the master 有効. A row without a positive
+ * 貯水率 cannot be checked and is not written.
  */
-export function implausibleVolume(
+export function storedVolume(
   row: Pick<ParsedRow, 'storageVolumeM3' | 'ratePct'>,
-  basisM3: number,
-  activeM3: number | null,
-): string | null {
+  pin: Pick<Pin, 'basisM3' | 'gross'>,
+  master: MasterCapacity,
+): StoredVolume {
   const volume = row.storageVolumeM3;
-  if (volume === null) return 'no 貯水量';
-  if (row.ratePct === null || row.ratePct <= 0) return `no 貯水率 to check ${volume} m³ against`;
+  if (volume === null) return { problem: 'no 貯水量' };
+  if (row.ratePct === null || row.ratePct <= 0) {
+    return { problem: `no 貯水率 to check ${volume} m³ against` };
+  }
   const implied = volume / (row.ratePct / 100);
-  if (Math.abs(implied / basisM3 - 1) > BASIS_TOLERANCE) {
-    return `${volume} m³ at ${row.ratePct} % implies ${Math.round(implied)} m³, not ~${basisM3}`;
+  if (Math.abs(implied / pin.basisM3 - 1) > BASIS_TOLERANCE) {
+    return {
+      problem: `${volume} m³ at ${row.ratePct} % implies ${Math.round(implied)} m³, not ~${pin.basisM3}`,
+    };
   }
-  if (activeM3 !== null && volume > activeM3 * MAX_ACTIVE_MULTIPLE) {
-    return `${volume} m³ exceeds ${MAX_ACTIVE_MULTIPLE}× the master 有効 ${activeM3} m³`;
+  let stored = volume;
+  if (pin.gross) {
+    const { totalM3: total, activeM3: active } = master;
+    if (total === null || active === null) {
+      return { problem: `gross 貯水量 needs the master 総 and 有効 (${total} / ${active})` };
+    }
+    if (Math.abs(pin.basisM3 / total - 1) > GROSS_TIE) {
+      return {
+        problem: `basis ${pin.basisM3} m³ no longer ties to the master 総貯水容量 ${total}`,
+      };
+    }
+    stored = Math.max(0, volume - (total - active));
   }
-  return null;
+  if (master.activeM3 !== null && stored > master.activeM3 * MAX_ACTIVE_MULTIPLE) {
+    return {
+      problem: `${stored} m³ exceeds ${MAX_ACTIVE_MULTIPLE}× the master 有効 ${master.activeM3} m³`,
+    };
+  }
+  return { volumeM3: stored };
 }
 
 // --- DB helpers -------------------------------------------------------------
@@ -233,8 +285,11 @@ const task: Task = async (_payload, helpers) => {
   log(`${SOURCE_ID}: ${page.rows.length} rows at ${page.observedAt.toISOString()}`);
 
   const ndis = Object.values(PINNED).map((p) => p.ndi);
-  const masters = await sql<{ id: bigint; ndi: string; active: string | null }[]>`
-    SELECT id, external_ids->>'ndi' AS ndi, active_capacity_m3 AS active
+  const masters = await sql<
+    { id: bigint; ndi: string; total: string | null; active: string | null }[]
+  >`
+    SELECT id, external_ids->>'ndi' AS ndi,
+           total_capacity_m3 AS total, active_capacity_m3 AS active
     FROM dams WHERE pref_code = ${PREF_CODE} AND external_ids->>'ndi' IN ${sql(ndis)}
   `;
   const masterByNdi = new Map(masters.map((m) => [m.ndi, m]));
@@ -261,13 +316,14 @@ const task: Task = async (_payload, helpers) => {
     matched++;
     await bindExternalId(damId, SOURCE_ID, row.name);
     if (!pin.write) continue;
-    const problem = implausibleVolume(
-      row,
-      pin.basisM3,
-      master?.active == null ? null : Number(master.active),
-    );
-    if (problem !== null || row.storageVolumeM3 === null) {
-      log(`${SOURCE_ID}: "${row.name}" 貯水量 「${row.volumeText}」 not written: ${problem}`);
+    const stored = storedVolume(row, pin, {
+      totalM3: master?.total == null ? null : Number(master.total),
+      activeM3: master?.active == null ? null : Number(master.active),
+    });
+    if ('problem' in stored) {
+      log(
+        `${SOURCE_ID}: "${row.name}" 貯水量 「${row.volumeText}」 not written: ${stored.problem}`,
+      );
       continue;
     }
     if (row.volumeFromTotal) {
@@ -279,7 +335,7 @@ const task: Task = async (_payload, helpers) => {
       observedAt: page.observedAt,
       damId,
       sourceId: SOURCE_ID,
-      storageVolumeM3: row.storageVolumeM3,
+      storageVolumeM3: stored.volumeM3,
       storageRate: null,
       inflowM3s: null,
       outflowM3s: null,
