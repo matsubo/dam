@@ -7,6 +7,7 @@ import {
   classifyOneDam,
   coverageSummary,
   recordUniverse,
+  recordUniverseHasData,
 } from './source_universe.ts';
 
 const SRC_A = 'universe-test-a';
@@ -253,6 +254,32 @@ describe('source universe coverage triage', () => {
     expect(only(await classifyDamCoverage(), stale)).toBe('published_not_ingested');
   });
 
+  test('a value reader can say "no data" for rows the catalogue task listed', async () => {
+    // kasenbosai's list comes from the weekly catalogue sweep, which sees no
+    // values; the hourly value fetch is what sees 滝波 / 和知 flag every
+    // reading 欠測. Its answer has to land on the rows the sweep recorded.
+    await recordUniverse(SRC_A, [{ externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale }]);
+    await recordUniverseHasData(SRC_A, [
+      { externalId: 'a-2', hasData: false },
+      { externalId: 'a-not-listed', hasData: false },
+    ]);
+    expect(only(await classifyDamCoverage(), stale)).toBe('published_no_data');
+    // It only annotates the list; it never adds a station the sweep did not see.
+    const [n] = await sql<{ n: number }[]>`
+      SELECT COUNT(*)::INT AS n FROM source_universe WHERE source_id = ${SRC_A}
+    `;
+    expect(n?.n).toBe(1);
+
+    // The next catalogue sweep cannot tell, so it must not wipe the answer...
+    await recordUniverse(SRC_A, [{ externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale }], {
+      keepHasData: true,
+    });
+    expect(only(await classifyDamCoverage(), stale)).toBe('published_no_data');
+    // ...while the value reader's own later "unknown" still clears it.
+    await recordUniverseHasData(SRC_A, [{ externalId: 'a-2', hasData: null }]);
+    expect(only(await classifyDamCoverage(), stale)).toBe('published_not_ingested');
+  });
+
   test('recordUniverse is idempotent and advances last_seen_at', async () => {
     await recordUniverse(SRC_A, [{ externalId: 'a-1', name: 'univ-covered', resolvedDamId: null }]);
     const first = await sql<{ first: Date; last: Date }[]>`
@@ -283,6 +310,39 @@ describe('source universe coverage triage', () => {
       WHERE source_id = ${SRC_A} AND resolved_dam_id IS NULL
     `;
     expect(Number(rows[0]?.n)).toBe(1);
+  });
+
+  test('a station marked not-a-dam leaves the backlog and survives re-scans', async () => {
+    const list = [
+      { externalId: 'a-weir', name: '〇〇堰', resolvedDamId: null },
+      { externalId: 'a-open', name: 'マスタ未登録', resolvedDamId: null },
+    ];
+    await recordUniverse(SRC_A, list);
+    const before = await coverageSummary();
+
+    // The convention later migrations use (AGENTS.md gotcha 7).
+    await sql`
+      UPDATE source_universe SET not_dam_reason = '堰: NDI master has no such dam'
+      WHERE source_id = ${SRC_A} AND source_external_id = 'a-weir' AND resolved_dam_id IS NULL
+    `;
+    const marked = await coverageSummary();
+    expect(marked.unmatchedStations).toBe(before.unmatchedStations - 1);
+    expect(marked.notDamStations).toBe(before.notDamStations + 1);
+
+    // The next scan re-records the same row; the reason is not the scan's to clear.
+    await recordUniverse(SRC_A, list);
+    const rows = await sql<{ reason: string | null }[]>`
+      SELECT not_dam_reason AS reason FROM source_universe
+      WHERE source_id = ${SRC_A} AND source_external_id = 'a-weir'
+    `;
+    expect(rows[0]?.reason).toBe('堰: NDI master has no such dam');
+    expect((await coverageSummary()).unmatchedStations).toBe(marked.unmatchedStations);
+
+    // A later match wins over the mark: the station is linked, not "not a dam".
+    await recordUniverse(SRC_A, [{ externalId: 'a-weir', name: '〇〇堰', resolvedDamId: covered }]);
+    const resolved = await coverageSummary();
+    expect(resolved.notDamStations).toBe(before.notDamStations);
+    expect(resolved.unmatchedStations).toBe(marked.unmatchedStations);
   });
 
   test('an empty list is a failed scan, not a scanned provider', async () => {

@@ -40,7 +40,11 @@ export interface UniverseRow {
  * constant rather than from the rows that happened to parse this run, so a
  * single failing page doesn't drop a station from the universe.
  */
-export async function recordUniverse(sourceId: string, rows: UniverseRow[]): Promise<number> {
+export async function recordUniverse(
+  sourceId: string,
+  rows: UniverseRow[],
+  opts: RecordUniverseOptions = {},
+): Promise<number> {
   // Fail-safe by design. Every one of the ~70 ingest tasks awaits this BEFORE
   // upsertObservations, so anything thrown here costs that run its
   // observations — the actual product — to protect coverage metadata, which
@@ -49,14 +53,27 @@ export async function recordUniverse(sourceId: string, rows: UniverseRow[]): Pro
   // (duplicate ON CONFLICT target) is fixed below; this guards the unknown
   // ones, and the next successful run re-records the same list anyway.
   try {
-    return await recordUniverseOrThrow(sourceId, rows);
+    return await recordUniverseOrThrow(sourceId, rows, opts.keepHasData ?? false);
   } catch (err) {
     console.error(`recordUniverse(${sourceId}) failed; observations continue:`, err);
     return 0;
   }
 }
 
-async function recordUniverseOrThrow(sourceId: string, rows: UniverseRow[]): Promise<number> {
+export interface RecordUniverseOptions {
+  /**
+   * Leave `has_data` as stored: this list comes from a catalogue that shows
+   * no values, and another task answers `has_data` through
+   * `recordUniverseHasData` (kasenbosai: weekly sweep vs hourly value fetch).
+   */
+  keepHasData?: boolean;
+}
+
+async function recordUniverseOrThrow(
+  sourceId: string,
+  rows: UniverseRow[],
+  keepHasData: boolean,
+): Promise<number> {
   // De-duplicate on the primary key before building the multi-row INSERT.
   // postgres.js emits one statement, and Postgres rejects a duplicate target
   // with `21000: ON CONFLICT DO UPDATE command cannot affect row a second
@@ -97,8 +114,12 @@ async function recordUniverseOrThrow(sourceId: string, rows: UniverseRow[]): Pro
         resolved_dam_id = COALESCE(EXCLUDED.resolved_dam_id, source_universe.resolved_dam_id),
         -- Unlike resolved_dam_id, the latest scan always wins: a row that
         -- stops parsing (NULL) must clear an earlier FALSE, or a parser break
-        -- would hide under 提供元に値なし. Each source has a single writer.
-        has_data        = EXCLUDED.has_data,
+        -- would hide under 提供元に値なし. Each source has a single has_data
+        -- writer: this call, or recordUniverseHasData when keepHasData is set.
+        has_data        = CASE WHEN ${keepHasData} THEN source_universe.has_data
+                               ELSE EXCLUDED.has_data END,
+        -- not_dam_reason is deliberately absent: migrations set it (0131) and
+        -- no scan can know a station is a 堰 rather than an unlinked dam.
         last_seen_at    = NOW()
     `;
   }
@@ -115,6 +136,32 @@ async function recordUniverseOrThrow(sourceId: string, rows: UniverseRow[]): Pro
       row_count         = EXCLUDED.row_count
   `;
   return deduped.length;
+}
+
+/**
+ * Set `has_data` on stations another task already listed, for a source whose
+ * published list and whose values come from different tasks. Rows the list
+ * does not hold are ignored: this annotates the universe, it never grows it.
+ * Same semantics as `UniverseRow.hasData`, the latest answer winning — null
+ * included. Fail-safe like `recordUniverse`.
+ */
+export async function recordUniverseHasData(
+  sourceId: string,
+  rows: { externalId: string; hasData: boolean | null }[],
+): Promise<void> {
+  if (rows.length === 0) return;
+  try {
+    await sql`
+      UPDATE source_universe su
+      SET has_data = v."hasData"
+      FROM jsonb_to_recordset(${sql.json(rows)}) AS v ("externalId" TEXT, "hasData" BOOLEAN)
+      WHERE su.source_id = ${sourceId}
+        AND su.source_external_id = v."externalId"
+        AND su.has_data IS DISTINCT FROM v."hasData"
+    `;
+  } catch (err) {
+    console.error(`recordUniverseHasData(${sourceId}) failed:`, err);
+  }
 }
 
 export type DamCoverageStatus =
@@ -227,8 +274,17 @@ export interface CoverageSummary {
   publishedNoData: number;
   unknown: number;
   notPublished: number;
-  /** Published stations we cannot tie to any master dam — the backlog. */
+  /**
+   * Published stations we cannot tie to any master dam — the backlog.
+   * Excludes rows a migration marked `not_dam_reason` (a 堰, a 調整池 outside
+   * the NDI master): there is no dam to link them to.
+   */
   unmatchedStations: number;
+  /**
+   * Unresolved stations carrying a cited `not_dam_reason`. Out of the
+   * backlog; a row that later resolves leaves this count, since a match wins.
+   */
+  notDamStations: number;
   /** Observation providers still to be instrumented. While > 0, `unknown` is not `not_published`. */
   sourcesPendingScan: number;
   /**
@@ -250,15 +306,29 @@ export async function coverageSummary(): Promise<CoverageSummary> {
   const rows = await classifyDamCoverage();
   const count = (s: DamCoverageStatus): number => rows.filter((r) => r.status === s).length;
   const [extra] = await sql<
-    { unresolved: bigint; pending: bigint; not_enumerable: bigint; historical_only: bigint }[]
+    {
+      unresolved: bigint;
+      not_dam: bigint;
+      pending: bigint;
+      not_enumerable: bigint;
+      historical_only: bigint;
+    }[]
   >`
     SELECT
       (SELECT COUNT(*) FROM source_universe su
         WHERE su.resolved_dam_id IS NULL
+          AND su.not_dam_reason IS NULL
           AND NOT EXISTS (
             SELECT 1 FROM source_priorities sp WHERE sp.source_id = su.source_id AND NOT sp.active
           )
       )::BIGINT AS unresolved,
+      (SELECT COUNT(*) FROM source_universe su
+        WHERE su.resolved_dam_id IS NULL
+          AND su.not_dam_reason IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM source_priorities sp WHERE sp.source_id = su.source_id AND NOT sp.active
+          )
+      )::BIGINT AS not_dam,
       (SELECT COUNT(*) FROM source_priorities sp
         WHERE sp.active AND sp.provides_observations AND sp.universe_enumerable
           AND NOT sp.historical_only
@@ -278,6 +348,7 @@ export async function coverageSummary(): Promise<CoverageSummary> {
     unknown: count('unknown'),
     notPublished: count('not_published'),
     unmatchedStations: Number(extra?.unresolved ?? 0),
+    notDamStations: Number(extra?.not_dam ?? 0),
     sourcesPendingScan: Number(extra?.pending ?? 0),
     sourcesNotEnumerable: Number(extra?.not_enumerable ?? 0),
     sourcesHistoricalOnly: Number(extra?.historical_only ?? 0),

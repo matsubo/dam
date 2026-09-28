@@ -125,6 +125,34 @@ describe('writeMatchReview', () => {
     // ON CONFLICT updated the same row (resolved_dam_id still NULL).
     expect(rows[0]?.candidate_dam_ids.map(String)).toEqual([String(damB)]);
   });
+
+  test('never rewrites or reopens a review closed as "not a dam"', async () => {
+    // The migration convention closes a review with resolved_at set and
+    // resolved_dam_id NULL when the station is not a master dam.
+    await sql`
+      UPDATE match_review SET resolved_at = NOW(), resolved_dam_id = NULL
+      WHERE source_id = 'kasenbosai' AND source_external_id = ${OBS_FCD}
+    `;
+    await writeMatchReview(
+      { obsFcd: OBS_FCD, obsNm: 'テスト', ofcCd: 1, lat: 35.7, lon: 139.5, kbPrefCd: 1301 },
+      {
+        obsFcd: OBS_FCD,
+        obsNm: 'テスト',
+        damId: damA,
+        damName: 'mr-test-a',
+        distanceM: 100,
+        score: 0.5,
+        reason: 'distance',
+        candidates: [{ id: damA, name: 'mr-test-a', distanceM: 100 }],
+      },
+    );
+    const rows = await sql<{ candidate_dam_ids: bigint[]; closed: boolean }[]>`
+      SELECT candidate_dam_ids, resolved_at IS NOT NULL AS closed FROM match_review
+      WHERE source_id = 'kasenbosai' AND source_external_id = ${OBS_FCD}
+    `;
+    expect(rows[0]?.closed).toBe(true);
+    expect(rows[0]?.candidate_dam_ids.map(String)).toEqual([String(damB)]);
+  });
 });
 
 describe('matchOne — candidate query', () => {

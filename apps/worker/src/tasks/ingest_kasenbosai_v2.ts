@@ -25,6 +25,7 @@
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { recordUniverseHasData } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const BASE_URL =
@@ -51,9 +52,11 @@ export interface ApiObsValue {
   allDischCcd?: number | null;
   obsTime?: string;
 }
-interface ApiResponse {
+export interface ApiResponse {
   dspFlg?: number;
-  obsValue?: ApiObsValue;
+  obsValue?: ApiObsValue | null;
+  min10Values?: ApiObsValue[];
+  hrValues?: ApiObsValue[];
 }
 
 interface DamTarget {
@@ -210,6 +213,32 @@ export function parseKasenbosaiObsValue(ov: ApiObsValue): ParsedKasenbosaiObs | 
   };
 }
 
+const QUANTITIES = [
+  ['storLvl', 'storLvlCcd'],
+  ['storCap', 'storCapCcd'],
+  ['storPcntIrr', 'storPcntIrrCcd'],
+  ['storPcntEff', 'storPcntEffCcd'],
+  ['allSink', 'allSinkCcd'],
+  ['allDisch', 'allDischCcd'],
+] as const;
+
+/**
+ * Whether the station publishes any value (source_universe.has_data): true =
+ * some quantity in the latest reading or the ~2-day 10-min / hourly history
+ * passes its quality code; false = every hourly row flags every quantity
+ * (滝波 / 和知: Ccd=160 across the board); null = neither, e.g. an empty
+ * history or bare nulls, which may be a payload we misread.
+ */
+export function kasenbosaiHasData(payload: ApiResponse): boolean | null {
+  const readings = [payload.obsValue, ...(payload.min10Values ?? []), ...(payload.hrValues ?? [])];
+  if (readings.some((r) => r && QUANTITIES.some(([v, c]) => validOrNull(r[v], r[c]) != null))) {
+    return true;
+  }
+  const hr = payload.hrValues ?? [];
+  const allFlagged = hr.every((r) => QUANTITIES.every(([, c]) => r[c] != null && r[c] !== 0));
+  return hr.length > 0 && allFlagged ? false : null;
+}
+
 async function ensureSourcePriority(): Promise<void> {
   await sql`
     INSERT INTO source_priorities (source_id, priority, description, active)
@@ -239,40 +268,45 @@ async function loadTargets(): Promise<DamTarget[]> {
   }));
 }
 
+type ObsInput = Parameters<typeof upsertObservations>[0][number];
+
 async function fetchOne(
   target: DamTarget,
   date: string,
   time: string,
   ua: string,
-): Promise<Parameters<typeof upsertObservations>[0][number] | null> {
+): Promise<{ obs: ObsInput | null; hasData: boolean | null }> {
+  const none = { obs: null, hasData: null };
   const url = `${BASE_URL}/${date}/${time}/${target.obsFcd}.json`;
   const r = await fetch(url, {
     headers: { 'user-agent': ua },
     signal: AbortSignal.timeout(PER_REQUEST_TIMEOUT_MS),
   });
-  if (r.status === 404) return null; // dam may have no current value
+  if (r.status === 404) return none; // dam may have no current value
   if (r.status !== 200) throw new Error(`HTTP ${r.status}`);
   const text = await r.text();
-  if (!text || text.length < 5) return null;
+  if (!text || text.length < 5) return none;
   let payload: ApiResponse;
   try {
     payload = JSON.parse(text) as ApiResponse;
   } catch {
-    return null;
+    return none;
   }
-  const ov = payload.obsValue;
-  if (!ov) return null;
-  const parsed = parseKasenbosaiObsValue(ov);
-  if (!parsed) return null;
+  const hasData = kasenbosaiHasData(payload);
+  const parsed = payload.obsValue ? parseKasenbosaiObsValue(payload.obsValue) : null;
+  if (!parsed) return { obs: null, hasData };
   const { rateBasis: _rateBasis, ...obs } = parsed;
   return {
-    ...obs,
-    storageRate: rateIfConsistent(parsed, target.effectiveCapacityM3),
-    damId: target.damId,
-    sourceId: SOURCE_ID,
-    rainfallMm: null,
-    rawSnapshotId: null,
-    qualityFlag: 0,
+    obs: {
+      ...obs,
+      storageRate: rateIfConsistent(parsed, target.effectiveCapacityM3),
+      damId: target.damId,
+      sourceId: SOURCE_ID,
+      rainfallMm: null,
+      rawSnapshotId: null,
+      qualityFlag: 0,
+    },
+    hasData,
   };
 }
 
@@ -294,22 +328,32 @@ const task: Task = async (_payload, helpers) => {
   for (let i = 0; i < targets.length; i += CONCURRENCY) {
     batch.push(targets.slice(i, i + CONCURRENCY));
   }
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
+  const inputs = [] as ObsInput[];
+  // Keyed by station: match:kasenbosai records the list but cannot see values,
+  // so this run is what tells /coverage a station publishes nothing. A failed
+  // fetch leaves it unknown.
+  const hasData: { externalId: string; hasData: boolean | null }[] = [];
   let okCount = 0;
   let noneCount = 0;
   let errCount = 0;
   for (const group of batch) {
-    const settled = await Promise.allSettled(group.map((t) => fetchOne(t, date, time, ua)));
-    for (const s of settled) {
-      if (s.status === 'fulfilled') {
-        if (s.value == null) {
-          noneCount += 1;
-        } else {
-          okCount += 1;
-          inputs.push(s.value);
-        }
-      } else {
+    const results = await Promise.all(
+      group.map((t) =>
+        fetchOne(t, date, time, ua).then(
+          (res) => ({ t, res }),
+          () => ({ t, res: null }),
+        ),
+      ),
+    );
+    for (const { t, res } of results) {
+      hasData.push({ externalId: t.obsFcd, hasData: res?.hasData ?? null });
+      if (res === null) {
         errCount += 1;
+      } else if (res.obs === null) {
+        noneCount += 1;
+      } else {
+        okCount += 1;
+        inputs.push(res.obs);
       }
     }
     if (INTER_REQUEST_DELAY_MS > 0) {
@@ -322,8 +366,10 @@ const task: Task = async (_payload, helpers) => {
   for (let i = 0; i < inputs.length; i += CHUNK) {
     written += await upsertObservations(inputs.slice(i, i + CHUNK));
   }
+  await recordUniverseHasData(SOURCE_ID, hasData);
+  const noData = hasData.filter((h) => h.hasData === false).length;
   log(
-    `${SOURCE_ID} done: targets=${targets.length} ok=${okCount} none=${noneCount} err=${errCount} written=${written}`,
+    `${SOURCE_ID} done: targets=${targets.length} ok=${okCount} none=${noneCount} err=${errCount} no-data=${noData} written=${written}`,
   );
 };
 
