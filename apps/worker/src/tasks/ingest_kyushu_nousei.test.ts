@@ -9,6 +9,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   chooseMaster,
   findLatestPdfUrl,
+  masterFor,
   parseKyushuNouseiDate,
   parseKyushuNouseiPdfText,
   pdfToText,
@@ -214,5 +215,38 @@ describe('chooseMaster', () => {
 
   test('returns null for a dam the master does not hold', () => {
     expect(chooseMaster('存在しないダム', masters)).toBeNull();
+  });
+});
+
+describe('masterFor', () => {
+  // The master files 大蘇 and 大谷 under 熊本; the PDF prints them under 大分.
+  const mastersByPref = new Map([
+    [
+      '43',
+      [
+        { id: 10n, name: '大蘇' },
+        { id: 11n, name: '大谷' },
+      ],
+    ],
+    ['44', [{ id: 1n, name: '石場' }]],
+    ['40', [{ id: 20n, name: '大谷' }]],
+  ]);
+  const pinnedIds = new Map([
+    ['2306', 10n],
+    ['2307', 11n],
+  ]);
+  const bind = (name: string) => {
+    const r = parsed0915.rows.find((x) => x.kyushuName === name);
+    return r ? masterFor(r.kyushuName, r.prefCode, mastersByPref, pinnedIds) : undefined;
+  };
+
+  test('binds the 大分-printed 大蘇ダム / 大谷ダム to their 熊本-filed NDI rows', () => {
+    expect(bind('大蘇ダム')).toBe(10n);
+    expect(bind('大谷ダム')).toBe(11n);
+  });
+
+  test('matches every other row by name within its own prefecture', () => {
+    expect(bind('石場ダム')).toBe(1n);
+    expect(masterFor('大谷ダム', '40', mastersByPref, pinnedIds)).toBe(20n);
   });
 });
