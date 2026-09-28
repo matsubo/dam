@@ -5,7 +5,7 @@
 // 2026-09-27 (tests/fixtures/kagawa_tameike), so the unpdf extraction is
 // exercised too.
 
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import type { BindableMaster } from '@dam/core/dam_binding';
 import {
   chooseHozanko,
@@ -13,6 +13,7 @@ import {
   findLatestPdfUrl,
   parseHozankoHtml,
   parseKagawaTameikeText,
+  readPonds,
 } from './ingest_kagawa_tameike.ts';
 import { pdfToText } from './ingest_oita_nourin.ts';
 
@@ -152,5 +153,30 @@ describe('chooseHozanko', () => {
 
   test('no NDI 2170 among the masters leaves it unbound', () => {
     expect(chooseHozanko([m(1, '宝山湖', null)])).toBeNull();
+  });
+});
+
+describe('readPonds — a broken PDF must not cost 宝山湖 its write', () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+  const html = '<a href="/documents/5847/chosui20260925.pdf">b</a>';
+
+  test('a fetch that times out is logged and yields null', async () => {
+    globalThis.fetch = (async () => {
+      throw new DOMException('The operation timed out.', 'TimeoutError');
+    }) as unknown as typeof fetch;
+    const logs: string[] = [];
+    expect(await readPonds(html, {}, (s) => logs.push(s))).toBeNull();
+    expect(logs.join('\n')).toContain('timed out');
+  });
+
+  test('bytes that are not a PDF are logged and yield null', async () => {
+    globalThis.fetch = (async () =>
+      new Response('<html>メンテナンス中</html>')) as unknown as typeof fetch;
+    const logs: string[] = [];
+    expect(await readPonds(html, {}, (s) => logs.push(s))).toBeNull();
+    expect(logs.join('\n')).toContain('PDF unreadable');
   });
 });
