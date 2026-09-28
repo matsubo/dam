@@ -1,19 +1,29 @@
 // apps/worker/src/tasks/ingest_jwa_toyokawa.ts
 //
-// 水資源機構 中部支社 豊川水系 — 宇連ダム / 大島ダム.
-// Real-time page updated every ~10 minutes; one page fetched hourly.
+// 水資源機構 中部支社 豊川水系 — every facility on the 豊川用水 real-time map.
+// The page updates every ~10 minutes; one page is fetched hourly.
 //
-//   豊川水系: 宇連 (愛知) / 大島 (愛知)
+//   dams      宇連 / 大島                 貯水位 (EL.m), 有効貯水量 (10³m³), 流入量
+//   調整池     大原 / 三ツ口池 / 万場 / 芦ヶ池 / 初立池 / 駒場池 / 蒲郡
+//                                         貯水位 (EL.m), 有効貯水量 (10³m³)
+//   頭首工     大入 / 振草 / 大野 / 牟呂松原 / 寒狭川   貯水位 (m)
 //
-// Source: https://www.water.go.jp/mizu/chubu/realtime/index_2.html
-// Format: Static HTML, one <h4>-headed table per facility; "観測時刻：YYYY年MM月DD日
-//         HH時MM分" (JST). 貯水位 in EL.m; 有効貯水量 in 10³m³ (stored × 1000);
-//         流入量 in m³/s. Each value is the text before the unit's markup
-//         (`18158<span class="unit">10<sup>3</sup>m<sup>3</sup></span>`).
-//         "cc" = sensor communication cut; treat as null.
-//         The only outflow printed is 放流量（利水）, the water-supply release, not
-//         the total (大島: 0.00 here while kasenbosai's total was > 0 at 49 of 61
-//         shared timestamps), so no outflow is stored.
+// Source: https://www.water.go.jp/mizu/chubu/realtime/index_2.html, parsed by
+// jwa_chubu_realtime.ts. Every facility is in 愛知. 有効貯水量 is stored as the
+// volume (× 1000); the page prints no rate, so the trigger derives one from
+// the master's capacity (調整池 on 2026-09-28: 万場 4,861 / 有効 5,000 千m³,
+// 大原 1,956 / 2,000, 初立池 1,485 / 1,600, 駒場池 721 / 800, 蒲郡 467 / 500).
+// The only outflow printed is 放流量（利水）, the water-supply release, not the
+// total (大島: 0.00 while kasenbosai's total was > 0 at 49 of 61 shared
+// timestamps), so no outflow is stored.
+//
+// The 頭首工 unit is a bare "m" and is not always an elevation: 大入 0.84 and
+// 振草 3.42 are gauge heights. 大野頭首工's is EL: its 施設情報 page
+// (realtime/p020313_60/305_1_1.html, 2026-09-28) gives 常時満水位 78.00 m and
+// 最低水位 68.20 m around readings of 77.3–77.5 m. 大野 is the only 頭首工 in
+// the NDI master; 三ツ口池, 芦ヶ池調整池 and the other four 頭首工 are not, and
+// migration 0211 records them as not master dams.
+//
 // License: 水資源機構「著作権・リンク等について」(honsya/honsya/policy/copyright):
 //         「数値データ、簡単な表・グラフ等は著作権の対象ではありませんので、これらに
 //         ついては本利用ルールの適用はなく、自由に利用できます。」 The 中部支社
@@ -24,116 +34,77 @@
 //         observed numbers are stored, with the source named, and the fetch is one
 //         page an hour (the page itself refreshes every 10 minutes).
 //
-// These two dams are in jwa-junpo (10-day) and aitoyo (daily). This adapter
-// upgrades them to real-time cadence and adds 水位 (EL.m) not available from
-// jwa-junpo/aitoyo. Priority 298 > aitoyo 295 so this becomes preferredSource.
+// Priority 298: above aitoyo (295) and jwa-junpo on 宇連/大島, which they
+// publish daily / every 10 days; below kasenbosai (310) there. The 調整池 and
+// 大野頭首工 have no other source.
 
-import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
+import { recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
+import {
+  matchFacilities,
+  parseJwaChubuRealtime,
+  type RealtimeFacility,
+} from './jwa_chubu_realtime.ts';
 
+const SOURCE_ID = 'jwa-toyokawa';
 const PAGE_URL =
   process.env.JWA_TOYOKAWA_URL ?? 'https://www.water.go.jp/mizu/chubu/realtime/index_2.html';
 
-const NAME_MAP: Array<{ toyoName: string; masterName: string; prefCodes: string[] }> = [
-  { toyoName: '宇連ダム', masterName: '宇連', prefCodes: ['23'] }, // 愛知
-  { toyoName: '大島ダム', masterName: '大島', prefCodes: ['23'] },
-];
+/** Every facility on the map as of 2026-09-28; all are in 愛知. */
+const PREF_BY_NAME: Record<string, string> = {
+  宇連ダム: '23',
+  大島ダム: '23',
+  大原調整池: '23',
+  三ツ口池: '23',
+  万場調整池: '23',
+  芦ヶ池調整池: '23',
+  初立池: '23',
+  駒場池: '23',
+  蒲郡調整池: '23',
+  大入頭首工: '23',
+  振草頭首工: '23',
+  大野頭首工: '23',
+  牟呂松原頭首工: '23',
+  寒狭川頭首工: '23',
+};
 
-interface ParsedRow {
-  toyoName: string;
+export interface ToyokawaReading {
+  name: string;
   waterLevelM: number | null;
   storageVolumeM3: number | null;
   inflowM3s: number | null;
 }
 
-function parseNum(s: string): number | null {
-  const cleaned = s.replace(/[,\s　]/g, '');
-  if (!cleaned || cleaned === '―' || cleaned === '-' || cleaned === '—' || cleaned === 'cc') {
-    return null;
+/** The stored quantities of each facility; one with none of them is dropped. */
+export function toyokawaReadings(facilities: RealtimeFacility[]): ToyokawaReading[] {
+  const rows: ToyokawaReading[] = [];
+  for (const f of facilities) {
+    const volumeThou = f.values.有効貯水量 ?? null;
+    const row = {
+      name: f.name,
+      waterLevelM: f.values.貯水位 ?? null,
+      storageVolumeM3: volumeThou === null ? null : volumeThou * 1000,
+      inflowM3s: f.values.流入量 ?? null,
+    };
+    if (row.waterLevelM === null && row.storageVolumeM3 === null && row.inflowM3s === null) {
+      continue;
+    }
+    rows.push(row);
   }
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? n : null;
+  return rows;
 }
 
-/**
- * Parse "観測時刻：YYYY年MM月DD日 HH時MM分" → UTC Date.
- * The page timestamp is JST; subtract 9 hours to get UTC.
- */
-export function parseTokyokawaTimestamp(text: string): Date | null {
-  const m = text.match(/(\d{4})年(\d{2})月(\d{2})日\s+(\d{1,2})時(\d{2})分/);
-  if (!m) return null;
-  const yr = Number(m[1]);
-  const mo = Number(m[2]);
-  const day = Number(m[3]);
-  const hr = Number(m[4]);
-  const mi = Number(m[5]);
-  // JST = UTC+9; Date.UTC handles out-of-range hours via normalization.
-  const d = new Date(Date.UTC(yr, mo - 1, day, hr - 9, mi, 0, 0));
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-/** The dam's table: from its `<h4>` heading to the table's end. */
-function extractSection(html: string, damName: string): string {
-  const start = html.indexOf(`<h4>${damName}</h4>`);
-  if (start < 0) return '';
-  const end = html.indexOf('</table>', start);
-  return html.slice(start, end < 0 ? html.length : end);
-}
-
-// The text of the <td class="data"> after <th>LABEL</th>, up to its first tag.
-// Reading the raw HTML keeps the value apart from the unit markup that follows
-// it (`18158<span class="unit">10<sup>3</sup>m<sup>3</sup></span>`), which
-// reads as "18158103m3" once the tags are stripped.
-function extractLabeledValue(section: string, label: string): number | null {
-  const pos = section.indexOf(`<th>${label}</th>`);
-  if (pos < 0) return null;
-  const m = section.slice(pos).match(/<td[^>]*class="data"[^>]*>([^<]*)/);
-  return m ? parseNum(m[1] ?? '') : null;
-}
-
-export function parseToyokawaHtml(html: string): {
-  observedAt: Date | null;
-  rows: ParsedRow[];
-} {
-  const observedAt = parseTokyokawaTimestamp(html);
-  const rows: ParsedRow[] = [];
-
-  for (const m of NAME_MAP) {
-    const section = extractSection(html, m.toyoName);
-    if (!section) continue;
-
-    // "cc" (communication cut) and other non-numeric cells produce null.
-    const waterLevel = extractLabeledValue(section, '貯水位');
-    const storageThou = extractLabeledValue(section, '有効貯水量');
-    const inflow = extractLabeledValue(section, '流入量');
-
-    // Skip if both primary metrics are unavailable (full cc outage).
-    if (waterLevel == null && storageThou == null) continue;
-
-    rows.push({
-      toyoName: m.toyoName,
-      waterLevelM: waterLevel,
-      storageVolumeM3: storageThou == null ? null : storageThou * 1000,
-      inflowM3s: inflow,
-    });
-  }
-  return { observedAt, rows };
-}
-
-interface DamMatch {
-  toyoName: string;
-  damId: bigint;
+export function matchToyokawa(facilities: RealtimeFacility[], log: (s: string) => void) {
+  return matchFacilities(SOURCE_ID, facilities, PREF_BY_NAME, log);
 }
 
 async function ensureSourcePriority(): Promise<void> {
   await sql`
     INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES ('jwa-toyokawa', 298,
-            '水資源機構 中部支社 豊川水系 — real-time (~10 min), 2 dams (宇連/大島)',
+    VALUES (${SOURCE_ID}, 298,
+            '水資源機構 中部支社 豊川水系 — real-time (~10 min), 14 facilities (宇連/大島 + 豊川用水 調整池・頭首工)',
             true)
     ON CONFLICT (source_id) DO UPDATE
       SET priority    = EXCLUDED.priority,
@@ -142,50 +113,9 @@ async function ensureSourcePriority(): Promise<void> {
   `;
 }
 
-async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
-  const matches: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  for (const m of NAME_MAP) {
-    // （元） and （再） rank alike so chooseRanked binds the current twin.
-    const candidates = await sql<(BindableMaster & { rank: number })[]>`
-      SELECT id, name, completed_year AS "completedYear",
-             external_ids->>'jwa-toyokawa' AS stamp,
-             CASE
-               WHEN name = ${`${m.masterName}ダム`}       THEN 0
-               WHEN name = ${m.masterName}                 THEN 1
-               WHEN name LIKE ${`${m.masterName}（再）%`}  THEN 2
-               WHEN name LIKE ${`${m.masterName}（元）%`}  THEN 2
-               ELSE 5
-             END AS rank
-      FROM dams
-      WHERE pref_code = ANY(${m.prefCodes}::text[])
-        AND name LIKE ${`%${m.masterName}%`}
-    `;
-    const r = chooseRanked(candidates, m.toyoName);
-    universe.push({
-      externalId: m.toyoName,
-      name: m.toyoName,
-      prefCode: m.prefCodes[0] ?? null,
-      resolvedDamId: r?.id ?? null,
-    });
-    if (!r) {
-      log(`jwa-toyokawa: no master match for "${m.toyoName}" (${m.masterName})`);
-      continue;
-    }
-    matches.push({ toyoName: m.toyoName, damId: r.id });
-    await bindExternalId(r.id, 'jwa-toyokawa', m.toyoName);
-  }
-  await recordUniverse('jwa-toyokawa', universe);
-  return matches;
-}
-
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
   await ensureSourcePriority();
-  const matches = await ensureExternalIds(log);
-  log(`jwa-toyokawa: matched ${matches.length}/${NAME_MAP.length} master dams`);
 
   const r = await fetch(PAGE_URL, {
     headers: {
@@ -196,29 +126,30 @@ const task: Task = async (_payload, helpers) => {
     signal: AbortSignal.timeout(20_000),
   });
   if (r.status !== 200) {
-    log(`jwa-toyokawa: HTTP ${r.status}; aborting`);
+    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
     return;
   }
-  const html = await r.text();
-  const { observedAt, rows: parsed } = parseToyokawaHtml(html);
-  log(
-    `jwa-toyokawa: parsed ${parsed.length} rows, observedAt=${observedAt?.toISOString() ?? '(missing)'}`,
-  );
-
-  if (!observedAt) {
-    log('jwa-toyokawa: no timestamp found; aborting');
-    return;
+  const { observedAt, facilities } = parseJwaChubuRealtime(await r.text());
+  if (!observedAt || facilities.length === 0) {
+    throw new Error(
+      `${SOURCE_ID}: no 観測時刻 or no facility blocks on ${PAGE_URL} — layout change?`,
+    );
   }
 
-  const matchByName = new Map(matches.map((m) => [m.toyoName, m.damId]));
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing.
+  const { damByName, universe } = await matchToyokawa(facilities, log);
+  await recordUniverse(SOURCE_ID, universe);
+
+  const readings = toyokawaReadings(facilities);
   const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const row of parsed) {
-    const damId = matchByName.get(row.toyoName);
+  for (const row of readings) {
+    const damId = damByName.get(row.name);
     if (!damId) continue;
     inputs.push({
       observedAt,
       damId,
-      sourceId: 'jwa-toyokawa',
+      sourceId: SOURCE_ID,
       storageVolumeM3: row.storageVolumeM3,
       storageRate: null, // no rate on the page; the trigger derives one from the volume
       inflowM3s: row.inflowM3s,
@@ -230,7 +161,10 @@ const task: Task = async (_payload, helpers) => {
     });
   }
   const written = await upsertObservations(inputs);
-  log(`jwa-toyokawa done: parsed=${parsed.length} matched=${matches.length} written=${written}`);
+  log(
+    `${SOURCE_ID} done at ${observedAt.toISOString()}: parsed=${facilities.length} ` +
+      `matched=${damByName.size} written=${written}`,
+  );
 };
 
 export default task;
