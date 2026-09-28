@@ -15,9 +15,9 @@
 // No time of day is published, so a reading is stamped 00:00 JST of its date.
 // Volume only: the page prints no level and no rate.
 //
-// Cadence: weekly in かんがい期 and autumn; the R7 archive shows the winter
-// thins out (2025.12.22 → 2026.1.13 → 2026.03.30), hence the freshness
-// override in source_freshness.ts.
+// Cadence: weekly all year; the 令和７年度 archive (pages/163) has 51 readings,
+// 2025.4.7 – 2026.3.30, the longest gap 14 days (年末年始). The derived
+// freshness threshold covers that, so there is no override.
 //
 // 水窪 is in no other feed (not on kasenbosai, not in 山形県's bousai table),
 // so priority 278 ties with nothing on it.
