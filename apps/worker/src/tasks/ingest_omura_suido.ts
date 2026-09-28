@@ -158,7 +158,7 @@ export function planOmura(rows: ParsedRow[], masters: OmuraMaster[]): OmuraPlan 
       name: row.name,
       prefCode: PREF_CODE,
       resolvedDamId: damId,
-      hasData: row.storageVolumeM3 !== null || row.storageRate !== null,
+      hasData: row.storageVolumeM3 !== null || row.storageRate !== null ? true : null,
     });
     const want = WRITE[row.name];
     if (!want || !damId) continue;
