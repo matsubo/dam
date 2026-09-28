@@ -41,6 +41,9 @@ const FRESHNESS_HOURS: Record<string, number> = {
   // Weekly survey that can skip a week (9/14 was still the latest on 9/27),
   // plus a day or two before the page's 更新日.
   'chiba-suisei': 17 * 24,
+  // Weekly 「M月D日現在」 page, same slack as chiba-suisei: a skipped week plus
+  // a day or two of publication lag after the survey date that is stamped.
+  'hyogo-kigyo': 17 * 24,
   // Survey-date source: 福島県 publishes 隔週 in かんがい期 but only monthly
   // Oct–Mar, so the window has to clear a full winter gap plus publish lag.
   'fukushima-nourin': 45 * 24,
