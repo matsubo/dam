@@ -51,4 +51,20 @@ describe('importDams', () => {
     const r2 = await importDams(parsed);
     expect(r2.upserted).toBe(2);
   });
+
+  test('re-import keeps the name and location a migration curated', async () => {
+    // 0186: kurisugara-28 carries NDI 1368 under its current name 栗柄 at
+    // ダム便覧's point; W01 still says 西紀 at a point 675 m off the dam.
+    await sql`
+      UPDATE dams SET name = '八ッ場（改名）',
+        location = ST_SetSRID(ST_MakePoint(138.7, 36.56), 4326)::geography
+      WHERE external_ids ->> 'ndi' = '1234567890'
+    `;
+    await importDams(parseW01(await readFile(W01, 'utf8')));
+    const [row] = await sql<{ name: string; lng: number; lat: number }[]>`
+      SELECT name, ST_X(location::geometry) AS lng, ST_Y(location::geometry) AS lat
+      FROM dams WHERE external_ids ->> 'ndi' = '1234567890'
+    `;
+    expect(row).toEqual({ name: '八ッ場（改名）', lng: 138.7, lat: 36.56 });
+  });
 });
