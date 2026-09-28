@@ -468,6 +468,14 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '昭和池 (兵庫県加東市) の貯水位・貯水量(m³)・流入量・時間雨量。貯水率は整数表示のため保存せず貯水量と有効貯水容量から算出。越流量は洪水吐からの越流のみで取水放流を含まないため放流量として保存しない。',
     label: '昭和池',
   },
+  'sokobaru-dam': {
+    upstream: '底原ダム管理システム (www.cosmos.ne.jp/~sokobaru/index.html)',
+    license:
+      '利用条件・運営者の記載なし (ページは「底原ダム 管理システム MainMenu」と各水文量の表のみ; robots.txt なし) — 観測値のみを出典明示で掲載',
+    cadence: '時次 (直近 13 時間の毎正時値, ページは数分ごとに再生成; 取得は毎時 :05)',
+    what: '石垣島の 3 ダム (底原/真栄里/石垣) の貯水位 (EL.m)・総貯水量(千m³)・放流量。底原は貯水率・全流入量も。3 ダムとも本ソース唯一の観測源。同じメニューの二又堰・平喜名堰は取水堰のため取り込まない。',
+    label: '底原ダム管理システム',
+  },
   'mc-tottori-hydro': {
     upstream: 'M&C鳥取水力発電株式会社 発電所・ダム運転情報 (mchp-k.co.jp/business/list.php)',
     license:
