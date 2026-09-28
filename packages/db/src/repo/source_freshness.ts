@@ -37,9 +37,13 @@ export const FRESHNESS_OVERRIDE_HOURS: Readonly<Record<string, number | null>> =
   'ktr-kinu-dam': 3,
   'jwa-tonekako': 3,
   // Daily sources — flag if older than 30 h (allows late publish day).
-  'tokyo-waterworks': 30,
   aitoyo: 30,
   'jwa-chikugo': 30,
+  // Business-day page stamped with its own date (0時, 小河内 7時). A holiday
+  // weekend ages it ~4.5 days; 年末年始 (closed 12/29–1/3) up to 10.5 when
+  // 12/26 is the last business day and 1/5 the first. The derived 3 × p90
+  // gap (~93 h) misses both: 20 stamps hold too few weekend gaps.
+  'tokyo-waterworks': 11 * 24,
   // 10-day cadence — flag if older than 14 days.
   'jwa-junpo': 14 * 24,
   // Weekly survey that can skip a week (9/14 was still the latest on 9/27),

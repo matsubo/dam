@@ -59,8 +59,8 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
   'tokyo-waterworks': {
     upstream: '東京都水道局 水源情報 (waterworks.metro.tokyo.lg.jp/suigen/suigen.html)',
     license: '東京都オープンデータ (出典明示で再配布可)',
-    cadence: '日次 (毎日 12:00 / 18:00 JST に取得)',
-    what: '東京都の水源 15 ダム (利根川・荒川・多摩川 水系) の貯水量 (万m³) と貯水率 (%)。前日からの増減量。',
+    cadence: '平日の日次 (0 時 / 多摩川は 7 時現在の値; 毎日 12:00 / 18:00 JST に取得)',
+    what: '東京都の水源 14 ダム (利根川・荒川・多摩川 水系) の貯水量 (万m³) と貯水率 (%)。村山・山口貯水池は 3 貯水池の合計のため取り込まない。',
     label: '東京都水道局',
   },
   'jwa-junpo': {
