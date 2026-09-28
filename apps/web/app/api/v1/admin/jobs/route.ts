@@ -4,6 +4,8 @@
 //   - cron_schedule   Last execution timestamps per crontab identifier.
 //   - active_jobs     Currently-queued / in-flight jobs.
 //   - failing_jobs    Jobs with a last_error, retrying or retries-exhausted.
+//   - stale_sources   Sources whose newest observation is older than their
+//                     cadence allows (packages/db/src/repo/source_freshness.ts).
 //   - queue_depth     Per-task pending counts for quick queue inspection.
 //   - dam_coverage    external_id source attachment counts.
 //   - observations    Row-count + per-source breakdown (last 30d).
@@ -17,6 +19,7 @@
 // disabled (returns 503) to avoid accidental exposure.
 
 import { sql } from '@dam/db/client';
+import { type StaleSource, staleSources } from '@dam/db/repo/source_freshness';
 import { type NextRequest, NextResponse } from 'next/server';
 import type { JSONValue } from 'postgres';
 
@@ -129,6 +132,11 @@ export async function GET(): Promise<NextResponse> {
     ORDER BY (attempts >= max_attempts) DESC, attempts DESC
     LIMIT 50
   `.catch(orEmpty<ActiveJob & { exhausted: boolean }>('failing_jobs'));
+
+  // A dead upstream fails no job — the ingest parses an unchanged page, or an
+  // empty one, and exits green — so failing_jobs can't show it. This can.
+  const stale = await staleSources().catch(orEmpty<StaleSource>('stale_sources'));
+  const hours = (h: number | null): number | null => (h === null ? null : Math.round(h * 10) / 10);
 
   const coverage = await sql<CoverageRow[]>`
     SELECT
@@ -257,6 +265,14 @@ export async function GET(): Promise<NextResponse> {
       cron_schedule: cron,
       active_or_pending_jobs: active,
       failing_jobs: failing,
+      stale_sources: stale.map((s) => ({
+        source_id: s.sourceId,
+        newest_observed_at: s.newestObservedAt?.toISOString() ?? null,
+        expected_interval_hours: hours(s.expectedIntervalHours),
+        age_hours: hours(s.ageHours),
+        threshold_hours: hours(s.thresholdHours),
+        cadence_basis: s.cadenceBasis,
+      })),
       degraded,
       queue_depth_by_task: queueDepth,
       dam_coverage: {
