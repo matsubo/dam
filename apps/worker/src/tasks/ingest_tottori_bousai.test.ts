@@ -7,6 +7,8 @@ import listFixture from '../../../../tests/fixtures/tottori_bousai/list_2026-06-
 import partialCopied from '../../../../tests/fixtures/tottori_bousai/list_2026-09-23-14-20.json';
 import completeCopied from '../../../../tests/fixtures/tottori_bousai/list_2026-09-27-05-20.json';
 import partialPlaceholder from '../../../../tests/fixtures/tottori_bousai/list_2026-09-27-12-20.json';
+// Live list 2026-09-28 12:40 JST, verbatim: the 利水 column null for all six.
+import liveList from '../../../../tests/fixtures/tottori_bousai/list_2026-09-28-12-40.json';
 import {
   chooseMaster,
   normalizeName,
@@ -68,9 +70,9 @@ describe('parseTottoriItems', () => {
         expect(r.storageRate).toBeLessThanOrEqual(1);
       }
     }
-    // 菅沢: 68.8% → 0.688
-    const sugisawa = rows.find((r) => r.observatoryName === '菅沢ダム');
-    expect(sugisawa?.storageRate).toBeCloseTo(0.688, 3);
+    // 東郷 (県-managed): 31.0% → 0.31
+    const togo = rows.find((r) => r.observatoryName === '東郷ダム');
+    expect(togo?.storageRate).toBeCloseTo(0.31, 3);
   });
 
   it('prefers 利水容量貯水率 over 有効容量貯水率', () => {
@@ -92,7 +94,7 @@ describe('parseTottoriItems', () => {
     expect(rows[0]?.storageRate).toBeCloseTo(0.962, 3);
   });
 
-  it('falls back to 有効容量貯水率 when 利水 is unpublished', () => {
+  it('a 県 dam falls back to 有効容量貯水率 when 利水 is unpublished', () => {
     const [base] = listFixture.items as Parameters<typeof parseTottoriItems>[0];
     if (!base) throw new Error('fixture missing');
     const rows = parseTottoriItems([
@@ -105,6 +107,28 @@ describe('parseTottoriItems', () => {
       },
     ]);
     expect(rows[0]?.storageRate).toBeCloseTo(0.31, 3);
+  });
+
+  it("does not store 菅沢's 有効容量貯水率: the 国 dam's rate is not its manager's", () => {
+    // 12:40: 450 千m³ at 2.9 % — volume / 15,403 千m³ on every stored row since
+    // June — while the manager's own feeds (cgr-mlit-dam, kasenbosai
+    // storPcntIrr) read ~39 %. A NULL rate lets the trigger derive and flag it.
+    const rows = parseTottoriItems(liveList.items as Items);
+    const sugisawa = rows.find((r) => r.observatoryName === '菅沢ダム');
+    expect(sugisawa?.storageVolumeM3).toBe(450_000);
+    expect(sugisawa?.storageRate).toBeNull();
+    // 県-managed 賀祥 keeps 鳥取県's own 15 % (kasenbosai stores the same), not
+    // the 26.7 % its 総貯水量-including volume column would derive to.
+    expect(rows.find((r) => r.observatoryName === '賀祥ダム')?.storageRate).toBeCloseTo(0.15, 3);
+  });
+
+  it('still takes a 国 dam’s 利水容量貯水率 when one is published', () => {
+    const sugisawa = (liveList.items as Items).find((it) => it.managerCd === '41');
+    if (!sugisawa) throw new Error('fixture missing');
+    const rows = parseTottoriItems([
+      { ...sugisawa, storageRateWaterUseCapacity: 39.1, storageRateWaterUseCapacityFlg: '0' },
+    ]);
+    expect(rows[0]?.storageRate).toBeCloseTo(0.391, 3);
   });
 
   it('observatoryId is stringified', () => {

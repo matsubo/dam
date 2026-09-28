@@ -106,6 +106,27 @@ const PREF_NAME_TO_CODE: Record<string, string> = {
 };
 
 /**
+ * JST hour each prefecture block's figures were read at, by JIS code.
+ *
+ * The PDF prints only the survey date. Matching the 11 survey columns of the
+ * R8.9.15 table (4/15–9/15) against prod's hourly feeds for the same dams:
+ * 福岡 equals the JST-midnight readings (38 matches at 15:00Z, none at 00:00Z;
+ * 江川 4,652 = fukuoka-bodik, 油木 7,353 = kasenbosai), while 佐賀 (厳木,
+ * 嘉瀬川: 11), 熊本 (市房, 竜門, 緑川: 18) and 大分 (耶馬渓 vs kasenbosai, and
+ * all six rows oita-nourin prints at 「9：00現在」: 10) match 09:00 JST only.
+ * 宮崎's three dams with a kasenbosai series (田代八重, 立花, 綾北) are on
+ * another volume basis, but an affine fit against the 09:00 readings leaves
+ * 4–5× less residual than against midnight. 長崎 and 鹿児島 have no hourly
+ * feed to compare with and stay at midnight.
+ */
+const SURVEY_HOUR_JST: Readonly<Record<string, number>> = {
+  '41': 9,
+  '43': 9,
+  '44': 9,
+  '45': 9,
+};
+
+/**
  * Rows whose master sits outside the printed prefecture, pinned to its NDI row
  * (keyed by feedKey below).
  *
@@ -132,6 +153,8 @@ export interface ParsedRow {
   storageVolumeM3: number;
   /** 貯水率 as a 0..1 fraction. */
   storageRate: number;
+  /** Survey date at the hour its prefecture block was read (see SURVEY_HOUR_JST). */
+  observedAt: Date;
 }
 
 interface PublishedRow {
@@ -146,7 +169,7 @@ interface PublishedRow {
  * JST midnight of that day.
  *
  * Unlike oita-nourin's own PDF, this table carries no survey time (HH:MM),
- * only the date, so the observation is stamped at JST midnight. Anchored on
+ * only the date; each row adds its block's hour (SURVEY_HOUR_JST). Anchored on
  * 現在 so the table's own title line — the only place this phrase appears —
  * is what is matched, not some other 令和N年M月D日 elsewhere on the page.
  */
@@ -344,11 +367,15 @@ export function parseKyushuNouseiPdfText(text: string): {
     const implied = (100 * current.volume) / current.capacity;
     if (Math.abs(implied - current.rate) > 1.5) continue;
 
+    const prefCode = currentPrefCode ?? 'unknown';
     rows.push({
       kyushuName: name,
-      prefCode: currentPrefCode ?? 'unknown',
+      prefCode,
       storageVolumeM3: current.volume * 1000,
       storageRate: current.rate / 100,
+      observedAt: new Date(
+        (reportDate?.getTime() ?? Number.NaN) + (SURVEY_HOUR_JST[prefCode] ?? 0) * 3_600_000,
+      ),
     });
   }
 
@@ -540,7 +567,7 @@ const task: Task = async (_payload, helpers) => {
       continue;
     }
     inputs.push({
-      observedAt: reportDate,
+      observedAt: p.observedAt,
       damId,
       sourceId: SOURCE_ID,
       storageVolumeM3: p.storageVolumeM3,
