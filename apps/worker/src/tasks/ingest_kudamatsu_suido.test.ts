@@ -4,10 +4,12 @@
 // (city.kudamatsu.lg.jp/sui-gyoumu/~k-water/damu_001.html) taken 2026-09-28:
 // 県営温見ダム 令和8年9月3日0時現在, 県営末武川ダム 令和8年9月1日0時現在.
 
-import { describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { parseKudamatsuSuigen } from './ingest_kudamatsu_suido.ts';
+import { sql } from '@dam/db/client';
+import type { JobHelpers } from 'graphile-worker';
+import task, { parseKudamatsuSuigen } from './ingest_kudamatsu_suido.ts';
 
 const FIXTURE = join(
   import.meta.dir,
@@ -78,5 +80,84 @@ describe('parseKudamatsuSuigen', () => {
   test('a section without a readable 現在 stamp keeps its name but no date', () => {
     const page = section('県営温見ダムの状況', '調整中', '');
     expect(parseKudamatsuSuigen(page)[0]?.observedAt).toBeNull();
+  });
+});
+
+describe('task: a section without a stamp', () => {
+  // The page lists two dams; one loses its 「…現在」 line. The run must still
+  // record the whole published list and write the dated dam before failing.
+  const SOURCE = 'kudamatsu-suido';
+  const DATED = { slug: 'kudamatsu-test-dated', name: '試験下松甲' };
+  const UNDATED = { slug: 'kudamatsu-test-undated', name: '試験下松乙' };
+  const KEYS = [`${DATED.name}ダム`, `${UNDATED.name}ダム`];
+  const ids = new Map<string, bigint>();
+  const realFetch = globalThis.fetch;
+  let hadRun = false;
+  let outcome: unknown;
+
+  async function cleanup(): Promise<void> {
+    await sql`
+      DELETE FROM source_universe
+      WHERE source_id = ${SOURCE} AND source_external_id IN ${sql(KEYS)}`;
+    await sql`
+      DELETE FROM observations WHERE dam_id IN (
+        SELECT id FROM dams WHERE slug IN (${DATED.slug}, ${UNDATED.slug}))`;
+    await sql`DELETE FROM dams WHERE slug IN (${DATED.slug}, ${UNDATED.slug})`;
+  }
+
+  beforeAll(async () => {
+    await cleanup();
+    const [run] = await sql`SELECT 1 FROM source_universe_runs WHERE source_id = ${SOURCE}`;
+    hadRun = run !== undefined;
+    for (const d of [DATED, UNDATED]) {
+      const [r] = await sql<{ id: bigint }[]>`
+        INSERT INTO dams (slug, name, pref_code, location)
+        VALUES (${d.slug}, ${d.name}, '35',
+                ST_SetSRID(ST_MakePoint(131.9, 34.1), 4326)::geography)
+        RETURNING id`;
+      ids.set(d.slug, r?.id ?? 0n);
+    }
+    const page =
+      section(
+        `県営${DATED.name}ダムの状況`,
+        '令和8年9月3日0時現在',
+        '<tr><th>水位</th><td><p>271.57m</p></td></tr>' +
+          '<tr><th>貯水量</th><td><p>4,319,680立法メートル</p></td></tr>',
+      ) + section(`県営${UNDATED.name}ダムの状況`, '調整中', '');
+    globalThis.fetch = (async () => new Response(page)) as unknown as typeof fetch;
+    const helpers = { logger: { info: () => {} } } as unknown as JobHelpers;
+    try {
+      await task({}, helpers);
+    } catch (e) {
+      outcome = e;
+    }
+  });
+
+  afterAll(async () => {
+    globalThis.fetch = realFetch;
+    await cleanup();
+    if (!hadRun) await sql`DELETE FROM source_universe_runs WHERE source_id = ${SOURCE}`;
+  });
+
+  test('still fails the run, naming the undated dam', () => {
+    expect(String(outcome)).toContain(`${UNDATED.name}ダム`);
+  });
+
+  test('records both published dams in the universe', async () => {
+    const rows = await sql<{ key: string; resolved: bigint | null }[]>`
+      SELECT source_external_id AS key, resolved_dam_id AS resolved FROM source_universe
+      WHERE source_id = ${SOURCE} AND source_external_id IN ${sql(KEYS)}
+      ORDER BY source_external_id`;
+    expect([...rows]).toEqual([
+      { key: `${UNDATED.name}ダム`, resolved: ids.get(UNDATED.slug) ?? null },
+      { key: `${DATED.name}ダム`, resolved: ids.get(DATED.slug) ?? null },
+    ]);
+  });
+
+  test('writes the dated dam', async () => {
+    const rows = await sql<{ at: Date; level: number }[]>`
+      SELECT observed_at AS at, water_level_m::float8 AS level FROM observations
+      WHERE source_id = ${SOURCE} AND dam_id = ${ids.get(DATED.slug) ?? 0n}`;
+    expect([...rows]).toEqual([{ at: new Date('2026-09-02T15:00:00.000Z'), level: 271.57 }]);
   });
 });

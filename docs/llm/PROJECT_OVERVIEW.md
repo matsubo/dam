@@ -133,7 +133,7 @@ header. Set `API_AUTH_BYPASS=1` for local development.
 
 ## Worker tasks (graphile-worker)
 
-Cron schedule lives in `apps/worker/src/crontab.ts` (times are UTC); every task
+Cron schedule lives in `packages/core/src/crontab.ts` (times are UTC); every task
 is registered in `apps/worker/src/index.ts`. Task names use `:` separators
 because graphile-worker rejects `.` in identifiers. Each ingest task writes
 under its own `source_id` (the task name without `ingest:`, except
@@ -142,7 +142,7 @@ the provider's whole published list (`kasenbosai`'s list is recorded by
 `match:kasenbosai`, its `has_data` by `kasenbosai-v2` through
 `recordUniverseHasData`; exemptions live in `universe_instrumentation.test.ts`).
 Every ingest cron line carries `?jobKey=<task>`, so a tick replaces a job
-that is still retrying instead of queueing another; `crontab.test.ts` checks
+that is still retrying instead of queueing another; `apps/worker/src/crontab.test.ts` checks
 the key and that the default 25 attempts outlast each line's longest gap.
 `CODEMAP.md` has one line per task file. 112 tasks are registered: 96
 `ingest:*` (95 on the cron, `ingest:kasenbosai` manual) and 16 others.
