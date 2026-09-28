@@ -7,6 +7,7 @@ import {
   classifyOneDam,
   coverageSummary,
   recordUniverse,
+  recordUniverseHasData,
 } from './source_universe.ts';
 
 const SRC_A = 'universe-test-a';
@@ -250,6 +251,32 @@ describe('source universe coverage triage', () => {
     await recordUniverse(SRC_A, [
       { externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale, hasData: null },
     ]);
+    expect(only(await classifyDamCoverage(), stale)).toBe('published_not_ingested');
+  });
+
+  test('a value reader can say "no data" for rows the catalogue task listed', async () => {
+    // kasenbosai's list comes from the weekly catalogue sweep, which sees no
+    // values; the hourly value fetch is what sees 滝波 / 和知 flag every
+    // reading 欠測. Its answer has to land on the rows the sweep recorded.
+    await recordUniverse(SRC_A, [{ externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale }]);
+    await recordUniverseHasData(SRC_A, [
+      { externalId: 'a-2', hasData: false },
+      { externalId: 'a-not-listed', hasData: false },
+    ]);
+    expect(only(await classifyDamCoverage(), stale)).toBe('published_no_data');
+    // It only annotates the list; it never adds a station the sweep did not see.
+    const [n] = await sql<{ n: number }[]>`
+      SELECT COUNT(*)::INT AS n FROM source_universe WHERE source_id = ${SRC_A}
+    `;
+    expect(n?.n).toBe(1);
+
+    // The next catalogue sweep cannot tell, so it must not wipe the answer...
+    await recordUniverse(SRC_A, [{ externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale }], {
+      keepHasData: true,
+    });
+    expect(only(await classifyDamCoverage(), stale)).toBe('published_no_data');
+    // ...while the value reader's own later "unknown" still clears it.
+    await recordUniverseHasData(SRC_A, [{ externalId: 'a-2', hasData: null }]);
     expect(only(await classifyDamCoverage(), stale)).toBe('published_not_ingested');
   });
 
