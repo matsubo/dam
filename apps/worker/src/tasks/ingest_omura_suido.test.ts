@@ -103,4 +103,11 @@ describe('planOmura', () => {
     expect(plan.writes).toEqual([]);
     expect(plan.drift).toHaveLength(1);
   });
+
+  test('a row whose readings do not parse is left unknown, not marked empty', () => {
+    const blank = html.replace('183,274', '－').replace('91.6%', '－');
+    const plan = planOmura(parseOmuraWater(blank).rows, masters);
+    expect(plan.universe.find((u) => u.externalId === '池田貯水池')?.hasData).toBeNull();
+    expect(plan.writes).toEqual([]);
+  });
 });
