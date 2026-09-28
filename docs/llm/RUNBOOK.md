@@ -55,7 +55,7 @@ just reset-db               # wipe + recreate (drops volume!)
 just dev-web                # next dev (default)
 just dev-worker             # graphile-worker
 just check                  # lint + typecheck + test
-bunx playwright test        # 26 E2E tests (auto-spawns dev server on 3031)
+bunx playwright test        # E2E on a seeded scratch DB (AGENTS.md "Tests"); auto-spawns dev on 3031
 just e2e                    # alias
 ```
 

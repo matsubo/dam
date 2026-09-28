@@ -77,7 +77,14 @@ cd apps/web && API_AUTH_BYPASS=1 \
 
 # Tests
 bun run test                            # 85 unit/integration tests
-bunx playwright test                    # 26 E2E tests (auto-spawns dev)
+# E2E runs on what CI builds: a migrated scratch DB plus the fixture seed,
+# which writes rows it never removes — never seed the shared `dam` DB.
+export DATABASE_URL=$(bun run bin/test_db.ts "$DATABASE_URL" "$PWD/e2e")
+bun run --filter @dam/db migrate && bun run tests/e2e/fixtures/seed.ts
+# The home page's unstable_cache is not keyed on the DB: clear it after
+# switching databases or reseeding, or coverage-consistency sees stale numbers.
+rm -rf apps/web/.next/dev/cache
+bunx playwright test                    # E2E (auto-spawns dev on that DB)
 E2E_BASE_URL=http://127.0.0.1:3030 bunx playwright test  # against existing dev
 
 # Quality gates
