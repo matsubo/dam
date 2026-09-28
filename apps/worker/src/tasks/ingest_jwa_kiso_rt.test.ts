@@ -1,8 +1,26 @@
 // apps/worker/src/tasks/ingest_jwa_kiso_rt.test.ts
+//
+// Fixture is a verbatim UTF-8 capture of 水資源機構 中部支社 リアルタイム情報
+// 木曽川水系 (water.go.jp/mizu/chubu/realtime/index.html) taken 2026-09-28
+// 12:54 JST, 観測時刻 2026年09月28日 12時40分. Page order: 牧尾, 味噌川,
+// 阿木川, 岩屋, 徳山, 打上調整池 (貯水位 only), 中里貯水池 (貯水位 and
+// 有効貯水量 only), 宮川/菰野/加佐登調整池, then 長良川河口堰 (流入量 193.44,
+// 流出量 214.77) and 木曽川大堰 (流入量 542.99, 放流量 535.39).
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { sql } from '@dam/db/client';
 import { ensureExternalIds, parseKisoRtHtml, parseKisoRtTimestamp } from './ingest_jwa_kiso_rt.ts';
+
+const FIXTURE = join(
+  import.meta.dir,
+  '..',
+  '..',
+  '..',
+  '..',
+  'tests/fixtures/jwa_kiso_rt/index_2026-09-28.html',
+);
 
 describe('parseKisoRtTimestamp', () => {
   test('parses JST timestamp to UTC (subtract 9h)', () => {
@@ -21,6 +39,66 @@ describe('parseKisoRtTimestamp', () => {
 
   test('returns null when no timestamp present', () => {
     expect(parseKisoRtTimestamp('no timestamp here')).toBeNull();
+  });
+});
+
+describe('parseKisoRtHtml on the live page', () => {
+  test('reads each dam from its own table only', async () => {
+    const { observedAt, rows } = parseKisoRtHtml(await readFile(FIXTURE, 'utf8'));
+    expect(observedAt?.toISOString()).toBe('2026-09-28T03:40:00.000Z');
+    // 中里's table has no 流入量 / 放流量. The 193.44 and 535.39 further down
+    // the page belong to 長良川河口堰 and 木曽川大堰.
+    expect(rows).toEqual([
+      {
+        kisoName: '牧尾ダム',
+        waterLevelM: 877.75,
+        storageVolumeM3: 60_877_000,
+        inflowM3s: 375.6,
+        outflowM3s: 392.78,
+      },
+      {
+        kisoName: '味噌川ダム',
+        waterLevelM: 1112.78,
+        storageVolumeM3: 42_739_000,
+        inflowM3s: 12.6,
+        outflowM3s: 10.81,
+      },
+      {
+        kisoName: '阿木川ダム',
+        waterLevelM: 399.9,
+        storageVolumeM3: 27_284_000,
+        inflowM3s: 18.53,
+        outflowM3s: 21.8,
+      },
+      {
+        kisoName: '岩屋ダム',
+        waterLevelM: 409.84,
+        storageVolumeM3: 96_026_000,
+        inflowM3s: 94.73,
+        outflowM3s: 0,
+      },
+      {
+        kisoName: '徳山ダム',
+        waterLevelM: 382.03,
+        storageVolumeM3: 160_488_000,
+        inflowM3s: 18.25,
+        outflowM3s: 18.25,
+      },
+      {
+        kisoName: '中里貯水池',
+        waterLevelM: 172.52,
+        storageVolumeM3: 1_801_000,
+        inflowM3s: null,
+        outflowM3s: null,
+      },
+    ]);
+  });
+
+  test('an empty data cell is null, not the next row of the table', async () => {
+    const html = (await readFile(FIXTURE, 'utf8')).replace('>375.60<', '><');
+    const makio = parseKisoRtHtml(html).rows.find((r) => r.kisoName === '牧尾ダム');
+    expect(makio?.inflowM3s).toBeNull();
+    expect(makio?.outflowM3s).toBe(392.78);
   });
 });
 
@@ -49,42 +127,6 @@ ${inRow}${outRow}</tbody></table>`;
 
   const makeHtml = (body: string): string =>
     `<html><body><span class="latest-time">2026年06月05日 10時10分</span>${body}</body></html>`;
-
-  test('extracts water level, storage (×1000 to m³), inflow, outflow for all 5 full-data dams', () => {
-    const html = makeHtml(
-      makeDamSection('牧尾ダム', '875.63', '55707', '5.51', '0.00') +
-        makeDamSection('味噌川ダム', '1112.66', '42596', '1.74', '1.74') +
-        makeDamSection('阿木川ダム', '403.12', '31250', '8.20', '0.00') +
-        makeDamSection('岩屋ダム', '402.91', '74053', '16.59', '0.00') +
-        makeDamSection('徳山ダム', '391.94', '268142', '14.86', '16.08') +
-        makeDamSection('中里貯水池', '182.51', '6794'),
-    );
-    const { observedAt, rows } = parseKisoRtHtml(html);
-    expect(observedAt?.toISOString()).toBe('2026-06-05T01:10:00.000Z');
-    expect(rows).toHaveLength(6);
-
-    const makio = rows.find((r) => r.kisoName === '牧尾ダム');
-    expect(makio?.waterLevelM).toBeCloseTo(875.63);
-    expect(makio?.storageVolumeM3).toBe(55707000);
-    expect(makio?.inflowM3s).toBeCloseTo(5.51);
-    expect(makio?.outflowM3s).toBeCloseTo(0.0);
-
-    const tokuyama = rows.find((r) => r.kisoName === '徳山ダム');
-    expect(tokuyama?.storageVolumeM3).toBe(268142000);
-    expect(tokuyama?.inflowM3s).toBeCloseTo(14.86);
-    expect(tokuyama?.outflowM3s).toBeCloseTo(16.08);
-  });
-
-  test('中里貯水池 has water level and storage but null inflow/outflow', () => {
-    const html = makeHtml(makeDamSection('中里貯水池', '182.51', '6794'));
-    const { rows } = parseKisoRtHtml(html);
-    expect(rows).toHaveLength(1);
-    const nakasato = rows[0];
-    expect(nakasato?.waterLevelM).toBeCloseTo(182.51);
-    expect(nakasato?.storageVolumeM3).toBe(6794000);
-    expect(nakasato?.inflowM3s).toBeNull();
-    expect(nakasato?.outflowM3s).toBeNull();
-  });
 
   test('treats "cc" sensor values as null; skips dam when both primary metrics are cc', () => {
     const html = makeHtml(
