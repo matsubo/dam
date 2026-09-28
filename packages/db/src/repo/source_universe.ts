@@ -157,6 +157,7 @@ export async function recordUniverseHasData(
       FROM jsonb_to_recordset(${sql.json(rows)}) AS v ("externalId" TEXT, "hasData" BOOLEAN)
       WHERE su.source_id = ${sourceId}
         AND su.source_external_id = v."externalId"
+        AND su.has_data IS DISTINCT FROM v."hasData"
     `;
   } catch (err) {
     console.error(`recordUniverseHasData(${sourceId}) failed:`, err);
