@@ -28,7 +28,6 @@ import { sql } from '../client.ts';
  */
 export const FRESHNESS_OVERRIDE_HOURS: Readonly<Record<string, number | null>> = {
   // Hourly real-time sources — flag if older than 3 h.
-  'kanagawa-dam': 3,
   'shiga-bousai': 3,
   'tottori-dam': 3,
   'aomori-dam': 3,
@@ -37,7 +36,9 @@ export const FRESHNESS_OVERRIDE_HOURS: Readonly<Record<string, number | null>> =
   'ktr-kinu-dam': 3,
   'jwa-tonekako': 3,
   // Daily sources — flag if older than 30 h (allows late publish day).
-  aitoyo: 30,
+  // 30-day daily window stamped at 24:00 JST, rolled over at ~01:00 JST and
+  // polled every 3 h; the derived 3 × 24 h + lag would wait three days.
+  'kanagawa-dam': 30,
   'jwa-chikugo': 30,
   // Business-day page stamped with its own date (0時, 小河内 7時). A holiday
   // weekend ages it ~4.5 days; 年末年始 (closed 12/29–1/3) up to 10.5 when
@@ -46,6 +47,10 @@ export const FRESHNESS_OVERRIDE_HOURS: Readonly<Record<string, number | null>> =
   'tokyo-waterworks': 11 * 24,
   // 10-day cadence — flag if older than 14 days.
   'jwa-junpo': 14 * 24,
+  // Business-day page: Friday's shows Thursday 24:00, the next is Monday's
+  // (Sunday 24:00, often after 11:00 JST) — ~85 h; a Monday holiday adds a
+  // day. The derived threshold (3 × the ~72 h weekend gap) would be ~10 d.
+  aitoyo: 5 * 24,
   // Weekly survey that can skip a week (9/14 was still the latest on 9/27),
   // plus a day or two before the page's 更新日.
   'chiba-suisei': 17 * 24,
