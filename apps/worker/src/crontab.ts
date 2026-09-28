@@ -456,6 +456,11 @@ export const CRONTAB = `
 # elsewhere and recorded in the universe. Daily at 06:52 UTC (15:52 JST).
 52 6 * * * ingest:nagasaki-city-suido ?jobKey=ingest:nagasaki-city-suido
 
+# 三重県企業庁 水源状況 — 7 ダム, one weekly 「令和…現在」 table (volume + rate);
+# stores 伊坂/山村/菰野調整池, the rest are universe-only. Said to be updated
+# Mondays but seen on a Thursday, so daily at 07:17 UTC (16:17 JST).
+17 7 * * * ingest:mie-kigyo ?jobKey=ingest:mie-kigyo
+
 # M&C鳥取水力発電 発電所・ダム運転情報 — 鳥取県営発電 4 ダム (茗荷谷/三朝調整池/
 # 中津 + 菅沢). One current value per dam (refreshed every minute): 10分間流入量
 # and ゲート放流量 only — the published ダム水位 is a gauge height, not EL.
