@@ -37,9 +37,11 @@ export const FRESHNESS_OVERRIDE_HOURS: Readonly<Record<string, number | null>> =
   'ktr-kinu-dam': 3,
   'jwa-tonekako': 3,
   // Daily sources — flag if older than 30 h (allows late publish day).
+  // Not jwa-chikugo: stamped by its business-day edition, it goes 72 h over a
+  // weekend and up to 7 days over 年末年始, which the derived threshold
+  // (3 × the p90 stamp gap, a weekend, + lag ≈ 230 h) already clears.
   'tokyo-waterworks': 30,
   aitoyo: 30,
-  'jwa-chikugo': 30,
   // 10-day cadence — flag if older than 14 days.
   'jwa-junpo': 14 * 24,
   // Weekly survey that can skip a week (9/14 was still the latest on 9/27),

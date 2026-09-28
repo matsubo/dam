@@ -69,15 +69,18 @@ export const CRONTAB = `
 20 2,5 * * * ingest:jwa-aichi-yosui ?jobKey=ingest:jwa-aichi-yosui
 
 # JWA Chikugo (筑後川 7 dams: 松原/下筌/大山/合所/江川/寺内/小石原川). Page
-# carries one dated 0時 edition per business day, often published after this
-# run; rows are stamped with the page's own date, so the edition is picked up
-# the next day. Fetch at 01:00 UTC = 10:00 JST.
-0 1 * * * ingest:jwa-chikugo ?jobKey=ingest:jwa-chikugo
+# carries one dated 0時 edition per business day (none on 閉庁日), published
+# at no fixed hour — often after 10:00 JST. Rows are stamped with the page's
+# own date, so each run just upserts whichever edition is up. 01:00 and 08:00
+# UTC = 10:00 and 17:00 JST: the late run catches an edition before the next
+# morning's replaces it.
+0 1,8 * * * ingest:jwa-chikugo ?jobKey=ingest:jwa-chikugo
 
 # JWA 筑後川局 水管理情報WEB (chikugo.ec-net.jp) — hourly, 5 施設
 # (江川/寺内/小石原川/大山/筑後大堰). Each rep*_I60 page is a 24-row hourly
 # table regenerated at ~:37; the whole window is upserted. Priority 298: above
-# jwa-chikugo (297), below kasenbosai (310). 筑後大堰 has no other source.
+# jwa-chikugo (297), below kasenbosai (310). 筑後大堰's only other source is
+# mudam (historical, daily to 2024-12).
 # Cron at :50.
 50 * * * * ingest:jwa-chikugo-rt ?jobKey=ingest:jwa-chikugo-rt
 
