@@ -27,6 +27,7 @@ import ingestFukushimaKasen from './tasks/ingest_fukushima_kasen.ts';
 import ingestFukushimaNourin from './tasks/ingest_fukushima_nourin.ts';
 import ingestGifuKasen from './tasks/ingest_gifu_kasen.ts';
 import ingestGunmaKasen from './tasks/ingest_gunma_kasen.ts';
+import ingestHiradoSuido from './tasks/ingest_hirado_suido.ts';
 import ingestHiroshima from './tasks/ingest_hiroshima.ts';
 import ingestHkdMlit from './tasks/ingest_hkd_mlit.ts';
 import ingestHrrMlit from './tasks/ingest_hrr_mlit.ts';
@@ -57,6 +58,7 @@ import ingestKagoshimaBousai from './tasks/ingest_kagoshima_bousai.ts';
 import ingestKagoshimaKasen from './tasks/ingest_kagoshima_kasen.ts';
 import ingestKanagawa from './tasks/ingest_kanagawa.ts';
 import ingestKanagawaSuibou from './tasks/ingest_kanagawa_suibou.ts';
+import ingestKandaSuido from './tasks/ingest_kanda_suido.ts';
 import ingestKasenbosai from './tasks/ingest_kasenbosai.ts';
 import ingestKasenbosaiV2 from './tasks/ingest_kasenbosai_v2.ts';
 import ingestKitakyushuSuido from './tasks/ingest_kitakyushu_suido.ts';
@@ -84,6 +86,7 @@ import ingestOita from './tasks/ingest_oita_bousai.ts';
 import ingestOitaNourin from './tasks/ingest_oita_nourin.ts';
 import ingestOkayama from './tasks/ingest_okayama.ts';
 import ingestOkinawaEb from './tasks/ingest_okinawa_eb.ts';
+import ingestOmuraSuido from './tasks/ingest_omura_suido.ts';
 import ingestOsaka from './tasks/ingest_osaka.ts';
 import ingestQsrRyumon from './tasks/ingest_qsr_ryumon.ts';
 import ingestQsrToukan from './tasks/ingest_qsr_toukan.ts';
@@ -99,6 +102,7 @@ import ingestShimokubo from './tasks/ingest_shimokubo.ts';
 import ingestShimonosekiSuido from './tasks/ingest_shimonoseki_suido.ts';
 import ingestShiodaSayamaike from './tasks/ingest_shioda_sayamaike.ts';
 import ingestSkrHiji from './tasks/ingest_skr_hiji.ts';
+import ingestSueSuido from './tasks/ingest_sue_suido.ts';
 import ingestSyowaike from './tasks/ingest_syowaike.ts';
 import ingestTndamHyogo from './tasks/ingest_tndam_hyogo.ts';
 import ingestTochigi from './tasks/ingest_tochigi.ts';
@@ -245,6 +249,10 @@ async function main(): Promise<void> {
       'ingest:hyogo-kigyo': ingestHyogoKigyo,
       'ingest:awaji-suido': ingestAwajiSuido,
       'ingest:dainichigawa-lid': ingestDainichigawaLid,
+      'ingest:omura-suido': ingestOmuraSuido,
+      'ingest:hirado-suido': ingestHiradoSuido,
+      'ingest:kanda-suido': ingestKandaSuido,
+      'ingest:sue-suido': ingestSueSuido,
       'backfill:kagoshima-bodik': backfillKagoshima,
       'backfill:suimon:enqueue': backfillEnqueue,
       'backfill:suimon:run': backfillRun,
