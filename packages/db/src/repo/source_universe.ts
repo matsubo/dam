@@ -231,10 +231,15 @@ export async function classifyDamCoverage(): Promise<DamCoverageRow[]> {
           SELECT 1 FROM source_universe_runs r WHERE r.source_id = sp.source_id
         )
     ),
+    -- A row with every quantity NULL is not data: mudam's blank CSV days and
+    -- kasenbosai's all-欠測 hours were stored that way, and counting them
+    -- called dams covered that have never delivered a value.
     fresh AS (
       SELECT DISTINCT dam_id
       FROM observations
       WHERE observed_at > NOW() - INTERVAL '30 days'
+        AND num_nonnulls(storage_volume_m3, storage_rate, inflow_m3s,
+                         outflow_m3s, water_level_m, rainfall_mm) > 0
     ),
     published AS (
       SELECT su.resolved_dam_id AS dam_id,
@@ -421,6 +426,8 @@ export async function classifyOneDam(damId: bigint): Promise<DamCoverageRow | nu
              WHEN EXISTS (
                SELECT 1 FROM observations o
                WHERE o.dam_id = d.id AND o.observed_at > NOW() - INTERVAL '30 days'
+                 AND num_nonnulls(o.storage_volume_m3, o.storage_rate, o.inflow_m3s,
+                                  o.outflow_m3s, o.water_level_m, o.rainfall_mm) > 0
              )                                            THEN 'covered'
              WHEN (SELECT no_data FROM published)         THEN 'published_no_data'
              WHEN (SELECT sources FROM published) IS NOT NULL THEN 'published_not_ingested'

@@ -41,6 +41,50 @@ describe('kasenbosaiHasData', () => {
       }),
     ).toBeNull();
   });
+
+  // The task fires at :03 and asks for the HH:00 file, whose newest rows are
+  // the placeholders for the time slot just opened: every quantity and every
+  // Ccd null. The 09:30 fixture shows the shape on its own 09:30 min10 row;
+  // the HH:00 file carries the same row at the head of hrValues too.
+  const takinami = tmlist('tmlist_0460900700011_2026-09-28_0930.json');
+  const placeholder = (obsTime: string) => ({ ...takinami.min10Values?.[0], obsTime });
+
+  test("the just-opened hour's null-Ccd row does not hide a station's 欠測 flags", () => {
+    expect(placeholder('x').storLvlCcd).toBeNull(); // the fixture row really is bare
+    const at1000: ApiResponse = {
+      ...takinami,
+      min10Values: [placeholder('2026/09/28 10:00'), ...(takinami.min10Values ?? [])],
+      hrValues: [placeholder('2026/09/28 10:00'), ...(takinami.hrValues ?? [])],
+    };
+    expect(kasenbosaiHasData(at1000)).toBe(false);
+  });
+
+  test('a quantity the station never reports does not hide its 欠測 flags', () => {
+    const hrValues = (takinami.hrValues ?? []).map((r) => ({
+      ...r,
+      allDisch: null,
+      allDischCcd: null,
+    }));
+    expect(kasenbosaiHasData({ ...takinami, hrValues })).toBe(false);
+  });
+
+  test('Ccd=0 with no value is not a 欠測 flag', () => {
+    // The provider vouches for the slot but sends nothing: we cannot tell
+    // that from a payload we misread, so the answer stays unknown.
+    const hrValues = (takinami.hrValues ?? []).map((r) => ({ ...r, storLvl: null, storLvlCcd: 0 }));
+    expect(kasenbosaiHasData({ ...takinami, hrValues })).toBeNull();
+  });
+
+  test('only bare placeholder rows is unknown', () => {
+    expect(
+      kasenbosaiHasData({
+        dspFlg: 1,
+        obsValue: null,
+        min10Values: [placeholder('2026/09/28 10:00')],
+        hrValues: [placeholder('2026/09/28 10:00')],
+      }),
+    ).toBeNull();
+  });
 });
 
 describe('parseKasenbosaiTimestamp', () => {
