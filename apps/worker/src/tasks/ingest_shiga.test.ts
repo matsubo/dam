@@ -7,11 +7,13 @@
 //   mobile_dam_data_34196_*        /mobile/dam/dam_data.php?ID=34196 (野洲川ダム)
 //   mobile_dam_data_37191_*        /mobile/dam/dam_data.php?ID=37191 (姉川ダム,
 //                                  every value "*" 欠測 / "-" 未観測 that day)
+//   mobile_dam_data_39999_*        /mobile/dam/dam_data.php?ID=39999 (犬上川ダム,
+//                                  2026-09-28 08:10: listed, but no rows at all)
 
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { parseShigaDamData, parseShigaStationList } from './ingest_shiga.ts';
+import { parseShigaDamData, parseShigaStationList, shigaPageHasData } from './ingest_shiga.ts';
 
 const FIXTURE_DIR = join(import.meta.dir, '..', '..', '..', '..', 'tests/fixtures/shiga_bousai');
 
@@ -93,5 +95,41 @@ describe('parseShigaDamData', () => {
     );
     const [latest] = parseShigaDamData(html, new Date('2026-12-31T15:05:00Z'));
     expect(latest?.observedAt.toISOString()).toBe('2026-12-31T14:50:00.000Z');
+  });
+});
+
+describe('shigaPageHasData', () => {
+  test('a station page with readings carries data', async () => {
+    expect(shigaPageHasData(await fixture('mobile_dam_data_34196_2026-09-27.shiftjis.html'))).toBe(
+      true,
+    );
+  });
+
+  test('a listed station whose page prints no rows carries none (犬上川)', async () => {
+    expect(shigaPageHasData(await fixture('mobile_dam_data_39999_2026-09-28.shiftjis.html'))).toBe(
+      false,
+    );
+  });
+
+  test('rows that are all 欠測 / 未観測 carry none', async () => {
+    expect(shigaPageHasData(await fixture('mobile_dam_data_37191_2026-09-27.shiftjis.html'))).toBe(
+      false,
+    );
+  });
+
+  test('a page it does not recognise is unknown, not "no value"', () => {
+    // An error page or a redesign must not read as the provider publishing
+    // nothing — that would hide our own breakage under 提供元に値なし.
+    expect(shigaPageHasData('<html><body>メンテナンス中</body></html>')).toBeNull();
+  });
+
+  test('a dated page with no recognisable cells in another shape is unknown', async () => {
+    // Only 犬上川's exact shape (header straight into the legend <hr>) means
+    // "no rows"; a redesign that renames the cells must not read as no data.
+    const html = (await fixture('mobile_dam_data_34196_2026-09-27.shiftjis.html'))
+      .replaceAll('［貯水位］', '水位:')
+      .replaceAll('［流入量］', '流入:')
+      .replaceAll('［放流量］', '放流:');
+    expect(shigaPageHasData(html)).toBeNull();
   });
 });

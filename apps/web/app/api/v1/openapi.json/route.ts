@@ -509,9 +509,15 @@ const components = {
         prefCode: { type: 'string', nullable: true, example: '14' },
         status: {
           type: 'string',
-          enum: ['covered', 'published_not_ingested', 'unknown', 'not_published'],
+          enum: [
+            'covered',
+            'published_not_ingested',
+            'published_no_data',
+            'unknown',
+            'not_published',
+          ],
           description:
-            '`covered` 取得済み / `published_not_ingested` 提供元は公開・紐付けも済みだが観測値が入っていない (取り込み側の不具合) / `unknown` 未調査 / `not_published` 全提供元の公開一覧に現れなかった',
+            '`covered` 取得済み / `published_not_ingested` 提供元は公開・紐付けも済みだが観測値が入っていない (取り込み側の不具合) / `published_no_data` 提供元の公開一覧には載っているが、掲載するすべての提供元が値を出していない (調査対象外・欠測・落水など) / `unknown` 未調査 / `not_published` 全提供元の公開一覧に現れなかった',
           example: 'published_not_ingested',
         },
         publishedBy: {
@@ -533,6 +539,11 @@ const components = {
           properties: {
             covered: { type: 'integer' },
             publishedNotIngested: { type: 'integer' },
+            publishedNoData: {
+              type: 'integer',
+              description:
+                '提供元の公開一覧に載っているが、掲載するすべての提供元が値を出していないダムの数。取り込み側の不具合ではない。',
+            },
             unknown: { type: 'integer' },
             notPublished: { type: 'integer' },
             unmatchedStations: {
@@ -878,7 +889,13 @@ const paths = {
           description: '判定でフィルタ。',
           schema: {
             type: 'string',
-            enum: ['covered', 'published_not_ingested', 'unknown', 'not_published'],
+            enum: [
+              'covered',
+              'published_not_ingested',
+              'published_no_data',
+              'unknown',
+              'not_published',
+            ],
           },
         },
         { $ref: '#/components/parameters/PrefCode' },
