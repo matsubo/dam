@@ -12,10 +12,12 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   chooseMaster,
+  hasDataOf,
   type NdiMaster,
   parseFieldLinks,
   parseHourlyPage,
   readingsOf,
+  usableVolumeM3,
 } from './ingest_sokobaru_dam.ts';
 
 const DIR = join(
@@ -29,6 +31,10 @@ const DIR = join(
 
 async function page(name: string): Promise<string> {
   return new TextDecoder('shift_jis').decode(await readFile(join(DIR, name)));
+}
+
+async function series(...names: string[]) {
+  return Promise.all(names.map(async (n) => parseHourlyPage(await page(n))));
 }
 
 describe('parseHourlyPage', () => {
@@ -84,11 +90,7 @@ describe('parseFieldLinks', () => {
 });
 
 describe('readingsOf', () => {
-  async function series(...names: string[]) {
-    return Promise.all(names.map(async (n) => parseHourlyPage(await page(n))));
-  }
-
-  test('merges 底原 into one row per hour: level, m³ volume, rate, inflow, outflow', async () => {
+  test('merges 底原 into one row per hour: level, gross volume, rate, inflow, outflow', async () => {
     const rows = readingsOf(
       await series(
         '00001002.html',
@@ -102,7 +104,7 @@ describe('readingsOf', () => {
     expect(rows.find((r) => r.observedAt.toISOString() === '2026-09-28T05:00:00.000Z')).toEqual({
       observedAt: new Date('2026-09-28T05:00:00.000Z'),
       waterLevelM: 38.21,
-      storageVolumeM3: 11_279_000,
+      grossVolumeM3: 11_279_000,
       storageRate: 0.866,
       inflowM3s: 0,
       outflowM3s: 0.11,
@@ -121,7 +123,7 @@ describe('readingsOf', () => {
     expect(rows[0]).toEqual({
       observedAt: new Date('2026-09-28T06:00:00.000Z'),
       waterLevelM: 38,
-      storageVolumeM3: 1_500_000,
+      grossVolumeM3: 1_500_000,
       storageRate: null,
       inflowM3s: null,
       outflowM3s: null,
@@ -135,6 +137,72 @@ describe('readingsOf', () => {
   test('ignores pages that are not a stored reading (放流管 is one outlet of 全放流量)', async () => {
     const outlet = (await page('00001007.html')).replaceAll('全放流量', '放流管');
     expect(readingsOf([parseHourlyPage(outlet)])).toEqual([]);
+  });
+});
+
+describe('usableVolumeM3', () => {
+  // Real prod master capacities (沖縄 47).
+  const sokobaru = { totalCapacityM3: 13_000_000, activeCapacityM3: 12_850_000 };
+  const maezato = { totalCapacityM3: 2_300_000, activeCapacityM3: 2_100_000 };
+
+  test('stores 底原 総貯水量 less 堆砂容量, the volume its printed 貯水率 divides', () => {
+    // 15:00 JST fixture row: 総貯水量 8,091 千m3, 貯水率 61.8 %.
+    expect(usableVolumeM3({ grossVolumeM3: 8_091_000, storageRate: 0.618 }, sokobaru)).toBe(
+      7_941_000,
+    );
+    // 14:00: 11,279 → 86.6 %.
+    expect(usableVolumeM3({ grossVolumeM3: 11_279_000, storageRate: 0.866 }, sokobaru)).toBe(
+      11_129_000,
+    );
+  });
+
+  test('stores nothing for 真栄里, which prints no 貯水率 to tie its 総貯水量 to the master', () => {
+    expect(usableVolumeM3({ grossVolumeM3: 1_500_000, storageRate: null }, maezato)).toBeNull();
+  });
+
+  test('stores nothing when the rate does not tie to the master capacities', () => {
+    // A gross over 総貯水容量 basis would print 62.2 %, not 61.8 %.
+    expect(usableVolumeM3({ grossVolumeM3: 8_091_000, storageRate: 0.622 }, sokobaru)).toBeNull();
+  });
+
+  test('stores nothing when the master lacks either capacity', () => {
+    expect(
+      usableVolumeM3(
+        { grossVolumeM3: 8_091_000, storageRate: 0.618 },
+        { totalCapacityM3: null, activeCapacityM3: 12_850_000 },
+      ),
+    ).toBeNull();
+    expect(
+      usableVolumeM3(
+        { grossVolumeM3: 8_091_000, storageRate: 0.618 },
+        { totalCapacityM3: 13_000_000, activeCapacityM3: null },
+      ),
+    ).toBeNull();
+  });
+});
+
+describe('hasDataOf', () => {
+  test('true when any hour carries a value', async () => {
+    expect(hasDataOf(await series('00004002.html', '00004003.html', '00004004.html'))).toBe(true);
+  });
+
+  test('false when every page is a stored reading and every point is **', async () => {
+    expect(hasDataOf(await series('00005002.html', '00005003.html', '00005004.html'))).toBe(false);
+  });
+
+  test('unknown when a page failed to load or parse', async () => {
+    const s = await series('00005002.html', '00005003.html');
+    expect(hasDataOf([...s, null])).toBeNull();
+  });
+
+  test('unknown when a page carries an unexpected unit', async () => {
+    const s = await series('00005002.html', '00005003.html', '00005004.html');
+    const odd = s.map((x, i) => (i === 1 && x ? { ...x, unit: 'm3' } : x));
+    expect(hasDataOf(odd)).toBeNull();
+  });
+
+  test('unknown when there are no pages', () => {
+    expect(hasDataOf([])).toBeNull();
   });
 });
 
