@@ -270,7 +270,11 @@ export default async function CoveragePage() {
             {triage.sourcesPendingScan} 件が未記録です。そのため大半のダムは「未調査」に入り、
             「提供元なし」は全提供元を記録し終えるまで確定しません。 提供元は公開しているのに
             マスタと紐付いていない観測所は現在 {triage.unmatchedStations.toLocaleString()}{' '}
-            件で、これが手を付けられる作業対象です。
+            件で、これが手を付けられる作業対象です
+            {triage.notDamStations > 0
+              ? `（堰や諸元外の調整池など、ダムではないと確認済みの ${triage.notDamStations.toLocaleString()} 件は除く）`
+              : ''}
+            。
           </p>
         ) : null}
         {triage.sourcesNotEnumerable > 0 ? (

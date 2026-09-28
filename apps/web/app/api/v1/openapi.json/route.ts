@@ -548,7 +548,13 @@ const components = {
             notPublished: { type: 'integer' },
             unmatchedStations: {
               type: 'integer',
-              description: '提供元は公開しているのにマスタと紐付いていない観測所の数。',
+              description:
+                '提供元は公開しているのにマスタと紐付いていない観測所の数。`notDamStations` は含まない。',
+            },
+            notDamStations: {
+              type: 'integer',
+              description:
+                '未紐付けのうち、ダムではないと根拠付きで確認済みの観測所の数 (堰、ダム諸元に無い調整池、複数ダムの合算行など)。作業対象ではない。',
             },
             sourcesPendingScan: {
               type: 'integer',

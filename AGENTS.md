@@ -150,6 +150,16 @@ bun run apps/web/bin/seed_synthetic_observations.ts     --hourly-days 30 --years
    unset when unsure: an unreadable cell may be our own parser breaking. Each
    scan overwrites the stored value (unset included), so a row that stops
    parsing drops back to unknown rather than keeping an earlier `false`.
+   An unmatched row that is **not a master dam at all** (a 堰, a 調整池 not
+   in the NDI master, a combined row like 呑吐・大川瀬, a station with no dam)
+   leaves the backlog (`coverageSummary().unmatchedStations`) once a
+   migration records a cited reason:
+   `UPDATE source_universe SET not_dam_reason = '<cited reason>' WHERE source_id = '<src>' AND source_external_id = '<key>' AND resolved_dam_id IS NULL;`
+   `recordUniverse` never writes the column, so it survives scans; a row that
+   later resolves wins over the mark. The matching `match_review` item (open =
+   `resolved_at IS NULL`; there is no admin action) closes the same way:
+   `UPDATE match_review SET resolved_at = NOW(), resolved_dam_id = <id or NULL> WHERE source_id = '<src>' AND source_external_id = '<key>' AND resolved_at IS NULL;`
+   Matchers never rewrite or reopen a closed review.
 
 8. **Test cleanup scoping**: see `packages/adapters/ndi/src/import_dams.test.ts`
    for the correct pattern (`WHERE external_ids ->> 'ndi' IN ('1234567890','9999999999')`).

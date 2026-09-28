@@ -99,6 +99,8 @@ async function recordUniverseOrThrow(sourceId: string, rows: UniverseRow[]): Pro
         -- stops parsing (NULL) must clear an earlier FALSE, or a parser break
         -- would hide under 提供元に値なし. Each source has a single writer.
         has_data        = EXCLUDED.has_data,
+        -- not_dam_reason is deliberately absent: migrations set it (0131) and
+        -- no scan can know a station is a 堰 rather than an unlinked dam.
         last_seen_at    = NOW()
     `;
   }
@@ -227,8 +229,17 @@ export interface CoverageSummary {
   publishedNoData: number;
   unknown: number;
   notPublished: number;
-  /** Published stations we cannot tie to any master dam — the backlog. */
+  /**
+   * Published stations we cannot tie to any master dam — the backlog.
+   * Excludes rows a migration marked `not_dam_reason` (a 堰, a 調整池 outside
+   * the NDI master): there is no dam to link them to.
+   */
   unmatchedStations: number;
+  /**
+   * Unresolved stations carrying a cited `not_dam_reason`. Out of the
+   * backlog; a row that later resolves leaves this count, since a match wins.
+   */
+  notDamStations: number;
   /** Observation providers still to be instrumented. While > 0, `unknown` is not `not_published`. */
   sourcesPendingScan: number;
   /**
@@ -250,15 +261,29 @@ export async function coverageSummary(): Promise<CoverageSummary> {
   const rows = await classifyDamCoverage();
   const count = (s: DamCoverageStatus): number => rows.filter((r) => r.status === s).length;
   const [extra] = await sql<
-    { unresolved: bigint; pending: bigint; not_enumerable: bigint; historical_only: bigint }[]
+    {
+      unresolved: bigint;
+      not_dam: bigint;
+      pending: bigint;
+      not_enumerable: bigint;
+      historical_only: bigint;
+    }[]
   >`
     SELECT
       (SELECT COUNT(*) FROM source_universe su
         WHERE su.resolved_dam_id IS NULL
+          AND su.not_dam_reason IS NULL
           AND NOT EXISTS (
             SELECT 1 FROM source_priorities sp WHERE sp.source_id = su.source_id AND NOT sp.active
           )
       )::BIGINT AS unresolved,
+      (SELECT COUNT(*) FROM source_universe su
+        WHERE su.resolved_dam_id IS NULL
+          AND su.not_dam_reason IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM source_priorities sp WHERE sp.source_id = su.source_id AND NOT sp.active
+          )
+      )::BIGINT AS not_dam,
       (SELECT COUNT(*) FROM source_priorities sp
         WHERE sp.active AND sp.provides_observations AND sp.universe_enumerable
           AND NOT sp.historical_only
@@ -278,6 +303,7 @@ export async function coverageSummary(): Promise<CoverageSummary> {
     unknown: count('unknown'),
     notPublished: count('not_published'),
     unmatchedStations: Number(extra?.unresolved ?? 0),
+    notDamStations: Number(extra?.not_dam ?? 0),
     sourcesPendingScan: Number(extra?.pending ?? 0),
     sourcesNotEnumerable: Number(extra?.not_enumerable ?? 0),
     sourcesHistoricalOnly: Number(extra?.historical_only ?? 0),
