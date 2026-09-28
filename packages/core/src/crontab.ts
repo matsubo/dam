@@ -553,8 +553,8 @@ export const CRONTAB = `
 
 # 底原ダム管理システム (cosmos.ne.jp/~sokobaru) — 石垣島 底原/真栄里/石垣ダム (沖縄/47),
 # no other live feed. Shift_JIS i-mode pages, one per reading, 13 hourly rows each:
-# 貯水位 + 総貯水量(千m3) + 貯水率 + 流入量 + 放流量 (底原; 真栄里/石垣 level,
-# volume, outflow). Priority 291. Cron at :05.
+# 貯水位 + 総貯水量(千m3, stored less 堆砂 150 when the printed 貯水率 ties) + 貯水率 +
+# 流入量 + 放流量 (底原; 真栄里/石垣 level + outflow). Priority 291. Cron at :05.
 5 * * * * ingest:sokobaru-dam ?jobKey=ingest:sokobaru-dam
 
 # 高知県水防情報システム ダム諸量現況表 — 11 ダム (和食/永瀬/鎌井谷/鏡/桐見/坂本/
