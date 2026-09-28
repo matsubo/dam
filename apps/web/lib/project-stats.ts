@@ -29,7 +29,9 @@
 // itself, which is not a workspace. `tables` leaves out
 // `observations`, which the page adds on its own as "+ hypertable 1".
 //
-// Last regenerated: 2026-09-28 on develop 8d7d1d8 (round 5 merged).
+// Last regenerated: 2026-09-28 on develop 8d7d1d8 (round 5 merged);
+// workerTasks / ingestTasks / cronEntries re-counted on develop b36c2a1
+// (round 9 merged).
 export const PROJECT_STATS = {
   measuredOn: '2026-09-28',
   commits: 643,
@@ -40,9 +42,9 @@ export const PROJECT_STATS = {
   testFiles: 186,
   migrations: 70,
   workspaces: 11,
-  workerTasks: 113,
-  ingestTasks: 96,
-  cronEntries: 106,
+  workerTasks: 126,
+  ingestTasks: 108,
+  cronEntries: 118,
   apiRoutes: 18,
   pageRoutes: 22,
   /** Base tables in packages/db/migrations, not counting the `observations` hypertable. */

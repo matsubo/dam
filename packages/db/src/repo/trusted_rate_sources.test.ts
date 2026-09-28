@@ -44,10 +44,29 @@ describe('trusted_rate_basis for shimonoseki-suido', () => {
   });
 });
 
+describe('trusted_rate_basis for dainichigawa-lid', () => {
+  // 貯水率 against the printed 最大貯水量 191.5 万t: 大日川 174.65 / 91.2 % =
+  // 191.5, against the master's 有効 2,032 千m³ (0213).
+  test('dainichigawa-lid publishes a rate on its own full pool and is trusted', async () => {
+    expect(await trusted('dainichigawa-lid')).toBe(true);
+  });
+});
+
 describe('trusted_rate_basis for jwa-chikugo-rt', () => {
   // 貯水率 against the 貯水容量 pool: 寺内 volume/rate = 8,230 千m³, 大山 11,000,
   // against annual 有効 17,030 / 18,000 (0087).
   test('jwa-chikugo-rt publishes a purpose-pool rate and is trusted', async () => {
     expect(await trusted('jwa-chikugo-rt')).toBe(true);
   });
+});
+
+describe('trusted_rate_basis for the 九州北部 city-water pages', () => {
+  // Each divides by the pool it prints: 池田 183,274 / 91.6 % = 200,000 利水
+  // (有効 209,000); 神の川 89,328 / 55.8 % = 160,000 満水量 (有効 223,000);
+  // 油木 6,463 / 44.7 % = 14,450 千m³, the 洪水期 利水容量 (0219).
+  for (const sourceId of ['omura-suido', 'hirado-suido', 'kanda-suido']) {
+    test(`${sourceId} publishes a rate on its printed pool and is trusted`, async () => {
+      expect(await trusted(sourceId)).toBe(true);
+    });
+  }
 });

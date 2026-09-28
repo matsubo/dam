@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<html lang="ja">
+<head>
+	<!-- 2026-09-28-15-50 -->
+	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+	<meta charset="utf-8">
+	<meta name="description" content="神奈川県内各地の雨量・水位観測情報及び河川監視カメラ画像を提供いたします。" />
+	<meta name="keyword" content="神奈川,雨量,水位,観測情報,河川監視カメラ" />
+	<meta http-equiv="Cache-Control" content="no-cache" />
+	<meta http-equiv="Pragma" content="no-cache" />
+	<meta http-equiv="Expires" content="0">
+	<link rel="stylesheet" type="text/css" href="../../../../../res/css/format.css?dummy=1776746610992">
+	<link rel="stylesheet" type="text/css" href="../../../../../res/script/lib/magnific-popup.css?dummy=1776746610992">
+	<link rel="stylesheet" type="text/css" href="../../../../../res/css/common.css?dummy=1776746610992">
+	<link rel="stylesheet" type="text/css" href="../../../../../res/css/table.css?dummy=1776746610992">
+	<link rel="stylesheet" type="text/css" href="../../../../../res/css/asideMenu.css?dummy=1776746610992">
+	<link rel="stylesheet" type="text/css" href="../../../../../res/css/common_pub.css?dummy=1776746610992">
+	<link rel="stylesheet" type="text/css" href="../../../../../res/css/asideMenu_pub.css?dummy=1776746610992">
+	<script type="text/javascript" src="../../../../../res/script/lib/jquery.js?dummy=1776746610992"></script>
+	<script type="text/javascript" src="../../../../../res/script/lib/jquery.magnific-popup.min.js?dummy=1776746610992"></script>
+	<script type="text/javascript" src="../../../../../res/script/common.js?dummy=1776746610992"></script>
+	<script type="text/javascript" src="../../../../../res/script/clickablMap.js?dummy=1776746610992"></script>
+	<title>水位グラフ(15分) - 神奈川県雨量水位情報</title>
+
+	<script type="text/javascript">
+	var LINK_FLG = true;
+	</script>
+
+	<link rel="stylesheet" type="text/css" href="../../../../../res/css/graph.css?dummy=1776746610992">
+	<link rel="stylesheet" type="text/css" href="../../../../../res/css/table_pub.css?dummy=1776746610992">
+	
+	<script type="text/javascript" src="../../../../../res/script/lib/chart.js-2.9.4/dist/Chart.min.js?dummy=1776746610992"></script>
+	<script type="text/javascript" src="../../../../../res/script/lib/chartjs-plugin-annotation-0.5.7/chartjs-plugin-annotation.min.js?dummy=1776746610992"></script>
+	<script type="text/javascript" src="../../../../../res/script/graph_config.js?dummy=1776746610992"></script>
+	<script type="text/javascript" src="../../../../../res/script/graph.js?dummy=1776746610992"></script>
+<script type="text/javascript">
+var contextPath = "/public";
+var graphKind = 4;
+
+//[A-01]グラフ描画
+$(window).load(stageGraphBind) ;
+</script>
+</head>
+<body class="publicContents">
+	<div id="header">
+		<div id="globalNavi">
+			<h1><img src="../../../../../res/images/header/public/gNavi_logo.png" alt="神奈川県雨量水位情報" /></h1>
+			<ul class="naviBtn">
+				<li class="gNavi_top"><a href="../../../index.html" title="TOP">TOP</a></li>
+				<li class="gNavi_map"><a href="../../../html/map/area/p10060_11.html" title="エリアマップ">エリアマップ</a></li>
+				<li class="gNavi_rain"><a href="../../../html/rain/60/p10102_11_0.html" title="雨量">雨量</a></li>
+				<li class="gNavi_stage is-selected"><span>水位</span></li>
+				<li class="gNavi_camera"><a href="../../../html/camera/list/p20101_11.html" title="カメラ">カメラ</a></li>
+				<li class="gNavi_flood"><a href="../../../html/sagami/map/p30101.html" title="洪水予測">洪水予測</a></li>
+			</ul>
+			<div class="disapre-header-language">
+			<div id="google_translate_element" class="disapre-header-language"><p class="label">他の言語に翻訳</p></div>
+			</div>
+	<script type="text/javascript">
+		function googleTranslateElementInit() {
+			new google.translate.TranslateElement({pageLanguage: 'ja', includedLanguages: 'en', layout: google.translate.TranslateElement.InlineLayout.SIMPLE}, 'google_translate_element');
+		}
+	</script>
+	<script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+			<a class="gNavi_help" title="ヘルプ" href="../../../html/etc/help/p50301.html">ヘルプ</a>
+		</div><!-- /#globalNavi -->
+		<div id="headerInfo">
+			<div class="damDischarge">
+				<a href="../../../html/sagami/map/p30101.html" id="discharge_shiroyama" class="damIcon noDischarge">城山ダムの放流情報へ</a>
+				<a href="../../../html/sakawa/map/p30102.html"  id="discharge_miho" class="damIcon noDischarge">三保ダムの放流情報へ</a>
+			</div><!-- /.damDischarge -->
+			<div class="obsTime">観測時刻　<span class="notranslate">2026/09/28 15:45</span></div>
+			<a class="btn_refresh" title="更新" href="javascript:location.reload();">更新</a>
+		</div><!-- /#headerInfo -->
+	</div><!-- /#header -->
+
+
+<div id="main" class="clearfix">
+
+		<div id="asideMenu" class="clearfix">
+			<div id="clickablMap">
+				<!-- 表示中の地図 -->
+				<img src="../../../../../res/images/clickablMap/public/base_18.png" alt="" />
+				<img src="../../../../../res/images/clickablMap/public/base_coast.png" alt="" />
+				<!-- 押下不可の地図 -->
+				<img src="../../../../../res/images/clickablMap/public/dsbl_11.png" alt="" />
+				<img src="../../../../../res/images/clickablMap/public/dsbl_12.png" alt="" />
+				<img src="../../../../../res/images/clickablMap/public/dsbl_14.png" alt="" />
+				<img src="../../../../../res/images/clickablMap/public/dsbl_21.png" alt="" />
+				<img src="../../../../../res/images/clickablMap/public/dsbl_22.png" alt="" />
+				<!-- 選択可能の地図 -->
+				<div id="sprite"></div>
+				<div id="clickabl_area">
+					<img src="../../../../../res/images/clickablMap/clickabl_area.png" usemap="#map" alt="クリッカブルマップ" />
+					<map name="map">
+						<area shape="poly" class="aside_13" href="../../../html/stage/15/p10202_13_0.html" title="湘南  [Shonan]" alt="湘南  [Shonan]" coords="112,68,109,65,110,60,108,57,110,52,108,49,108,44,107,42,108,41,106,37,102,40,98,39,96,42,91,45,92,48,91,51,89,54,91,57,91,64,88,63,88,67,82,67,82,70,78,67,76,69,73,70,73,72,67,76,69,78,67,81,67,88,75,85,82,83,95,81,109,82,109,86,112,86,112,79,115,77,115,75,112,72">
+						<area shape="poly" class="aside_15" href="../../../html/stage/15/p10202_15_0.html" title="相模原  [Sagamihara]" alt="相模原  [Sagamihara]" coords="105,38,105,34,98,29,94,23,84,20,80,20,76,18,73,18,72,20,66,19,64,14,63,10,60,9,58,11,55,9,55,6,51,6,50,4,46,9,49,11,47,15,50,17,48,22,49,28,46,30,45,34,42,39,38,40,39,43,41,43,44,46,51,45,54,47,60,40,63,37,65,34,67,34,71,31,74,31,75,30,79,31,80,33,84,33,91,38,91,45,95,42,97,42,98,39,102,41">
+						<area shape="poly" class="aside_16" href="../../../html/stage/15/p10202_16_0.html" title="県央  [Ken-o]" alt="県央  [Ken-o]" coords="91,38,84,33,81,33,77,30,74,32,71,31,68,34,64,35,63,38,54,47,54,49,54,53,50,55,51,59,52,63,51,67,54,72,56,72,57,75,62,72,64,74,73,73,73,69,76,69,78,67,81,69,81,67,88,67,88,64,90,65,91,59,91,55,90,54,93,50,91,46">
+						<area shape="poly" class="aside_17" href="../../../html/stage/15/p10202_17_0.html" title="足柄上  [Ashigara-kami]" alt="足柄上  [Ashigara-kami]" coords="55,46,52,46,49,45,46,47,40,43,36,40,34,40,33,44,30,46,24,47,22,50,18,50,13,55,14,58,11,62,13,63,20,63,20,62,26,63,26,67,28,71,28,76,30,78,27,82,27,87,32,90,34,88,36,90,42,89,45,89,49,86,49,80,53,82,57,78,61,81,66,81,68,79,67,76,69,74,64,73,62,72,57,75,56,72,53,72,51,68,52,62,51,57,49,55,54,53">
+					</map>
+				</div><!-- /#clickabl_area -->
+			</div><!-- /#clickablMap -->
+
+			<ul id="areaSelect-btn" class="notranslate">
+				<li class="is-disabled"><span>横浜  [Yokohama]</span></li>
+				<li class="is-disabled"><span>川崎  [Kawasaki]</span></li>
+				<li><a href="../../../html/stage/15/p10202_13_0.html" class="">湘南  [Shonan]</a></li>
+				<li class="is-disabled"><span>三浦半島  [Miura Pen.]</span></li>
+				<li><a href="../../../html/stage/15/p10202_15_0.html" class="">相模原  [Sagamihara]</a></li>
+				<li><a href="../../../html/stage/15/p10202_16_0.html" class="">県央  [Ken-o]</a></li>
+				<li><a href="../../../html/stage/15/p10202_17_0.html" class="">足柄上  [Ashigara-kami]</a></li>
+				<li class="is-selected"><span class="">西湘  [Seisho]</span></li>
+				<li class="is-disabled"><span>東京湾  [Tokyo Bay]</span></li>
+				<li class="is-disabled"><span>相模灘  [Sagaminada]</span></li>
+			</ul>
+			<p class="attention"><a href="../../../html/etc/help/p50311.html">※エリアマップの区分について</a></p>
+		</div><!-- /#asideMenu -->
+
+
+
+	<div id="contents" class="clearfix">
+		
+				<div id="titleBar">
+			<h2 class="title_stage">水位グラフ(15分)&nbsp;<span class="notranslate">西湘[Seisho]</span></h2>
+		</div><!-- /#titleBar -->
+
+		<div id="dataHeaderBox" class="clearfix">
+			<div class="timeBox">
+				<ul class="timeMode">
+					<li class="is-disabled"><span>10分</span></li>
+					<li class="is-selected"><span>15分</span></li>
+					<li><a href="../../../html/stage/60/p10202_18_3585_4_1601.html"><span>1時間</span></a></li>
+				</ul><!-- /.timeMode -->
+
+			</div><!-- /.timeBox -->
+
+			<a class="otherContentsBtn funcBtn" href="../../../html/map/area/p10060_18.html">エリアマップ</a>
+
+			<div class="pagerBox clearfix">
+				<button type="button" class="funcBtn" onclick="openModal('#pointSelectPopup');">局選択</button>
+								<ul class="changePage">
+					<li class="prevPage is-disabled" disabled="disabled"><span>Back</span></li>
+					<li class="pageCount notranslate">1/2</li>
+					<li class="nextPage"><a href="../../../html/stage/15/p10202_18_3585_4_1602.html">Next</a></li>
+				</ul><!-- /.changePage -->
+
+			</div><!-- /.pagerBox -->
+		</div><!-- /#dataHeaderBox -->
+
+		<div id="dataBox" class="clearfix">
+			<form id="param" name="param" method="get" target="_self" action="/dps/disp?">
+				
+				<input type="hidden" name="mode" value="15" />
+				<input type="hidden" name="etim" value="2026-09-28-15-45" />
+				<ul class="graphArea">
+					<li>
+						<table class="obsInfoTbl stage">
+							<colgroup>
+								<col style="width:110px" />
+								<col style="width:auto" />
+							</colgroup>
+
+							<tr>
+								<th>観測所名</th>
+								<td class="notranslate"><span>飯泉取水堰 [Iizumi Intake Weir]</span></td>
+							</tr>
+							<tr>
+								<th>河川名</th>
+								<td class="notranslate"><span>酒匂川 [Sakawa River]</span></td>
+							</tr>
+							<tr>
+								<th>住所</th>
+								<td class="notranslate"><span>小田原市飯泉 [Iizumi, Odawara City]</span></td>
+							</tr>
+						</table>
+					</li>
+					<li>
+						<h3>水位グラフ</h3>
+					</li>
+					<li>
+						<dl class="graphLegend clearfix">
+							<dt><span class="ex-graph-stage"></span></dt>
+							<dd><span>水位<span class="notranslate">(m)</span></span></dd>
+						</dl>
+					</li>
+					<li>
+
+						<div style="width:500px;box-sizing: border-box;">
+							<canvas data-graph-settingKey="graph_stage" data-graph-obs="3585_4_1601"
+									data-graph-dataPrefix="stage"
+									style="width:500px;height:380px;margin: 0 auto;"></canvas>
+						</div>
+
+						<div class="explainBox graph-sideList clearfix">
+							<dl class="clearfix">
+
+								<dt><span class="ex-graph-stageLv4"></span>氾濫危険水位</dt>
+
+								<dd><span class="notranslate">--</span><span class="unit notranslate">m</span></dd>
+
+								<dt><span class="ex-graph-stageLv3"></span>避難判断水位</dt>
+
+								<dd><span class="notranslate">--</span><span class="unit notranslate">m</span></dd>
+
+								<dt><span class="ex-graph-stageLv2"></span>氾濫注意水位</dt>
+
+								<dd><span class="notranslate">--</span><span class="unit notranslate">m</span></dd>
+
+								<dt><span class="ex-graph-stageLv1"></span>水防団待機水位</dt>
+
+								<dd><span class="notranslate">--</span><span class="unit notranslate">m</span></dd>
+
+							</dl>
+						</div>
+					</li>
+					<li>
+						<div class="explainBox clearfix">
+							<h6>凡例</h6>
+							<dl class="colorLegend clearfix">
+								<dd class="ex-label">河川水位</dd>
+								<dt><span class="ex-stageLv4"></span></dt>
+								<dd>氾濫危険水位</dd>
+								<dt><span class="ex-stageLv3"></span></dt>
+								<dd>避難判断水位</dd>
+								<dt><span class="ex-stageLv2"></span></dt>
+								<dd>氾濫注意水位</dd>
+								<dt><span class="ex-stageLv1"></span></dt>
+								<dd>水防団待機水位</dd>
+								<!--
+								<dt><span class="ex-missing"></span></dt>
+								<dd>欠測</dd>
+								 -->
+							</dl><!-- /.colorLegend -->
+							<dl class="colorLegend clearfix">
+								<dd style="min-width:75px;"></dd>
+								<dt><span class="ex-graph-stage"></span></dt>
+								<dd>河川水位</dd>
+								<dt>*&nbsp;</dt>
+								<dd>欠測</dd>
+							</dl><!-- /.colorLegend -->
+							<dl class="dispLegend clearfix">
+								<dt><span class="notranslate">**</span></dt>
+								<dd>データ欠測(強制欠測、範囲異常含む)</dd>
+								<dt><span class="notranslate">--</span></dt>
+								<dd>未収集</dd>
+								<dt>データ</dt>
+								<dd>正常</dd>
+							</dl><!-- /.dispLegend -->
+						</div><!-- /.explainBox -->
+					</li>
+				</ul><!-- /.graphArea -->
+
+				<table class="timelineTbl graph stage">
+					<caption>水位表</caption>
+					<colgroup>
+						<col style="width:auto" />
+						<col style="width:75px" />
+					</colgroup>
+
+					<thead>
+						<tr>
+							<th>観測時刻</th>
+							<th class="itemName">水位<span class="notranslate">(m)</span></th>
+						</tr>
+					</thead>
+					<tbody>
+
+						<tr class="odd">
+							<td class="notranslate">09/28 10:00</td>
+
+							<td><span class="notranslate" data-graph-dtkey="stage_item_data_1">8.44</span><span class="arrowCol notranslate">↑</span></td>
+
+						</tr>
+
+						<tr class="even">
+							<td class="notranslate">10:15</td>
+
+							<td><span class="notranslate" data-graph-dtkey="stage_item_data_2">8.42</span><span class="arrowCol notranslate">↓</span></td>
+
+						</tr>
+
+						<tr class="odd">
+							<td class="notranslate">10:30</td>
+
+							<td><span class="notranslate" data-graph-dtkey="stage_item_data_3">8.40</span><span class="arrowCol notranslate">↓</span></td>
+
+						</tr>
+
+						<tr class="even">
+							<td class="notranslate">10:45</td>
+
+							<td><span class="notranslate" data-graph-dtkey="stage_item_data_4">8.38</span><span class="arrowCol notranslate">↓</span></td>
+
+						</tr>
+
+						<tr class="odd">
+							<td class="notranslate">11:00</td>
+
+							<td><span class="notranslate" data-graph-dtkey="stage_item_data_5">8.37</span><span class="arrowCol notranslate">↓</span></td>
+
+						</tr>
+
+						<tr class="even">
+							<td class="notranslate">11:15</td>
+
+							<td><span class="notranslate" data-graph-dtkey="stage_item_data_6">8.37</span><span class="arrowCol notranslate">→</span></td>
+
+						</tr>
+
+						<tr class="odd">
+							<td class="notranslate">11:30</td>
+
+							<td><span class="notranslate" data-graph-dtkey="stage_item_data_7">8.37</span><span class="arrowCol notranslate">→</span></td>
+
+						</tr>
+
+						<tr class="even">
+							<td class="notranslate">11:45</td>
+
+							<td><span class="notranslate" data-graph-dtkey="stage_item_data_8">8.38</span><span class="arrowCol notranslate">↑</span></td>
+
+						</tr>
+
+						<tr class="odd">
+							<td class="notranslate">12:00</td>
+
+							<td><span class="notranslate" data-graph-dtkey="stage_item_data_9">8.40</span><span class="arrowCol notranslate">↑</span></td>
+
+						</tr>
+
+						<tr class="even">
+							<td class="notranslate">12:15</td>
+
+							<td><span class="notranslate" data-graph-dtkey="stage_item_data_10">8.41</span><span class="arrowCol notranslate">↑</span></td>
+
+						</tr>
+
+						<tr class="odd">
+							<td class="notranslate">12:30</td>
+
+							<td><span class="notranslate" data-graph-dtkey="stage_item_data_11">8.42</span><span class="arrowCol notranslate">↑</span></td>
+
+						</tr>
+
+						<tr class="even">
+							<td class="notranslate">12:45</td>
+
+							<td><span class="notranslate" data-graph-dtkey="stage_item_data_12">8.42</span><span class="arrowCol notranslate">→</span></td>
+
+						</tr>
+
+						<tr class="odd">
+							<td class="notranslate">13:00</td>
+
+							<td><span class="notranslate" data-graph-dtkey="stage_item_data_13">8.43</span><span class="arrowCol notranslate">↑</span></td>
+
+						</tr>
+
+						<tr class="even">
+							<td class="notranslate">13:15</td>
+
+							<td><span class="notranslate" data-graph-dtkey="stage_item_data_14">8.44</span><span class="arrowCol notranslate">↑</span></td>
+
+						</tr>
+
+						<tr class="odd">
+							<td class="notranslate">13:30</td>
+
+							<td><span class="notranslate" data-graph-dtkey="stage_item_data_15">8.42</span><span class="arrowCol notranslate">↓</span></td>
+
+						</tr>
+
+						<tr class="even">
+							<td class="notranslate">13:45</td>
+
+							<td><span class="notranslate" data-graph-dtkey="stage_item_data_16">8.41</span><span class="arrowCol notranslate">↓</span></td>
+
+						</tr>
+
+						<tr class="odd">
+							<td class="notranslate">14:00</td>
+
+							<td><span class="notranslate" data-graph-dtkey="stage_item_data_17">8.41</span><span class="arrowCol notranslate">→</span></td>
+
+						</tr>
+
+						<tr class="even">
+							<td class="notranslate">14:15</td>
+
+							<td><span class="notranslate" data-graph-dtkey="stage_item_data_18">8.43</span><span class="arrowCol notranslate">↑</span></td>
+
+						</tr>
+
+						<tr class="odd">
+							<td class="notranslate">14:30</td>
+
+							<td><span class="notranslate" data-graph-dtkey="stage_item_data_19">8.43</span><span class="arrowCol notranslate">→</span></td>
+
+						</tr>
+
+						<tr class="even">
+							<td class="notranslate">14:45</td>
+
+							<td><span class="notranslate" data-graph-dtkey="stage_item_data_20">8.41</span><span class="arrowCol notranslate">↓</span></td>
+
+						</tr>
+
+						<tr class="odd">
+							<td class="notranslate">15:00</td>
+
+							<td><span class="notranslate" data-graph-dtkey="stage_item_data_21">8.39</span><span class="arrowCol notranslate">↓</span></td>
+
+						</tr>
+
+						<tr class="even">
+							<td class="notranslate">15:15</td>
+
+							<td><span class="notranslate" data-graph-dtkey="stage_item_data_22">8.37</span><span class="arrowCol notranslate">↓</span></td>
+
+						</tr>
+
+						<tr class="odd">
+							<td class="notranslate">15:30</td>
+
+							<td><span class="notranslate" data-graph-dtkey="stage_item_data_23">8.35</span><span class="arrowCol notranslate">↓</span></td>
+
+						</tr>
+
+						<tr class="even">
+							<td class="notranslate">15:45</td>
+
+							<td><span class="notranslate" data-graph-dtkey="stage_item_data_24">8.35</span><span class="arrowCol notranslate">→</span></td>
+
+						</tr>
+
+					</tbody>
+				</table><!-- /.timelineTbl.graph.stage -->
+			</form>
+		</div><!-- /#dataBox -->
+		
+
+
+
+
+
+			<div class="dataInfo">
+				<div>雨量･水位値は、速報値であり、観測機器の故障や通信異常による異常値がそのまま表示されてしまう可能性があります。</div>
+			</div><!-- /.dataInfo -->
+
+
+	</div><!-- contents -->
+</div><!-- main -->
+<!-- 局選択モーダル -->
+
+<div id="pointSelectPopup" class="white-popup mfp-hide mfp-close-btn-in">
+	<div class="popupHeader">
+		<h4>観測局選択</h4>
+		<hr>
+	</div>
+	<div class="scrollBox">
+		<table class="pointSelectTbl notranslate">
+			<tbody>
+				<tr>
+					<th colspan="6">西湘[Seisho]</th>
+				</tr>
+				<tr>
+					<td><span class="is-selected">飯泉取水堰<br/>[Iizumi Intake Weir]</span></td>
+					<td><a href="../../../html/stage/15/p10202_18_3585_4_1602.html">狩川<br/>[Karikawa]</a></td>
+					<td>&nbsp;</td>
+					<td>&nbsp;</td>
+					<td>&nbsp;</td>
+					<td>&nbsp;</td>
+				</tr>
+			</tbody>
+		</table>
+		<div class="addPointSelect"><h3>10分間隔の観測局</h3></div>
+		<table class="pointSelectTbl notranslate">
+			<tbody>
+				<tr>
+					<td><a href="../../../html/stage/10/p10202_18_3585_4_801.html">坂呂橋<br/>[Sakaro Bridge]</a></td>
+					<td><a href="../../../html/stage/10/p10202_18_3585_4_802.html">富士見橋<br/>[Fujimi Bridge]</a></td>
+					<td><a href="../../../html/stage/10/p10202_18_3585_4_803.html">富士道橋<br/>[Fujimichi Bridge]</a></td>
+					<td><a href="../../../html/stage/10/p10202_18_3585_4_804.html">東洋橋<br/>[Toyo Bridge]</a></td>
+					<td><a href="../../../html/stage/10/p10202_18_3585_4_805.html">大窪橋<br/>[Okubo Bridge]</a></td>
+					<td><a href="../../../html/stage/10/p10202_18_3585_4_806.html">芦の湖<br/>[Lake Ashino-ko]</a></td>
+				</tr>
+				<tr>
+					<td><a href="../../../html/stage/10/p10202_18_3585_4_807.html">千歳<br/>[Chitose]</a></td>
+					<td><a href="../../../html/stage/10/p10202_18_3585_4_808.html">新崎橋<br/>[Niizaki Bridge]</a></td>
+					<td><a href="../../../html/stage/10/p10202_18_3585_4_809.html">仙石原<br/>[Sengokubara]</a></td>
+					<td><a href="../../../html/stage/10/p10202_18_3585_4_810.html">宮城野<br/>[Miyagino]</a></td>
+					<td><a href="../../../html/stage/10/p10202_18_3585_4_811.html">柳新田<br/>[Yanagi-Shinden]</a></td>
+					<td>&nbsp;</td>
+				</tr>
+			</tbody>
+		</table>
+	</div><!-- /.scrollBox -->
+	<div class="popupFooter">
+		<input type="button" id="close" value="閉じる" class="mfp-close funcBtn">
+	</div><!-- /.popupFooter -->
+</div><!-- /#pointSelectPopup -->
+
+
+</body>
+</html>

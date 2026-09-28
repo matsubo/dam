@@ -65,6 +65,14 @@ export const FRESHNESS_OVERRIDE_HOURS: Readonly<Record<string, number | null>> =
   // Hand-edited about monthly; the index shows gaps up to 62 days (2026/3/26
   // → 5/27), and the 現在 date runs ~5 days behind the edit.
   'awaji-suido': 70 * 24,
+  // Re-issued about every ten days (R8.9.14 → 9.24), stamped with its own
+  // date; a skipped edition plus a few days of lag. With one stamp the
+  // derived threshold falls back to 3 × the daily poll and flags it at once.
+  'hirado-suido': 21 * 24,
+  // Re-issued about monthly (更新日 2026-09-01 carries the 8月 figures) and
+  // stamped with that 更新日; a late month plus lag. One stamp alone would get
+  // 3 × the daily poll.
+  'sue-suido': 45 * 24,
   // The portal lists dams only during a flood or disaster; empty otherwise.
   'kagoshima-bousai': null,
   // The 水源状況 page is a 渇水 notice, taken down when the drought ends
