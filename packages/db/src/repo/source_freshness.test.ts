@@ -9,18 +9,30 @@ import { type StaleSource, staleSources } from './source_freshness.ts';
 const FAST = 'freshness-test-fast'; // hourly cron, 10-min data
 const DAILY = 'freshness-test-daily'; // daily cron, 00:00 JST stamps fetched at noon JST
 const WEEKLY = 'freshness-test-weekly'; // daily cron, weekly survey dates
+const WEEKDAY = 'freshness-test-weekday'; // daily cron, published Mon–Fri only
 const NO_CRON = 'freshness-test-no-cron'; // no cron line: cadence from the data
 const OVERRIDDEN = 'freshness-test-override';
 const SILENT = 'freshness-test-silent'; // override null: silence is normal
 const HISTORICAL = 'freshness-test-historical';
 const INACTIVE = 'freshness-test-inactive';
 const UNREGISTERED = 'freshness-test-unregistered'; // cron line, never registered
-const REGISTERED = [FAST, DAILY, WEEKLY, NO_CRON, OVERRIDDEN, SILENT, HISTORICAL, INACTIVE];
+const REGISTERED = [
+  FAST,
+  DAILY,
+  WEEKLY,
+  WEEKDAY,
+  NO_CRON,
+  OVERRIDDEN,
+  SILENT,
+  HISTORICAL,
+  INACTIVE,
+];
 
 const CRON: Record<string, number> = {
   [FAST]: 1,
   [DAILY]: 24,
   [WEEKLY]: 24,
+  [WEEKDAY]: 24,
   [OVERRIDDEN]: 24,
   [SILENT]: 1,
   [INACTIVE]: 1,
@@ -83,6 +95,17 @@ beforeAll(async () => {
   await insertSeries(FAST, series(30, 1 / 6, 0), 5 / 60);
   await insertSeries(DAILY, series(20, 24, 0), 12);
   await insertSeries(WEEKLY, series(5, 168, 0), 24);
+  // Four weeks of Mon–Fri stamps, the newest a Friday, and the oldest week a
+  // week earlier still (an outage): gaps of 24 h, 72 h over each weekend, and
+  // one of 240 h.
+  await insertSeries(
+    WEEKDAY,
+    Array.from({ length: 20 }, (_, i) => {
+      const week = Math.floor(i / 5);
+      return at(-24 * (7 * week + (i % 5) + (week === 3 ? 7 : 0)));
+    }),
+    12,
+  );
   await insertSeries(NO_CRON, series(20, 6, 0), 1);
   await insertSeries(OVERRIDDEN, series(20, 24, 0), 12);
   await insertSeries(HISTORICAL, series(20, 24, -24 * 400), 24 * 400);
@@ -131,6 +154,19 @@ describe('staleSources', () => {
     expect((await staleAt(3 * 168 + 25)).get(WEEKLY)).toMatchObject({
       expectedIntervalHours: 168,
       thresholdHours: 3 * 168 + 24,
+      cadenceBasis: 'observed',
+    });
+  });
+
+  test('a weekday-only source rides out a long weekend but not an outage', async () => {
+    // Friday's stamp is followed by Tuesday's after a Monday holiday: 96 h,
+    // plus the 12 h until Tuesday's fetch. The median gap (24 h) would flag it
+    // at 84 h, every weekend; the longest gap (240 h, one old outage) would
+    // wait 3 × 240 h. The 90th percentile is the weekend: 72 h.
+    expect((await staleAt(108)).has(WEEKDAY)).toBe(false);
+    expect((await staleAt(3 * 72 + 13)).get(WEEKDAY)).toMatchObject({
+      expectedIntervalHours: 72,
+      thresholdHours: 3 * 72 + 12,
       cadenceBasis: 'observed',
     });
   });

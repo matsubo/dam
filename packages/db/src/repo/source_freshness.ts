@@ -4,12 +4,15 @@
 //
 // threshold = MISSED_RUNS × cadence + publication lag, where
 //   cadence  = the longer of the source's poll interval (the longest gap
-//              between runs of its cron line) and the median spacing of its
-//              recent observation stamps. The poll bounds how often new rows
-//              can arrive; the stamps say how often the provider publishes,
-//              which for the survey-date sources polled daily (jwa-junpo,
-//              the 農林 PDFs, the weekly 水道 tables) is days or weeks. A
-//              source with no cron line has only the stamps to go on.
+//              between runs of its cron line) and the longest usual gap
+//              between its recent observation stamps (the 90th percentile,
+//              so one outage still in the sample doesn't count). The poll
+//              bounds how often new rows can arrive; the stamps say how often
+//              the provider publishes: the weekend for a weekday-only daily
+//              (the median, 24 h, flagged those every weekend), days or weeks
+//              for the survey-date sources polled daily (jwa-junpo, the 農林
+//              PDFs, the weekly 水道 tables). A source with no cron line has
+//              only the stamps to go on.
 //   lag      = the median delay between a recent stamp and the first time we
 //              stored it (created_at survives the upsert), e.g. ~12 h for a
 //              00:00 JST daily value fetched at noon.
@@ -53,6 +56,9 @@ export const FRESHNESS_OVERRIDE_HOURS: Readonly<Record<string, number | null>> =
   'awaji-suido': 70 * 24,
   // The portal lists dams only during a flood or disaster; empty otherwise.
   'kagoshima-bousai': null,
+  // The 水源状況 page is a 渇水 notice, taken down when the drought ends
+  // (HTTP 404 on 2026-09-28; see migration 0151).
+  'shimonoseki-suido': null,
 };
 
 /** How many polls (or publications) in a row may bring nothing new. */
@@ -79,7 +85,7 @@ export interface StaleSource {
 interface SourceStats {
   source_id: string;
   newest: Date | null;
-  median_gap_hours: number | null;
+  usual_gap_hours: number | null;
   median_lag_hours: number | null;
 }
 
@@ -109,14 +115,14 @@ export async function staleSources(
       SELECT c.id FROM unnest(${Object.keys(cron)}::text[]) AS c(id)
       WHERE NOT EXISTS (SELECT 1 FROM source_priorities sp WHERE sp.source_id = c.id)
     )
-    SELECT c.source_id, n.newest, s.median_gap_hours, s.median_lag_hours
+    SELECT c.source_id, n.newest, s.usual_gap_hours, s.median_lag_hours
     FROM candidates c
     LEFT JOIN LATERAL (
       SELECT MAX(observed_at) AS newest FROM observations WHERE source_id = c.source_id
     ) n ON TRUE
     LEFT JOIN LATERAL (
       SELECT
-        percentile_cont(0.5) WITHIN GROUP (ORDER BY gap_hours)::float8 AS median_gap_hours,
+        percentile_cont(0.9) WITHIN GROUP (ORDER BY gap_hours)::float8 AS usual_gap_hours,
         percentile_cont(0.5) WITHIN GROUP (ORDER BY lag_hours)::float8 AS median_lag_hours
       FROM (
         SELECT
@@ -142,7 +148,7 @@ export async function staleSources(
     const override = overrides[r.source_id];
     if (override === null) continue;
     const polled = cron[r.source_id] ?? null;
-    const observed = r.median_gap_hours;
+    const observed = r.usual_gap_hours;
     const interval =
       polled === null ? observed : observed === null ? polled : Math.max(polled, observed);
     const threshold =
