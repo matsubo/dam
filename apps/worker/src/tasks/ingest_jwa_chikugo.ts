@@ -1,7 +1,7 @@
 // apps/worker/src/tasks/ingest_jwa_chikugo.ts
 //
 // Fourth real-observation source. 水資源機構 筑後川ダム統合管理事務所
-// publishes a daily-updated 0時 reading for the 筑後川 system dams:
+// publishes a 0時 reading for the 筑後川 system dams once per business day:
 //
 //   松原 (国交省), 下筌 (国交省), 大山 (JWA), 合所 (福岡県),
 //   江川 (JWA), 寺内 (JWA), 小石原川 (JWA) — 7 dams total.
@@ -11,7 +11,11 @@
 // sources.
 //
 // Source: https://www.water.go.jp/chikugo/chikugo/water-source.html
-// Format: static HTML; two block patterns:
+// Format: static HTML, dated in its heading: 水源情報【令和8年9月25日】 — the
+// day whose 0時 the blocks below report. Rows are stamped with that date, not
+// the fetch date: the page is "閉庁日を除き毎日更新", so on weekends and
+// holidays it keeps the last business day's edition, and on business days it
+// is often not out yet at the 10:00 JST run. Two block patterns:
 //   (A) <div class="ws_title">{name}ダム</div>
 //       <div class="storage_rate">■貯水率　<span>NN.N%</span></div>
 //       <div class="ws_data"><table>...<td>NN千m³</td>...</table></div>
@@ -65,7 +69,20 @@ function parseNum(s: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-export function parseJwaChikugoHtml(html: string): ParsedRow[] {
+export interface ParsedPage {
+  /** 0時 JST of the date in the page heading. */
+  observedAt: Date;
+  rows: ParsedRow[];
+}
+
+/** Null when the page carries no dated 水源情報 heading. */
+export function parseJwaChikugoHtml(html: string): ParsedPage | null {
+  const date = html.match(/水源情報【令和(元|\d+)年(\d{1,2})月(\d{1,2})日】/);
+  if (!date) return null;
+  const year = 2018 + (date[1] === '元' ? 1 : Number(date[1]));
+  // JST → UTC
+  const observedAt = new Date(Date.UTC(year, Number(date[2]) - 1, Number(date[3]), -9));
+
   const out: ParsedRow[] = [];
   const knownNames = new Set(NAME_MAP.map((m) => m.chikugoName));
 
@@ -111,7 +128,7 @@ export function parseJwaChikugoHtml(html: string): ParsedRow[] {
     out.push({ chikugoName: name, storageRatePct: ratePct, storageVolumeThouM3: vol });
   }
 
-  return out;
+  return { observedAt, rows: out };
 }
 
 interface DamMatch {
@@ -174,13 +191,6 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
   return matches;
 }
 
-/** Compute today's JST midnight as the observed_at (the page header is 0時 JST). */
-function todayJstMidnight(now = new Date()): Date {
-  const utcDate = now.getUTCDate();
-  // JST midnight = previous-UTC-date 15:00.
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), utcDate - 1, 15, 0, 0, 0));
-}
-
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
   await ensureSourcePriority();
@@ -200,13 +210,17 @@ const task: Task = async (_payload, helpers) => {
     return;
   }
   const html = await r.text();
-  const parsed = parseJwaChikugoHtml(html);
-  log(`jwa-chikugo: parsed ${parsed.length} dam rows`);
+  const page = parseJwaChikugoHtml(html);
+  if (!page) {
+    log('jwa-chikugo: no dated 水源情報 heading on the page; aborting');
+    return;
+  }
+  log(`jwa-chikugo: parsed ${page.rows.length} dam rows for ${page.observedAt.toISOString()}`);
 
-  const observedAt = todayJstMidnight();
+  const { observedAt } = page;
   const matchByName = new Map(matches.map((m) => [m.chikugoName, m.damId]));
   const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const row of parsed) {
+  for (const row of page.rows) {
     const damId = matchByName.get(row.chikugoName);
     if (!damId) continue;
     inputs.push({
@@ -224,7 +238,7 @@ const task: Task = async (_payload, helpers) => {
     });
   }
   const written = await upsertObservations(inputs);
-  log(`jwa-chikugo done: parsed=${parsed.length} matched=${matches.length} written=${written}`);
+  log(`jwa-chikugo done: parsed=${page.rows.length} matched=${matches.length} written=${written}`);
 };
 
 export default task;

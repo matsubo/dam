@@ -66,8 +66,9 @@ export const CRONTAB = `
 20 2,5 * * * ingest:jwa-aichi-yosui ?jobKey=ingest:jwa-aichi-yosui
 
 # JWA Chikugo (筑後川 7 dams: 松原/下筌/大山/合所/江川/寺内/小石原川). Page
-# shows today 0時 JST values, refreshed during business hours. Fetch at
-# 01:00 UTC = 10:00 JST.
+# carries one dated 0時 edition per business day, often published after this
+# run; rows are stamped with the page's own date, so the edition is picked up
+# the next day. Fetch at 01:00 UTC = 10:00 JST.
 0 1 * * * ingest:jwa-chikugo ?jobKey=ingest:jwa-chikugo
 
 # JWA 筑後川局 水管理情報WEB (chikugo.ec-net.jp) — hourly, 5 施設
