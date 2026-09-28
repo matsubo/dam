@@ -11,16 +11,16 @@
 // figures are 「当日午前0時現在」, so rows are stamped 00:00 JST of that date.
 // The 降水量 table below it is not read.
 //
-//   湯の原ダム  written. 満水量 2,050,000 equals the master's 有効貯水容量
-//               (NDI 2024), and 507,000 / 2,050,000 = 24.7 %, the printed rate.
-//               In the 洪水期 (6/15–9/15) the notes cap it at 1,620,000, but the
-//               printed rate stays on 2,050,000 — the static capacity the site
-//               already divides by, so the source is not trusted_rate_basis
-//               (0048 leaves okinawa-eb out for the same reason).
+//   湯の原ダム  written. The printed 満水量 follows the season and the rate
+//               divides by it: out of the 洪水期 2,050,000 (the master's
+//               有効貯水容量, NDI 2024; 507,000 / 24.7 % on 2026-09-25), in the
+//               洪水期 (6/15–9/15) the 1,620,000 cap (699,000 / 43.1 % on
+//               2025-07-14, which the static capacity would show as 34.1 %).
+//               Trusted as a season-aware native rate in 0107.
 //   木屋川ダム  universe only. kasenbosai and yamaguchi-bousai publish it every
-//               10 minutes, and this page's 満水量 19,440,000 is a 利水 pool
-//               below the master's 有効 21,080,000, so its rate is on another
-//               basis and a once-a-day volume adds nothing.
+//               10 minutes, and this page's 満水量 (19,440,000; 17,332,000 in
+//               the 洪水期) sits below the master's 有効 21,080,000, so its rate
+//               is on another basis and a once-a-day volume adds nothing.
 //   内日貯水池  universe only, unresolved. 1,900,000 is 内日第1 (有効 1,000,000)
 //               + 内日第2 (900,000) as one figure; writing it to either would show
 //               a volume the dam cannot hold. The stem 内日 also names the 県's

@@ -20,6 +20,12 @@ const FIXTURE = join(
 );
 
 const html = await readFile(FIXTURE, 'utf8');
+// Wayback capture (web.archive.org/web/20250714024937/…/5617.html) of the
+// 令和7年7月14日現在 table, taken in the 洪水期.
+const floodHtml = await readFile(
+  FIXTURE.replace('suigen_2026-09-28.html', 'suigen_2025-07-14_wayback.html'),
+  'utf8',
+);
 
 describe('parseShimonosekiSuigen', () => {
   test('lists the three 施設 of the 貯水量 table, not 合計 nor the 降水量 table', () => {
@@ -53,6 +59,21 @@ describe('parseShimonosekiSuigen', () => {
 
   test('no 「…日現在」 line → no date', () => {
     expect(parseShimonosekiSuigen(html.replace('現在の下関市', 'の下関市')).observedAt).toBeNull();
+  });
+});
+
+describe('parseShimonosekiSuigen in the 洪水期', () => {
+  // The 満水量 printed for 湯の原 that day is the 洪水期 cap, 1,620,000.
+  const flood = parseShimonosekiSuigen(floodHtml);
+
+  test('reads 43.1 %, the rate on the 1,620,000 flood-season 満水量', () => {
+    const yunohara = flood.rows.find((r) => r.name === '湯の原ダム');
+    expect(flood.observedAt?.toISOString()).toBe('2025-07-13T15:00:00.000Z');
+    expect(yunohara?.storageVolumeM3).toBe(699_000);
+    expect(yunohara?.storageRate).toBeCloseTo(0.431, 6);
+    // Back-solves to the 洪水期 満水量 1,620,000, not the annual 2,050,000.
+    const pool = (yunohara?.storageVolumeM3 ?? 0) / (yunohara?.storageRate ?? 1);
+    expect(Math.abs(pool - 1_620_000)).toBeLessThan(5_000);
   });
 });
 
