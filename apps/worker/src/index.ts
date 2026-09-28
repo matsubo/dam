@@ -34,6 +34,7 @@ import ingestHyogo from './tasks/ingest_hyogo.ts';
 import ingestHyogoKigyo from './tasks/ingest_hyogo_kigyo.ts';
 import ingestHyogoSuigen from './tasks/ingest_hyogo_suigen.ts';
 import ingestIbaraki from './tasks/ingest_ibaraki_bousai.ts';
+import ingestIbarakiKasumigaura from './tasks/ingest_ibaraki_kasumigaura.ts';
 import ingestIshikawa from './tasks/ingest_ishikawa_kasen.ts';
 import ingestIwate from './tasks/ingest_iwate_kasen.ts';
 import ingestJwaAichiYosui from './tasks/ingest_jwa_aichi_yosui.ts';
@@ -54,6 +55,7 @@ import ingestKagawaTameike from './tasks/ingest_kagawa_tameike.ts';
 import ingestKagoshimaBousai from './tasks/ingest_kagoshima_bousai.ts';
 import ingestKagoshimaKasen from './tasks/ingest_kagoshima_kasen.ts';
 import ingestKanagawa from './tasks/ingest_kanagawa.ts';
+import ingestKanagawaSuibou from './tasks/ingest_kanagawa_suibou.ts';
 import ingestKasenbosai from './tasks/ingest_kasenbosai.ts';
 import ingestKasenbosaiV2 from './tasks/ingest_kasenbosai_v2.ts';
 import ingestKitakyushuSuido from './tasks/ingest_kitakyushu_suido.ts';
@@ -154,6 +156,7 @@ async function main(): Promise<void> {
       'ingest:jwa-chiba-bouso': ingestJwaChiba,
       'ingest:jwa-chikugo': ingestJwaChikugo,
       'ingest:kanagawa-dam': ingestKanagawa,
+      'ingest:kanagawa-suibou': ingestKanagawaSuibou,
       'ingest:kumamoto-bousai': ingestKumamoto,
       'ingest:kkr-mlit-dam': ingestKkrMlit,
       'ingest:shiga-bousai': ingestShiga,
@@ -184,6 +187,7 @@ async function main(): Promise<void> {
       'ingest:shimane-bousai': ingestShimaneBousai,
       'ingest:shimokubo': ingestShimokubo,
       'ingest:ibaraki-bousai': ingestIbaraki,
+      'ingest:ibaraki-kasumigaura': ingestIbarakiKasumigaura,
       'ingest:kochi-bousai': ingestKochi,
       'ingest:kochi-kigyo': ingestKochiKigyo,
       'ingest:kyoto-bousai': ingestKyoto,

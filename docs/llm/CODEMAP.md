@@ -159,6 +159,7 @@ the file for detail.
 | `src/tasks/ingest_hrr_mlit.ts` | `hrr-mlit-dam`: 北陸地方整備局 `tmDam.txt`, hourly (7 dams; level + flows) |
 | `src/tasks/ingest_hyogo.ts` | `hyogo-bodik`: 兵庫県 ダム諸量 BODIK CSV, hourly (22 stations) |
 | `src/tasks/ingest_ibaraki_bousai.ts` | `ibaraki-bousai`: 茨城県河川防災情報 ダム諸量現況表, hourly (7 県管理ダム; no rate) |
+| `src/tasks/ingest_ibaraki_kasumigaura.ts` | `ibaraki-kasumigaura`: 茨城県河川情報 出島 水位グラフ as 霞ヶ浦開発's lake level, hourly 24-row window (gauge + 零点高 → Y.P.) |
 | `src/tasks/ingest_ishikawa_kasen.ts` | `ishikawa-kasen`: 石川県河川総合情報システム dam JSON, hourly (11 県管理ダム) |
 | `src/tasks/ingest_iwate_kasen.ts` | `iwate-kasen`: 岩手県河川情報システム ダム諸量経過表, one page per dam, hourly (10 県管理ダム) |
 | `src/tasks/ingest_jwa_chiba.ts` | `jwa-chiba-bouso`: JWA 房総導水路管理所 取水情報, daily 0時 (長柄 / 東金; level + rate) |
@@ -173,6 +174,7 @@ the file for detail.
 | `src/tasks/ingest_kagoshima_bousai.ts` | `kagoshima-bousai`: 鹿児島県防災ポータル `dam_station.json`, hourly; items only during flood events |
 | `src/tasks/ingest_kagoshima_kasen.ts` | `kagoshima-kasen`: 鹿児島県河川砂防情報システム ダム一覧表, hourly (西之谷 / 川辺 / 大和) |
 | `src/tasks/ingest_kanagawa.ts` | `kanagawa-dam`: かながわの水がめ `summary.php` JSON, a 30-day daily window stamped at 24:00 JST (5 dams) |
+| `src/tasks/ingest_kanagawa_suibou.ts` | `kanagawa-suibou`: 神奈川県雨量水位情報 飯泉取水堰 15分水位, hourly 6 h window (level only, as published) |
 | `src/tasks/ingest_kkr_mlit.ts` | `kkr-mlit-dam`: 近畿地方整備局 貯水率 JSON feed, daily (12 国管理ダム) |
 | `src/tasks/ingest_kochi_bousai.ts` | `kochi-bousai`: 高知県水防情報システム ダム諸量現況表, hourly (11 dams: 7 県 + 4 MLIT) |
 | `src/tasks/ingest_ktr_kinu.ts` | `ktr-kinu-dam`: 関東地方整備局 鬼怒川ダム統合管理事務所 realtime page, hourly (4 dams) |
