@@ -182,12 +182,13 @@ export function parseMudamCsv(text: string): CsvRow[] {
     if (cols.length < 4) continue;
     const obs = parseDateJst(cols[0] ?? '');
     if (!obs) continue;
-    out.push({
-      observedAt: obs,
-      waterLevelM: parseNum(cols[1] ?? ''),
-      inflowM3s: parseNum(cols[2] ?? ''),
-      outflowM3s: parseNum(cols[3] ?? ''),
-    });
+    const waterLevelM = parseNum(cols[1] ?? '');
+    const inflowM3s = parseNum(cols[2] ?? '');
+    const outflowM3s = parseNum(cols[3] ?? '');
+    // The header says （※空欄はデータがなし）: a blank day is no observation,
+    // and stored as an all-NULL row it read as coverage.
+    if (waterLevelM == null && inflowM3s == null && outflowM3s == null) continue;
+    out.push({ observedAt: obs, waterLevelM, inflowM3s, outflowM3s });
   }
   return out;
 }
