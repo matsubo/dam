@@ -240,14 +240,17 @@ describe('source universe coverage triage', () => {
     expect((await classifyOneDam(stale))?.status).toBe('published_not_ingested');
   });
 
-  test('a scan that cannot tell keeps the last known answer', async () => {
-    // A catalogue-driven task lists a station whose row did not parse this
-    // run; "unknown this time" must not erase what an earlier scan saw.
+  test('a later unreadable row clears an earlier "no data"', async () => {
+    // A row that stops parsing may be our parser breaking. Keeping last
+    // week's "provider marks it empty" would hide that under 提供元に値なし,
+    // so the latest scan's answer always wins — unknown included.
     await recordUniverse(SRC_A, [
       { externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale, hasData: false },
     ]);
-    await recordUniverse(SRC_A, [{ externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale }]);
-    expect(only(await classifyDamCoverage(), stale)).toBe('published_no_data');
+    await recordUniverse(SRC_A, [
+      { externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale, hasData: null },
+    ]);
+    expect(only(await classifyDamCoverage(), stale)).toBe('published_not_ingested');
   });
 
   test('recordUniverse is idempotent and advances last_seen_at', async () => {

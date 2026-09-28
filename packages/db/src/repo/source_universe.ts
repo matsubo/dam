@@ -21,8 +21,9 @@ export interface UniverseRow {
    * Whether this row carried a value: true = yes, false = the provider itself
    * marks it empty (調査対象外, "---" in every column, a page with no rows).
    * Leave it unset when unsure — a cell the parser could not read may be our
-   * own breakage, and calling that "no data" would hide it. An unset value
-   * keeps what an earlier scan recorded.
+   * own breakage, and calling that "no data" would hide it. Every scan
+   * overwrites the stored value, unset included, so a row that stops parsing
+   * drops back to unknown instead of keeping an earlier "no data".
    */
   hasData?: boolean | null;
 }
@@ -94,9 +95,10 @@ async function recordUniverseOrThrow(sourceId: string, rows: UniverseRow[]): Pro
         -- be missing — turning a matched dam into unmatched backlog. A real
         -- re-match still overwrites, because it supplies a non-NULL id.
         resolved_dam_id = COALESCE(EXCLUDED.resolved_dam_id, source_universe.resolved_dam_id),
-        -- Same rule: a scan that could not tell keeps the last known answer,
-        -- while a scan that saw a value (or an explicit blank) overwrites it.
-        has_data        = COALESCE(EXCLUDED.has_data, source_universe.has_data),
+        -- Unlike resolved_dam_id, the latest scan always wins: a row that
+        -- stops parsing (NULL) must clear an earlier FALSE, or a parser break
+        -- would hide under 提供元に値なし. Each source has a single writer.
+        has_data        = EXCLUDED.has_data,
         last_seen_at    = NOW()
     `;
   }
