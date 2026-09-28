@@ -205,6 +205,54 @@ describe('source universe coverage triage', () => {
     expect(only(rows, stale)).toBe('published_not_ingested');
   });
 
+  test('a dam its publishers list with no value is 提供元に値なし, not an ingestion bug', async () => {
+    // 鉄山 / 坂下 (調査対象外) and 滝波 (every column "---") are on their
+    // provider's page with nothing in the value cells. Calling that
+    // 「取り込み側の不具合」 accuses ourselves of a bug there is no fix for.
+    await recordUniverse(SRC_A, [
+      { externalId: 'a-1', name: 'univ-covered', resolvedDamId: covered, hasData: false },
+      { externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale, hasData: false },
+    ]);
+    const before = await coverageSummary();
+    const rows = await classifyDamCoverage();
+    expect(only(rows, stale)).toBe('published_no_data');
+    expect(rows.find((r) => r.damId === stale)?.publishedBy).toEqual([SRC_A]);
+    // Data that does arrive (from anywhere) still wins.
+    expect(only(rows, covered)).toBe('covered');
+    expect((await classifyOneDam(stale))?.status).toBe('published_no_data');
+
+    await recordUniverse(SRC_A, [
+      { externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale, hasData: true },
+    ]);
+    const after = await coverageSummary();
+    expect(after.publishedNoData).toBe(before.publishedNoData - 1);
+    expect(after.publishedNotIngested).toBe(before.publishedNotIngested + 1);
+  });
+
+  test('one publisher that may carry values keeps the dam an ingestion bug', async () => {
+    // A provider we cannot vouch for is exactly where the missing data might
+    // be, so "no data" needs every publisher to say so.
+    await recordUniverse(SRC_A, [
+      { externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale, hasData: false },
+    ]);
+    await recordUniverse(SRC_B, [{ externalId: 'b-2', name: 'univ-stale', resolvedDamId: stale }]);
+    expect(only(await classifyDamCoverage(), stale)).toBe('published_not_ingested');
+    expect((await classifyOneDam(stale))?.status).toBe('published_not_ingested');
+  });
+
+  test('a later unreadable row clears an earlier "no data"', async () => {
+    // A row that stops parsing may be our parser breaking. Keeping last
+    // week's "provider marks it empty" would hide that under 提供元に値なし,
+    // so the latest scan's answer always wins — unknown included.
+    await recordUniverse(SRC_A, [
+      { externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale, hasData: false },
+    ]);
+    await recordUniverse(SRC_A, [
+      { externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale, hasData: null },
+    ]);
+    expect(only(await classifyDamCoverage(), stale)).toBe('published_not_ingested');
+  });
+
   test('recordUniverse is idempotent and advances last_seen_at', async () => {
     await recordUniverse(SRC_A, [{ externalId: 'a-1', name: 'univ-covered', resolvedDamId: null }]);
     const first = await sql<{ first: Date; last: Date }[]>`
