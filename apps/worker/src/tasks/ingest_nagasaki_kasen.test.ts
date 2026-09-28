@@ -6,6 +6,7 @@ import type { JobHelpers } from 'graphile-worker';
 import task, {
   buildNagasakiUniverse,
   buildSnapshotUrl,
+  chooseMaster,
   parseAllDamsJson,
   parseNagasakiDatetime,
 } from './ingest_nagasaki_kasen.ts';
@@ -259,6 +260,31 @@ describe('buildNagasakiUniverse', () => {
     // An empty list is how recordUniverse recognises a failed fetch, so the
     // builder must not invent rows.
     expect(buildNagasakiUniverse([], () => undefined)).toEqual([]);
+  });
+});
+
+describe('chooseMaster', () => {
+  // pref 42 has two 小ヶ倉: NDI 2592 (諫早, 長崎県) and NDI 2609 (長崎市).
+  const kogakura = [
+    { id: 11176n, name: '小ヶ倉', ndi: '2592', stamp: null },
+    { id: 11190n, name: '小ヶ倉', ndi: '2609', stamp: null },
+  ];
+
+  test("binds dam_cd 1106 to 長崎市's 小ヶ倉, not the lower-id namesake", () => {
+    expect(chooseMaster(1106, '小ヶ倉ダム', kogakura)?.id).toBe(11190n);
+  });
+
+  test('the pin outranks a stamp left on the wrong 小ヶ倉', () => {
+    const stale = kogakura.map((m) => (m.ndi === '2592' ? { ...m, stamp: '1106' } : m));
+    expect(chooseMaster(1106, '小ヶ倉ダム', stale)?.id).toBe(11190n);
+  });
+
+  test('an unpinned station keeps the same-name row it is stamped on', () => {
+    const twins = [
+      { id: 1n, name: '宮崎', ndi: '1', stamp: null },
+      { id: 2n, name: '宮崎', ndi: '2', stamp: '1110' },
+    ];
+    expect(chooseMaster(1110, '宮崎ダム', twins)?.id).toBe(2n);
   });
 });
 
