@@ -1,4 +1,7 @@
-// apps/worker/src/crontab.ts
+// packages/core/src/crontab.ts — the worker's schedule (apps/worker/src/index.ts
+// hands it to graphile-worker). It lives in core because the web app reads it
+// too: INGEST_INTERVAL_HOURS below is each source's poll cadence for the
+// freshness check (packages/db/src/repo/source_freshness.ts).
 // graphile-worker crontab format: https://github.com/graphile/worker
 // All times below are UTC (graphile-worker doesn't take a timezone). Display
 // time in the UI is always JST (Asia/Tokyo) — see lib/format.ts.
@@ -14,8 +17,8 @@
 // exp(min(attempts, 10)) s, so an hourly job makes ~8 attempts before the
 // next tick. A job that exhausted its attempts before the next tick would
 // have its key stripped by add_job and stay behind as a dead row, one per
-// tick; crontab.test.ts checks that every ingest line's retries outlast its
-// longest gap between runs.
+// tick; apps/worker/src/crontab.test.ts checks that every ingest line's
+// retries outlast its longest gap between runs.
 export const CRONTAB = `
 # 秋田県河川砂防情報システム ダム一覧表 — 18 県管理ダム (防災Web HTML table, Shift_JIS,
 # no session). 12 columns: level / inflow / outflow (no storage volume).
@@ -40,12 +43,12 @@ export const CRONTAB = `
 # dams matched as the kawabou catalogue grows.
 30 3 * * 1 match:kasenbosai
 
-# Tokyo waterworks daily reservoir status — open data, real values for the
-# 13 dams supplying Tokyo's drinking water (Tonegawa 9 + Arakawa 4 +
-# Tamagawa 2). Page updates daily; check at 03:00 UTC = 12:00 JST and again
-# at 09:00 UTC = 18:00 JST so a same-day refresh after the morning publish
-# is captured. Idempotent — repeated runs UPSERT on (dam_id, observed_at,
-# source_id) where observed_at is snapped to today 00:00 JST.
+# Tokyo waterworks reservoir status — open data, real values for the 14
+# single-dam rows supplying Tokyo's drinking water (Tonegawa 9 + Arakawa 4 +
+# Ogouchi). The page updates on business days; check at 03:00 UTC = 12:00 JST
+# and again at 09:00 UTC = 18:00 JST so a same-day refresh after the morning
+# publish is captured. Idempotent — runs UPSERT on (dam_id, observed_at,
+# source_id) where observed_at is the page's own date and 「N時現在」 hour.
 0 3,9 * * * ingest:tokyo-waterworks ?jobKey=ingest:tokyo-waterworks
 
 # JWA 旬報 — 21 dams across 7 major water systems (Tonegawa, Arakawa, Kisogawa,
@@ -55,10 +58,12 @@ export const CRONTAB = `
 # new publication within ~24 h regardless of which exact day it lands on.
 0 4 * * * ingest:jwa-junpo ?jobKey=ingest:jwa-junpo
 
-# あいとよネット (aitoyo) — 7 dams across 木曽川 / 豊川 / 矢作川 系. Page is
-# updated daily at 24:00 JST (木曽川/豊川) or 09:00 JST (矢作川); fetch at
-# 02:00 UTC = 11:00 JST so we get fresh data for both branches.
-0 2 * * * ingest:aitoyo ?jobKey=ingest:aitoyo
+# あいとよネット (aitoyo) — 7 dams across 木曽川 / 豊川 / 矢作川 系. The page
+# shows ONE day (24:00 JST 木曽川/豊川, 09:00 JST 矢作川 values), replaced on
+# business days at a varying hour, often after 11:00 JST; a once-a-day poll
+# missed 9/27's (up by 12:57 JST 9/28, not at the 11:00 run). Hourly
+# 09:15–20:15 JST; the upsert on the reading time makes repeats free.
+15 0-11 * * * ingest:aitoyo ?jobKey=ingest:aitoyo
 
 # 水資源機構 愛知用水総合管理所 水情報 — 牧尾 / 東郷調整池 / 前山池. Daily 0時
 # JST values, page updated ~10:00 JST; 02:20 UTC = 11:20 JST, retried 05:20
@@ -66,14 +71,18 @@ export const CRONTAB = `
 20 2,5 * * * ingest:jwa-aichi-yosui ?jobKey=ingest:jwa-aichi-yosui
 
 # JWA Chikugo (筑後川 7 dams: 松原/下筌/大山/合所/江川/寺内/小石原川). Page
-# shows today 0時 JST values, refreshed during business hours. Fetch at
-# 01:00 UTC = 10:00 JST.
-0 1 * * * ingest:jwa-chikugo ?jobKey=ingest:jwa-chikugo
+# carries one dated 0時 edition per business day (none on 閉庁日), published
+# at no fixed hour — often after 10:00 JST. Rows are stamped with the page's
+# own date, so each run just upserts whichever edition is up. 01:00 and 08:00
+# UTC = 10:00 and 17:00 JST: the late run catches an edition before the next
+# morning's replaces it.
+0 1,8 * * * ingest:jwa-chikugo ?jobKey=ingest:jwa-chikugo
 
 # JWA 筑後川局 水管理情報WEB (chikugo.ec-net.jp) — hourly, 5 施設
 # (江川/寺内/小石原川/大山/筑後大堰). Each rep*_I60 page is a 24-row hourly
 # table regenerated at ~:37; the whole window is upserted. Priority 298: above
-# jwa-chikugo (297), below kasenbosai (310). 筑後大堰 has no other source.
+# jwa-chikugo (297), below kasenbosai (310). 筑後大堰's only other source is
+# mudam (historical, daily to 2024-12).
 # Cron at :50.
 50 * * * * ingest:jwa-chikugo-rt ?jobKey=ingest:jwa-chikugo-rt
 
@@ -82,11 +91,11 @@ export const CRONTAB = `
 # report hour, so hourly polling costs nothing. Cron at :54.
 54 * * * * ingest:jwa-fukudou ?jobKey=ingest:jwa-fukudou
 
-# かながわの水がめ JSON API — hourly cadence for 5 prefectural dams
-# (相模/城山/三保/宮ヶ瀬/道志). Page rolls a 30-hour window; cron at
-# every hour :05 captures the freshest reading shortly after the
-# source's update.
-5 * * * * ingest:kanagawa-dam ?jobKey=ingest:kanagawa-dam
+# かながわの水がめ JSON API — 5 prefectural dams (相模/城山/三保/宮ヶ瀬/道志).
+# A 30-day DAILY window (24:00 JST values; lastUpdate rolls at ~01:00 JST),
+# upserted whole so a missed poll heals. Every 3 h at :35 — the 16:35 UTC
+# (01:35 JST) run catches the rollover, the rest cover a late one.
+35 1,4,7,10,13,16,19,22 * * * ingest:kanagawa-dam ?jobKey=ingest:kanagawa-dam
 
 # 滋賀県土木防災 (mobile pages; robots.txt disallows /dam/, allows /mobile/) —
 # 8 dams, the latest 10-minute value + six hourly rows per station. Cron at
@@ -593,10 +602,9 @@ export const CRONTAB = `
 # filling in storage_rate from volume / capacity for sources that don't provide it.
 45 4 * * * storageRate:recompute
 
-# Freshness watchdog — every hour, scan source_priorities and flag any source
-# whose newest observation is older than the per-source expected window
-# (see apps/worker/src/tasks/quality_freshness.ts). Posts a digest to
-# DISCORD_FRESHNESS_WEBHOOK if set; else logs warnings only.
+# Freshness watchdog — every hour, flag any source whose newest observation is
+# older than its cadence allows (packages/db/src/repo/source_freshness.ts).
+# Posts a digest to DISCORD_FRESHNESS_WEBHOOK if set; else logs warnings only.
 35 * * * * quality:freshness-check
 
 # Cover-image and elevation refresh — monthly, staggered to avoid hitting the
@@ -604,3 +612,88 @@ export const CRONTAB = `
 0 5 2 * * images:refresh:wikipedia
 0 5 3 * * master:refresh:elevation
 `;
+
+/**
+ * One crontab field as the values it matches, the way graphile-worker reads it:
+ * a comma list of `n`, `a-b` and `*` (optionally `*\/step`). Day of week 7 is 0.
+ */
+function cronField(field: string, min: number, max: number): number[] {
+  const values = new Set<number>();
+  for (const part of field.split(',')) {
+    const wildcard = /^\*(?:\/(\d+))?$/.exec(part);
+    const range = /^(\d+)(?:-(\d+))?$/.exec(part);
+    let from: number;
+    let to: number;
+    let step = 1;
+    if (wildcard) {
+      from = min;
+      to = max;
+      step = Number(wildcard[1] ?? 1);
+    } else if (range) {
+      from = Number(range[1]);
+      to = Number(range[2] ?? range[1]);
+    } else {
+      throw new Error(`crontab: unsupported field "${field}"`);
+    }
+    const top = max === 6 ? 7 : max;
+    if (from < min || to > top || from > to || step < 1) {
+      throw new Error(`crontab: field "${field}" is outside ${min}-${max}`);
+    }
+    for (let v = from; v <= to; v += step) values.add(max === 6 ? v % 7 : v);
+  }
+  return [...values].sort((a, b) => a - b);
+}
+
+/**
+ * Longest gap between two consecutive runs of a schedule, in hours, over a
+ * year and a month of UTC days (every month length and every weekday).
+ * graphile-worker's day rule: when both day-of-month and day-of-week are
+ * restricted, either one matching is enough.
+ */
+function longestGapHours(fields: string[]): number {
+  const [minF, hourF, dateF, monthF, dowF] = fields as [string, string, string, string, string];
+  const minutes = cronField(minF, 0, 59);
+  const hours = cronField(hourF, 0, 23);
+  const dates = cronField(dateF, 1, 31);
+  const months = cronField(monthF, 1, 12);
+  const dows = cronField(dowF, 0, 6);
+  const byDate = dates.length !== 31;
+  const byDow = dows.length !== 7;
+  const start = Date.UTC(2026, 0, 1);
+  let previous: number | null = null;
+  let longest = 0;
+  for (let day = 0; day < 396; day++) {
+    const t = new Date(start + day * 86_400_000);
+    if (!months.includes(t.getUTCMonth() + 1)) continue;
+    const onDate = dates.includes(t.getUTCDate());
+    const onDow = dows.includes(t.getUTCDay());
+    if (byDate && byDow ? !(onDate || onDow) : !(onDate && onDow)) continue;
+    for (const h of hours) {
+      for (const m of minutes) {
+        const minute = day * 1440 + h * 60 + m;
+        if (previous !== null) longest = Math.max(longest, minute - previous);
+        previous = minute;
+      }
+    }
+  }
+  if (longest === 0) throw new Error(`crontab: "${fields.join(' ')}" runs less than twice a year`);
+  return longest / 60;
+}
+
+/**
+ * Each ingest line's longest gap between runs, in hours, keyed by the source
+ * the task writes (its name without `ingest:`, except kasenbosai-v2): new rows
+ * can't arrive more often than the source is polled.
+ */
+export const INGEST_INTERVAL_HOURS: Readonly<Record<string, number>> = Object.fromEntries(
+  CRONTAB.split('\n')
+    .filter((line) => !line.trimStart().startsWith('#'))
+    .map((line) => line.trim().split(/\s+/))
+    .filter((tokens) => tokens[5]?.startsWith('ingest:'))
+    .map((tokens) => {
+      const task = tokens[5] as string;
+      const sourceId =
+        task === 'ingest:kasenbosai-v2' ? 'kasenbosai' : task.slice('ingest:'.length);
+      return [sourceId, longestGapHours(tokens.slice(0, 5))];
+    }),
+);

@@ -94,14 +94,17 @@ function extractDamSection(html: string, damName: string): string {
   return html.slice(start, end);
 }
 
-function extractLabeled(section: string, label: string): number | null {
-  const labelIdx = section.indexOf(label);
-  if (labelIdx < 0) return null;
-  const context = textOf(section.slice(labelIdx, labelIdx + 400));
-  const afterLabel = context.slice(label.length);
-  const m = afterLabel.match(/([\d,]+(?:\.\d+)?)/);
-  if (!m) return null;
-  return parseNum(m[1] ?? '');
+/**
+ * The value cell of the first `<th>` whose text starts with `label`. The unit
+ * sits inside the `<th>` as markup (`流入量(<span class='unit'>m<sup>3</sup>/s
+ * </span>)`), so the value must come from the `<td>`, never from the first
+ * digit after the label: that is the 3 of m³.
+ */
+function extractLabeled(html: string, label: string): number | null {
+  for (const m of html.matchAll(/<th[^>]*>([\s\S]*?)<\/th>\s*<td[^>]*>([^<]*)/g)) {
+    if (textOf(m[1] ?? '').startsWith(label)) return parseNum(m[2] ?? '');
+  }
+  return null;
 }
 
 export function parseYoshinoHtml(html: string): { observedAt: Date | null; rows: ParsedRow[] } {

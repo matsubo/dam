@@ -173,6 +173,53 @@ describe('source universe coverage triage', () => {
     }
   });
 
+  test('names each source holding the gate open, and why', async () => {
+    // A bare count leaves the reader hunting for which provider to fix. The
+    // reason separates "its task is not producing anything" (first run
+    // pending or failing) from "it ingests but never records its list" (the
+    // task is missing its recordUniverse call, or every call comes back empty).
+    await recordUniverse(SRC_A, [
+      { externalId: 'a-1', name: 'univ-covered', resolvedDamId: covered },
+    ]);
+    const pendingB = async () =>
+      (await coverageSummary()).pendingScanSources.find((p) => p.sourceId === SRC_B);
+
+    const first = await coverageSummary();
+    expect(first.pendingScanSources.map((p) => p.sourceId)).not.toContain(SRC_A);
+    expect(first.sourcesPendingScan).toBe(first.pendingScanSources.length);
+    expect((await pendingB())?.reason).toBe('no_recent_observations');
+
+    // Same 30-day window as 取得済み: a task that stopped long ago is not ingesting.
+    const DAY = 86_400_000;
+    await upsertObservations([
+      {
+        observedAt: new Date(Date.now() - 31 * DAY),
+        damId: stale,
+        sourceId: SRC_B,
+        storageVolumeM3: 1,
+      },
+    ]);
+    expect((await pendingB())?.reason).toBe('no_recent_observations');
+
+    await upsertObservations([
+      {
+        observedAt: new Date(Date.now() - 29 * DAY),
+        damId: stale,
+        sourceId: SRC_B,
+        storageVolumeM3: 1,
+      },
+    ]);
+    expect((await pendingB())?.reason).toBe('ingesting_without_list');
+
+    // Excluded from the gate means excluded from the list too.
+    await sql`UPDATE source_priorities SET historical_only = TRUE WHERE source_id = ${SRC_B}`;
+    expect(await pendingB()).toBeUndefined();
+    await sql`UPDATE source_priorities SET historical_only = FALSE WHERE source_id = ${SRC_B}`;
+
+    await recordUniverse(SRC_B, [{ externalId: 'b-stub', name: 'stub', resolvedDamId: null }]);
+    expect(await pendingB()).toBeUndefined();
+  });
+
   test("a retired source's last list is neither an ingestion bug nor backlog", async () => {
     // A retired source's universe rows stay behind with the resolution of its
     // last run. Its dams must not be reported as 「取り込み側の不具合で、
@@ -204,6 +251,27 @@ describe('source universe coverage triage', () => {
     expect(only(rows, covered)).toBe('covered');
     // Published and matched, but no observation has landed — the actionable bug.
     expect(only(rows, stale)).toBe('published_not_ingested');
+  });
+
+  test('an observation row with every quantity NULL is not coverage', async () => {
+    // kasenbosai-v2 used to store an all-NULL row per hour for stations whose
+    // every reading is flagged 欠測, and 21 dams were "covered" by nothing but
+    // those rows. A row carrying no value is not data we have.
+    await recordUniverse(SRC_A, [
+      { externalId: 'a-1', name: 'univ-covered', resolvedDamId: covered },
+      { externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale },
+    ]);
+    await recordUniverse(SRC_B, [{ externalId: 'b-stub', name: 'stub', resolvedDamId: null }]);
+    await upsertObservations([{ observedAt: new Date(), damId: stale, sourceId: SRC_A }]);
+    expect(only(await classifyDamCoverage(), stale)).toBe('published_not_ingested');
+    expect((await classifyOneDam(stale))?.status).toBe('published_not_ingested');
+
+    // Any one non-NULL quantity, rainfall included, is coverage.
+    await upsertObservations([
+      { observedAt: new Date(Date.now() - 3600_000), damId: stale, sourceId: SRC_A, rainfallMm: 0 },
+    ]);
+    expect(only(await classifyDamCoverage(), stale)).toBe('covered');
+    expect((await classifyOneDam(stale))?.status).toBe('covered');
   });
 
   test('a dam its publishers list with no value is 提供元に値なし, not an ingestion bug', async () => {

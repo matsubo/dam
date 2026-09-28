@@ -59,8 +59,8 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
   'tokyo-waterworks': {
     upstream: '東京都水道局 水源情報 (waterworks.metro.tokyo.lg.jp/suigen/suigen.html)',
     license: '東京都オープンデータ (出典明示で再配布可)',
-    cadence: '日次 (毎日 12:00 / 18:00 JST に取得)',
-    what: '東京都の水源 15 ダム (利根川・荒川・多摩川 水系) の貯水量 (万m³) と貯水率 (%)。前日からの増減量。',
+    cadence: '平日の日次 (0 時 / 多摩川は 7 時現在の値; 毎日 12:00 / 18:00 JST に取得)',
+    what: '東京都の水源 14 ダム (利根川・荒川・多摩川 水系) の貯水量 (万m³) と貯水率 (%)。村山・山口貯水池は 3 貯水池の合計のため取り込まない。',
     label: '東京都水道局',
   },
   'jwa-junpo': {
@@ -121,14 +121,15 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
   aitoyo: {
     upstream: 'あいとよネット 公益財団法人 愛知・豊川用水振興協会 (aitoyo.or.jp)',
     license: '公益財団法人発行 — 出典明示で再配布可',
-    cadence: '日次 (木曽川/豊川は 24:00 JST 値, 矢作川は 09:00 JST 値; 取得は 11:00 JST)',
+    cadence:
+      '営業日ごとの日次 (木曽川/豊川は当日 24:00 JST 値, 矢作川は当日 09:00 JST 値; 更新時刻が一定しないため 09:15–20:15 JST に毎時取得)',
     what: '木曽川 4 ダム (牧尾/阿木川/味噌川/岩屋), 豊川 1 ダム (宇連), 矢作川 2 ダム (矢作/羽布) の 利水容量・貯水量・貯水率・前日差・平年貯水率。',
     label: 'あいとよネット',
   },
   'jwa-chikugo': {
     upstream: '水資源機構 筑後川ダム統合管理事務所 (water.go.jp/chikugo/chikugo/water-source.html)',
     license: '公的統計 — 出典明示で再配布可',
-    cadence: '日次 (毎日 0:00 JST 値; 取得は 10:00 JST)',
+    cadence: '日次 (開庁日のみ, 見出しの日付の 0:00 JST 値; 取得は 10:00 / 17:00 JST)',
     what: '筑後川水系 7 ダム (松原/下筌/大山/合所/江川/寺内/小石原川) の貯水率・貯水量。',
     label: 'JWA 筑後川',
   },
@@ -138,7 +139,7 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     license:
       '水資源機構 利用ルール — 出典を記載すれば複製・公衆送信・翻案・商用利用可; 数値データは著作権の対象外 (water.go.jp/honsya/honsya/policy/copyright/)',
     cadence: '時次 (毎正時値, ~37 分に更新; 取得は毎時 :50, 直近 24 時間分を毎回 UPSERT)',
-    what: '筑後川水系 5 施設 (江川/寺内/小石原川/大山ダム, 筑後大堰) の貯水位・有効貯水量・貯水率 (利水等の貯水容量比)・流入量・総放流量・時間雨量。筑後大堰は貯水位・有効貯水量のみで新規カバレッジ; 各ダムは jwa-chikugo (日次 0 時) を時次に格上げ。',
+    what: '筑後川水系 5 施設 (江川/寺内/小石原川/大山ダム, 筑後大堰) の貯水位・有効貯水量・貯水率 (利水等の貯水容量比)・流入量・総放流量・時間雨量。筑後大堰は貯水位・時間雨量のみ (有効貯水量欄は容量 930 千m³ の固定値のため保存しない) で、現行の唯一のソース; 各ダムは jwa-chikugo (日次 0 時) を時次に格上げ。',
     label: 'JWA 筑後川 時次',
   },
   'jwa-fukudou': {
@@ -216,8 +217,8 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
   'kanagawa-dam': {
     upstream: 'かながわの水がめ (kanagawa-dam.jp) — JSON API `summary.php`',
     license: '神奈川県企業庁 — 出典明示で再配布可 (推定)',
-    cadence: '時次 (1 時間粒度; 取得は毎時 :05)',
-    what: '神奈川県 5 ダム (相模/城山/三保/宮ヶ瀬/道志) の貯水位・貯水量・貯水率・流入量・放流量。',
+    cadence: '日次 (24:00 JST 値; 直近 30 日分を 3 時間ごとに取得, 更新は ~01:00 JST)',
+    what: '神奈川県 5 ダム (相模/城山/三保/宮ヶ瀬/道志) の貯水位・貯水量・貯水率 (24:00 値) と流入量・放流量 (日平均)。',
     label: 'かながわの水がめ',
   },
   mudam: {

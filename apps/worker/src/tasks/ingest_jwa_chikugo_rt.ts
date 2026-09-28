@@ -24,7 +24,10 @@
 // 35,000 / 大山 11,000 千m³). 有効貯水量 / 貯水率 over the 24 captured rows
 // back-solves to 23,906–24,088 / 8,215–8,246 / 34,954–35,047 / 10,993–11,007,
 // i.e. that pool within the rounding of a one-decimal rate; 0087 trusts it.
-// 筑後大堰 prints no rate and no flows.
+// 筑後大堰 prints no rate and no flows, and its 有効貯水量 is not a reading:
+// 930 in every row while the level moves across its 3.15 m 設定水位 — the
+// pool's 930 千m³ capacity (water-source.html gave 820 千m³ for 2026-09-25
+// 0時). Stored for it: level and rain only.
 //
 // Every run upserts the page's whole 24 h window, so a missed run heals.
 // Priority 298: above the daily 0時 jwa-chikugo (297) on the same dams, below
@@ -105,8 +108,10 @@ export function parseChikugoRtPage(html: string): ParsedRow[] {
     headerLabel(m[1] ?? ''),
   );
   const level = labels.findIndex((l) => l === '貯水位' || l === '貯水位水位');
-  const volume = labels.indexOf('有効貯水量');
   const rate = labels.indexOf('貯水率');
+  // Only the dam pages' 有効貯水量 is a reading. 筑後大堰's page, the one without
+  // 貯水率, prints its 930 千m³ pool capacity there in every row.
+  const volume = rate < 0 ? -1 : labels.indexOf('有効貯水量');
   const inflow = labels.indexOf('流入量');
   const outflow = labels.indexOf('総放流量');
   const rain = labels.findIndex((l) => l.endsWith('時間雨量'));
