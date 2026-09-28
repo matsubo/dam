@@ -1,22 +1,23 @@
 // apps/worker/src/tasks/ingest_jwa_chikugo_rt.test.ts
 //
 // Fixtures are verbatim Shift_JIS captures of 水資源機構 筑後川局
-// 水管理情報WEB (chikugo.ec-net.jp/chikugo/kyoku/pc/new/rep{EG,KB,CO}_I60.html)
-// taken 2026-09-27 21:43 JST: 24 hourly rows, 2026/09/26 22:00 … 09/27 21:00.
+// 水管理情報WEB (chikugo.ec-net.jp/chikugo/kyoku/pc/new/rep{EG,KB,CO}_I60.html):
+// EG and KB taken 2026-09-27 21:43 JST (24 hourly rows, 2026/09/26 22:00 …
+// 09/27 21:00); CO taken 2026-09-28 12:55 JST (09/27 13:00 … 09/28 12:00).
 
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { chooseMaster, parseChikugoRtPage, STATIONS } from './ingest_jwa_chikugo_rt.ts';
 
-async function page(code: string): Promise<string> {
+async function page(code: string, date = '2026-09-27'): Promise<string> {
   const path = join(
     import.meta.dir,
     '..',
     '..',
     '..',
     '..',
-    `tests/fixtures/jwa_chikugo_rt/rep${code}_I60_2026-09-27.shiftjis.html`,
+    `tests/fixtures/jwa_chikugo_rt/rep${code}_I60_${date}.shiftjis.html`,
   );
   return new TextDecoder('shift_jis').decode(await readFile(path));
 }
@@ -60,18 +61,21 @@ describe('parseChikugoRtPage', () => {
     });
   });
 
-  test('reads 筑後大堰 pool level and volume, not its 設定水位, and no flows', async () => {
-    const rows = parseChikugoRtPage(await page('CO'));
+  test('reads 筑後大堰 pool level, not its 設定水位, and neither its fixed 有効貯水量 nor flows', async () => {
+    // The 有効貯水量 column prints the pool's 930 千m³ capacity in every row,
+    // 3.13–3.63 m alike; water-source.html gave 820 千m³ (88.2 %) for 9/25 0時.
+    const rows = parseChikugoRtPage(await page('CO', '2026-09-28'));
     expect(rows).toHaveLength(24);
     expect(rows[0]).toEqual({
-      observedAt: new Date('2026-09-26T13:00:00Z'),
-      waterLevelM: 3.41,
-      storageVolumeM3: 930_000,
+      observedAt: new Date('2026-09-27T04:00:00Z'), // 09/27 13:00 JST
+      waterLevelM: 3.16,
+      storageVolumeM3: null,
       storageRate: null,
       inflowM3s: null,
       outflowM3s: null,
-      rainfallMm: 0,
+      rainfallMm: 11,
     });
+    expect(rows.filter((r) => r.storageVolumeM3 !== null)).toEqual([]);
   });
 });
 

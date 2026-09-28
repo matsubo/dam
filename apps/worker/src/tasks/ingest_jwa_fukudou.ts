@@ -85,8 +85,11 @@ export interface MasterCapacity {
   activeCapacityM3: number | null;
 }
 
-// Half of the last printed digit of a one-decimal percentage.
-const RATE_ROUNDING = 0.0005;
+// Half a whole percent. The page prints 貯水率 with one decimal but rounds it
+// to a whole percent: 3,758,400 m³ (93.96 %) and 3,753,400 m³ (93.835 %) of
+// 4,000,000 both read "94.0", and no one denominator gives both at one-decimal
+// precision. The check still rejects a 有効 denominator (96.4 % at 94.0).
+const RATE_ROUNDING = 0.005;
 
 /**
  * Water above 最低水位 (m³), comparable with 有効貯水容量: 総貯水量 less

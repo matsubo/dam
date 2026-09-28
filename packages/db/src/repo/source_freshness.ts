@@ -39,12 +39,14 @@ export const FRESHNESS_OVERRIDE_HOURS: Readonly<Record<string, number | null>> =
   // 30-day daily window stamped at 24:00 JST, rolled over at ~01:00 JST and
   // polled every 3 h; the derived 3 × 24 h + lag would wait three days.
   'kanagawa-dam': 30,
-  'jwa-chikugo': 30,
   // Business-day page stamped with its own date (0時, 小河内 7時). A holiday
   // weekend ages it ~4.5 days; 年末年始 (closed 12/29–1/3) up to 10.5 when
   // 12/26 is the last business day and 1/5 the first. The derived 3 × p90
   // gap (~93 h) misses both: 20 stamps hold too few weekend gaps.
   'tokyo-waterworks': 11 * 24,
+  // Not jwa-chikugo: stamped by its business-day edition, it goes 72 h over a
+  // weekend and up to 7 days over 年末年始, which the derived threshold
+  // (3 × the p90 stamp gap, a weekend, + lag ≈ 230 h) already clears.
   // 10-day cadence — flag if older than 14 days.
   'jwa-junpo': 14 * 24,
   // Business-day page: Friday's shows Thursday 24:00, the next is Monday's

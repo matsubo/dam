@@ -1,23 +1,25 @@
 // apps/worker/src/tasks/ingest_jwa_fukudou.test.ts
 //
-// Fixture is a verbatim Shift_JIS capture of 水資源機構 筑後川局 福岡導水管理室
-// water.go.jp/chikugo/fukudou/html/info02.html (Last-Modified 2026-09-25 04:34
-// JST): 山口調整池 at 令和8年9月25日 0時 — EL 117.04 m, 総貯水量 3,758,400 m³,
-// 貯水率 94.0 %.
+// Fixtures are verbatim Shift_JIS captures of 水資源機構 筑後川局 福岡導水管理室
+// water.go.jp/chikugo/fukudou/html/info02.html:
+//   2026-09-25 (Last-Modified 04:34 JST): 山口調整池 at 令和8年9月25日 0時 —
+//     EL 117.04 m, 総貯水量 3,758,400 m³, 貯水率 94.0 %.
+//   2026-09-28 (Last-Modified 01:49 JST, fetched 12:54 JST): 9月28日 0時 —
+//     EL 117.02 m, 総貯水量 3,753,400 m³, 貯水率 94.0 %.
 
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { chooseMaster, parseFukudouPage, usableVolumeM3 } from './ingest_jwa_fukudou.ts';
 
-async function fixtureHtml(): Promise<string> {
+async function fixtureHtml(date = '2026-09-25'): Promise<string> {
   const path = join(
     import.meta.dir,
     '..',
     '..',
     '..',
     '..',
-    'tests/fixtures/jwa_fukudou/info02_2026-09-25.shiftjis.html',
+    `tests/fixtures/jwa_fukudou/info02_${date}.shiftjis.html`,
   );
   return new TextDecoder('shift_jis').decode(await readFile(path));
 }
@@ -44,6 +46,15 @@ describe('usableVolumeM3', () => {
   test('subtracts 堆砂容量 when the rate is printed against the master 総貯水容量', () => {
     // 3,758,400 / 4,000,000 = 93.96 % → printed 94.0; stored as water above 最低水位.
     expect(usableVolumeM3({ grossVolumeM3: 3_758_400, ratePct: 94 }, YAMAGUCHI)).toBe(3_658_400);
+  });
+
+  test('ties a gross volume the page rounds to a whole percent', async () => {
+    // 3,753,400 / 4,000,000 = 93.835 %, printed 94.0 — prod stored this 0時 level-only.
+    const r = parseFukudouPage(await fixtureHtml('2026-09-28'));
+    expect(r).not.toBeNull();
+    if (r === null) return;
+    expect(r.grossVolumeM3).toBe(3_753_400);
+    expect(usableVolumeM3(r, YAMAGUCHI)).toBe(3_653_400);
   });
 
   test('stores nothing when the printed rate no longer ties to the master total', () => {
