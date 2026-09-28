@@ -310,6 +310,16 @@ export const CRONTAB = `
 # storage volume (千m³) but no 貯水率. Cron at :53.
 53 * * * * ingest:ibaraki-bousai ?jobKey=ingest:ibaraki-bousai
 
+# 茨城県河川情報 霞ヶ浦 出島 水位グラフ — 霞ヶ浦開発 (NDI 597) の湖水位. 23 hourly
+# rows + the latest 10-minute row, gauge height + 零点高 (T.P.) + 0.8402 → Y.P.
+# All rows re-upserted each run. Priority 308. Cron at :13 (ibaraki-bousai, same
+# host, is at :53).
+13 * * * * ingest:ibaraki-kasumigaura ?jobKey=ingest:ibaraki-kasumigaura
+
+# 神奈川県雨量水位情報 — 飯泉取水堰 (NDI 727) 15分水位, last 6 h per page, all
+# re-upserted each run. Level only, as published. Priority 308. Cron at :43.
+43 * * * * ingest:kanagawa-suibou ?jobKey=ingest:kanagawa-suibou
+
 # 徳島県河川砂防水位観測所 ダム諸量情報 — 7 ダム (Shift_JIS HTML, 10分更新).
 # 長安口/福井/川口/正木/宮川内/棚野/池田(水). 3 cols: 貯水位/流入量/放流量.
 # Per-dam timestamps "MM/DD HH:MM" JST. Cron at :08 every hour.
