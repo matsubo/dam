@@ -20,10 +20,13 @@
 //   page prints the 企業庁's 3,980 千m³ share, full at 100.0 % while the
 //   reservoir itself swings daily with generation, so neither its volume nor
 //   its rate describes the dam: nothing is stored, and the row is recorded
-//   unresolved and unstamped (NOT_THE_DAM). Resolving it would list 黒川 as
-//   published_not_ingested, a gap we do not intend to close.
+//   unresolved and unstamped (NOT_THE_DAM); 0135 marks it not_dam_reason.
+//   Resolving it would list 黒川 as published_not_ingested, a gap we do not
+//   intend to close.
 // - 平荘 / 権現 are reservoir totals over several dam bodies (平荘第1/2/3,
-//   権現第1/3); chooseMaster leaves them unresolved.
+//   権現第1/3), so their stem matches no single row. The master gives 平荘第1
+//   and 権現第1 the reservoir's whole 有効 (9,000 / 11,000) and kasenbosai
+//   stores both reservoirs on those rows, so 0135 stamps them there.
 // - 一庫 / 青野 / 呑吐 / 大川瀬 / 生野 / 引原 have live 10-minute feeds, and
 //   several print a 利水 volume and pool (青野 9,300 against 有効 14,100)
 //   that the site would divide by the annual capacity.
@@ -135,9 +138,10 @@ function stemOf(s: string): string {
 /**
  * Master dam for a published ダム名称: the row stamped with it keeps it; else an
  * exact stem beats a prefix. A name whose best rank reaches several different
- * dams (平荘 → 平荘第1/第2/第3) is a reservoir total and binds to none; the
- * （元）/（再） twins of one dam share a stem and go to the live one. 黒川's row
- * is an allocation, not the dam, and binds to none even if stamped.
+ * dams (平荘 → 平荘第1/第2/第3) is a reservoir total and binds to none unless
+ * stamped (0135 stamps 平荘 / 権現); the （元）/（再） twins of one dam share a
+ * stem and go to the live one. 黒川's row is an allocation, not the dam, and
+ * binds to none even if stamped.
  */
 export function chooseMaster(name: string, masters: BindableMaster[]): bigint | null {
   if (name === NOT_THE_DAM) return null;
