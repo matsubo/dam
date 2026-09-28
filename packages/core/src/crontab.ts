@@ -596,6 +596,12 @@ export const CRONTAB = `
 # 貯水位 + 流入量 + 放流量 + 雨量; no volume or rate. Priority 308. Cron at :44.
 44 * * * * ingest:kochi-kigyo ?jobKey=ingest:kochi-kigyo
 
+# 電源開発 (J-POWER) 奈半利川ダム情報公開サイト — 魚梁瀬/久木/平鍋 (高知, no other
+# feed covers them). One ダムグラフ page per dam: 12 half-hour columns of 貯水位
+# + 全流入量 + 全放流量 ending at the requested JST hour; no volume or rate.
+# Priority 301. Cron at :48, asking for the running hour so its :30 is read.
+48 * * * * ingest:jpower-naharigawa ?jobKey=ingest:jpower-naharigawa
+
 # 島根県防災Web — 14 県管理ダム (布部/山佐/三瓶/波積/八戸/浜田/第二浜田/大長見/
 # 御部/益田川/笹倉/大峠/銚子/美田). Same Remix SPA framework as 広島/鳥取県防災Web;
 # pointer + list JSON; storage in 千m³. 国直轄 (尾原/志津見) also appear but
