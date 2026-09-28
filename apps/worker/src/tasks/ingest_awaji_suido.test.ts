@@ -48,14 +48,34 @@ describe('parseAwajiChosui', () => {
     ]);
   });
 
-  test('reads a volume whose thousands grouping is broken as null, keeping the cell', () => {
+  test("recovers a volume whose thousands grouping is broken from its pair's 合計", () => {
+    // 猪鼻第１ and 第２ share one rowspan=2 合計 of 783,200: 783,200 − 304,000 =
+    // 479,200, which the printed 100.0 % of the 479.3 千m³ basis corroborates.
     const inohana2 = parseAwajiChosui(typo).rows.find((r) => r.name === '猪鼻第2ダム');
     expect(inohana2).toEqual({
       name: '猪鼻第2ダム',
       volumeText: '479,2000',
-      storageVolumeM3: null,
+      storageVolumeM3: 479_200,
+      volumeFromTotal: true,
       ratePct: 100,
     });
+  });
+
+  test('leaves a broken volume null when the pair cannot give it back', () => {
+    // The partner's own volume is the one the 合計 is reduced by; without it
+    // (or without a readable 合計) there is nothing to subtract.
+    const partnerDash = typo.replace('>304,000<', '>－<');
+    const totalBroken = typo.replace('>783,200<', '>783,2000<');
+    for (const page of [partnerDash, totalBroken]) {
+      const inohana2 = parseAwajiChosui(page).rows.find((r) => r.name === '猪鼻第2ダム');
+      expect(inohana2?.storageVolumeM3).toBeNull();
+      expect(inohana2?.volumeFromTotal).toBe(false);
+    }
+  });
+
+  test('never reads a well-formed volume from the 合計', () => {
+    const rows = parseAwajiChosui(typo).rows.filter((r) => r.name !== '猪鼻第2ダム');
+    expect(rows.every((r) => !r.volumeFromTotal)).toBe(true);
   });
 
   test('keeps a row whose 貯水量 is a dash, with a null volume', () => {

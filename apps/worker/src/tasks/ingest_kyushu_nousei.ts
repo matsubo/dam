@@ -116,8 +116,18 @@ const PREF_NAME_TO_CODE: Record<string, string> = {
  * all six rows oita-nourin prints at 「9：00現在」: 10) match 09:00 JST only.
  * 宮崎's three dams with a kasenbosai series (田代八重, 立花, 綾北) are on
  * another volume basis, but an affine fit against the 09:00 readings leaves
- * 4–5× less residual than against midnight. 長崎 and 鹿児島 have no hourly
- * feed to compare with and stay at midnight.
+ * 4–5× less residual than against midnight.
+ *
+ * 長崎 and 鹿児島 stay at midnight. Their only other feed is kasenbosai's
+ * 貯水位 (no 貯水量), from 5/19, so the 6/1–9/15 columns were fitted to it
+ * as a level–volume curve. 鹿児島 fits midnight: 高隈's ΔV/ΔL between
+ * surveys is 924–967 千m³/m at midnight but 901–1,335 at 09:00, and a cubic
+ * fit leaves 4.3 千m³ RMS at midnight against 65 at 09:00 (谷川内 0.2 vs
+ * 2.4, 中岳 0.8 vs 3.0, 輝北 4.2 vs 8.9; 高川, 荒瀬 and 徳之島 do not
+ * separate the hours). 長崎's one comparable dam, 小ヶ倉, moves under 0.1 m
+ * between midnight and 09:00; a cubic fit over its 7 surveys leans to
+ * midnight (12 vs 20 千m³ RMS) with 3 degrees of freedom left, which
+ * does not settle the hour.
  */
 const SURVEY_HOUR_JST: Readonly<Record<string, number>> = {
   '41': 9,

@@ -11,10 +11,18 @@
  * - 利根川 (一級, 830303) and 堤川 (二級, 020036) under their master codes,
  *   each with one migrated dam attached, so watershed-kind.spec can check the
  *   河川法 classification on a fresh database. Migration 0041 only UPDATEs
- *   rows that already exist, so kind / ndi_code are set here directly.
+ *   rows that already exist, so kind / ndi_code are set here directly;
+ * - two published stations under the `e2e-fixture` provider, for
+ *   coverage-triage.spec: one listed for ryumon-40 (which has no
+ *   observation) with no value (`has_data = FALSE`, so the dam is
+ *   published_no_data), and one unresolved station with a cited
+ *   not_dam_reason. No `source_universe_runs` row is written, so on a fresh
+ *   database every enumerable provider stays in the pending-scan list.
  *
- * Idempotent, and a no-op on a database that already carries the master
- * (same codes → ON CONFLICT DO NOTHING; dams already attached → no UPDATE).
+ * Idempotent (ON CONFLICT DO NOTHING; dams already attached → no UPDATE), but
+ * not a no-op: the observation and the `e2e-fixture` universe rows land on
+ * any database and nothing removes them, so run it only on CI's database or
+ * a scratch one (AGENTS.md "Tests"), never on the shared dev `dam`.
  * The slugs deliberately avoid the `watershed-` prefix, which the middleware
  * treats as a legacy redirect.
  *
@@ -108,6 +116,23 @@ try {
   await sql`
     UPDATE dams SET active_capacity_m3 = 1000000
     WHERE slug = 'kechi-42' AND active_capacity_m3 IS NULL
+  `;
+
+  // /coverage triage: a provider that lists ryumon-40 but prints no value for
+  // it (提供元に値なし), and a station it publishes that is known not to be a
+  // dam (excluded from the unmatched backlog).
+  await sql`
+    INSERT INTO source_universe
+      (source_id, source_external_id, source_name, pref_code, resolved_dam_id, has_data)
+    SELECT 'e2e-fixture', 'e2e-no-data', 'E2E値なしダム', d.pref_code, d.id, FALSE
+    FROM dams d WHERE d.slug = 'ryumon-40'
+    ON CONFLICT (source_id, source_external_id) DO NOTHING
+  `;
+  await sql`
+    INSERT INTO source_universe
+      (source_id, source_external_id, source_name, not_dam_reason)
+    VALUES ('e2e-fixture', 'e2e-weir', 'E2E堰', 'E2E fixture: a 堰 with no dam behind it')
+    ON CONFLICT (source_id, source_external_id) DO NOTHING
   `;
 } finally {
   await sql.end();

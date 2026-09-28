@@ -6,6 +6,8 @@ import type { JobHelpers } from 'graphile-worker';
 import task, {
   buildNagasakiUniverse,
   buildSnapshotUrl,
+  chooseMaster,
+  type DamMaster,
   parseAllDamsJson,
   parseNagasakiDatetime,
 } from './ingest_nagasaki_kasen.ts';
@@ -221,6 +223,40 @@ describe('parseAllDamsJson', () => {
   });
 });
 
+// Live captures, 2026-09-28: dam_m.json and the 14:10 JST all-dams snapshot.
+// 樋口 / つづら / 笛吹 (佐世保市) print 「-」 in every field, stat 0.
+const fixture = async (name: string) =>
+  Bun.file(`${import.meta.dir}/../../../../tests/fixtures/nagasaki_kasen/${name}`).json();
+const liveCatalogue = (await fixture('dam_m_2026-09-28.json')) as DamMaster[];
+const liveSnapshot = await fixture('all_20260928_1410_d.json');
+
+describe('parseAllDamsJson hasData', () => {
+  const rows = parseAllDamsJson(
+    liveSnapshot,
+    new Map(liveCatalogue.map((m) => [m.dam_cd, m.dam_nm])),
+  );
+
+  test('marks the dams printed with 「-」 in every field as publishing nothing', () => {
+    expect(rows.filter((r) => r.hasData !== true).map((r) => [r.damName, r.hasData])).toEqual([
+      ['樋口ダム', false],
+      ['つづらダム', false],
+      ['笛吹ダム', false],
+    ]);
+    expect(rows).toHaveLength(35);
+  });
+
+  test('an empty or unreadable field is unknown, not "no value"', () => {
+    const [base] = liveSnapshot.list.filter((i: { dam_cd: number }) => i.dam_cd === 1421);
+    for (const lv of ['', 'x']) {
+      const [row] = parseAllDamsJson(
+        { ...liveSnapshot, list: [{ ...base, lv }] },
+        new Map([[1421, '樋口ダム']]),
+      );
+      expect(row?.hasData).toBeNull();
+    }
+  });
+});
+
 describe('buildNagasakiUniverse', () => {
   // dam_m.json is 長崎県's own catalogue, so it is what the source publishes —
   // not the subset that carried a reading in this run's snapshot.
@@ -233,7 +269,14 @@ describe('buildNagasakiUniverse', () => {
     [1928, 11n],
     [1927, 12n],
   ]);
-  const universe = buildNagasakiUniverse(catalogue, (cd) => resolved.get(cd));
+  const snapshot = parseAllDamsJson(
+    liveSnapshot,
+    new Map([
+      [1928, '永田ダム'],
+      [1101, '式見ダム'],
+    ]),
+  );
+  const universe = buildNagasakiUniverse(catalogue, (cd) => resolved.get(cd), snapshot);
 
   test('records the whole published catalogue, matched or not', () => {
     expect(universe).toHaveLength(3);
@@ -245,7 +288,12 @@ describe('buildNagasakiUniverse', () => {
       name: '永田ダム',
       prefCode: '42',
       resolvedDamId: 11n,
+      hasData: true,
     });
+  });
+
+  test('a catalogued dam with no parsed snapshot row is unknown, not empty', () => {
+    expect(universe.find((u) => u.externalId === '1927')?.hasData).toBeNull();
   });
 
   test('keeps an unmatched dam with resolvedDamId null', () => {
@@ -258,7 +306,32 @@ describe('buildNagasakiUniverse', () => {
   test('records nothing extra for an empty catalogue', () => {
     // An empty list is how recordUniverse recognises a failed fetch, so the
     // builder must not invent rows.
-    expect(buildNagasakiUniverse([], () => undefined)).toEqual([]);
+    expect(buildNagasakiUniverse([], () => undefined, [])).toEqual([]);
+  });
+});
+
+describe('chooseMaster', () => {
+  // pref 42 has two 小ヶ倉: NDI 2592 (諫早, 長崎県) and NDI 2609 (長崎市).
+  const kogakura = [
+    { id: 11176n, name: '小ヶ倉', ndi: '2592', stamp: null },
+    { id: 11190n, name: '小ヶ倉', ndi: '2609', stamp: null },
+  ];
+
+  test("binds dam_cd 1106 to 長崎市's 小ヶ倉, not the lower-id namesake", () => {
+    expect(chooseMaster(1106, '小ヶ倉ダム', kogakura)?.id).toBe(11190n);
+  });
+
+  test('the pin outranks a stamp left on the wrong 小ヶ倉', () => {
+    const stale = kogakura.map((m) => (m.ndi === '2592' ? { ...m, stamp: '1106' } : m));
+    expect(chooseMaster(1106, '小ヶ倉ダム', stale)?.id).toBe(11190n);
+  });
+
+  test('an unpinned station keeps the same-name row it is stamped on', () => {
+    const twins = [
+      { id: 1n, name: '宮崎', ndi: '1', stamp: null },
+      { id: 2n, name: '宮崎', ndi: '2', stamp: '1110' },
+    ];
+    expect(chooseMaster(1110, '宮崎ダム', twins)?.id).toBe(2n);
   });
 });
 

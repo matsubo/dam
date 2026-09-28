@@ -47,13 +47,16 @@ async function upsertDamByNdi(input: UpsertDamInput): Promise<bigint> {
       ST_SetSRID(ST_MakePoint(${input.lng}, ${input.lat}), 4326)::geography,
       ${sql.json(input.externalIds)}::jsonb
     )
+    -- name and location are set on insert only. On an existing row they may
+    -- have been corrected since (0186: NDI 1368 is 栗柄 at ダム便覧's point,
+    -- W01 still says 西紀 at a point 675 m off the dam); W01 is a 2014
+    -- snapshot, so re-importing it must not roll that back. The boot seed
+    -- follows the same prod-wins rule (#54).
     ON CONFLICT ((external_ids ->> 'ndi')) WHERE external_ids ? 'ndi'
     DO UPDATE SET
-      name              = EXCLUDED.name,
       pref_code         = EXCLUDED.pref_code,
       watershed_id      = COALESCE(EXCLUDED.watershed_id, dams.watershed_id),
-      external_ids      = dams.external_ids || EXCLUDED.external_ids,
-      location          = EXCLUDED.location
+      external_ids      = dams.external_ids || EXCLUDED.external_ids
     RETURNING id
   `;
   const row = rows[0];

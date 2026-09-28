@@ -8,8 +8,9 @@
 //   ダム名称 | 水系 | 貯水量（ｍ3） | 貯水率（％） | 合計 貯水量 | 合計 貯水率
 // 猪鼻第１/第２ and 天川第１/第２ share rowspan=2 合計 cells after the first
 // row's own four; every other 合計 is 「-」. Each row's first four cells are its
-// own, so a row is read by position and the 合計 cells are ignored. No time of
-// day is printed, so a reading is stamped 00:00 JST on the 現在 date.
+// own, so a row is read by position; a 合計 is read only to give back a
+// malformed 貯水量 (below). No time of day is printed, so a reading is stamped
+// 00:00 JST on the 現在 date.
 //
 // Volume: 貯水量 is the whole reservoir's 有効 volume, the basis the 0036
 // trigger divides by 有効貯水容量. Checked against 兵庫県's telemetry on
@@ -27,6 +28,9 @@
 // 100.0 %, so a 貯水量 is read only when its comma grouping is well formed,
 // and written only when volume / 貯水率 lands near that dam's back-solved
 // basis and the volume stays under 1.2× the master 有効 (implausibleVolume).
+// A malformed 貯水量 in a pair sharing a 合計 is read back as 合計 minus the
+// partner's own volume (783,200 − 304,000 = 479,200 for that edit), both
+// well formed, and then faces the same check against its own 貯水率.
 //
 // Priority 288. Cron daily; the page changes about monthly and a re-read
 // upserts the same rows.
@@ -79,8 +83,10 @@ export interface ParsedRow {
   name: string;
   /** The 貯水量 cell as printed (folded), kept for the log when unreadable. */
   volumeText: string;
-  /** 貯水量 (m³); null for a dash or a malformed number such as 「479,2000」. */
+  /** 貯水量 (m³); null for a dash or a malformed number such as 「479,2000」 its pair's 合計 cannot give back. */
   storageVolumeM3: number | null;
+  /** The volume is the shared 合計 minus the partner's, its own cell being malformed. */
+  volumeFromTotal: boolean;
   /** 貯水率 (%) on the utility's own basis; checks the volume, never stored. */
   ratePct: number | null;
 }
@@ -99,6 +105,11 @@ function flat(cell: string): string {
     .replace(/\s+/g, '');
 }
 
+/** A 貯水量 as printed, when its comma grouping is well formed. */
+function volume(text: string): number | null {
+  return /^(?:\d{1,3}(?:,\d{3})*|\d+)$/.test(text) ? Number(text.replace(/,/g, '')) : null;
+}
+
 export function parseAwajiChosui(html: string): ParsedPage {
   const date = flat(html).match(/令和(元|\d+)年(\d{1,2})月(\d{1,2})日現在/);
   if (!date) throw new Error(`${SOURCE_ID}: no 令和…現在 date on the page`);
@@ -110,9 +121,12 @@ export function parseAwajiChosui(html: string): ParsedPage {
     .map((m) => m[1] ?? '')
     .find((t) => t.includes('ダム名称'));
   const trs = [...(table ?? '').matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)].map((tr) =>
-    [...(tr[1] ?? '').matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((td) => flat(td[1] ?? '')),
+    [...(tr[1] ?? '').matchAll(/<td([^>]*)>([\s\S]*?)<\/td>/g)].map((td) => ({
+      text: flat(td[2] ?? ''),
+      rowspan2: /rowspan="?2/.test(td[1] ?? ''),
+    })),
   );
-  const header = trs[0] ?? [];
+  const header = (trs[0] ?? []).map((c) => c.text);
   if (
     header[0] !== 'ダム名称' ||
     !header[2]?.startsWith('貯水量') ||
@@ -122,19 +136,39 @@ export function parseAwajiChosui(html: string): ParsedPage {
   }
 
   const rows: ParsedRow[] = [];
+  // The rowspan=2 合計 貯水量 opened by the previous row, for its partner below.
+  let pairTotal: { first: ParsedRow; total: number | null } | null = null;
   for (const cells of trs) {
-    const name = cells[0] ?? '';
+    const name = cells[0]?.text ?? '';
     if (cells.length < 4 || !name.endsWith('ダム')) continue;
-    const volumeText = cells[2] ?? '';
-    const rate = (cells[3] ?? '').match(/^(\d+(?:\.\d+)?)%?$/)?.[1];
-    rows.push({
+    const volumeText = cells[2]?.text ?? '';
+    const rate = (cells[3]?.text ?? '').match(/^(\d+(?:\.\d+)?)%?$/)?.[1];
+    const row: ParsedRow = {
       name,
       volumeText,
-      storageVolumeM3: /^(?:\d{1,3}(?:,\d{3})*|\d+)$/.test(volumeText)
-        ? Number(volumeText.replace(/,/g, ''))
-        : null,
+      storageVolumeM3: volume(volumeText),
+      volumeFromTotal: false,
       ratePct: rate === undefined ? null : Number(rate),
-    });
+    };
+    rows.push(row);
+    const pair = pairTotal;
+    pairTotal = cells[4]?.rowspan2 ? { first: row, total: volume(cells[4].text) } : null;
+    if (!pair || pair.total === null) continue;
+    // Exactly one of the pair malformed (a digit typed, grouping broken), the
+    // other and the 合計 well formed: the 合計 gives the malformed one back.
+    const [broken, other] = row.storageVolumeM3 === null ? [row, pair.first] : [pair.first, row];
+    if (
+      broken.storageVolumeM3 === null &&
+      /\d/.test(broken.volumeText) &&
+      other.storageVolumeM3 !== null &&
+      pair.total >= other.storageVolumeM3
+    ) {
+      rows[rows.indexOf(broken)] = {
+        ...broken,
+        storageVolumeM3: pair.total - other.storageVolumeM3,
+        volumeFromTotal: true,
+      };
+    }
   }
   if (rows.length === 0) throw new Error(`${SOURCE_ID}: no dam rows — layout change?`);
   return { observedAt, rows };
@@ -235,6 +269,11 @@ const task: Task = async (_payload, helpers) => {
     if (problem !== null || row.storageVolumeM3 === null) {
       log(`${SOURCE_ID}: "${row.name}" 貯水量 「${row.volumeText}」 not written: ${problem}`);
       continue;
+    }
+    if (row.volumeFromTotal) {
+      log(
+        `${SOURCE_ID}: "${row.name}" 貯水量 「${row.volumeText}」 read from the 合計 as ${row.storageVolumeM3}`,
+      );
     }
     inputs.push({
       observedAt: page.observedAt,
