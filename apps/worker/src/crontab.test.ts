@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
+import { CRONTAB, INGEST_INTERVAL_HOURS } from '@dam/core/crontab';
 import { type ParsedCronItem, parseCrontab } from 'graphile-worker';
-import { CRONTAB } from './crontab.ts';
 
 // graphile-worker's failJobs reschedules a failed job at
 // run_at + exp(least(attempts, 10)) seconds, attempts counting the runs so
@@ -64,4 +64,13 @@ describe('CRONTAB ingest lines', () => {
       );
     },
   );
+});
+
+// INGEST_INTERVAL_HOURS parses the crontab itself (the web app can't load
+// graphile-worker); the freshness check reads it as each source's cadence.
+describe('INGEST_INTERVAL_HOURS', () => {
+  test.each(ingestItems)('%s: agrees with the scheduler', (_id, item) => {
+    const sourceId = item.task === 'ingest:kasenbosai-v2' ? 'kasenbosai' : item.task.slice(7);
+    expect(INGEST_INTERVAL_HOURS[sourceId]).toBe(longestGapSeconds(item.match) / 3600);
+  });
 });

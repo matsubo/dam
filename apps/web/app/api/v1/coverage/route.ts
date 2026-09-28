@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { authorize, makeUnauthorized, rateLimitHeaders } from '../../../../lib/api/auth.ts';
 import { asProblem, HttpError } from '../../../../lib/api/error.ts';
 import { hal } from '../../../../lib/api/response.ts';
+import { sourceLabel } from '../../../../lib/source-details.ts';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,7 +35,7 @@ const MEANING: Record<DamCoverageStatus, string> = {
   published_no_data:
     'データ提供元の公開一覧には載っているが、掲載しているすべての提供元が使える値を出していない (調査対象外、全項目が欠測表示、落水中の 0.0 % など、提供元自身が空と示している)。取り込み側で直せるものは無い。',
   unknown:
-    '未調査。まだ公開一覧を記録していないデータ提供元が残っているため、提供の有無を判定できない。',
+    '未調査。まだ公開一覧を記録していないデータ提供元 (summary.pendingScanSources) が残っているため、提供の有無を判定できない。',
   not_published:
     '観測値を出す全提供元の公開一覧を記録した上で、どこにも現れなかった。現時点でこのダムのデータを公開している提供元が無い。ただし公開一覧を列挙できない提供元 (summary.sourcesNotEnumerable) と、定期スキャンを持たない歴史ダンプ (summary.sourcesHistoricalOnly) はゲートから除外しているため、その分の保留が残る。',
 };
@@ -55,7 +56,21 @@ export async function GET(req: Request): Promise<Response> {
 
     return hal(
       {
-        summary,
+        summary: {
+          ...summary,
+          pendingScanSources: summary.pendingScanSources.map((p) => {
+            const id = encodeURIComponent(p.sourceId);
+            return {
+              sourceId: p.sourceId,
+              label: sourceLabel(p.sourceId),
+              reason: p.reason,
+              _links: {
+                source: { href: `/api/v1/sources/${id}` },
+                web: { href: `/sources/${id}` },
+              },
+            };
+          }),
+        },
         // Restated in the payload so a client never has to guess whether
         // `notPublished` means "nobody publishes it" or "we haven't looked".
         statusMeanings: MEANING,
