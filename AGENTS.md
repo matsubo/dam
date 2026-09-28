@@ -147,7 +147,9 @@ bun run apps/web/bin/seed_synthetic_observations.ts     --hourly-days 30 --years
    (調査対象外, "---" in every column, a page with no readings), pass
    `hasData: false` (and `true` for rows with values); /coverage then files
    the dam under `published_no_data` instead of blaming ingestion. Leave it
-   unset when unsure: an unreadable cell may be our own parser breaking.
+   unset when unsure: an unreadable cell may be our own parser breaking. Each
+   scan overwrites the stored value (unset included), so a row that stops
+   parsing drops back to unknown rather than keeping an earlier `false`.
 
 8. **Test cleanup scoping**: see `packages/adapters/ndi/src/import_dams.test.ts`
    for the correct pattern (`WHERE external_ids ->> 'ndi' IN ('1234567890','9999999999')`).

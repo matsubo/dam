@@ -97,9 +97,10 @@ export function parseShigaDamData(html: string, reference: Date): ParsedRow[] {
 
 /**
  * Whether a station page carries any reading: true = rows we store; false =
- * a recognised station page whose every level / flow is "*" 欠測, "-" 未観測
- * or absent (犬上川 prints no rows at all); null = anything else, which may
- * be an error page or a redesign rather than the provider publishing nothing.
+ * a recognised station page whose every level / flow is "*" 欠測 or "-"
+ * 未観測, or 犬上川's exact shape (the 現在 header straight into the legend
+ * <hr>, no rows at all); null = anything else, which may be an error page or
+ * a redesign rather than the provider publishing nothing.
  */
 export function shigaPageHasData(html: string): boolean | null {
   if (!/\d{2}月\d{2}日 \d{2}時\d{2}分現在/.test(html)) return null;
@@ -107,6 +108,7 @@ export function shigaPageHasData(html: string): boolean | null {
   const cells = [...html.matchAll(/［(?:貯水位|流入量|放流量)］([^<]*)/g)].map((m) =>
     (m[1] ?? '').trim(),
   );
+  if (cells.length === 0) return /分現在<br>\s*<hr>/.test(html) ? false : null;
   return cells.every((c) => c === '' || c === '*' || c === '-') ? false : null;
 }
 

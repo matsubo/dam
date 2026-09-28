@@ -122,4 +122,14 @@ describe('shigaPageHasData', () => {
     // nothing — that would hide our own breakage under 提供元に値なし.
     expect(shigaPageHasData('<html><body>メンテナンス中</body></html>')).toBeNull();
   });
+
+  test('a dated page with no recognisable cells in another shape is unknown', async () => {
+    // Only 犬上川's exact shape (header straight into the legend <hr>) means
+    // "no rows"; a redesign that renames the cells must not read as no data.
+    const html = (await fixture('mobile_dam_data_34196_2026-09-27.shiftjis.html'))
+      .replaceAll('［貯水位］', '水位:')
+      .replaceAll('［流入量］', '流入:')
+      .replaceAll('［放流量］', '放流:');
+    expect(shigaPageHasData(html)).toBeNull();
+  });
 });
