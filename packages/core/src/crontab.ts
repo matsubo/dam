@@ -508,6 +508,13 @@ export const CRONTAB = `
 # (12:40 JST).
 40 3 * * * ingest:hyogo-kigyo ?jobKey=ingest:hyogo-kigyo
 
+# 大日川土地改良区 大日川ダム情報 — 大日川ダム (南あわじ市, NDI 1594). dam.html links
+# one 日別ダム情報 PDF per month; each line is 「各日午前９時測定」 水位 (a depth gauge,
+# not stored) + 貯水量(万t) + 貯水率 against the printed 最大貯水量 191.5万t. The
+# current and previous month are re-read every run (weekend rows land with
+# Monday's upload). Priority 278. Daily at 03:33 UTC (12:33 JST).
+33 3 * * * ingest:dainichigawa-lid ?jobKey=ingest:dainichigawa-lid
+
 # 佐賀県河川砂防情報システム ダム現況表 — 19 県管理ダム (岸川/庭木/繁昌/天ヶ瀬/
 # 平木場/伊岐佐/都川内/井手口川/竜門/有田/古木場/本部/矢筈/狩立日ノ峯/中木庭/
 # 岩屋川内/横竹/深浦/河内). Transposed Shift_JIS HTML table; 3 pages (7+7+5
