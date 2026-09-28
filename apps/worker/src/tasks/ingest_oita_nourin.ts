@@ -186,6 +186,18 @@ export async function pdfToText(bytes: Uint8Array): Promise<string> {
 }
 
 /**
+ * The survey day a link label names, as a sortable yyyymmdd number.
+ *
+ * Labels carry the date only (「令和8年9月24日現在の貯水率 [PDFファイル／62KB]」),
+ * so parseOitaNourinDate's 「H:MM現在」 anchor never matches them.
+ */
+function labelSurveyDay(label: string): number | null {
+  const m = label.normalize('NFKC').match(/令和(\d+)年(\d+)月(\d+)日/);
+  if (!m) return null;
+  return (2018 + Number(m[1])) * 10_000 + Number(m[2]) * 100 + Number(m[3]);
+}
+
+/**
  * The newest survey PDF linked from the index page.
  *
  * The filename is a CMS attachment id that changes every survey, so pinning
@@ -221,10 +233,10 @@ export function findLatestPdfUrl(html: string): string | null {
     return bare ? `${ORIGIN}${bare[0]}` : null;
   }
 
-  const scored = links.map((l) => ({ ...l, date: parseOitaNourinDate(`${l.label}0:00現在`) }));
-  const dated = scored.filter((l) => l.date !== null);
+  const scored = links.map((l) => ({ ...l, day: labelSurveyDay(l.label) }));
+  const dated = scored.filter((l) => l.day !== null);
   const best = dated.length
-    ? dated.reduce((a, b) => ((b.date as Date) > (a.date as Date) ? b : a))
+    ? dated.reduce((a, b) => ((b.day as number) > (a.day as number) ? b : a))
     : scored.reduce((a, b) => (b.id > a.id ? b : a));
 
   return best.href.startsWith('http') ? best.href : `${ORIGIN}${best.href}`;
