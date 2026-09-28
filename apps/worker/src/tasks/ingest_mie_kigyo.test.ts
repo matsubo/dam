@@ -131,7 +131,7 @@ describe('chooseMaster', () => {
     { id: 10026n, name: '伊坂', prefCode: '24', completedYear: 1966 },
     { id: 10034n, name: '君ヶ野', prefCode: '24', completedYear: 1971 },
     { id: 10043n, name: '蓮', prefCode: '24', completedYear: 1991 },
-    { id: 90001n, name: '伊坂', prefCode: '21', completedYear: 2000 },
+    { id: 1n, name: '伊坂', prefCode: '21', completedYear: 2000 },
   ];
 
   test('binds each name to the master of the same stem in its prefecture', () => {
@@ -146,8 +146,8 @@ describe('chooseMaster', () => {
   });
 
   test('keeps an existing stamp over a name match', () => {
-    const stamped = masters.map((m) => (m.id === 90001n ? { ...m, stamp: '伊坂ダム' } : m));
-    expect(chooseMaster('伊坂ダム', stamped)).toBe(90001n);
+    const stamped = masters.map((m) => (m.id === 1n ? { ...m, stamp: '伊坂ダム' } : m));
+    expect(chooseMaster('伊坂ダム', stamped)).toBe(1n);
   });
 
   test('binds nothing for an unknown name', () => {
