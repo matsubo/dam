@@ -287,6 +287,8 @@ export interface CoverageSummary {
   notDamStations: number;
   /** Observation providers still to be instrumented. While > 0, `unknown` is not `not_published`. */
   sourcesPendingScan: number;
+  /** The providers behind `sourcesPendingScan`, by source id. */
+  pendingScanSources: PendingScanSource[];
   /**
    * Providers that publish no enumerable station list (e.g. a portal that
    * only lists dams during a flood event). They are excluded from the gate,
@@ -302,6 +304,24 @@ export interface CoverageSummary {
   sourcesHistoricalOnly: number;
 }
 
+/**
+ * Why a provider has not recorded its published list yet, from what the
+ * database can see (there is no per-run log). "Recent" is the same 30 days
+ * `classifyDamCoverage` calls covered.
+ *  - `no_recent_observations` — nothing from it landed recently: its task
+ *    has not run yet (a new source awaiting its first cron slot) or is
+ *    failing.
+ *  - `ingesting_without_list` — observations arrive, but no list was ever
+ *    stamped: the task lacks its `recordUniverse` call, or every call passed
+ *    an empty list (which deliberately does not count as a scan).
+ */
+export type PendingScanReason = 'no_recent_observations' | 'ingesting_without_list';
+
+export interface PendingScanSource {
+  sourceId: string;
+  reason: PendingScanReason;
+}
+
 export async function coverageSummary(): Promise<CoverageSummary> {
   const rows = await classifyDamCoverage();
   const count = (s: DamCoverageStatus): number => rows.filter((r) => r.status === s).length;
@@ -309,7 +329,6 @@ export async function coverageSummary(): Promise<CoverageSummary> {
     {
       unresolved: bigint;
       not_dam: bigint;
-      pending: bigint;
       not_enumerable: bigint;
       historical_only: bigint;
     }[]
@@ -330,16 +349,31 @@ export async function coverageSummary(): Promise<CoverageSummary> {
           )
       )::BIGINT AS not_dam,
       (SELECT COUNT(*) FROM source_priorities sp
-        WHERE sp.active AND sp.provides_observations AND sp.universe_enumerable
-          AND NOT sp.historical_only
-          AND NOT EXISTS (SELECT 1 FROM source_universe_runs r WHERE r.source_id = sp.source_id)
-      )::BIGINT AS pending,
-      (SELECT COUNT(*) FROM source_priorities sp
         WHERE sp.active AND sp.provides_observations AND NOT sp.universe_enumerable
       )::BIGINT AS not_enumerable,
       (SELECT COUNT(*) FROM source_priorities sp
         WHERE sp.active AND sp.provides_observations AND sp.historical_only
       )::BIGINT AS historical_only
+  `;
+  // Same predicate as the `pending` CTE in classifyDamCoverage. The probe is
+  // windowed on purpose: an unbounded EXISTS for a source with no rows must
+  // visit every chunk, compressed ones included (~125 ms per source on prod
+  // against ~7 ms for 30 days).
+  const pending = await sql<PendingScanSource[]>`
+    SELECT sp.source_id AS "sourceId",
+           CASE WHEN EXISTS (
+                  SELECT 1 FROM observations o
+                  WHERE o.source_id = sp.source_id
+                    AND o.observed_at > NOW() - INTERVAL '30 days'
+                )
+                THEN 'ingesting_without_list'
+                ELSE 'no_recent_observations'
+           END          AS "reason"
+    FROM source_priorities sp
+    WHERE sp.active AND sp.provides_observations AND sp.universe_enumerable
+      AND NOT sp.historical_only
+      AND NOT EXISTS (SELECT 1 FROM source_universe_runs r WHERE r.source_id = sp.source_id)
+    ORDER BY sp.source_id
   `;
   return {
     covered: count('covered'),
@@ -349,7 +383,8 @@ export async function coverageSummary(): Promise<CoverageSummary> {
     notPublished: count('not_published'),
     unmatchedStations: Number(extra?.unresolved ?? 0),
     notDamStations: Number(extra?.not_dam ?? 0),
-    sourcesPendingScan: Number(extra?.pending ?? 0),
+    sourcesPendingScan: pending.length,
+    pendingScanSources: [...pending],
     sourcesNotEnumerable: Number(extra?.not_enumerable ?? 0),
     sourcesHistoricalOnly: Number(extra?.historical_only ?? 0),
   };
