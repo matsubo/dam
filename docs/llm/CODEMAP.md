@@ -181,7 +181,7 @@ the file for detail.
 | `src/tasks/ingest_miyagi_kasen.ts` | `miyagi-kasen`: 宮城県土木総合情報システム ダム現況表, latest + previous hour, hourly (21 dams) |
 | `src/tasks/ingest_miyazaki_bousai.ts` | `miyazaki-bousai`: 宮崎県 防災Web ダム諸量現況表, hourly (13 県管理ダム) |
 | `src/tasks/ingest_nagano_kasen.ts` | `nagano-kasen`: 長野県 河川砂防情報ステーション dam JSON, hourly (17 県管理ダム) |
-| `src/tasks/ingest_nagasaki_kasen.ts` | `nagasaki-kasen`: 長崎県河川砂防情報 dam JSON, every 30 min (35 dams; 利水 rate) |
+| `src/tasks/ingest_nagasaki_kasen.ts` | `nagasaki-kasen`: 長崎県河川砂防情報 dam JSON, every 30 min (35 dams; 利水 rate); `has_data` FALSE for a dam printed 「-」 in every field |
 | `src/tasks/ingest_oita_bousai.ts` | `oita-bousai`: 大分県河川情報 防災Web ダム諸量現況表, hourly (10 県管理ダム) |
 | `src/tasks/ingest_oita_nourin.ts` | `oita-nourin`: 大分県 農業用ダム貯水率一覧 PDF (link discovered each run), daily (21 dams) |
 | `src/tasks/ingest_okayama.ts` | `okayama-bousai`: おかやま防災ポータル pointer → list JSON, hourly (21 dams listed); reference `recordUniverse` over a fetched list |
