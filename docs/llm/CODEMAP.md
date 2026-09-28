@@ -100,7 +100,7 @@ the file for detail.
 | File | Purpose |
 |---|---|
 | `src/index.ts` | graphile-worker entry; registers tasks + crontab |
-| `src/crontab.ts` | cron schedule (colon-separated task names); every `ingest:*` line carries `?jobKey=<task>` so a tick replaces its pending retry. `crontab.test.ts` checks each ingest line's key and that its retries (default 25 attempts) outlast its longest gap between runs, so no dead job is left behind per tick |
+| `src/crontab.test.ts` | the schedule itself is `packages/core/src/crontab.ts`. Checks each ingest line's key and that its retries (default 25 attempts) outlast its longest gap between runs, so no dead job is left behind per tick, and that `INGEST_INTERVAL_HOURS` agrees with graphile-worker for every ingest line |
 | `src/tasks/master_refresh_ndi.ts` | monthly NLNI reimport |
 | `src/tasks/master_refresh_damnet.ts` | monthly damnet attribute pass |
 | `src/tasks/master_match.ts` | `master:match`: placeholder, logs and returns (still on the nightly cron) |
@@ -161,7 +161,7 @@ the file for detail.
 | `src/tasks/ingest_iwate_kasen.ts` | `iwate-kasen`: 岩手県河川情報システム ダム諸量経過表, one page per dam, hourly (10 県管理ダム) |
 | `src/tasks/ingest_jwa_chiba.ts` | `jwa-chiba-bouso`: JWA 房総導水路管理所 取水情報, daily 0時 (長柄 / 東金; level + rate) |
 | `src/tasks/ingest_jwa_chikugo.ts` | `jwa-chikugo`: JWA 筑後川 water-source page, daily 0時 (7 dams incl. 松原 / 下筌 / 合所) |
-| `src/tasks/ingest_jwa_chubu.ts` | `jwa-chubu`: JWA 中部支社 水源状況 report, published once per weekday (木曽川水系 5 dams + 三重用水 中里); poll times in crontab.ts |
+| `src/tasks/ingest_jwa_chubu.ts` | `jwa-chubu`: JWA 中部支社 水源状況 report, published once per weekday (木曽川水系 5 dams + 三重用水 中里); poll times in `packages/core/src/crontab.ts` |
 | `src/tasks/ingest_jwa_junpo.ts` | `jwa-junpo`: JWA 旬報 (10-day report), polled daily (26 JWA dams across 7 water systems) |
 | `src/tasks/ingest_jwa_kiso_rt.ts` | `jwa-kiso-rt`: JWA 中部支社 木曽川水系 realtime page, hourly (6 dams) |
 | `src/tasks/ingest_jwa_toneara.ts` | `jwa-toneara`: JWA 関東支社 利根川 / 荒川 daily 0時 table, polled hourly (13 facilities) |
@@ -210,7 +210,7 @@ the file for detail.
 | `src/tasks/match_kasenbosai.ts` | `match:kasenbosai`: weekly sweep of the 川の防災情報 dam catalogue (~900 dams); seeds `external_ids.kasenbosai` and records kasenbosai's universe (keeping the `has_data` kasenbosai-v2 set) |
 | `src/tasks/match_kasenbosai_scoring.ts` | pure scoring tiers for match_kasenbosai (name / containment / trigram / distance); not a task |
 | `src/tasks/observations_rebind.ts` | `observations:rebind`: move one source's observations to the right dam, keyed by NDI id (manual) |
-| `src/tasks/quality_freshness.ts` | `quality:freshness-check`: hourly stale-source digest to Discord (or the log) |
+| `src/tasks/quality_freshness.ts` | `quality:freshness-check`: hourly digest of `staleSources()` to Discord (or the log) |
 | `src/tasks/refresh_dam_elevation.ts` | `master:refresh:elevation`: fill NULL `elevation_m` from the GSI DEM API (monthly) |
 | `src/tasks/refresh_dam_images_wikipedia.ts` | `images:refresh:wikipedia`: ja.wikipedia page image for dams without a Damnet photo (monthly) |
 | `src/tasks/storage_rate_recompute.ts` | `storageRate:recompute`: nightly fill of rates for rows with a volume but no rate, one transaction per chunk |
@@ -226,6 +226,7 @@ the file for detail.
 | `src/hateoas.ts` | `buildLinks`, `Link`, `LinksInput` |
 | `src/similarity.ts` | `trigramSimilarity`, `normalizeJaName` |
 | `src/dam_binding.ts` | `BindableMaster`, `twinOf`, `preferMaster`, `stampedMaster`, `chooseRanked` (station → master: a stamped row keeps it, then lowest SQL rank, （元）/（再） tie-break) |
+| `src/crontab.ts` | `CRONTAB`, the worker schedule (colon-separated task names, UTC); every `ingest:*` line carries `?jobKey=<task>` so a tick replaces its pending retry. `INGEST_INTERVAL_HOURS`: each ingest source's longest gap between runs (the web app reads it; it can't load graphile-worker) |
 
 ## packages/db
 
@@ -272,6 +273,7 @@ the file for detail.
 | `src/repo/watersheds.ts` | `upsertWatershed`, `findWatershedBySlug`, `findWatershedContaining`, `findNearestWatershed`, `listWatersheds`, `aggregateWatershed` |
 | `src/repo/match_review.ts` | `enqueueMatchReview` (never touches a closed review: open = `resolved_at IS NULL`; a migration closes one with `SET resolved_at = NOW(), resolved_dam_id = <id or NULL = not a dam>`) |
 | `src/repo/source_universe.ts` | `recordUniverse` (never writes `not_dam_reason`), `classifyDamCoverage`, `classifyOneDam`, `coverageSummary` (`unmatchedStations` = unresolved AND `not_dam_reason IS NULL`; `notDamStations` = unresolved with a reason). Mark a non-dam from a migration: `UPDATE source_universe SET not_dam_reason = '<cited reason>' WHERE source_id = '<src>' AND source_external_id = '<key>' AND resolved_dam_id IS NULL;` |
+| `src/repo/source_freshness.ts` | `staleSources` (threshold = 3 × cadence + publication lag; cadence = the longer of the cron gap and the median spacing of the last 20 stamps, lag = median `created_at − observed_at`), `FRESHNESS_OVERRIDE_HOURS` (explicit thresholds; `null` = silent by design). Feeds `stale_sources` in `/api/v1/admin/jobs` and `quality:freshness-check` |
 | `src/repo/observations.ts` | `upsertObservations`, `findSeries{Hourly,Daily,Monthly}` |
 | `src/repo/raw_snapshots.ts` | `recordRawSnapshot`, `markParsed`, `markParseError`, `previousEtag` |
 | `src/repo/source_priorities.ts` | `preferredSource`, `priorityMap` |
