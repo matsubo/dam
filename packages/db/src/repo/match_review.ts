@@ -26,5 +26,8 @@ export async function enqueueMatchReview(input: NewMatchReview): Promise<void> {
                   best_dam_id = EXCLUDED.best_dam_id,
                   confidence  = EXCLUDED.confidence,
                   payload     = EXCLUDED.payload
+    -- Same rule as match_kasenbosai's writeMatchReview: a closed review
+    -- (resolved_at set) is frozen and never reopened by a later run.
+    WHERE match_review.resolved_at IS NULL
   `;
 }
