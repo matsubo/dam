@@ -312,6 +312,39 @@ describe('source universe coverage triage', () => {
     expect(Number(rows[0]?.n)).toBe(1);
   });
 
+  test('a station marked not-a-dam leaves the backlog and survives re-scans', async () => {
+    const list = [
+      { externalId: 'a-weir', name: '〇〇堰', resolvedDamId: null },
+      { externalId: 'a-open', name: 'マスタ未登録', resolvedDamId: null },
+    ];
+    await recordUniverse(SRC_A, list);
+    const before = await coverageSummary();
+
+    // The convention later migrations use (AGENTS.md gotcha 7).
+    await sql`
+      UPDATE source_universe SET not_dam_reason = '堰: NDI master has no such dam'
+      WHERE source_id = ${SRC_A} AND source_external_id = 'a-weir' AND resolved_dam_id IS NULL
+    `;
+    const marked = await coverageSummary();
+    expect(marked.unmatchedStations).toBe(before.unmatchedStations - 1);
+    expect(marked.notDamStations).toBe(before.notDamStations + 1);
+
+    // The next scan re-records the same row; the reason is not the scan's to clear.
+    await recordUniverse(SRC_A, list);
+    const rows = await sql<{ reason: string | null }[]>`
+      SELECT not_dam_reason AS reason FROM source_universe
+      WHERE source_id = ${SRC_A} AND source_external_id = 'a-weir'
+    `;
+    expect(rows[0]?.reason).toBe('堰: NDI master has no such dam');
+    expect((await coverageSummary()).unmatchedStations).toBe(marked.unmatchedStations);
+
+    // A later match wins over the mark: the station is linked, not "not a dam".
+    await recordUniverse(SRC_A, [{ externalId: 'a-weir', name: '〇〇堰', resolvedDamId: covered }]);
+    const resolved = await coverageSummary();
+    expect(resolved.notDamStations).toBe(before.notDamStations);
+    expect(resolved.unmatchedStations).toBe(marked.unmatchedStations);
+  });
+
   test('an empty list is a failed scan, not a scanned provider', async () => {
     // A transient upstream outage must not be able to close the honesty gate.
     await recordUniverse(SRC_A, []);

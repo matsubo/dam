@@ -272,6 +272,32 @@ export function chooseMaster(feedName: string, masters: BindableMaster[]): bigin
   return best?.m.id ?? null;
 }
 
+/**
+ * Rows whose master is filed outside 大分, pinned to its NDI row.
+ *
+ * 大蘇ダム and 大谷ダム are on the 大野川 headwaters at the 大分/熊本 line and
+ * serve 竹田市荻町; the master files both under 熊本, as ダム便覧 does (2681
+ * 大蘇, 熊本県阿蘇郡産山村; 2657 大谷, 熊本県阿蘇郡高森町, 荻柏原土地改良区 —
+ * the 管理者 this PDF prints). The PDF's 有効 3,890 and 1,500 千m³ are the
+ * master's 有効貯水容量 exactly. Their readings fail the rate check, so the
+ * pin only links the universe rows.
+ */
+export const NDI_PINS: Readonly<Record<string, { prefCode: string; ndi: string }>> = {
+  大蘇ダム: { prefCode: '43', ndi: '2306' },
+  大谷ダム: { prefCode: '43', ndi: '2307' },
+};
+
+/** A pinned name's master (`pinnedIds`: NDI → dam id), else the best 大分 name match. */
+export function masterFor(
+  feedName: string,
+  masters: BindableMaster[],
+  pinnedIds: ReadonlyMap<string, bigint>,
+): bigint | null {
+  const pin = NDI_PINS[feedName];
+  const pinned = pin ? pinnedIds.get(pin.ndi) : undefined;
+  return pinned ?? chooseMaster(feedName, masters);
+}
+
 // --- DB helpers -------------------------------------------------------------
 
 async function ensureSourcePriority(): Promise<void> {
@@ -329,19 +355,29 @@ const task: Task = async (_payload, helpers) => {
     SELECT id, name, completed_year AS "completedYear"
     FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
+  const pins = Object.values(NDI_PINS);
+  const pinnedRows = await sql<{ id: bigint; prefCode: string; ndi: string }[]>`
+    SELECT id, pref_code AS "prefCode", external_ids->>'ndi' AS ndi
+    FROM dams WHERE external_ids->>'ndi' IN ${sql(pins.map((p) => p.ndi))}
+  `;
+  const pinnedIds = new Map(
+    pinnedRows
+      .filter((m) => pins.some((p) => p.ndi === m.ndi && p.prefCode === m.prefCode))
+      .map((m) => [m.ndi, m.id]),
+  );
 
   const universe: UniverseRow[] = published.map((name) => ({
     externalId: name,
     name,
     prefCode: PREF_CODE,
-    resolvedDamId: chooseMaster(name, masters),
+    resolvedDamId: masterFor(name, masters, pinnedIds),
   }));
   await recordUniverse(SOURCE_ID, universe);
 
   const inputs = [] as Parameters<typeof upsertObservations>[0];
   let unmatched = 0;
   for (const p of rows) {
-    const damId = chooseMaster(p.oitaName, masters);
+    const damId = masterFor(p.oitaName, masters, pinnedIds);
     if (!damId) {
       unmatched += 1;
       log(`${SOURCE_ID}: no master match for "${p.oitaName}"`);
