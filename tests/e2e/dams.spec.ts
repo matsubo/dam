@@ -22,10 +22,11 @@ test('/dams/[slug] shows latest stat block + chart container + structured data',
 
   await page.goto(`/dams/${slug}`);
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-  // The heading-stat block has unique labels; the nearby-dam cards repeat
-  // 「総貯水容量」 inline so we anchor on the exact label and 堤高.
-  await expect(page.getByText('総貯水容量', { exact: true })).toBeVisible();
-  await expect(page.getByText('堤高', { exact: true })).toBeVisible();
+  // Same-watershed dam cards repeat the 「総貯水容量」 label, so look inside
+  // the heading-stat block, the only section carrying 堤高.
+  const stats = page.locator('section', { has: page.getByText('堤高', { exact: true }) });
+  await expect(stats.getByText('総貯水容量', { exact: true })).toBeVisible();
+  await expect(stats.getByText('堤高', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: '推移グラフ' })).toBeVisible();
 
   // Structured data — expect at least one schema.org Place JSON-LD on the page.

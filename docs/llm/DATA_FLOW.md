@@ -15,7 +15,8 @@ nlftp.mlit.go.jp/ksj/gml/data/W01/W01-14/W01-14_GML.zip
                  ├─ generate slug via @dam/core/slug
                  └─ upsertDamByExternalId('ndi', …) →
                       INSERT INTO dams (…) ON CONFLICT (external_ids->>'ndi')
-                      DO UPDATE … (idempotent)
+                      DO UPDATE pref / watershed / external_ids (idempotent;
+                      name and location are insert-only, see 0186)
 ```
 
 After this: `dams` has 2,749 rows, all 47 prefectures, with NDI external_id.

@@ -22,6 +22,27 @@
 //     hrValues: [...hourly...] }
 //
 // We upsert one observation per dam per cron firing (the latest obsValue).
+//
+// observed_at is obsValue.obsTime as printed. The task reads the HH:00 file
+// at :03, whose HH:00 row is still a placeholder, so obsValue is the station's
+// last reading: HH-1:50 for a 10-minute station, HH-1:00 for an hourly one.
+// That label is the reading time, not 10 minutes early (checked against prod,
+// 2026-09-18..28): sources stamping the same :50 print the same 貯水位 at the
+// same instant (akita-kasen 3,022/3,022, nagasaki-kasen 7,395/7,395,
+// yamaguchi-bousai 4,506/4,506, miyazaki-bousai, oita-bousai, hkd-mlit-dam),
+// and against hourly sources a moving HH:50 level sits 50 minutes along the
+// HH:00→HH+1:00 change (median offset −0.8 min over 101 hours for
+// iwate-kasen, 0.0 for shimane-bousai, toyama-bousai, ishikawa-kasen; for
+// iwate, 189 of 325 such rows lie strictly between the two, none equal HH:00).
+//
+// The exception is a station in hourly mode that kasenbosai still lists at
+// HH:50: that row repeats the HH:00 reading, 50 minutes late. The prefecture
+// feed had already stored the same values at HH:00 before HH:50 came round
+// (yamanashi-dam at HH:36 for 深城, shiga-bousai at HH:07 for 永源寺 until
+// 2026-09-28 07:00). 日南 has done the same since 2026-09-19 17:00, when
+// miyazaki-bousai's stamp for it moved from :50 to :00.
+// Telling that apart from a steady 10-minute station needs a payload captured
+// from one of them in that mode.
 
 import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';

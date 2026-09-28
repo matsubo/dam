@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { extractYear, parseSagaPage, parseSagaTimestamp } from './ingest_saga_bousai.ts';
 
 describe('extractYear', () => {
@@ -115,5 +117,43 @@ describe('parseSagaPage', () => {
     const rows = parseSagaPage(noYearHtml, new Date('2026-12-31T15:30:00Z'));
     expect(rows).toHaveLength(2);
     expect(rows[0]?.observedAt?.toISOString()).toBe('2027-01-02T00:00:00.000Z');
+  });
+});
+
+// Page 3 of the live ダム現況表 (dk=4&sv=3&pg=3), Shift_JIS as served, captured
+// 2026-09-28 14:20 JST. 天ヶ瀬 prints 「***」 in 貯水位/流入/放流 and 河内 in
+// 貯水位, the rest blank; 深浦 is blank throughout under a 07/06 10:10 観測時刻.
+const page3 = new TextDecoder('shift_jis').decode(
+  readFileSync(
+    join(
+      import.meta.dir,
+      '../../../../tests/fixtures/saga_bousai/status_dk4_pg3_2026-09-28.shiftjis.html',
+    ),
+  ),
+);
+
+describe('parseSagaPage hasData', () => {
+  test('marks the dams whose every value cell is 「***」 or blank as publishing nothing', () => {
+    expect(parseSagaPage(page3).map((r) => [r.sagaName, r.hasData])).toEqual([
+      ['岩屋川内ダム', true],
+      ['横竹ダム', true],
+      ['天ヶ瀬ダム', false],
+      ['河内ダム', false],
+      ['深浦ダム', false],
+    ]);
+  });
+
+  test('an unreadable value cell is unknown, not "no value"', () => {
+    const garbled = page3.replace(
+      /(貯水位　EL \[m\]<\/td>(?:<td[^>]*>[^<]*<\/td>){3})<td([^>]*)>\*\*\*</,
+      '$1<td$2>ERR<',
+    );
+    expect(garbled).not.toBe(page3);
+    expect(parseSagaPage(garbled).find((r) => r.sagaName === '河内ダム')?.hasData).toBeNull();
+  });
+
+  test('a page without its 貯水位 row cannot say a dam is empty', () => {
+    const noLevel = page3.replace('貯水位　EL [m]', '貯水位（旧）');
+    expect(parseSagaPage(noLevel).map((r) => r.hasData)).toEqual([true, true, null, null, null]);
   });
 });

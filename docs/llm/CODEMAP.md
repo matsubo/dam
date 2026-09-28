@@ -112,7 +112,7 @@ the file for detail.
 | `src/tasks/backfill_mudam.ts` | `backfill:mudam`: NILIM ダム諸量DB daily history (monthly tail + on demand); name + 10 km match, `MUDAM_OVERRIDES` pins mis-bound listings to an NDI id |
 | `src/tasks/ingest_cgr_ashida_seki.ts` | `cgr-ashida-seki`: 福山河川国道事務所 芦田川河口堰 mobile page, hourly (level, volume, flows) |
 | `src/tasks/ingest_cgr_okakawa.ts` | `cgr-okakawa-dam`: 岡山河川事務所 三水系主要ダム貯水状況 PDF, daily 9時 edition (11 dams + 2 weirs; only source for 小阪部川 / 坂根堰) |
-| `src/tasks/ingest_awaji_suido.ts` | `awaji-suido`: 淡路広域水道企業団 各水源地の貯水状況, hand-edited about monthly, polled daily (淡路島 utility reservoirs; volume only, written when its comma grouping and volume / 貯水率 basis check out) |
+| `src/tasks/ingest_awaji_suido.ts` | `awaji-suido`: 淡路広域水道企業団 各水源地の貯水状況, hand-edited about monthly, polled daily (淡路島 utility reservoirs; volume only, written when its comma grouping — or, for a pair sharing a 合計, the 合計 minus its partner — and volume / 貯水率 basis check out) |
 | `src/tasks/ingest_hyogo_kigyo.ts` | `hyogo-kigyo`: 兵庫県企業庁 貯水状況, weekly 「M月D日現在」 table polled daily (神谷 volume + rate only; 黒川 企業庁 share, 平荘 / 権現 totals and live-covered rows universe-only) |
 | `src/tasks/ingest_hyogo_suigen.ts` | `hyogo-suigen`: 兵庫県 県内の水源の状況, monthly 1日 survey (more often in a 渇水) polled daily; rate only, written for 千苅 / 丸山 / 加古川大堰 / 鴨川 (plus 呑吐 / 大川瀬 / 但東 when listed apart), dams with a volume feed elsewhere universe-only |
 | `src/tasks/ingest_jwa_aichi_yosui.ts` | `jwa-aichi-yosui`: 愛知用水総合管理所 水情報, daily 0時 (牧尾 + 東郷調整池 / 前山池; 牧尾's daily-mean flows not stored) |
@@ -181,7 +181,7 @@ the file for detail.
 | `src/tasks/ingest_miyagi_kasen.ts` | `miyagi-kasen`: 宮城県土木総合情報システム ダム現況表, latest + previous hour, hourly (21 dams) |
 | `src/tasks/ingest_miyazaki_bousai.ts` | `miyazaki-bousai`: 宮崎県 防災Web ダム諸量現況表, hourly (13 県管理ダム) |
 | `src/tasks/ingest_nagano_kasen.ts` | `nagano-kasen`: 長野県 河川砂防情報ステーション dam JSON, hourly (17 県管理ダム) |
-| `src/tasks/ingest_nagasaki_kasen.ts` | `nagasaki-kasen`: 長崎県河川砂防情報 dam JSON, every 30 min (35 dams; 利水 rate) |
+| `src/tasks/ingest_nagasaki_kasen.ts` | `nagasaki-kasen`: 長崎県河川砂防情報 dam JSON, every 30 min (35 dams; 利水 rate); `has_data` FALSE for a dam printed 「-」 in every field |
 | `src/tasks/ingest_oita_bousai.ts` | `oita-bousai`: 大分県河川情報 防災Web ダム諸量現況表, hourly (10 県管理ダム) |
 | `src/tasks/ingest_oita_nourin.ts` | `oita-nourin`: 大分県 農業用ダム貯水率一覧 PDF (link discovered each run), daily (21 dams) |
 | `src/tasks/ingest_okayama.ts` | `okayama-bousai`: おかやま防災ポータル pointer → list JSON, hourly (21 dams listed); reference `recordUniverse` over a fetched list |
@@ -190,7 +190,7 @@ the file for detail.
 | `src/tasks/ingest_qsr_ryumon.ts` | `qsr-ryumon-dam`: 九州地方整備局 竜門ダム key-value endpoints, hourly |
 | `src/tasks/ingest_qsr_toukan.ts` | `qsr-toukan-dam`: 九州地方整備局 筑後川ダム統合管理事務所, hourly (松原 / 下筌) |
 | `src/tasks/ingest_qsr_turuta.ts` | `qsr-turuta-dam`: 九州地方整備局 鶴田ダム EUC-JP table, hourly |
-| `src/tasks/ingest_saga_bousai.ts` | `saga-bousai`: 佐賀県河川砂防情報システム transposed ダム現況表 (3 pages), hourly (19 県管理ダム) |
+| `src/tasks/ingest_saga_bousai.ts` | `saga-bousai`: 佐賀県河川砂防情報システム transposed ダム現況表 (3 pages), hourly (19 県管理ダム); `has_data` FALSE for a column that is 「***」 or blank throughout |
 | `src/tasks/ingest_saitama_suibo.ts` | `saitama-suibo`: 埼玉県 川の防災情報 `dinfo.csv`, hourly (9 dams / 調節池) |
 | `src/tasks/ingest_shimane_bousai.ts` | `shimane-bousai`: 島根県水防情報システム `dam60.json`, hourly (19 dams) |
 | `src/tasks/ingest_shimokubo.ts` | `shimokubo`: JWA 下久保ダム `table.json`, hourly (10-min readings) |
@@ -324,6 +324,8 @@ the file for detail.
 | `tests/e2e/dams.spec.ts` | list + detail + 404 + structured data |
 | `tests/e2e/watersheds.spec.ts` | list + detail + prefecture |
 | `tests/e2e/qa-walk.spec.ts` | full-page screenshot + console-error scan over 12 pages |
+| `tests/e2e/coverage-triage.spec.ts` | /coverage triage vs `/api/v1/coverage`: 提供元に値なし count, not-dam count, pending-scan providers linked to /sources |
+| `tests/e2e/fixtures/seed.ts` | fixture rows for a fresh migrated DB (CI / scratch only; never cleaned up) |
 
 ## docs
 

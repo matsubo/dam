@@ -7,9 +7,9 @@ import { expect, type Page, test } from '@playwright/test';
 // end-to-end guard that they still agree.
 
 // Note: the home page memoises its stats for 5 minutes (unstable_cache, which
-// Next persists under .next/cache). After changing fixture data locally, clear
-// that directory before running this spec or the home page will still serve
-// the pre-seed numbers.
+// `next dev` persists under apps/web/.next/dev/cache). After pointing the dev
+// server at another database or changing fixture data, delete that directory
+// before running this spec or the home page will still serve the old numbers.
 async function bodyText(page: Page, path: string): Promise<string> {
   await page.goto(path);
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
