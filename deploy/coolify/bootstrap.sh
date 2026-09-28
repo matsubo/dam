@@ -260,7 +260,7 @@ if [ "${kick}" = "1" ]; then
   # 3. Enqueue the cheap live-ingest jobs so prod gets fresh observation
   # data without waiting for the next cron tick. These are small (one HTTP
   # fetch each) and finish in seconds. Keyed like their cron line, so the
-  # next tick replaces a kick that is still retrying (see crontab.ts).
+  # next tick replaces a kick that is still retrying (see packages/core/src/crontab.ts).
   for task in \
     ingest:kasenbosai ingest:tokyo-waterworks ingest:jwa-junpo ingest:aitoyo \
     ingest:jwa-chikugo ingest:kanagawa-dam ingest:shiga-bousai ingest:tottori-dam \
