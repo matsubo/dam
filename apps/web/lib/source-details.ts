@@ -128,7 +128,7 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
   'jwa-chikugo': {
     upstream: '水資源機構 筑後川ダム統合管理事務所 (water.go.jp/chikugo/chikugo/water-source.html)',
     license: '公的統計 — 出典明示で再配布可',
-    cadence: '日次 (毎日 0:00 JST 値; 取得は 10:00 JST)',
+    cadence: '日次 (開庁日のみ, 見出しの日付の 0:00 JST 値; 取得は 10:00 / 17:00 JST)',
     what: '筑後川水系 7 ダム (松原/下筌/大山/合所/江川/寺内/小石原川) の貯水率・貯水量。',
     label: 'JWA 筑後川',
   },
@@ -138,7 +138,7 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     license:
       '水資源機構 利用ルール — 出典を記載すれば複製・公衆送信・翻案・商用利用可; 数値データは著作権の対象外 (water.go.jp/honsya/honsya/policy/copyright/)',
     cadence: '時次 (毎正時値, ~37 分に更新; 取得は毎時 :50, 直近 24 時間分を毎回 UPSERT)',
-    what: '筑後川水系 5 施設 (江川/寺内/小石原川/大山ダム, 筑後大堰) の貯水位・有効貯水量・貯水率 (利水等の貯水容量比)・流入量・総放流量・時間雨量。筑後大堰は貯水位・有効貯水量のみで新規カバレッジ; 各ダムは jwa-chikugo (日次 0 時) を時次に格上げ。',
+    what: '筑後川水系 5 施設 (江川/寺内/小石原川/大山ダム, 筑後大堰) の貯水位・有効貯水量・貯水率 (利水等の貯水容量比)・流入量・総放流量・時間雨量。筑後大堰は貯水位・時間雨量のみ (有効貯水量欄は容量 930 千m³ の固定値のため保存しない) で、現行の唯一のソース; 各ダムは jwa-chikugo (日次 0 時) を時次に格上げ。',
     label: 'JWA 筑後川 時次',
   },
   'jwa-fukudou': {
