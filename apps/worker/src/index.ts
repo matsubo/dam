@@ -58,6 +58,7 @@ import ingestKochi from './tasks/ingest_kochi_bousai.ts';
 import ingestKochiKigyo from './tasks/ingest_kochi_kigyo.ts';
 import ingestKtrKinu from './tasks/ingest_ktr_kinu.ts';
 import ingestKtrTone from './tasks/ingest_ktr_tone_dam.ts';
+import ingestKudamatsuSuido from './tasks/ingest_kudamatsu_suido.ts';
 import ingestKumamoto from './tasks/ingest_kumamoto_bousai.ts';
 import ingestKyoto from './tasks/ingest_kyoto_bousai.ts';
 import ingestKyushuNousei from './tasks/ingest_kyushu_nousei.ts';
@@ -220,6 +221,7 @@ async function main(): Promise<void> {
       'ingest:matsue-suido': ingestMatsueSuido,
       'ingest:nagasaki-city-suido': ingestNagasakiCitySuido,
       'ingest:shimonoseki-suido': ingestShimonosekiSuido,
+      'ingest:kudamatsu-suido': ingestKudamatsuSuido,
       'ingest:mc-tottori-hydro': ingestMcTottoriHydro,
       'ingest:mie-kigyo': ingestMieKigyo,
       'ingest:nagano-kigyo': ingestNaganoKigyo,
