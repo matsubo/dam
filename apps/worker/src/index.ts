@@ -67,6 +67,7 @@ import ingestMiyagiNousei from './tasks/ingest_miyagi_nousei.ts';
 import ingestMiyazaki from './tasks/ingest_miyazaki_bousai.ts';
 import ingestNagano from './tasks/ingest_nagano_kasen.ts';
 import ingestNaganoKigyo from './tasks/ingest_nagano_kigyo.ts';
+import ingestNagasakiCitySuido from './tasks/ingest_nagasaki_city_suido.ts';
 import ingestNagasaki from './tasks/ingest_nagasaki_kasen.ts';
 import ingestNaraKasen from './tasks/ingest_nara_kasen.ts';
 import ingestOita from './tasks/ingest_oita_bousai.ts';
@@ -212,6 +213,7 @@ async function main(): Promise<void> {
       'ingest:kitakyushu-suido': ingestKitakyushuSuido,
       'ingest:sasebo-suido': ingestSaseboSuido,
       'ingest:matsue-suido': ingestMatsueSuido,
+      'ingest:nagasaki-city-suido': ingestNagasakiCitySuido,
       'ingest:mc-tottori-hydro': ingestMcTottoriHydro,
       'ingest:nagano-kigyo': ingestNaganoKigyo,
       'backfill:kagoshima-bodik': backfillKagoshima,
