@@ -1,10 +1,47 @@
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
+  type ApiResponse,
+  kasenbosaiHasData,
   type ParsedKasenbosaiObs,
   parseKasenbosaiObsValue,
   parseKasenbosaiTimestamp,
   rateIfConsistent,
 } from './ingest_kasenbosai_v2.ts';
+
+const tmlist = (name: string): ApiResponse =>
+  JSON.parse(
+    readFileSync(
+      join(import.meta.dir, '..', '..', '..', '..', 'tests/fixtures/kasenbosai', name),
+      'utf8',
+    ),
+  ) as ApiResponse;
+
+describe('kasenbosaiHasData', () => {
+  test('a station flagging every reading 欠測 publishes no data', () => {
+    // 滝波ダム (0460900700011) on 2026-09-28: obsValue null and all 50 hourly
+    // rows Ccd=160 on every quantity. 和知ダム（利水） (0665700700002) served
+    // byte-identical JSON. Neither has ever produced an observation.
+    expect(kasenbosaiHasData(tmlist('tmlist_0460900700011_2026-09-28_0930.json'))).toBe(false);
+  });
+
+  test('one valid quantity means the station publishes data', () => {
+    // 松川ダム: 貯水量/貯水率 flagged 160, but level and flows carry Ccd=0.
+    expect(kasenbosaiHasData(tmlist('tmlist_2183100700010_2026-09-28_0930.json'))).toBe(true);
+  });
+
+  test('no explicit 欠測 flags is unknown, not "no data"', () => {
+    // Empty history or bare nulls may be a truncated / changed payload.
+    expect(kasenbosaiHasData({ dspFlg: 1, obsValue: null, hrValues: [] })).toBeNull();
+    expect(
+      kasenbosaiHasData({
+        obsValue: null,
+        hrValues: [{ obsTime: '2026/09/28 09:00', storLvl: null, storLvlCcd: null }],
+      }),
+    ).toBeNull();
+  });
+});
 
 describe('parseKasenbosaiTimestamp', () => {
   test('JST → UTC', () => {

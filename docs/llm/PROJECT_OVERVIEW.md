@@ -139,7 +139,8 @@ because graphile-worker rejects `.` in identifiers. Each ingest task writes
 under its own `source_id` (the task name without `ingest:`, except
 `kasenbosai-v2`, which writes `kasenbosai`) and calls `recordUniverse()` with
 the provider's whole published list (`kasenbosai`'s list is recorded by
-`match:kasenbosai`; exemptions live in `universe_instrumentation.test.ts`).
+`match:kasenbosai`, its `has_data` by `kasenbosai-v2` through
+`recordUniverseHasData`; exemptions live in `universe_instrumentation.test.ts`).
 Every ingest cron line carries `?jobKey=<task>`, so a tick replaces a job
 that is still retrying instead of queueing another; `crontab.test.ts` checks
 the key and that the default 25 attempts outlast each line's longest gap.

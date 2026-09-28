@@ -16,7 +16,8 @@ const EXEMPT = new Map<string, string>([
   [
     'ingest_kasenbosai_v2.ts',
     'Targets are read back from dams.external_ids, so this task cannot see the ' +
-      'catalogue. kasenbosai’s universe is recorded by match_kasenbosai.ts.',
+      'catalogue. kasenbosai’s universe is recorded by match_kasenbosai.ts; this ' +
+      'task only fills in has_data.',
   ],
   [
     'backfill_jwa_junpo.ts',
