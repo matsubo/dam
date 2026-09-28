@@ -216,8 +216,8 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
   'kanagawa-dam': {
     upstream: 'かながわの水がめ (kanagawa-dam.jp) — JSON API `summary.php`',
     license: '神奈川県企業庁 — 出典明示で再配布可 (推定)',
-    cadence: '時次 (1 時間粒度; 取得は毎時 :05)',
-    what: '神奈川県 5 ダム (相模/城山/三保/宮ヶ瀬/道志) の貯水位・貯水量・貯水率・流入量・放流量。',
+    cadence: '日次 (24:00 JST 値; 直近 30 日分を 3 時間ごとに取得, 更新は ~01:00 JST)',
+    what: '神奈川県 5 ダム (相模/城山/三保/宮ヶ瀬/道志) の貯水位・貯水量・貯水率 (24:00 値) と流入量・放流量 (日平均)。',
     label: 'かながわの水がめ',
   },
   mudam: {

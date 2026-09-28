@@ -24,7 +24,6 @@ import type { Task } from 'graphile-worker';
  */
 const FRESHNESS_HOURS: Record<string, number> = {
   // Hourly real-time sources — flag if older than 3 h.
-  'kanagawa-dam': 3,
   'shiga-bousai': 3,
   'tottori-dam': 3,
   'aomori-dam': 3,
@@ -33,6 +32,8 @@ const FRESHNESS_HOURS: Record<string, number> = {
   'ktr-kinu-dam': 3,
   'jwa-tonekako': 3,
   // Daily sources — flag if older than 30 h (allows late publish day).
+  // 30-day daily window stamped at 24:00 JST, rolled over at ~01:00 JST.
+  'kanagawa-dam': 30,
   'tokyo-waterworks': 30,
   aitoyo: 30,
   'jwa-chikugo': 30,

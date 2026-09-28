@@ -8,9 +8,9 @@
 //
 // Payload (excerpt):
 //   {
-//     "lastUpdate": "2026-05-13",
+//     "lastUpdate": "2026-09-27",
 //     "values": {
-//       "sagami_volume": {"0":"26992", ..., "29":"32096", "dt":"2026-05-12 22:00"},
+//       "sagami_volume": {"0":"34509", ..., "29":"34615", "dt":"2026-09-27 03:00"},
 //       "sagami_storage_level": {...},          // 貯水率 %
 //       "sagami_water_level": {...},            // 貯水位 EL.m
 //       "sagami_in": {...},                     // 流入量 m³/s
@@ -19,14 +19,18 @@
 //     }
 //   }
 //
+// Each series is a 30-DAY daily window: index 29 is the `lastUpdate` day,
+// index 0 is 29 days earlier. Checked against the hourly /api/weekly.php
+// table: volume / storage_level / water_level are the day's 24:00 JST reading,
+// in / out are the day's hourly mean. lastUpdate rolls over at ~01:00 JST.
+// The per-series `dt` is NOT a reading time — it steps back one hour per key
+// in response order — so it is ignored; every day is stamped at 24:00 JST.
+//
 // All 5 dams are NEW — none were covered by tokyo-waterworks / jwa-junpo /
 // aitoyo / jwa-chikugo. They're high-profile dams supplying the Kanagawa
 // prefecture water system (~9 million people).
 //
-// Cadence: the dt field is per-FIELD (different sensors fire at different
-// minutes); we use volume's dt as the canonical observed_at and write one
-// observation per dam per fetch. Future task: a backfill that walks the
-// 30-hour rolling window in the response and emits 30 rows per dam.
+// The whole window is upserted each run, so a missed poll heals itself.
 
 import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
@@ -45,14 +49,12 @@ const NAME_MAP: Array<{ key: string; masterName: string; prefCodes: string[] }> 
   { key: 'doushi', masterName: '道志', prefCodes: ['14'] },
 ];
 
-interface RawSeries {
-  [hourIdx: string]: string;
-  dt: string;
-}
+/** Day index → value; also carries the meaningless `dt`, never read. */
+type RawSeries = Record<string, string>;
 
 interface ApiResponse {
   lastUpdate: string;
-  values: Record<string, RawSeries | Record<string, string>>;
+  values: Record<string, RawSeries>;
 }
 
 interface ParsedRow {
@@ -65,58 +67,57 @@ interface ParsedRow {
   outflowM3s: number | null;
 }
 
+const WINDOW_DAYS = 30;
+const DAY_MS = 86_400_000;
+
 function num(s: string | null | undefined): number | null {
   if (s == null || s === '') return null;
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
 }
 
-/**
- * Parse 「YYYY-MM-DD HH:MM」 as JST → UTC Date.
- * The kanagawa-dam.jp dt field is published in JST, not specified, but
- * empirically the API returns server-local time which is JST (= UTC+9).
- */
-export function parseJstTimestamp(s: string): Date | null {
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})\s(\d{2}):(\d{2})$/);
+/** `lastUpdate` 「YYYY-MM-DD」 → that day's 24:00 JST (= 15:00Z the same date). */
+export function parseKanagawaLastUpdate(s: string): Date | null {
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!m) return null;
-  const [, y, mo, d, h, mi] = m;
-  // JST = UTC + 9, so subtract 9 hours from the JST clock to get UTC.
-  return new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h) - 9, Number(mi)));
-}
-
-function latestField(series: RawSeries | undefined): { value: string | null; dt: string | null } {
-  if (!series) return { value: null, dt: null };
-  const dt = series.dt ?? null;
-  // Index 29 is the most recent value in the 30-hour rolling window.
-  const value = series['29'] ?? null;
-  return { value, dt };
+  return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 15));
 }
 
 export function parseKanagawaResponse(body: ApiResponse): ParsedRow[] {
+  const newest = parseKanagawaLastUpdate(body.lastUpdate);
+  if (!newest) return [];
   const out: ParsedRow[] = [];
   for (const m of NAME_MAP) {
-    const vol = latestField(body.values[`${m.key}_volume`] as RawSeries | undefined);
-    const rate = latestField(body.values[`${m.key}_storage_level`] as RawSeries | undefined);
-    const level = latestField(body.values[`${m.key}_water_level`] as RawSeries | undefined);
-    const inflow = latestField(body.values[`${m.key}_in`] as RawSeries | undefined);
-    const outflow = latestField(body.values[`${m.key}_out`] as RawSeries | undefined);
-    // observedAt anchored to volume's dt (the headline metric); other
-    // fields may be a few minutes ahead/behind but for hourly cadence
-    // that's fine to lump together.
-    const observedAt = vol.dt ? parseJstTimestamp(vol.dt) : null;
-    if (!observedAt) continue;
-    const volThouM3 = num(vol.value);
-    const ratePct = num(rate.value);
-    out.push({
-      key: m.key,
-      observedAt,
-      // kanagawa volume is in 千m³ (thousand m³).
-      storageVolumeM3: volThouM3 != null ? volThouM3 * 1_000 : null,
-      storageRate: ratePct != null ? Math.max(0, Math.min(1, ratePct / 100)) : null,
-      waterLevelM: num(level.value),
-      inflowM3s: num(inflow.value),
-      outflowM3s: num(outflow.value),
-    });
+    const vol = body.values[`${m.key}_volume`];
+    const rate = body.values[`${m.key}_storage_level`];
+    const level = body.values[`${m.key}_water_level`];
+    const inflow = body.values[`${m.key}_in`];
+    const outflow = body.values[`${m.key}_out`];
+    for (let i = 0; i < WINDOW_DAYS; i++) {
+      const idx = String(i);
+      const volThouM3 = num(vol?.[idx]);
+      const ratePct = num(rate?.[idx]);
+      const row: ParsedRow = {
+        key: m.key,
+        observedAt: new Date(newest.getTime() - (WINDOW_DAYS - 1 - i) * DAY_MS),
+        // kanagawa volume is in 千m³ (thousand m³).
+        storageVolumeM3: volThouM3 != null ? volThouM3 * 1_000 : null,
+        storageRate: ratePct != null ? Math.max(0, Math.min(1, ratePct / 100)) : null,
+        waterLevelM: num(level?.[idx]),
+        inflowM3s: num(inflow?.[idx]),
+        outflowM3s: num(outflow?.[idx]),
+      };
+      if (
+        row.storageVolumeM3 == null &&
+        row.storageRate == null &&
+        row.waterLevelM == null &&
+        row.inflowM3s == null &&
+        row.outflowM3s == null
+      ) {
+        continue;
+      }
+      out.push(row);
+    }
   }
   return out;
 }
@@ -130,7 +131,7 @@ async function ensureSourcePriority(): Promise<void> {
   await sql`
     INSERT INTO source_priorities (source_id, priority, description, active)
     VALUES ('kanagawa-dam', 310,
-            'かながわの水がめ (kanagawa-dam.jp) — hourly, 5 dams (相模/城山/三保/宮ヶ瀬/道志)',
+            'かながわの水がめ (kanagawa-dam.jp) — daily 24時値, 5 dams (相模/城山/三保/宮ヶ瀬/道志)',
             true)
     ON CONFLICT (source_id) DO UPDATE
       SET priority    = EXCLUDED.priority,

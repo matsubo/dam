@@ -170,7 +170,7 @@ the file for detail.
 | `src/tasks/ingest_kagawa_bousai.ts` | `kagawa-bousai`: かがわ防災Webポータル `dam_station.json`, hourly (18 dams) |
 | `src/tasks/ingest_kagoshima_bousai.ts` | `kagoshima-bousai`: 鹿児島県防災ポータル `dam_station.json`, hourly; items only during flood events |
 | `src/tasks/ingest_kagoshima_kasen.ts` | `kagoshima-kasen`: 鹿児島県河川砂防情報システム ダム一覧表, hourly (西之谷 / 川辺 / 大和) |
-| `src/tasks/ingest_kanagawa.ts` | `kanagawa-dam`: かながわの水がめ `summary.php` JSON, hourly (5 dams) |
+| `src/tasks/ingest_kanagawa.ts` | `kanagawa-dam`: かながわの水がめ `summary.php` JSON, a 30-day daily window stamped at 24:00 JST (5 dams) |
 | `src/tasks/ingest_kkr_mlit.ts` | `kkr-mlit-dam`: 近畿地方整備局 貯水率 JSON feed, daily (12 国管理ダム) |
 | `src/tasks/ingest_kochi_bousai.ts` | `kochi-bousai`: 高知県水防情報システム ダム諸量現況表, hourly (11 dams: 7 県 + 4 MLIT) |
 | `src/tasks/ingest_ktr_kinu.ts` | `ktr-kinu-dam`: 関東地方整備局 鬼怒川ダム統合管理事務所 realtime page, hourly (4 dams) |
