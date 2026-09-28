@@ -36,6 +36,13 @@ export interface ParsedRow {
   storageRate: number | null;
   inflowM3s: number | null;
   outflowM3s: number | null;
+  /**
+   * source_universe.has_data: true = the task stores the row (a level or a
+   * volume); false = the provider prints its 「-」 in every field (樋口 /
+   * つづら / 笛吹, stat 0); null = an empty or unreadable field, which may be
+   * our parser rather than the provider.
+   */
+  hasData: boolean | null;
 }
 
 interface DtRange {
@@ -117,12 +124,17 @@ export function parseAllDamsJson(raw: AllDamsJson, masters: Map<number, string>)
     if (!name) continue;
 
     const pondageRaw = parseNum(item.pondage);
+    const waterLevelM = parseNum(item.lv);
+    const storageVolumeM3 = pondageRaw !== null ? pondageRaw * 1_000 : null;
+    const empty = [item.lv, item.pondage, item.rate, item.rate_r, item.rate_y, item.in, item.dis]
+      .filter((v) => v !== undefined)
+      .every((v) => v.trim() === '-');
     rows.push({
       damCd: item.dam_cd,
       damName: name,
       observedAt,
-      waterLevelM: parseNum(item.lv),
-      storageVolumeM3: pondageRaw !== null ? pondageRaw * 1_000 : null,
+      waterLevelM,
+      storageVolumeM3,
       // Prefer 利水容量貯水率 (rate_r): it is the rate the manager publishes,
       // against the current-season 利水容量. rate / rate_y divide by the full
       // 有効貯水容量 and understate flood-control dams badly — 宮崎ダム reads
@@ -134,6 +146,7 @@ export function parseAllDamsJson(raw: AllDamsJson, masters: Map<number, string>)
       })(),
       inflowM3s: parseNum(item.in),
       outflowM3s: parseNum(item.dis),
+      hasData: waterLevelM !== null || storageVolumeM3 !== null ? true : empty ? false : null,
     });
   }
   return rows;
@@ -256,16 +269,20 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
  *
  * `dam_cd` is the upstream's stable id, so it is the external id; unmatched
  * dams stay in the list with a null `resolvedDamId` as matching backlog.
+ * `hasData` is the snapshot row's; a catalogued dam without one is unknown.
  */
 export function buildNagasakiUniverse(
   catalogue: DamMaster[],
   resolve: (damCd: number) => bigint | undefined,
+  snapshot: ParsedRow[],
 ): UniverseRow[] {
+  const hasData = new Map(snapshot.map((r) => [r.damCd, r.hasData]));
   return catalogue.map((m) => ({
     externalId: String(m.dam_cd),
     name: m.dam_nm,
     prefCode: PREF_CODE,
     resolvedDamId: resolve(m.dam_cd) ?? null,
+    hasData: hasData.get(m.dam_cd) ?? null,
   }));
 }
 
@@ -322,7 +339,11 @@ const task: Task = async (_payload, helpers) => {
   // bound, published dam as unmatched backlog (#82).
   await recordUniverse(
     SOURCE_ID,
-    buildNagasakiUniverse(masterList, (damCd) => damByCd.get(damCd) ?? byExternalId.get(damCd)),
+    buildNagasakiUniverse(
+      masterList,
+      (damCd) => damByCd.get(damCd) ?? byExternalId.get(damCd),
+      rows,
+    ),
   );
 
   const inputs = [] as Parameters<typeof upsertObservations>[0];
