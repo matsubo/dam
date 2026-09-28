@@ -23,6 +23,10 @@
 //
 // Year inferred from "YYYY年" pattern in the page header.
 //
+// A column that is 「***」 (欠測) or blank in every value row is recorded as
+// has_data = FALSE: on 2026-09-28 天ヶ瀬 and 河内 printed 「***」, and 深浦 was
+// blank under a 07/06 観測時刻.
+//
 // Priority 308. Cron hourly at :40.
 
 import { type BindableMaster, preferMaster } from '@dam/core/dam_binding';
@@ -49,6 +53,13 @@ export interface ParsedRow {
   waterLevelM: number | null;
   inflowM3s: number | null;
   outflowM3s: number | null;
+  /**
+   * source_universe.has_data: true = the task stores the row (a 貯水位 or a
+   * 貯水量); false = every value cell is 「***」 (欠測) or blank, as 天ヶ瀬 /
+   * 河内 / 深浦 print it; null = something we could not read, or a page
+   * missing the 貯水位 row, which may be our parser rather than the provider.
+   */
+  hasData: boolean | null;
 }
 
 // --- parsing ----------------------------------------------------------------
@@ -129,6 +140,7 @@ export function parseSagaPage(html: string, now: Date = new Date()): ParsedRow[]
   const outflowRow = rowMap.get('全放流量 [m3/s]') ?? [];
   const volRow = rowMap.get('貯水量 [1000m3]') ?? [];
   const rateRow = rowMap.get('貯水率 [%]') ?? [];
+  const valueRows = [levelRow, inflowRow, outflowRow, volRow, rateRow];
 
   const rows: ParsedRow[] = [];
 
@@ -142,14 +154,21 @@ export function parseSagaPage(html: string, now: Date = new Date()): ParsedRow[]
     const ratePct = parseNum(rateRow[i] ?? '');
     const volRaw = parseNum(volRow[i] ?? '');
 
+    const waterLevelM = parseNum(levelRow[i] ?? '');
+    const storageVolumeM3 = volRaw != null ? volRaw * 1000 : null;
+    // 「***」 is the provider's 欠測; blank is a quantity it does not publish.
+    const empty =
+      rowMap.has('貯水位 EL [m]') && valueRows.every((row) => /^\**$/.test(row[i] ?? ''));
+
     rows.push({
       sagaName,
       observedAt,
       storageRate: ratePct != null ? Math.max(0, Math.min(1, ratePct / 100)) : null,
-      storageVolumeM3: volRaw != null ? volRaw * 1000 : null,
-      waterLevelM: parseNum(levelRow[i] ?? ''),
+      storageVolumeM3,
+      waterLevelM,
       inflowM3s: parseNum(inflowRow[i] ?? ''),
       outflowM3s: parseNum(outflowRow[i] ?? ''),
+      hasData: waterLevelM !== null || storageVolumeM3 !== null ? true : empty ? false : null,
     });
   }
 
@@ -221,6 +240,7 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
       name: r.sagaName,
       prefCode: PREF_CODE,
       resolvedDamId: best?.m.id ?? null,
+      hasData: r.hasData,
     });
 
     if (!best) {
