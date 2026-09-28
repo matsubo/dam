@@ -502,6 +502,11 @@ export const CRONTAB = `
 # + 流入量 + 放流量 (no rate). Priority 303. Cron at :02.
 2 * * * * ingest:cgr-ashida-seki ?jobKey=ingest:cgr-ashida-seki
 
+# 兵庫県 昭和池防災情報管理システム — 昭和池 (加東市, NDI 1539). public/DamData.jsp,
+# one 10分更新 Windows-31J snapshot: 貯水位 + 貯水量(m³) + 流入量 + 時間雨量 (越流量
+# is spill only, integer 貯水率 left to the trigger). Priority 299. Cron at :23.
+23 * * * * ingest:syowaike ?jobKey=ingest:syowaike
+
 # 高知県水防情報システム ダム諸量現況表 — 11 ダム (和食/永瀬/鎌井谷/鏡/桐見/坂本/
 # 以布利川 [pref] + 早明浦/大渡/中筋川/横瀬川 [国交省]). Pre-generated static
 # Shift_JIS HTML (tableStatusDam_0_1_0_now.html); no servlet call needed.
