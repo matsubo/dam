@@ -1,27 +1,32 @@
 // apps/worker/src/tasks/ingest_tokyo_waterworks.ts
 //
-// First real-observation source. 東京都水道局 publishes a daily-updated
-// vol/rate/delta table for the 13 dams that supply Tokyo's drinking water:
+// First real-observation source. 東京都水道局 publishes a vol/rate/delta
+// table for the reservoirs that supply Tokyo's drinking water:
 //
 //   利根川水系 9 dams: 矢木沢 / 奈良俣 / 藤原 / 相俣 / 薗原 / 八ッ場 /
 //                      下久保 / 草木 / 渡良瀬貯水池
 //   荒川水系   4 dams: 浦山 / 荒川貯水池 / 滝沢 / 二瀬
-//   多摩川水系 2 dams: 小河内貯水池 / 村山・山口貯水池
+//   多摩川水系 2 rows: 小河内貯水池 / 村山・山口貯水池 (a three-reservoir total)
 //
 // Source: https://www.waterworks.metro.tokyo.lg.jp/suigen/suigen.html
-// Format: HTML table, daily granularity. Officially-public open data
+// Format: HTML table, one reading a day. Officially-public open data
 //         (no UA gate, no scraping prohibition like kasenbosai/suimon).
 //
 // Strategy:
-//   1. Ensure source_priorities row + 13 dams have
-//      external_ids->>'tokyo-waterworks' set on first run (idempotent UPSERT
-//      keyed by a manual name → master-name mapping table).
+//   1. Ensure source_priorities row + the 14 single-dam rows have
+//      external_ids->>'tokyo-waterworks' set (idempotent, keyed by a manual
+//      name → master-name mapping table).
 //   2. Fetch + parse the HTML table.
-//   3. Insert one observation per dam with
+//   3. Upsert one observation per dam with
 //        source_id      = 'tokyo-waterworks'
-//        observed_at    = today 00:00 JST (the page publishes daily)
+//        observed_at    = the page's 「令和N年M月D日」 at its table's 「N時現在」
+//                         (利根川 / 荒川 0時, 多摩川 7時; JST)
 //        storage_volume = 貯水量(万m³) × 10_000
 //        storage_rate   = 貯水率 / 100  (clipped to [0, 1])
+//
+// The page is updated on business days only: over a weekend or holiday it
+// keeps the last business day's date, so a run then rewrites that day's row
+// instead of copying it onto the run date.
 
 import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
@@ -57,11 +62,17 @@ const NAME_MAP: Array<{ tokyoName: string; masterName: string; prefCodes: string
   { tokyoName: '二瀬ダム', masterName: '二瀬', prefCodes: ['11'] },
   // 多摩川水系
   { tokyoName: '小河内貯水池', masterName: '小河内', prefCodes: ['13'] }, // 東京
-  { tokyoName: '村山・山口貯水池', masterName: '村山', prefCodes: ['13'] },
 ];
+
+// 村山・山口貯水池 totals three reservoirs: 貯水容量 3,435 万m³ is the 有効 of
+// 村山上 (298.3), 村山下 (1,184.3) and 山口 (1,952.8, 埼玉). No master row
+// holds that figure, so it is recorded as published, bound to no dam and
+// not stored; migration 0162 gives it a not_dam_reason.
+const RESERVOIR_TOTAL = '村山・山口貯水池';
 
 interface ParsedRow {
   tokyoName: string;
+  observedAt: Date;
   storageVolumeWanM3: number; // 万m³
   storageRatePct: number; // %
   prevDeltaWanM3: number | null;
@@ -88,7 +99,14 @@ function parseNum(s: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Parse the suigen.html table into one ParsedRow per known dam name. */
+/**
+ * Parse suigen.html into one ParsedRow per known dam name, each dated by the
+ * page. In document order the page carries its date (「令和8年9月25日(金曜日)」,
+ * 令和N = 2018+N), then one table per 水系 whose caption gives the hour
+ * (「利根川水系　0時現在」, 「多摩川水系　7時現在」), then that table's rows.
+ * The weekday keeps a nav link's 「令和5年3月31日事業廃止」 from passing for
+ * the page date. Rows without a date and an hour above them are dropped.
+ */
 export function parseTokyoWaterworksHtml(html: string): ParsedRow[] {
   const out: ParsedRow[] = [];
   const knownNames = new Set(NAME_MAP.map((m) => m.tokyoName));
@@ -98,9 +116,22 @@ export function parseTokyoWaterworksHtml(html: string): ParsedRow[] {
   // row. Replace only nested tables that sit inside a <td>, leaving the
   // top-level wrapping tables intact.
   const normalised = html.replace(/(<td\b[^>]*>)\s*<table\b[\s\S]*?<\/table>\s*/g, '$1_nested_');
-  const rowMatches = normalised.match(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g) ?? [];
-  for (const row of rowMatches) {
-    const cellMatches = row.match(/<t[hd]\b[^>]*>([\s\S]*?)<\/t[hd]>/g) ?? [];
+  const tokens = normalised.matchAll(
+    /令和(\d+)年(\d+)月(\d+)日[(（][月火水木金土日]曜日[)）]|(\d+)時現在|<tr\b[^>]*>[\s\S]*?<\/tr>/g,
+  );
+  let date: { year: number; month: number; day: number } | null = null;
+  let hour: number | null = null;
+  for (const t of tokens) {
+    if (t[1] !== undefined) {
+      date = { year: 2018 + Number(t[1]), month: Number(t[2]), day: Number(t[3]) };
+      continue;
+    }
+    if (t[4] !== undefined) {
+      hour = Number(t[4]);
+      continue;
+    }
+    if (date === null || hour === null) continue;
+    const cellMatches = t[0].match(/<t[hd]\b[^>]*>([\s\S]*?)<\/t[hd]>/g) ?? [];
     const cells = cellMatches.map((c) => textOf(c.replace(/^<t[hd][^>]*>|<\/t[hd]>$/g, '')));
     if (cells.length < 5) continue;
     const name = cells[0] ?? '';
@@ -111,6 +142,8 @@ export function parseTokyoWaterworksHtml(html: string): ParsedRow[] {
     if (volume == null || rate == null) continue;
     out.push({
       tokyoName: name,
+      // JST = UTC+9.
+      observedAt: new Date(Date.UTC(date.year, date.month - 1, date.day, hour - 9)),
       storageVolumeWanM3: volume,
       storageRatePct: rate,
       prevDeltaWanM3: delta,
@@ -140,8 +173,8 @@ async function ensureSourcePriority(): Promise<void> {
 /**
  * Master row for a listing: match by (prefCode IN list) AND name LIKE
  * '%<masterName>%' to tolerate the「ダム」/「貯水池」suffix variation. A row
- * already stamped with the listing keeps it; a redeveloped dam's twins share
- * the ELSE rank so chooseRanked picks the current one (村山下, #79).
+ * already stamped with the listing keeps it; a redeveloped dam's （元）/（再）
+ * twins share the ELSE rank so chooseRanked picks the current one (#79).
  */
 export async function findMaster(m: (typeof NAME_MAP)[number]): Promise<BindableMaster | null> {
   const rows = await sql<(BindableMaster & { rank: number })[]>`
@@ -158,8 +191,11 @@ export async function findMaster(m: (typeof NAME_MAP)[number]): Promise<Bindable
   return chooseRanked(rows, m.tokyoName);
 }
 
-/** Stamp external_ids->>'tokyo-waterworks' on the listed master dams. */
-async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
+/**
+ * Stamp external_ids->>'tokyo-waterworks' on the listed master dams, and
+ * record every published row (the 村山・山口 total too) in the universe.
+ */
+export async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
   const matches: DamMatch[] = [];
   // What this source publishes, matched or not — recorded so /coverage can
   // say "they publish it, we failed to link it" instead of guessing.
@@ -169,7 +205,10 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
     universe.push({
       externalId: m.tokyoName,
       name: m.tokyoName,
-      prefCode: m.prefCodes[0] ?? null,
+      // A multi-code entry (渡良瀬 straddles 栃木/群馬/埼玉) is a LIKE-narrowing
+      // hint, not an attribution, and pref_code is COALESCE-sticky once
+      // written.
+      prefCode: m.prefCodes.length === 1 ? (m.prefCodes[0] ?? null) : null,
       resolvedDamId: r?.id ?? null,
     });
     if (!r) {
@@ -179,6 +218,13 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
     matches.push({ tokyoName: m.tokyoName, damId: r.id });
     await bindExternalId(r.id, 'tokyo-waterworks', m.tokyoName);
   }
+  // Spans 東京 and 埼玉 (山口), so no prefecture either.
+  universe.push({
+    externalId: RESERVOIR_TOTAL,
+    name: RESERVOIR_TOTAL,
+    prefCode: null,
+    resolvedDamId: null,
+  });
   await recordUniverse('tokyo-waterworks', universe);
   return matches;
 }
@@ -205,14 +251,6 @@ const task: Task = async (_payload, helpers) => {
   const parsed = parseTokyoWaterworksHtml(html);
   log(`tokyo-waterworks: parsed ${parsed.length} dam rows`);
 
-  // Daily granularity → snap observation timestamp to today 00:00 JST so
-  // re-runs on the same day idempotently UPSERT (the table's PK is
-  // (dam_id, observed_at, source_id)).
-  const now = new Date();
-  const jstMidnight = new Date(now);
-  jstMidnight.setUTCHours(15, 0, 0, 0); // 00:00 JST = 15:00 UTC the previous day
-  if (now.getUTCHours() < 15) jstMidnight.setUTCDate(jstMidnight.getUTCDate() - 1);
-
   const matchByName = new Map(matches.map((m) => [m.tokyoName, m.damId]));
   const inputs = [] as Parameters<typeof upsertObservations>[0];
   for (const row of parsed) {
@@ -221,7 +259,7 @@ const task: Task = async (_payload, helpers) => {
     const storageVolumeM3 = row.storageVolumeWanM3 * 10_000;
     const storageRate = Math.max(0, Math.min(1, row.storageRatePct / 100));
     inputs.push({
-      observedAt: jstMidnight,
+      observedAt: row.observedAt,
       damId,
       sourceId: 'tokyo-waterworks',
       storageVolumeM3,

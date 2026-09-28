@@ -33,9 +33,11 @@ const FRESHNESS_HOURS: Record<string, number> = {
   'ktr-kinu-dam': 3,
   'jwa-tonekako': 3,
   // Daily sources — flag if older than 30 h (allows late publish day).
-  'tokyo-waterworks': 30,
   aitoyo: 30,
   'jwa-chikugo': 30,
+  // Business-day page stamped with its own date: a weekend already ages it
+  // ~3 days, and 年末年始 (12/29–1/3) closes it for 6.
+  'tokyo-waterworks': 8 * 24,
   // 10-day cadence — flag if older than 14 days.
   'jwa-junpo': 14 * 24,
   // Weekly survey that can skip a week (9/14 was still the latest on 9/27),

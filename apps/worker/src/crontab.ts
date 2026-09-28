@@ -40,12 +40,12 @@ export const CRONTAB = `
 # dams matched as the kawabou catalogue grows.
 30 3 * * 1 match:kasenbosai
 
-# Tokyo waterworks daily reservoir status — open data, real values for the
-# 13 dams supplying Tokyo's drinking water (Tonegawa 9 + Arakawa 4 +
-# Tamagawa 2). Page updates daily; check at 03:00 UTC = 12:00 JST and again
-# at 09:00 UTC = 18:00 JST so a same-day refresh after the morning publish
-# is captured. Idempotent — repeated runs UPSERT on (dam_id, observed_at,
-# source_id) where observed_at is snapped to today 00:00 JST.
+# Tokyo waterworks reservoir status — open data, real values for the 14
+# single-dam rows supplying Tokyo's drinking water (Tonegawa 9 + Arakawa 4 +
+# Ogouchi). The page updates on business days; check at 03:00 UTC = 12:00 JST
+# and again at 09:00 UTC = 18:00 JST so a same-day refresh after the morning
+# publish is captured. Idempotent — runs UPSERT on (dam_id, observed_at,
+# source_id) where observed_at is the page's own date and 「N時現在」 hour.
 0 3,9 * * * ingest:tokyo-waterworks ?jobKey=ingest:tokyo-waterworks
 
 # JWA 旬報 — 21 dams across 7 major water systems (Tonegawa, Arakawa, Kisogawa,
