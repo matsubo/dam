@@ -30,7 +30,10 @@ function formatAge(hours: number | null): string {
   return `${(hours / 24).toFixed(1)} d`;
 }
 
-function buildDiscordPayload(stale: StaleSource[]): {
+/** Discord rejects an embed with more fields than this, and with it the whole post. */
+const MAX_EMBED_FIELDS = 25;
+
+export function buildDiscordPayload(stale: StaleSource[]): {
   username: string;
   embeds: Array<{
     title: string;
@@ -43,6 +46,8 @@ function buildDiscordPayload(stale: StaleSource[]): {
 } {
   const critical = stale.filter((s) => severity(s) === 'critical');
   const color = critical.length > 0 ? 0xdc2626 : 0xf59e0b; // red / amber
+  const shown = stale.length > MAX_EMBED_FIELDS ? stale.slice(0, MAX_EMBED_FIELDS - 1) : stale;
+  const rest = stale.slice(shown.length);
   return {
     username: 'dam.teraren.com',
     embeds: [
@@ -50,11 +55,26 @@ function buildDiscordPayload(stale: StaleSource[]): {
         title: `${stale.length} データソースが期待鮮度を下回っています`,
         description: 'Critical = 閾値の 3 倍超 / Warning = 閾値超過',
         color,
-        fields: stale.map((s) => ({
-          name: `${severity(s) === 'critical' ? '🚨' : '⚠️'} ${s.sourceId}`,
-          value: `最新: ${s.newestObservedAt ? s.newestObservedAt.toISOString() : 'なし'}\n経過: ${formatAge(s.ageHours)} (閾値 ${s.thresholdHours.toFixed(1)} h, ${s.cadenceBasis})`,
-          inline: false,
-        })),
+        fields: [
+          ...shown.map((s) => ({
+            name: `${severity(s) === 'critical' ? '🚨' : '⚠️'} ${s.sourceId}`,
+            value: `最新: ${s.newestObservedAt ? s.newestObservedAt.toISOString() : 'なし'}\n経過: ${formatAge(s.ageHours)} (閾値 ${s.thresholdHours.toFixed(1)} h, ${s.cadenceBasis})`,
+            inline: false,
+          })),
+          ...(rest.length > 0
+            ? [
+                {
+                  name: `…and ${rest.length} more`,
+                  // A field value is capped at 1024 characters.
+                  value: rest
+                    .map((s) => s.sourceId)
+                    .join(', ')
+                    .slice(0, 1024),
+                  inline: false,
+                },
+              ]
+            : []),
+        ],
         footer: { text: 'https://dam.teraren.com/sources' },
         timestamp: new Date().toISOString(),
       },
