@@ -190,7 +190,7 @@ the file for detail.
 | `src/tasks/ingest_qsr_ryumon.ts` | `qsr-ryumon-dam`: 九州地方整備局 竜門ダム key-value endpoints, hourly |
 | `src/tasks/ingest_qsr_toukan.ts` | `qsr-toukan-dam`: 九州地方整備局 筑後川ダム統合管理事務所, hourly (松原 / 下筌) |
 | `src/tasks/ingest_qsr_turuta.ts` | `qsr-turuta-dam`: 九州地方整備局 鶴田ダム EUC-JP table, hourly |
-| `src/tasks/ingest_saga_bousai.ts` | `saga-bousai`: 佐賀県河川砂防情報システム transposed ダム現況表 (3 pages), hourly (19 県管理ダム) |
+| `src/tasks/ingest_saga_bousai.ts` | `saga-bousai`: 佐賀県河川砂防情報システム transposed ダム現況表 (3 pages), hourly (19 県管理ダム); `has_data` FALSE for a column that is 「***」 or blank throughout |
 | `src/tasks/ingest_saitama_suibo.ts` | `saitama-suibo`: 埼玉県 川の防災情報 `dinfo.csv`, hourly (9 dams / 調節池) |
 | `src/tasks/ingest_shimane_bousai.ts` | `shimane-bousai`: 島根県水防情報システム `dam60.json`, hourly (19 dams) |
 | `src/tasks/ingest_shimokubo.ts` | `shimokubo`: JWA 下久保ダム `table.json`, hourly (10-min readings) |
