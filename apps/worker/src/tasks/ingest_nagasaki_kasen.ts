@@ -13,7 +13,7 @@
 // (tank_risui_d / tank_ecapa), and this site's 貯水率 is the 利水 one.
 // Priority 308, matching other prefectural sources.
 
-import { type BindableMaster, preferMaster } from '@dam/core/dam_binding';
+import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
 import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
@@ -162,6 +162,55 @@ function normalizeName(s: string): string {
     .trim();
 }
 
+/**
+ * Stations the name rule binds wrongly, by dam_cd, pinned to an NDI row.
+ *
+ * 1106 「小ヶ倉ダム」 → 小ヶ倉 (NDI 2609), 長崎市's dam on the 鹿尾川 — pref 42
+ * has a second 小ヶ倉 (NDI 2592, 諫早市), and the lower id picked that one. The
+ * 11xx codes are the 長崎市 block (式見, 鹿尾, 本河内…), and on prod every one
+ * of the 2,738 readings the station shares an instant with kasenbosai's
+ * 「小ヶ倉(補助)ダム」 (bound to 2609) carries the same 貯水位 (87.97–90.89 m;
+ * kasenbosai on 2592 reads 0–26 m); mudam's listing 524 is pinned to 2609 too
+ * (migration 0073).
+ */
+const NDI_PINS: Readonly<Record<number, string>> = {
+  1106: '2609',
+};
+
+export interface NagasakiMaster extends BindableMaster {
+  ndi: string | null;
+}
+
+/** The pref-42 master for a station: its NDI pin, else its stamp, else by name. */
+export function chooseMaster(
+  damCd: number,
+  damName: string,
+  masters: NagasakiMaster[],
+): NagasakiMaster | null {
+  const pin = NDI_PINS[damCd];
+  if (pin) return masters.find((m) => m.ndi === pin) ?? null;
+  const stamped = stampedMaster(masters, String(damCd));
+  if (stamped) return stamped;
+
+  const stem = normalizeName(damName);
+  if (!stem) return null;
+  let best: { m: NagasakiMaster; rank: number } | null = null;
+  for (const m of masters) {
+    const mStem = normalizeName(m.name);
+    let rank: number;
+    if (m.name === damName) rank = 0;
+    else if (mStem === stem) rank = 1;
+    else if (m.name === `${stem}ダム`) rank = 2;
+    else if (mStem.startsWith(stem)) rank = 3;
+    else if (mStem.includes(stem)) rank = 4;
+    else continue;
+    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
+      best = { m, rank };
+    }
+  }
+  return best?.m ?? null;
+}
+
 interface DamMatch {
   damCd: number;
   damId: bigint;
@@ -174,58 +223,26 @@ interface MasterMatches {
 }
 
 async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<MasterMatches> {
-  // Load any dams that were pre-seeded with a nagasaki-kasen external_id
-  // (e.g. け知ダム added via migration with dam_cd=2030).  Matching by
-  // external_id is more reliable than name matching for dams whose name in
-  // the JSON differs from the master.
-  const seeded = await sql<{ id: bigint; damCd: number }[]>`
-    SELECT id, (external_ids->>${SOURCE_ID})::int AS "damCd"
-    FROM dams
-    WHERE pref_code = ${PREF_CODE}
-      AND external_ids ? ${SOURCE_ID}
-      AND external_ids->>${SOURCE_ID} ~ '^\\d+$'
-  `;
-  const byExternalId = new Map<number, bigint>(seeded.map((r) => [r.damCd, r.id]));
-
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear"
+  // The stamp is how a dam whose name differs from the master keeps its
+  // binding (け知ダム, stamped dam_cd=2030 by a migration).
+  const masters = await sql<NagasakiMaster[]>`
+    SELECT id, name, completed_year AS "completedYear",
+           external_ids->>'ndi' AS ndi, external_ids->>${SOURCE_ID} AS stamp
     FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
+  const byExternalId = new Map<number, bigint>(
+    masters.filter((m) => m.stamp && /^\d+$/.test(m.stamp)).map((m) => [Number(m.stamp), m.id]),
+  );
   const out: DamMatch[] = [];
 
   for (const r of rows) {
-    // Prefer pre-seeded external_id match (highest confidence).
-    const seededId = byExternalId.get(r.damCd);
-    if (seededId) {
-      out.push({ damCd: r.damCd, damId: seededId });
-      continue;
-    }
-
-    const stem = normalizeName(r.damName);
-    if (!stem) continue;
-
-    let best: { m: BindableMaster; rank: number } | null = null;
-    for (const m of masters) {
-      const mStem = normalizeName(m.name);
-      let rank: number;
-      if (m.name === r.damName) rank = 0;
-      else if (mStem === stem) rank = 1;
-      else if (m.name === `${stem}ダム`) rank = 2;
-      else if (mStem.startsWith(stem)) rank = 3;
-      else if (mStem.includes(stem)) rank = 4;
-      else continue;
-      if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-        best = { m, rank };
-      }
-    }
-
-    if (!best) {
+    const m = chooseMaster(r.damCd, r.damName, masters);
+    if (!m) {
       log(`${SOURCE_ID}: no master match for "${r.damName}" (dam_cd=${r.damCd})`);
       continue;
     }
-
-    out.push({ damCd: r.damCd, damId: best.m.id });
-    await bindExternalId(best.m.id, SOURCE_ID, String(r.damCd));
+    out.push({ damCd: r.damCd, damId: m.id });
+    if (m.stamp !== String(r.damCd)) await bindExternalId(m.id, SOURCE_ID, String(r.damCd));
   }
 
   return { matches: out, byExternalId };
