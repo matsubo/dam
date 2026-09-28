@@ -377,7 +377,8 @@ export const CRONTAB = `
 # 岩堂沢/二ツ石/菅生/宿の沢/村田 と ため池 5 か所が新規。
 32 5 * * * ingest:miyagi-nousei ?jobKey=ingest:miyagi-nousei
 
-# 香川県 水資源対策課「かがわの水」降雨及び貯水率の状況 — 主要ため池 26 か所の
+# 香川県 水資源対策課「かがわの水」— ページ本文の宝山湖 (香川用水調整池, 0.1 %, H時現在) と
+# 降雨及び貯水率の状況 PDF の主要ため池 26 か所の
 # 貯水率 (整数 %)。PDF は開庁日毎、ため池欄は月2回程度の調査日 (M月D日現在)。
 50 5 * * * ingest:kagawa-tameike ?jobKey=ingest:kagawa-tameike
 

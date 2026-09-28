@@ -90,13 +90,13 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
   },
   'kagawa-tameike': {
     upstream:
-      '香川県 水資源対策課「かがわの水」降雨及び貯水率の状況 (pref.kagawa.lg.jp/mizusigen/mizu/kfvn.html → chosuiYYYYMMDD.pdf)',
+      '香川県 水資源対策課「かがわの水」降雨及び貯水率の状況 (pref.kagawa.lg.jp/mizusigen/mizu/kfvn.html 本文の宝山湖欄 + リンク先の chosuiYYYYMMDD.pdf)',
     license:
       'サイト表記は「私的使用または引用など著作権法上認められた行為として、適宜の方法により出所を明示することにより、引用・転載複製を行うことができます」(無断改変は不可)。',
     cadence:
-      'PDF は開庁日毎、ため池貯水率は月 2 回程度の調査日 (M月D日現在) ベース (取得は日次でポーリング)',
-    what: '香川県の主要ため池 26 か所 (満濃池・公渕池・神内池・仁池・豊稔池 ほか) の貯水率 (整数 %)。貯水量・水位は非公開。同 PDF の県内ダム欄は kagawa-bousai が毎時で持つため取り込まない。',
-    label: '香川県 主要ため池',
+      'PDF とページは開庁日毎。宝山湖は掲載時刻 (例: 9時現在) ベース、ため池貯水率は月 2 回程度の調査日 (M月D日現在) ベース (取得は日次でポーリング)',
+    what: '香川県の主要ため池 26 か所 (満濃池・公渕池・神内池・仁池・豊稔池 ほか) の貯水率 (整数 %) と、宝山湖 (香川用水調整池) の貯水率 (0.1 %)。貯水量・水位は非公開 (宝山湖の容量は「3百万立方メートル」の概数のみ)。同 PDF の県内ダム欄は kagawa-bousai が毎時で持つため取り込まない。',
+    label: '香川県 主要ため池・宝山湖',
   },
   'hyogo-suigen': {
     upstream:

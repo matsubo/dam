@@ -118,7 +118,7 @@ the file for detail.
 | `src/tasks/ingest_jwa_chikugo_rt.ts` | `jwa-chikugo-rt`: JWA 筑後川局 水管理情報WEB, hourly 24 h window (江川/寺内/小石原川/大山 + 筑後大堰; rate trusted, 0087) |
 | `src/tasks/ingest_jwa_fukudou.ts` | `jwa-fukudou`: 福岡導水 山口調整池, daily 0時 (volume stored as 総 − 堆砂; rate null) |
 | `src/tasks/ingest_jwa_tonekako.ts` | `jwa-tonekako`: 利根川河口堰 水位/流量 scripts, hourly 24 h window (Y.P. level + flows; only hours both tables carry) |
-| `src/tasks/ingest_kagawa_tameike.ts` | `kagawa-tameike`: 香川県「かがわの水」daily PDF, ため池貯水率 of 26 named ponds (rate only, dated by survey) |
+| `src/tasks/ingest_kagawa_tameike.ts` | `kagawa-tameike`: 香川県「かがわの水」daily PDF, ため池貯水率 of 26 named ponds (rate only, dated by survey), plus the page's 宝山湖 block (香川用水調整池, NDI 2170; rate only, stamped at the stated 時) |
 | `src/tasks/ingest_kitakyushu_suido.ts` | `kitakyushu-suido`: 北九州市上下水道局 水源状況, daily (10 sources; rate trusted, 0098) |
 | `src/tasks/ingest_kochi_kigyo.ts` | `kochi-kigyo`: 高知県公営企業局 ダム水文量表, hourly 48 h window (吉野 / 杉田 level + flows; empty hours dropped) |
 | `src/tasks/ingest_matsue_suido.ts` | `matsue-suido`: 松江市上下水道局 千本 / 大谷 daily 貯水量・貯水率 table |
