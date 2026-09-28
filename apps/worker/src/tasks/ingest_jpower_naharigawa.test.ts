@@ -8,6 +8,10 @@
 //     blank (requested before it was observed).
 //   damgraph_71100_2026-01-01T01.html — ?value=2026/01/01 01:00 for 魚梁瀬:
 //     12/31 19:30 … 24:00, 01/01 00:30, 01:00 (a year boundary).
+//   damgraph_71200_2026-09-28T16_downlevel.html — the same 久木 request, taken
+//     16:35 JST with the plain DamDataPlatform user agent: ASP.NET serves
+//     downlevel markup (x_name wraps the name in <font><b>, width= attributes)
+//     and the 16:00 column is filled by then.
 
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
@@ -100,6 +104,20 @@ describe('parseNaharigawaGraph', () => {
       waterLevelM: 429.35,
       inflowM3s: null,
       outflowM3s: 14,
+    });
+  });
+
+  test('reads the downlevel markup served to a non-browser user agent', async () => {
+    const { name, readings } = parseNaharigawaGraph(
+      await fixture('damgraph_71200_2026-09-28T16_downlevel.html'),
+    );
+    expect(name).toBe('久木ダム');
+    expect(readings).toHaveLength(12);
+    expect(readings.at(-1)).toEqual({
+      observedAt: new Date('2026-09-28T07:00:00Z'),
+      waterLevelM: 342.97,
+      inflowM3s: 35,
+      outflowM3s: 45,
     });
   });
 
