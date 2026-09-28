@@ -486,6 +486,25 @@ export const CRONTAB = `
 # about monthly. Priority 288. Daily at 03:17 UTC (12:17 JST).
 17 3 * * * ingest:awaji-suido ?jobKey=ingest:awaji-suido
 
+# 大村市上下水道局 ダム（水源）情報 — 池田貯水池 written (the 萱瀬 row is the city's
+# share of a dam kasenbosai carries: universe only). 利水貯水量 + 利水貯水率 at
+# 07:00 JST. Priority 292. Daily at 01:41 UTC (10:41 JST).
+41 1 * * * ingest:omura-suido ?jobKey=ingest:omura-suido
+
+# 平戸市水道局 市内水道用ダムの貯水状況 — 神曽根/箕坪/阿奈田/神の川/桜川 (plus a
+# pond and two 砂防ダム outside the master), 貯水量 + 貯水率 on a 「…現在」 date,
+# re-issued about every ten days. Priority 293. Daily at 06:44 UTC (15:44 JST).
+44 6 * * * ingest:hirado-suido ?jobKey=ingest:hirado-suido
+
+# 苅田町水道課 水源の状況 — 油木/山口 (and 井ノ口池, outside the master), 貯水量 +
+# 貯水率 on a daily 「…現在」 date. Priority 293. Daily at 06:13 UTC (15:13 JST).
+13 6 * * * ingest:kanda-suido ?jobKey=ingest:kanda-suido
+
+# 須恵町上下水道課 貯水率 — 須恵ダム (and 3 ponds outside the master), whole-percent
+# 貯水率 only, dated by the page's 更新日, re-issued about monthly. Priority 293.
+# Daily at 06:17 UTC (15:17 JST).
+17 6 * * * ingest:sue-suido ?jobKey=ingest:sue-suido
+
 # M&C鳥取水力発電 発電所・ダム運転情報 — 鳥取県営発電 4 ダム (茗荷谷/三朝調整池/
 # 中津 + 菅沢). One current value per dam (refreshed every minute): 10分間流入量
 # and ゲート放流量 only — the published ダム水位 is a gauge height, not EL.
