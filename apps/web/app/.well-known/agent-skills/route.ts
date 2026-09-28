@@ -101,14 +101,15 @@ const SKILLS: Skill[] = [
     id: 'get_coverage_triage',
     name: 'Explain why a dam has no data',
     description:
-      "Per-dam triage of observation coverage. Separates 'a data provider publishes this dam and we are failing to ingest it' (actionable) from 'no provider publishes it'. IMPORTANT: while summary.sourcesPendingScan > 0 the triage is incomplete — dams report 'unknown' and 'not_published' is not yet a claim that nobody publishes them.",
+      "Per-dam triage of observation coverage. Separates 'a data provider publishes this dam and we are failing to ingest it' (actionable) from 'every provider listing it publishes no value' (published_no_data) and 'no provider publishes it'. IMPORTANT: while summary.sourcesPendingScan > 0 the triage is incomplete — dams report 'unknown' and 'not_published' is not yet a claim that nobody publishes them.",
     endpoint: `${SITE_URL}/api/v1/coverage`,
     method: 'GET',
     inputs: [
       {
         name: 'status',
         in: 'query',
-        description: "'covered' | 'published_not_ingested' | 'unknown' | 'not_published'",
+        description:
+          "'covered' | 'published_not_ingested' | 'published_no_data' | 'unknown' | 'not_published'",
       },
       { name: 'pref', in: 'query', description: 'JIS prefecture code (01-47)' },
     ],

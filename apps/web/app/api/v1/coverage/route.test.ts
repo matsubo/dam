@@ -63,7 +63,13 @@ describe('GET /api/v1/coverage', () => {
     expect(res.headers.get('content-type')).toContain('application/hal+json');
     const body = await res.json();
 
-    for (const k of ['covered', 'publishedNotIngested', 'unknown', 'notPublished']) {
+    for (const k of [
+      'covered',
+      'publishedNotIngested',
+      'publishedNoData',
+      'unknown',
+      'notPublished',
+    ]) {
       expect(typeof body.summary[k]).toBe('number');
     }
     // Historical dumps are excluded from the gate, and clients are told how many.
@@ -115,6 +121,27 @@ describe('GET /api/v1/coverage', () => {
     expect(mine.status).toBe('published_not_ingested');
     expect(mine.publishedBy).toContain(SRC);
     expect(mine._links.dam.href).toBe('/api/v1/dams/cov-api-1');
+  });
+
+  test('status=published_no_data lists a dam whose provider publishes no value', async () => {
+    await recordUniverse(SRC, [
+      { externalId: 'c-1', name: 'Coverage API Test', resolvedDamId: damId, hasData: false },
+    ]);
+    try {
+      const res = await GET(
+        new Request('http://localhost/api/v1/coverage?status=published_no_data'),
+      );
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      const mine = body.items.find((i: { slug: string }) => i.slug === 'cov-api-1');
+      expect(mine?.status).toBe('published_no_data');
+      expect(mine?.publishedBy).toContain(SRC);
+      expect(typeof body.statusMeanings.published_no_data).toBe('string');
+    } finally {
+      await recordUniverse(SRC, [
+        { externalId: 'c-1', name: 'Coverage API Test', resolvedDamId: damId, hasData: true },
+      ]);
+    }
   });
 
   test('400 on an unknown status filter', async () => {

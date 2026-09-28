@@ -53,17 +53,22 @@ export function parseFukuiTimestamp(s: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/** A value cell the page leaves empty: "---" or nothing but entities. */
+function isBlank(s: string): boolean {
+  const clean = s.replace(/&[a-z]+;/g, '').trim();
+  return clean === '---' || clean === '';
+}
+
 /** Strip HTML entities (&rarr; &darr; &uarr; &nbsp;) and parse a number; "---" → null */
 function parseVal(s: string): number | null {
-  const clean = s.replace(/&[a-z]+;/g, '').trim();
-  if (clean === '---' || clean === '') return null;
-  const n = Number(clean);
+  if (isBlank(s)) return null;
+  const n = Number(s.replace(/&[a-z]+;/g, '').trim());
   return Number.isFinite(n) ? n : null;
 }
 
 // Each dam row is on one line; columns: name | location | timestamp |
 // storageRate | waterLevel | storage | inflow | outflow | manager.
-// Module-level so parseFukuiNames can share it: String.matchAll clones the
+// Module-level so parseFukuiListing can share it: String.matchAll clones the
 // regex, so the two callers cannot leak lastIndex into each other.
 const ROW_RE =
   /<td[^>]+class="normal[01]">[^<]*<a[^>]+>([^<]+)<\/a>[^<]*<\/td><td[^>]+class="normal[01]">[^<]*<\/td><td[^>]+class="normal[01]">([^<]*)<\/td><td[^>]+class="normal[01]">([^<]*)<\/td><td[^>]+class="normal[01]">([^<]*)<\/td><td[^>]+class="normal[01]">([^<]*)<\/td><td[^>]+class="normal[01]">([^<]*)<\/td><td[^>]+class="normal[01]">([^<]*)<\/td><td[^>]+class="normal[01]">[^<]*<\/td>/g;
@@ -107,6 +112,17 @@ export function parseFukuiPage(html: string): ParsedRow[] {
   return rows;
 }
 
+/** One dam the 現況表 lists, and whether its row carried a value. */
+export interface FukuiListing {
+  name: string;
+  /**
+   * true = parseFukuiPage keeps the row; false = every value column is
+   * "---" or blank (滝波); null = something else we could not read, which
+   * may be our parser rather than the page.
+   */
+  hasData: boolean | null;
+}
+
 /**
  * Every dam the 現況表 lists, whatever it currently reports.
  *
@@ -117,13 +133,16 @@ export function parseFukuiPage(html: string): ParsedRow[] {
  * of source_universe forever, and /coverage would then report its dam as
  * 提供元なし — the exact false negative the table exists to prevent.
  */
-export function parseFukuiNames(html: string): string[] {
-  const names: string[] = [];
+export function parseFukuiListing(html: string): FukuiListing[] {
+  const kept = new Set(parseFukuiPage(html).map((r) => r.fukuiName));
+  const out: FukuiListing[] = [];
   for (const m of html.matchAll(ROW_RE)) {
-    const fukuiName = m[1]?.trim() ?? '';
-    if (fukuiName) names.push(fukuiName);
+    const name = m[1]?.trim() ?? '';
+    if (!name) continue;
+    const empty = [m[3], m[4], m[5], m[6], m[7]].every((c) => isBlank(c ?? ''));
+    out.push({ name, hasData: kept.has(name) ? true : empty ? false : null });
   }
-  return names;
+  return out;
 }
 
 // --- DB helpers -------------------------------------------------------------
@@ -179,7 +198,7 @@ function chooseMaster(rawName: string, stem: string, masters: BindableMaster[]):
 
 async function matchMaster(
   rows: ParsedRow[],
-  publishedNames: string[],
+  listing: FukuiListing[],
   log: (s: string) => void,
 ): Promise<DamMatch[]> {
   const masters = await sql<BindableMaster[]>`
@@ -205,11 +224,12 @@ async function matchMaster(
   // from every name the 現況表 lists, not from `rows`: a dam reporting "---"
   // across the board never survives parseFukuiPage, and recording only the
   // parsed subset would eventually have /coverage claim nobody publishes it.
-  const universe: UniverseRow[] = publishedNames.map((fukuiName) => ({
-    externalId: fukuiName,
-    name: fukuiName,
+  const universe: UniverseRow[] = listing.map(({ name, hasData }) => ({
+    externalId: name,
+    name,
     prefCode: PREF_CODE,
-    resolvedDamId: chooseMaster(fukuiName, normalizeName(fukuiName), masters),
+    resolvedDamId: chooseMaster(name, normalizeName(name), masters),
+    hasData,
   }));
   await recordUniverse(SOURCE_ID, universe);
 
@@ -241,7 +261,7 @@ const task: Task = async (_payload, helpers) => {
   const rows = parseFukuiPage(html);
   log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
 
-  const matches = await matchMaster(rows, parseFukuiNames(html), log);
+  const matches = await matchMaster(rows, parseFukuiListing(html), log);
   const damByName = new Map(matches.map((m) => [m.fukuiName, m.damId]));
 
   const inputs = [] as Parameters<typeof upsertObservations>[0];
