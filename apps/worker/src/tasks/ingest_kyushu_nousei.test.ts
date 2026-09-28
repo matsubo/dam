@@ -194,9 +194,12 @@ describe('parseKyushuNouseiPdfText — the R8.9.15 PDF (no leading 利水容量 
     // (江川 4,652 = fukuoka-bodik 09-14T15:00Z) while 佐賀/熊本/大分/宮崎 are
     // the 09:00 JST ones (厳木 3,553 = kasenbosai 09-15T00:00Z, 市房 4,371 =
     // kumamoto-bousai 00:00Z, 石場 886 = oita-nourin's 「9：00現在」 row).
+    // 鹿児島 is midnight too: 高隈's 6/1–9/15 volumes against kasenbosai's
+    // 貯水位 give ΔV/ΔL 924–967 千m³/m at midnight, 901–1,335 at 09:00.
     const at = (name: string) =>
       p.rows.find((r) => r.kyushuName === name)?.observedAt.toISOString();
     expect(at('江川ダム')).toBe('2026-09-14T15:00:00.000Z');
+    expect(at('高隈ダム')).toBe('2026-09-14T15:00:00.000Z');
     expect(at('厳木ダム')).toBe('2026-09-15T00:00:00.000Z');
     expect(at('市房ダム')).toBe('2026-09-15T00:00:00.000Z');
     expect(at('石場ダム')).toBe('2026-09-15T00:00:00.000Z');
