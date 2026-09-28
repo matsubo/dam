@@ -81,6 +81,9 @@ bun run test                            # 85 unit/integration tests
 # which writes rows it never removes — never seed the shared `dam` DB.
 export DATABASE_URL=$(bun run bin/test_db.ts "$DATABASE_URL" "$PWD/e2e")
 bun run --filter @dam/db migrate && bun run tests/e2e/fixtures/seed.ts
+# The home page's unstable_cache is not keyed on the DB: clear it after
+# switching databases or reseeding, or coverage-consistency sees stale numbers.
+rm -rf apps/web/.next/dev/cache
 bunx playwright test                    # E2E (auto-spawns dev on that DB)
 E2E_BASE_URL=http://127.0.0.1:3030 bunx playwright test  # against existing dev
 
