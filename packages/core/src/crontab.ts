@@ -97,6 +97,11 @@ export const CRONTAB = `
 # (01:35 JST) run catches the rollover, the rest cover a late one.
 35 1,4,7,10,13,16,19,22 * * * ingest:kanagawa-dam ?jobKey=ingest:kanagawa-dam
 
+# 上田市塩田平土地改良区 沢山池の状況図 — one CSV line (貯水位, 貯水量, 貯水率,
+# 流入量, 時間雨量) re-uploaded a minute past every 10-minute mark; stamped at
+# its Last-Modified floored to 10 min. Hourly at :05.
+5 * * * * ingest:shioda-sayamaike ?jobKey=ingest:shioda-sayamaike
+
 # 滋賀県土木防災 (mobile pages; robots.txt disallows /dam/, allows /mobile/) —
 # 8 dams, the latest 10-minute value + six hourly rows per station. Cron at
 # every hour :07 re-upserts the six-hour window for self-healing.
