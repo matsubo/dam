@@ -121,7 +121,8 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
   aitoyo: {
     upstream: 'あいとよネット 公益財団法人 愛知・豊川用水振興協会 (aitoyo.or.jp)',
     license: '公益財団法人発行 — 出典明示で再配布可',
-    cadence: '日次 (木曽川/豊川は 24:00 JST 値, 矢作川は 09:00 JST 値; 取得は 11:00 JST)',
+    cadence:
+      '営業日ごとの日次 (木曽川/豊川は当日 24:00 JST 値, 矢作川は当日 09:00 JST 値; 更新時刻が一定しないため 09:15–20:15 JST に毎時取得)',
     what: '木曽川 4 ダム (牧尾/阿木川/味噌川/岩屋), 豊川 1 ダム (宇連), 矢作川 2 ダム (矢作/羽布) の 利水容量・貯水量・貯水率・前日差・平年貯水率。',
     label: 'あいとよネット',
   },
@@ -216,8 +217,8 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
   'kanagawa-dam': {
     upstream: 'かながわの水がめ (kanagawa-dam.jp) — JSON API `summary.php`',
     license: '神奈川県企業庁 — 出典明示で再配布可 (推定)',
-    cadence: '時次 (1 時間粒度; 取得は毎時 :05)',
-    what: '神奈川県 5 ダム (相模/城山/三保/宮ヶ瀬/道志) の貯水位・貯水量・貯水率・流入量・放流量。',
+    cadence: '日次 (24:00 JST 値; 直近 30 日分を 3 時間ごとに取得, 更新は ~01:00 JST)',
+    what: '神奈川県 5 ダム (相模/城山/三保/宮ヶ瀬/道志) の貯水位・貯水量・貯水率 (24:00 値) と流入量・放流量 (日平均)。',
     label: 'かながわの水がめ',
   },
   mudam: {

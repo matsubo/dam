@@ -58,10 +58,12 @@ export const CRONTAB = `
 # new publication within ~24 h regardless of which exact day it lands on.
 0 4 * * * ingest:jwa-junpo ?jobKey=ingest:jwa-junpo
 
-# あいとよネット (aitoyo) — 7 dams across 木曽川 / 豊川 / 矢作川 系. Page is
-# updated daily at 24:00 JST (木曽川/豊川) or 09:00 JST (矢作川); fetch at
-# 02:00 UTC = 11:00 JST so we get fresh data for both branches.
-0 2 * * * ingest:aitoyo ?jobKey=ingest:aitoyo
+# あいとよネット (aitoyo) — 7 dams across 木曽川 / 豊川 / 矢作川 系. The page
+# shows ONE day (24:00 JST 木曽川/豊川, 09:00 JST 矢作川 values), replaced on
+# business days at a varying hour, often after 11:00 JST; a once-a-day poll
+# missed 9/27's (up by 12:57 JST 9/28, not at the 11:00 run). Hourly
+# 09:15–20:15 JST; the upsert on the reading time makes repeats free.
+15 0-11 * * * ingest:aitoyo ?jobKey=ingest:aitoyo
 
 # 水資源機構 愛知用水総合管理所 水情報 — 牧尾 / 東郷調整池 / 前山池. Daily 0時
 # JST values, page updated ~10:00 JST; 02:20 UTC = 11:20 JST, retried 05:20
@@ -85,11 +87,11 @@ export const CRONTAB = `
 # report hour, so hourly polling costs nothing. Cron at :54.
 54 * * * * ingest:jwa-fukudou ?jobKey=ingest:jwa-fukudou
 
-# かながわの水がめ JSON API — hourly cadence for 5 prefectural dams
-# (相模/城山/三保/宮ヶ瀬/道志). Page rolls a 30-hour window; cron at
-# every hour :05 captures the freshest reading shortly after the
-# source's update.
-5 * * * * ingest:kanagawa-dam ?jobKey=ingest:kanagawa-dam
+# かながわの水がめ JSON API — 5 prefectural dams (相模/城山/三保/宮ヶ瀬/道志).
+# A 30-day DAILY window (24:00 JST values; lastUpdate rolls at ~01:00 JST),
+# upserted whole so a missed poll heals. Every 3 h at :35 — the 16:35 UTC
+# (01:35 JST) run catches the rollover, the rest cover a late one.
+35 1,4,7,10,13,16,19,22 * * * ingest:kanagawa-dam ?jobKey=ingest:kanagawa-dam
 
 # 滋賀県土木防災 (mobile pages; robots.txt disallows /dam/, allows /mobile/) —
 # 8 dams, the latest 10-minute value + six hourly rows per station. Cron at
