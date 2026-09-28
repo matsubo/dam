@@ -12,6 +12,7 @@ import ingestAichiKasen from './tasks/ingest_aichi_kasen.ts';
 import ingestAitoyo from './tasks/ingest_aitoyo.ts';
 import ingestAkita from './tasks/ingest_akita_kasen.ts';
 import ingestAomori from './tasks/ingest_aomori.ts';
+import ingestAwajiSuido from './tasks/ingest_awaji_suido.ts';
 import ingestCgrAshidaSeki from './tasks/ingest_cgr_ashida_seki.ts';
 import ingestCgrMlit from './tasks/ingest_cgr_mlit.ts';
 import ingestCgrOkakawa from './tasks/ingest_cgr_okakawa.ts';
@@ -228,6 +229,7 @@ async function main(): Promise<void> {
       'ingest:nagano-kigyo': ingestNaganoKigyo,
       'ingest:syowaike': ingestSyowaike,
       'ingest:hyogo-kigyo': ingestHyogoKigyo,
+      'ingest:awaji-suido': ingestAwajiSuido,
       'backfill:kagoshima-bodik': backfillKagoshima,
       'backfill:suimon:enqueue': backfillEnqueue,
       'backfill:suimon:run': backfillRun,
