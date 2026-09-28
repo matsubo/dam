@@ -10,7 +10,13 @@ import { hal } from '../../../../lib/api/response.ts';
 
 export const dynamic = 'force-dynamic';
 
-const STATUSES = ['covered', 'published_not_ingested', 'unknown', 'not_published'] as const;
+const STATUSES = [
+  'covered',
+  'published_not_ingested',
+  'published_no_data',
+  'unknown',
+  'not_published',
+] as const;
 
 const Query = z.object({
   status: z.enum(STATUSES).optional(),
@@ -25,6 +31,8 @@ const MEANING: Record<DamCoverageStatus, string> = {
   covered: '直近 30 日に観測値あり。',
   published_not_ingested:
     'データ提供元が公開しており、マスタとの紐付けも済んでいるのに観測値が入っていない。取り込み側の不具合で、こちらで直せる。',
+  published_no_data:
+    'データ提供元の公開一覧には載っているが、掲載しているすべての提供元が使える値を出していない (調査対象外、全項目が欠測表示、落水中の 0.0 % など、提供元自身が空と示している)。取り込み側で直せるものは無い。',
   unknown:
     '未調査。まだ公開一覧を記録していないデータ提供元が残っているため、提供の有無を判定できない。',
   not_published:

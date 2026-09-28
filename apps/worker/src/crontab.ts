@@ -5,11 +5,22 @@
 //
 // Note: graphile-worker's crontab parser only allows [_a-zA-Z][_a-zA-Z0-9:_-]*
 // for task identifiers, so we use colons instead of dots.
+//
+// Every ingest line carries `?jobKey=<task>` (jobKeyMode defaults to replace),
+// so each tick replaces its task's pending job: a failing ingest keeps one job
+// that retries until the next tick resets it, instead of one job per tick
+// each retrying 25 times over ~4 days (a dead upstream piled up ~90 of them).
+// Leave max_attempts at the default 25. graphile-worker retries after
+// exp(min(attempts, 10)) s, so an hourly job makes ~8 attempts before the
+// next tick. A job that exhausted its attempts before the next tick would
+// have its key stripped by add_job and stay behind as a dead row, one per
+// tick; crontab.test.ts checks that every ingest line's retries outlast its
+// longest gap between runs.
 export const CRONTAB = `
 # 秋田県河川砂防情報システム ダム一覧表 — 18 県管理ダム (防災Web HTML table, Shift_JIS,
 # no session). 12 columns: level / inflow / outflow (no storage volume).
 # Cron at :01.
-1 * * * * ingest:akita-kasen
+1 * * * * ingest:akita-kasen ?jobKey=ingest:akita-kasen
 
 # Master refresh
 0 3 1 * * master:refresh:ndi
@@ -21,7 +32,7 @@ export const CRONTAB = `
 # Snap to 10-min cadence at :03 (give the source 3 min headroom past the
 # 10-min boundary, then concurrent fetches across 800+ dams take ~3 min
 # at concurrency=8).
-3 * * * * ingest:kasenbosai-v2
+3 * * * * ingest:kasenbosai-v2 ?jobKey=ingest:kasenbosai-v2
 
 # Seed / refresh external_ids.kasenbosai by sweeping the kawabou dam catalogue
 # GeoJSON (49 prefecture files, ~900 dams) and matching by name + distance.
@@ -35,207 +46,207 @@ export const CRONTAB = `
 # at 09:00 UTC = 18:00 JST so a same-day refresh after the morning publish
 # is captured. Idempotent — repeated runs UPSERT on (dam_id, observed_at,
 # source_id) where observed_at is snapped to today 00:00 JST.
-0 3,9 * * * ingest:tokyo-waterworks
+0 3,9 * * * ingest:tokyo-waterworks ?jobKey=ingest:tokyo-waterworks
 
 # JWA 旬報 — 21 dams across 7 major water systems (Tonegawa, Arakawa, Kisogawa,
 # Toyokawa, Yodogawa, Yoshinogawa, Chikugogawa). Published every 10 days
 # (1st/11th/21st of each month JST). Daily polling at 04:00 UTC = 13:00 JST
 # is cheap (idempotent UPSERT on the report-date timestamp) and catches a
 # new publication within ~24 h regardless of which exact day it lands on.
-0 4 * * * ingest:jwa-junpo
+0 4 * * * ingest:jwa-junpo ?jobKey=ingest:jwa-junpo
 
 # あいとよネット (aitoyo) — 7 dams across 木曽川 / 豊川 / 矢作川 系. Page is
 # updated daily at 24:00 JST (木曽川/豊川) or 09:00 JST (矢作川); fetch at
 # 02:00 UTC = 11:00 JST so we get fresh data for both branches.
-0 2 * * * ingest:aitoyo
+0 2 * * * ingest:aitoyo ?jobKey=ingest:aitoyo
 
 # 水資源機構 愛知用水総合管理所 水情報 — 牧尾 / 東郷調整池 / 前山池. Daily 0時
 # JST values, page updated ~10:00 JST; 02:20 UTC = 11:20 JST, retried 05:20
 # UTC for a late update (idempotent upsert on the 0時 timestamp).
-20 2,5 * * * ingest:jwa-aichi-yosui
+20 2,5 * * * ingest:jwa-aichi-yosui ?jobKey=ingest:jwa-aichi-yosui
 
 # JWA Chikugo (筑後川 7 dams: 松原/下筌/大山/合所/江川/寺内/小石原川). Page
 # shows today 0時 JST values, refreshed during business hours. Fetch at
 # 01:00 UTC = 10:00 JST.
-0 1 * * * ingest:jwa-chikugo
+0 1 * * * ingest:jwa-chikugo ?jobKey=ingest:jwa-chikugo
 
 # JWA 筑後川局 水管理情報WEB (chikugo.ec-net.jp) — hourly, 5 施設
 # (江川/寺内/小石原川/大山/筑後大堰). Each rep*_I60 page is a 24-row hourly
 # table regenerated at ~:37; the whole window is upserted. Priority 298: above
 # jwa-chikugo (297), below kasenbosai (310). 筑後大堰 has no other source.
 # Cron at :50.
-50 * * * * ingest:jwa-chikugo-rt
+50 * * * * ingest:jwa-chikugo-rt ?jobKey=ingest:jwa-chikugo-rt
 
 # JWA 筑後川局 福岡導水管理室 — 山口調整池 (天拝湖). One page with the day's
 # 0時 reading, regenerated on weekdays at ~04:30 JST; idempotent upsert on the
 # report hour, so hourly polling costs nothing. Cron at :54.
-54 * * * * ingest:jwa-fukudou
+54 * * * * ingest:jwa-fukudou ?jobKey=ingest:jwa-fukudou
 
 # かながわの水がめ JSON API — hourly cadence for 5 prefectural dams
 # (相模/城山/三保/宮ヶ瀬/道志). Page rolls a 30-hour window; cron at
 # every hour :05 captures the freshest reading shortly after the
 # source's update.
-5 * * * * ingest:kanagawa-dam
+5 * * * * ingest:kanagawa-dam ?jobKey=ingest:kanagawa-dam
 
 # 滋賀県土木防災 (mobile pages; robots.txt disallows /dam/, allows /mobile/) —
 # 8 dams, the latest 10-minute value + six hourly rows per station. Cron at
 # every hour :07 re-upserts the six-hour window for self-healing.
-7 * * * * ingest:shiga-bousai
+7 * * * * ingest:shiga-bousai ?jobKey=ingest:shiga-bousai
 
 # 鳥取県ダム諸量情報システム — 5 prefectural dams (賀祥/朝鍋/佐治川/
 # 東郷/百谷). Page refreshes server-side every 10 min. Cron at :09 every
 # hour catches the freshest values.
-9 * * * * ingest:tottori-dam
+9 * * * * ingest:tottori-dam ?jobKey=ingest:tottori-dam
 
 # 青森県河川砂防情報提供システム — every dam on the ダム諸量現況表 (11),
 # one ダム諸量グラフ (10分) page each; stores the latest row. Cron at :11.
-11 * * * * ingest:aomori-dam
+11 * * * * ingest:aomori-dam ?jobKey=ingest:aomori-dam
 
 # 愛知県 川の防災情報 ダム表 — 2 県管理ダム (雨山/木瀬). UTF-8 HTML; 10分更新.
 # Stores 24h of 10-min data per fetch. Cron at :12 every hour.
-12 * * * * ingest:aichi-kasen
+12 * * * * ingest:aichi-kasen ?jobKey=ingest:aichi-kasen
 
 # 国土交通省 近畿地方整備局 — 12 国管理ダム 貯水率 (JSON feed, 日次, 土日祝除く).
 # managawa/kuzuryu (Fukui), amagase/hiyoshi (Kyoto), muro/syourenji/takayama/
 # nunome/hinati/otaki/sarutani (Nara/Mie), hitokura (Hyogo). storageRate only.
 # Cron at 03:00 UTC = 12:00 JST on weekdays. Weekend runs return same data
 # (or cached page); UPSERT on (dam_id, observed_at, source_id) is idempotent.
-0 3 * * * ingest:kkr-mlit-dam
+0 3 * * * ingest:kkr-mlit-dam ?jobKey=ingest:kkr-mlit-dam
 
 # 水資源機構 千葉用水総合管理所 房総導水路管理所 — 長柄ダム / 東金ダム 日次 (HTML, 閉庁日除く).
 # Manually updated page: water level (EL.m) + storage rate (%) at midnight JST.
 # Not on 千葉県水道局 page — JWA-managed, not prefecture-managed.
 # Priority 302. Cron daily at 03:00 UTC = 12:00 JST.
-0 3 * * * ingest:jwa-chiba-bouso
+0 3 * * * ingest:jwa-chiba-bouso ?jobKey=ingest:jwa-chiba-bouso
 
 # 沖縄県企業局 — 倉敷ダム (県管理) / 山城ダム (企業局管理) 日次 (CSV, 午前0時時点).
 # Source: www.eb.pref.okinawa.jp/js/chart/dam-youryou.csv
 # 5-row CSV with storage volume (千m³) and rate (%) per group.
 # Priority 302. Cron daily at 03:00 UTC = 12:00 JST.
-0 3 * * * ingest:okinawa-eb
+0 3 * * * ingest:okinawa-eb ?jobKey=ingest:okinawa-eb
 
 # 国土交通省 北海道開発局 — 18 直轄 dams (info-dam.hdb.hkd.mlit.go.jp).
 # Page table has 10-minute cadence; we fetch hourly at :13 to spread load
 # from other prefectural sources.
-13 * * * * ingest:hkd-mlit-dam
+13 * * * * ingest:hkd-mlit-dam ?jobKey=ingest:hkd-mlit-dam
 
 # 福井県 河川・砂防総合情報システム ダム諸量現況表 — 13 ダム (防災Web Shift_JIS, hourly).
 # 永平寺/二ツ屋/浄土寺川/龍ヶ鼻/笹生川/桝谷/広野/河内川/大津呂/開谷/滝波 + 真名川/九頭竜(KKR).
 # Priority 308 upgrades kkr-mlit-dam (daily, priority 302) for 真名川/九頭竜.
 # Cron at :14 every hour.
-14 * * * * ingest:fukui-bousai
+14 * * * * ingest:fukui-bousai ?jobKey=ingest:fukui-bousai
 
 # 奈良県河川情報システム ダム現況表 (PC) — 5 ダム (防災Web Shift_JIS, 10分更新).
 # 岩井川/天理/白川/初瀬/大門. 貯水位/貯水容量/空容量/全流入量/放流量, no 貯水率.
 # Volume = 有効 − 空容量 where 空容量 runs to サーチャージ (all but 大門, which stops at 常時満水位).
 # Cron at :18 every hour.
-18 * * * * ingest:nara-kasen
+18 * * * * ingest:nara-kasen ?jobKey=ingest:nara-kasen
 
 # 富山県 河川現況表 ダム貯水位表 — 16 ダム (kawa.pref.toyama.jp CSV, 10分更新).
 # 室牧/上市川/和田川/利賀川/白岩川/子撫川/角川/熊野川/上市川第二/朝日小川/
 # 布施川/城端/境川/大谷/久婦須川/舟川. Columns: 貯水位/全流入量/全放流量/
 # 貯水率 (利水容量). No storage volume. Cron at :16 every hour.
-16 * * * * ingest:toyama-bousai
+16 * * * * ingest:toyama-bousai ?jobKey=ingest:toyama-bousai
 
 # 国土交通省 中国地方整備局 — 11 国管理 dams across 5 prefectures
 # (岡山/広島/山口/鳥取/島根). Single POST JSON gives all dams' current
 # values. Cron at :15 every hour.
-15 * * * * ingest:cgr-mlit-dam
+15 * * * * ingest:cgr-mlit-dam ?jobKey=ingest:cgr-mlit-dam
 
 # 国土交通省 岡山河川事務所「三水系の主要ダムの貯水状況」— 吉井川・旭川・高梁川の
 # 11 ダム + 2 堰 (PDF, 平日 9時 速報値, ~09:45 JST 掲載)。小阪部川ダム・坂根堰は
 # ここにしか無い。10:50 / 14:50 JST に取得 (2 回目は遅れた掲載用)。PDF 内の
 # タイムスタンプへの冪等 UPSERT。
-50 1,5 * * * ingest:cgr-okakawa-dam
+50 1,5 * * * ingest:cgr-okakawa-dam ?jobKey=ingest:cgr-okakawa-dam
 
 # 国土交通省 関東地方整備局 鬼怒川ダム統管 — 4 dams (栃木県:
 # 五十里/川俣/川治/湯西川). realDM.html embeds the 4 dams' values
 # inline as JS arrays (10-min cadence at source). Cron at :17.
-17 * * * * ingest:ktr-kinu-dam
+17 * * * * ingest:ktr-kinu-dam ?jobKey=ingest:ktr-kinu-dam
 
 # 国土交通省 北陸地方整備局 — 7 dams across 6 prefectures (福島/山形/
 # 新潟/長野/富山/石川). CSV-like tmDam.txt feed has current values for
 # all dams in one fetch. Cron at :19.
-19 * * * * ingest:hrr-mlit-dam
+19 * * * * ingest:hrr-mlit-dam ?jobKey=ingest:hrr-mlit-dam
 
 # 国土交通省 関東地方整備局 利根川ダム統合管理事務所 — 9 国管理ダム
 # (矢木沢/奈良俣/藤原/相俣/薗原/八ッ場/下久保/草木/渡良瀬貯水池).
 # Single JSON gives all dams' current hourly values. Cron at :20.
-20 * * * * ingest:ktr-tone-dam
+20 * * * * ingest:ktr-tone-dam ?jobKey=ingest:ktr-tone-dam
 
 # 国土交通省 九州地方整備局 鶴田ダム管理所 — 鶴田ダム (川内川水系, 鹿児島/46).
 # EUC-JP HTML table, 10分更新; type=2 endpoint, 7 cols. Cron at :22.
-22 * * * * ingest:qsr-turuta-dam
+22 * * * * ingest:qsr-turuta-dam ?jobKey=ingest:qsr-turuta-dam
 
 # 国土交通省 九州地方整備局 竜門ダム管理所 — 竜門ダム (佐田川水系, 福岡/40).
 # PHP key-value endpoint (data.php?key=); 6 keys fetched in parallel: time /
 # ryunyu / houryu / chosuiryo / chosuii / chosuiritsu. Full data: storage +
 # rate + level + inflow + outflow. Cron at :24.
-24 * * * * ingest:qsr-ryumon-dam
+24 * * * * ingest:qsr-ryumon-dam ?jobKey=ingest:qsr-ryumon-dam
 
 # 国土交通省 九州地方整備局 筑後川ダム統合管理事務所 — 2 国管理ダム (筑後川水系, 大分/44).
 # 松原ダム / 下筌ダム. Single HTML page with 2 tables (one per dam); one data
 # row each. level + inflow + 全放流量 + hourly rain (no storage). Cron at :26.
-26 * * * * ingest:qsr-toukan-dam
+26 * * * * ingest:qsr-toukan-dam ?jobKey=ingest:qsr-toukan-dam
 
 # 国土交通省 四国地方整備局 肱川ダム統合管理事務所 — 野村・鹿野川ダム (肱川水系, 愛媛/38).
 # www1.river.go.jp CGI (EUC-JP HTML + IFRAME), 10分更新; 2 dams, 4 HTTP requests.
 # Cron at :23.
-23 * * * * ingest:skr-hiji-dam
+23 * * * * ingest:skr-hiji-dam ?jobKey=ingest:skr-hiji-dam
 
 # 千葉県 県内ダムの貯水状況 — 23 dams (水道用+工業用水). Weekly 9 JST survey
 # (Mondays, 更新日 ~1 day later). Polled daily at 02:30 UTC = 11:30 JST.
-30 2 * * * ingest:chiba-suisei
+30 2 * * * ingest:chiba-suisei ?jobKey=ingest:chiba-suisei
 
 # おかやま防災ポータル — ~15 県管理ダム (JSON feed, 30分更新). A pointer
 # fetch yields the freshest snapshot file with every dam's values. Cron at
 # :21 every hour, spaced from the other prefectural sources.
-21 * * * * ingest:okayama-bousai
+21 * * * * ingest:okayama-bousai ?jobKey=ingest:okayama-bousai
 
 # 兵庫県 ダム諸量 — 22観測所 (BODIK オープンデータ CSV, CC-BY 4.0, 10分更新).
 # Single CSV fetch gives level / 貯水量(千m³) / inflow / outflow. Cron at :25.
-25 * * * * ingest:hyogo-bodik
+25 * * * * ingest:hyogo-bodik ?jobKey=ingest:hyogo-bodik
 
 # 栃木県河川水位・雨量情報システム — 7観測所 (BODIK ダム諸量 NGSI-v2 CSV,
 # CC-BY 4.0, 10分更新). dateObserved is ISO UTC, waterStorage in 千m³.
 # Cron at :27.
-27 * * * * ingest:tochigi-bodik
+27 * * * * ingest:tochigi-bodik ?jobKey=ingest:tochigi-bodik
 
 # 石川県河川総合情報システム ダム諸量 — 11 県管理ダム hourly JSON.
 # 八ヶ川/新内川/内川/赤瀬/我谷/九谷/小屋/北河内/辰巳/犀川/大日川.
 # item_10=貯水位 / item_20=貯水量(千m³) / item_50=流入量 / item_70=放流量.
 # Cron at :28 every hour.
-28 * * * * ingest:ishikawa-kasen
+28 * * * * ingest:ishikawa-kasen ?jobKey=ingest:ishikawa-kasen
 
 # 広島県防災Web — 18 ダム (JSON feed, 10分更新). Pointer + list feed; storage
 # in 千m³. Prefectural (managerCd 23/24/26) + 5 MLIT dams already in
 # cgr-mlit-dam (priority 304 wins for those). Cron at :29.
-29 * * * * ingest:hiroshima-bousai
+29 * * * * ingest:hiroshima-bousai ?jobKey=ingest:hiroshima-bousai
 
 # 大阪府河川防災情報 — 3 県管理ダム (安威川/箕面川/狭山池). Single JSON fetch;
 # displayDt is YYYYMMDDHHMM JST. Cron at :31.
-31 * * * * ingest:osaka-bousai
+31 * * * * ingest:osaka-bousai ?jobKey=ingest:osaka-bousai
 
 # 鳥取県防災Web — 6 ダム (百谷/佐治川/東郷/賀祥/朝鍋/菅沢). Same Remix SPA
 # framework as 広島県防災Web; pointer + list JSON; storage in 千m³. 菅沢ダム
 # is sole coverage (not in tottori-dam). Cron at :33.
-33 * * * * ingest:tottori-bousai
+33 * * * * ingest:tottori-bousai ?jobKey=ingest:tottori-bousai
 
 # 福岡市関連9ダム — BODIK open data (CC-BY), hourly Shift-JIS CSV.
 # Storage in 千m³ (南畑/五ケ山/脊振/曲渕/江川/久原/長谷/猪野/瑞梅寺).
 # Cron at :35.
-35 * * * * ingest:fukuoka-bodik
+35 * * * * ingest:fukuoka-bodik ?jobKey=ingest:fukuoka-bodik
 
 # 岐阜県 川の防災情報 ダム諸量 — 14 ダム (UTF-8 HTML, hourly).
 # 阿多岐/大ヶ洞/岩村/中野方/丹生川/矢作/小里川/横山/徳山/丸山/阿木川/岩屋/牧尾/味噌川.
 # Priority 308 upgrades overlapping jwa-chubu/aitoyo dams from daily to hourly.
 # Cron at :10 every hour.
-10 * * * * ingest:gifu-kasen
+10 * * * * ingest:gifu-kasen ?jobKey=ingest:gifu-kasen
 
 # 水資源機構 関東支社 利根川/荒川系 — 13 facilities (9 Tone + 4 Ara).
 # Daily 0時 JST static HTML; 万m³ units. New dams: 藤原/相俣/薗原/八ッ場/二瀬.
 # Overlap dams (矢木沢/奈良俣/下久保/草木/浦山/滝沢) get daily cadence. Cron at :39.
-39 * * * * ingest:jwa-toneara
+39 * * * * ingest:jwa-toneara ?jobKey=ingest:jwa-toneara
 
 # 水資源機構 中部支社 — 木曽川水系 5 dams (牧尾/阿木川/味噌川/岩屋/徳山) + 三重用水 中里.
 # Daily static HTML; 0時 EL + 千m³ storage + 利水 rate + inflow/outflow. New: 中里ダム.
@@ -243,101 +254,101 @@ export const CRONTAB = `
 # on prod, 2026-08-31..09-25), and the 中部支社 site asks users not to collect
 # with tools (server load). So 3 fetches per weekday — 01:41 / 03:41 / 06:41 UTC
 # = 10:41 / 12:41 / 15:41 JST — instead of 24 a day.
-41 1,3,6 * * 1-5 ingest:jwa-chubu
+41 1,3,6 * * 1-5 ingest:jwa-chubu ?jobKey=ingest:jwa-chubu
 
 # 水資源機構 中部支社 豊川水系 — 2 dams (宇連/大島). Real-time page updated
 # every ~10 min; water level (EL.m) + 有効貯水量(10³m³) + inflow; no outflow (the
 # page prints only 放流量（利水）). Upgrades 宇連/大島 from daily (aitoyo) to
 # hourly cadence. One page per run; cron at :43.
-43 * * * * ingest:jwa-toyokawa
+43 * * * * ingest:jwa-toyokawa ?jobKey=ingest:jwa-toyokawa
 
 # 水資源機構 吉野川上流総合管理所 — 5 dams (池田/早明浦/新宮/富郷/柳瀬).
 # Hourly real-time page (UTF-8); 貯水位(EL.m) + 流入量 + 全放流量 for all 5.
 # 早明浦ダムのみ利水貯水率[速報値]あり (四国の水不足指標). Cron at :45.
-45 * * * * ingest:jwa-yoshino
+45 * * * * ingest:jwa-yoshino ?jobKey=ingest:jwa-yoshino
 
 # 水資源機構 中部支社 木曽川水系 実時計 — 6 dams (牧尾/味噌川/阿木川/岩屋/徳山 + 三重用水 中里).
 # Real-time page (~10 min cadence); 貯水位(EL.m) + 有効貯水量(10³m³) + inflow/outflow.
 # Upgrades jwa-chubu (daily, priority 296) to hourly. Priority 297. One page per
 # run; cron at :47.
-47 * * * * ingest:jwa-kiso-rt
+47 * * * * ingest:jwa-kiso-rt ?jobKey=ingest:jwa-kiso-rt
 
 # 群馬県水位雨量情報システム ダム現況表 — 7 県管理ダム hourly (Shift_JIS HTML,
 # 坂本/霧積/塩沢/四万川/道平川/大仁田/桐生川). One fetch per station index (1–7);
 # timestamp "MM月DD日HH時mm分現在" JST (no year); volume in 千m³; arrow
 # indicators (→↑↓) stripped. Priority 308. Cron at :48.
-48 * * * * ingest:gunma-kasen
+48 * * * * ingest:gunma-kasen ?jobKey=ingest:gunma-kasen
 
 # 水資源機構 利根川上流総合管理所 下久保ダム — 1 dam (群馬/埼玉境). JSON feed
 # (UTF-8-BOM), 10分更新. Upgrades jwa-toneara (daily, priority 296) → hourly for
 # 下久保ダム. Priority 297. Cron at :49.
-49 * * * * ingest:shimokubo
+49 * * * * ingest:shimokubo ?jobKey=ingest:shimokubo
 
 # 水資源機構 利根川河口堰管理所 利根河口堰 情報提供 — 1 weir (茨城/千葉境).
 # 正時水位表 + 正時流量表 script files (24 h rolling); 堰上流水位 (新宿 19.0km,
 # Y.P.m) + 堰流入量 + 堰通過流量. All 24 hours re-upserted each run, so a
 # missed hour back-fills. Priority 298. Cron at :30.
-30 * * * * ingest:jwa-tonekako
+30 * * * * ingest:jwa-tonekako ?jobKey=ingest:jwa-tonekako
 
 # 山形県河川・砂防情報 — ~17 ダム (県管理13 + 国管理4: 長井/寒河江/白川/月山).
 # 防災Web JSON feed (dk=4, Shift_JIS), 10分更新. Level + storage (千m³) + rate +
 # inflow + outflow. Priority 308, matching other 防災Web prefectural sources.
 # Cron at :51 (spaced from shimokubo :49 and ktr-kinu :17).
-51 * * * * ingest:yamagata-bousai
+51 * * * * ingest:yamagata-bousai ?jobKey=ingest:yamagata-bousai
 
 # 茨城県河川防災情報 — 7 県管理ダム (小山/飯田/藤井川/竜神/十王/花貫/花園).
 # 防災Web HTML table (Shift_JIS), no session required. 9 columns including
 # storage volume (千m³) but no 貯水率. Cron at :53.
-53 * * * * ingest:ibaraki-bousai
+53 * * * * ingest:ibaraki-bousai ?jobKey=ingest:ibaraki-bousai
 
 # 徳島県河川砂防水位観測所 ダム諸量情報 — 7 ダム (Shift_JIS HTML, 10分更新).
 # 長安口/福井/川口/正木/宮川内/棚野/池田(水). 3 cols: 貯水位/流入量/放流量.
 # Per-dam timestamps "MM/DD HH:MM" JST. Cron at :08 every hour.
-8 * * * * ingest:tokushima-bousai
+8 * * * * ingest:tokushima-bousai ?jobKey=ingest:tokushima-bousai
 
 # 長崎県河川砂防情報 ダム情報 — 35 ダム (lv / 貯水量(千m³) / 貯水率 / in / out).
 # JSON API (dt_range.json → snapshot URL). 30分更新. Cron at :02 and :32 to
 # catch both the :00 and :30 snapshots each hour.
-2,32 * * * * ingest:nagasaki-kasen
+2,32 * * * * ingest:nagasaki-kasen ?jobKey=ingest:nagasaki-kasen
 
 # 宮城県土木総合情報システム ダム現況表 — 21 ダム (18 県管理 + 3 国管理).
 # Gamen42Servlet: 1 request = all dams. 10 columns: level / 貯水量(10³m³) /
 # inflow / outflow / 貯水率(利水容量). Cron at :06 every hour.
-6 * * * * ingest:miyagi-kasen
+6 * * * * ingest:miyagi-kasen ?jobKey=ingest:miyagi-kasen
 
 # 熊本県防災情報システム 地方別ダム情報 — 6 ダム (市房/氷川/石打/上津浦/亀川/路木).
 # Shift_JIS JS page; DspDat[] array; 有効貯水量(千m³) / 貯水位 / 全流入量 / 全放流量 /
 # 貯水率(有効容量). 60分更新. Cron at :04 every hour.
-4 * * * * ingest:kumamoto-bousai
+4 * * * * ingest:kumamoto-bousai ?jobKey=ingest:kumamoto-bousai
 
 # 宮崎県河川・砂防水位観測所 — 13 県管理ダム (防災Web servlet, Shift_JIS,
 # no session). 8 columns: level / inflow / outflow (no storage volume).
 # Cron at :55.
-55 * * * * ingest:miyazaki-bousai
+55 * * * * ingest:miyazaki-bousai ?jobKey=ingest:miyazaki-bousai
 
 # 山梨県雨量・水位情報 ダム状況表 — 6 県管理ダム (大門/塩川/広瀬/琴川/荒川/深城).
 # Shift_JIS HTML; one page lists every dam. Handles "24時00分" midnight.
 # level + storage volume + inflow + outflow + hourly rain (no rate). Cron at :36.
-36 * * * * ingest:yamanashi-dam
+36 * * * * ingest:yamanashi-dam ?jobKey=ingest:yamanashi-dam
 
 # 長野県 河川砂防情報ステーション ダム諸量 — 17 県管理ダム (松川/片桐/箕輪/横川/
 # 奈良井/裾花/奥裾花/古谷/内村/豊丘/余地/北山/浅川/水上/小仁熊/湯川/金原).
 # Same JSON pattern as 石川/福島 (sabo-nagano.jp); uses "value"/"level" keys
 # (not "val"/"lvl"); has item_20 storage volume (×1000 m³). Cron at :33.
-33 * * * * ingest:nagano-kasen
+33 * * * * ingest:nagano-kasen ?jobKey=ingest:nagano-kasen
 
 # 福島県河川流域総合情報システム — 11 県管理ダム (こまち/千五沢/堀川/真野/木戸/
 # 小玉/高柴/四時/日中/東山/田島). JST-dated JSON URL; item_10=貯水位 /
 # item_50=流入量 / item_70=放流量 / item_1_70=時間雨量 (no storage volume).
 # Same framework as 石川県河川総合情報システム. Cron at :34.
-34 * * * * ingest:fukushima-kasen
+34 * * * * ingest:fukushima-kasen ?jobKey=ingest:fukushima-kasen
 
 # 福島県 農林水産部 県内の主要農業関係ダムの貯水状況 — 農業用ダム 29 基
 # (岳/藤倉/山ノ入/三ツ森/深田調整池/金沢調整池 ほか)。土木部の
 # ingest:fukushima-kasen とは対象ダムが重ならない。HTML 1 テーブル、
 # 貯水率（かんがい用水）のみ。調査日ベースで隔週更新なので、jwa-junpo と同じく
 # 日次ポーリング (報告日タイムスタンプへの冪等 UPSERT) で拾う。
-15 4 * * * ingest:fukushima-nourin
+15 4 * * * ingest:fukushima-nourin ?jobKey=ingest:fukushima-nourin
 
 # 大分県 農林水産部 農地・農村整備課「農業用ダム貯水率一覧」— 農業用ダム 21 基
 # (石山/鍋倉/久木野尾/乙見/末広/中ノ川/石場/大舞 ほか)。土木部の
@@ -345,99 +356,132 @@ export const CRONTAB = `
 # 有効貯水量・現貯水量・貯水率。かんがい期 (4-9月) は月2回、それ以外は月1回の
 # 調査日ベースなので、fukushima-nourin と同じく日次ポーリングで拾う
 # (調査日タイムスタンプへの冪等 UPSERT)。#27
-35 4 * * * ingest:oita-nourin
+35 4 * * * ingest:oita-nourin ?jobKey=ingest:oita-nourin
 
 # 九州農政局「管内の農業用ダムの貯水状況」— 7県 59 基。地方農政局で基別
 # テーブルを定期公表しているのはここだけ。PDF、4-9月は毎月1日・15日、
 # 10-3月は毎月1日。大分の 石場/深見/日指/並石 は oita-nourin と重複するので
 # priority で解決する。#28
-55 4 * * * ingest:kyushu-nousei
+55 4 * * * ingest:kyushu-nousei ?jobKey=ingest:kyushu-nousei
 
 # 千葉県 農林水産部 耕地課「県内農業用ダム貯水状況」— 農業用ダム 11 基
 # (金山/安房中央/勝浦/荒木根/三島/戸面原/小中/佐久間/平沢/山内、保台のみ既ライブ)。
 # HTML 1 テーブル、有効貯水量・現貯水量・貯水率。調査日ベース (掲載は数日遅れる)
 # なので、他の農林ソースと同じく日次ポーリングで調査日タイムスタンプへ冪等 UPSERT。
 # #29 の一巡調査で net-new が最大だった県。
-5 5 * * * ingest:chiba-nourin
+5 5 * * * ingest:chiba-nourin ?jobKey=ingest:chiba-nourin
 
 # 宮城県 農政部「農業用水の状況」— 主要ダム 17 基 + 主要ため池 9 か所。PDF (2 頁)、
 # 利水容量・貯水量・貯水率・水位・流入/放流量。かんがい期は 1日・15日、それ以外は
 # 月1回の調査日ベースなので日次ポーリングで調査日タイムスタンプへ冪等 UPSERT。
 # 岩堂沢/二ツ石/菅生/宿の沢/村田 と ため池 5 か所が新規。
-32 5 * * * ingest:miyagi-nousei
+32 5 * * * ingest:miyagi-nousei ?jobKey=ingest:miyagi-nousei
 
-# 香川県 水資源対策課「かがわの水」降雨及び貯水率の状況 — 主要ため池 26 か所の
+# 香川県 水資源対策課「かがわの水」— ページ本文の宝山湖 (香川用水調整池, 0.1 %, H時現在) と
+# 降雨及び貯水率の状況 PDF の主要ため池 26 か所の
 # 貯水率 (整数 %)。PDF は開庁日毎、ため池欄は月2回程度の調査日 (M月D日現在)。
-50 5 * * * ingest:kagawa-tameike
+50 5 * * * ingest:kagawa-tameike ?jobKey=ingest:kagawa-tameike
+
+# 兵庫県 総合政策課「県内の水源の状況」— 県内主要水源の貯水率 (整数 %, 貯水量なし)。
+# 毎月1日現在の調査を10日前後に掲載、渇水時は頻度増。千苅/丸山/加古川大堰 と、
+# 貯水量のない鴨川 (渇水時は呑吐/大川瀬/但東も) を取り込み。他は貯水量のある
+# フィード (竹原/猪ノ鼻/猪鼻第2 は awaji-suido) があるため universe のみ。日次で
+# 調査日 00:00 JST へ冪等 UPSERT。
+17 1 * * * ingest:hyogo-suigen ?jobKey=ingest:hyogo-suigen
 
 # 新潟県 佐渡地域振興局「農業用ダムの貯水量情報」— 県営農業用ダム 7 基
 # (羽茂/竹田川/小倉川/藤津川/新穂/新穂第2/佐和田)。ダム別の静的 HTML、
 # 貯水量 + 貯水率。調査日ベースで不定期 (月1-2回) なので日次ポーリング。
-54 5 * * * ingest:sado-nourin
+54 5 * * * ingest:sado-nourin ?jobKey=ingest:sado-nourin
 
 # 岩手県河川情報システム — 10 県管理ダム (Gamen32Servlet, Shift_JIS, one
 # request per station). Columns: level / 貯水量(千m³) / inflow / outflow.
 # Cron at :57.
-57 * * * * ingest:iwate-kasen
+57 * * * * ingest:iwate-kasen ?jobKey=ingest:iwate-kasen
 
 # 大分県河川情報 ダム諸量現況表 — 10 県管理ダム (防災Web HTML table, Shift_JIS,
 # no session). 10 columns: level / inflow / 貯水量(千m³) / 貯水率 / outflow.
 # Cron at :59.
-59 * * * * ingest:oita-bousai
+59 * * * * ingest:oita-bousai ?jobKey=ingest:oita-bousai
 
 # かがわ防災Webポータル ダム諸量 — 18 ダム (椛川/門入/千足/内海/吉田/内場/野口/
 # 長柄/前山/殿川/粟井/五名/田万/大川/大内/五郷/府中/粟地). Single JSON fetch;
 # clean structured data with storageRate + storageVolumeM3 + waterLevel +
 # inflow + outflow. Updated every 10 min. Cron at :39.
-39 * * * * ingest:kagawa-bousai
+39 * * * * ingest:kagawa-bousai ?jobKey=ingest:kagawa-bousai
 
 # 愛媛県 河川砂防総合情報システム ダム諸量現況表 — 県管理ダム (防災Web HTML, Shift_JIS).
 # URL: kasen.pref.ehime.jp (geo-blocked outside Japan; works from production).
 # National dams (野村/鹿野川 via skr-hiji, 富郷/柳瀬 via jwa-yoshino) already covered.
 # Cron at :57.
-57 * * * * ingest:ehime-bousai
+57 * * * * ingest:ehime-bousai ?jobKey=ingest:ehime-bousai
 
 # 兵庫県 丹波農林振興事務所 ダムテレメータ — 6 dams (鍔市/八幡谷/藤岡/佐仲/黒石/大杉).
 # Tanba area dams; Shift_JIS HTML single-latest-value display. PSNO=2,4 currently
 # offline (0000/00/00 timestamps). Storage volume in direct m³ (not 千m³).
 # URL: tndam.pref.hyogo.lg.jp/dam/DamData.jsp?PSNO={1-6}. Cron at :53.
-53 * * * * ingest:tndam-hyogo
+53 * * * * ingest:tndam-hyogo ?jobKey=ingest:tndam-hyogo
 
 # 鹿児島県防災ポータル ダム情報 — 県管理ダム (JSON API, globally accessible).
 # NOTE: Returns empty items during normal conditions; populated only during
 # active flood/disaster events. Adapter exits early when no data present.
-56 * * * * ingest:kagoshima-bousai
+56 * * * * ingest:kagoshima-bousai ?jobKey=ingest:kagoshima-bousai
 
 # 鹿児島県河川砂防情報システム ダム一覧表 — 3 県管理ダム (西之谷/川辺/大和).
 # Published continuously, unlike the portal above. 防災Web servlet dk=4,
 # Shift_JIS HTML, 10-min values; 貯水率（利水） is the stored rate.
 # Priority 309 (above the flood-only kagoshima-bousai at 308). Cron at :52.
-52 * * * * ingest:kagoshima-kasen
+52 * * * * ingest:kagoshima-kasen ?jobKey=ingest:kagoshima-kasen
 
 # 水資源機構 琵琶湖総合管理所 堰諸量 — 琵琶湖 (master 琵琶湖開発). daminfo1_h.json,
 # 25 hourly rows: B.S.L. level (stored as T.P. = B.S.L. + 84.371 m), lake
 # 総流入量 / 総流出量. Priority 297. Cron at :58.
-58 * * * * ingest:jwa-biwako
+58 * * * * ingest:jwa-biwako ?jobKey=ingest:jwa-biwako
 
 # 北九州市上下水道局 北九州市の水源状況 — 10 水源 (油木/ます渕/耶馬渓/力丸/頓田/
 # 畑/白木/道原/松ヶ江/遠賀川河口堰), 水位 + 貯水量 + 貯水率 at 09:00 JST.
 # Refreshed on weekdays around 16:00 JST; daily at 08:50 UTC (17:50 JST).
-50 8 * * * ingest:kitakyushu-suido
+50 8 * * * ingest:kitakyushu-suido ?jobKey=ingest:kitakyushu-suido
 
 # 佐世保市水道局 水道用貯水池の貯水状況表 — 6 ダム (山の田/菰田/川谷/相当/転石/
 # 下の原), daily PDF of the 00:00 JST readings (link discovered each run).
 # 01:54 + 07:54 UTC (10:54 / 16:54 JST) to catch a late upload.
-54 1,7 * * * ingest:sasebo-suido
+54 1,7 * * * ingest:sasebo-suido ?jobKey=ingest:sasebo-suido
 
 # 松江市上下水道局 千本ダム・大谷ダム貯水量・貯水率 — daily rows, two months
 # per page, edited on weekday late mornings. Daily at 04:58 UTC (13:58 JST).
-58 4 * * * ingest:matsue-suido
+58 4 * * * ingest:matsue-suido ?jobKey=ingest:matsue-suido
+
+# 長崎市上下水道局 長崎市ダム貯水量一覧表 — 13 city 水源ダム, one weekly table
+# (月曜 現在, posted the next day). Only 浦上 is written; the rest are covered
+# elsewhere and recorded in the universe. Daily at 06:52 UTC (15:52 JST).
+52 6 * * * ingest:nagasaki-city-suido ?jobKey=ingest:nagasaki-city-suido
+
+# 三重県企業庁 水源状況 — 7 ダム, one weekly 「令和…現在」 table (volume + rate);
+# stores 伊坂/山村/菰野調整池, the rest are universe-only. Said to be updated
+# Mondays but seen on a Thursday, so daily at 07:17 UTC (16:17 JST).
+17 7 * * * ingest:mie-kigyo ?jobKey=ingest:mie-kigyo
+
+# 下関市上下水道局 水源状況 — 湯の原ダム written (木屋川 and the combined 内日貯水池
+# recorded in the universe only). 貯水量 + 貯水率 at 00:00 JST, edited a few
+# times a week during the day. Daily at 07:46 UTC (16:46 JST).
+46 7 * * * ingest:shimonoseki-suido ?jobKey=ingest:shimonoseki-suido
+
+# 下松市上下水道局 水源情報 — 県営温見ダム (水位 + 貯水量 + 貯水率 at the stated
+# 「…時現在」; 末武川 is universe-only). Edited about monthly, early in the
+# month. Priority 293. Daily at 02:47 UTC (11:47 JST).
+47 2 * * * ingest:kudamatsu-suido ?jobKey=ingest:kudamatsu-suido
+
+# 淡路広域水道企業団 各水源地の貯水状況 — 淡路島の水道ダム (猪鼻第１/第２/竹原/
+# 天川第１/第２/成相・北富士/牛内/本庄川), 貯水量 on a 現在 date, hand-edited
+# about monthly. Priority 288. Daily at 03:17 UTC (12:17 JST).
+17 3 * * * ingest:awaji-suido ?jobKey=ingest:awaji-suido
 
 # M&C鳥取水力発電 発電所・ダム運転情報 — 鳥取県営発電 4 ダム (茗荷谷/三朝調整池/
 # 中津 + 菅沢). One current value per dam (refreshed every minute): 10分間流入量
 # and ゲート放流量 only — the published ダム水位 is a gauge height, not EL.
 # Priority 301 (菅沢 is better covered by 4 other sources). Cron at :32.
-32 * * * * ingest:mc-tottori-hydro
+32 * * * * ingest:mc-tottori-hydro ?jobKey=ingest:mc-tottori-hydro
 
 # 長野県企業局 ダム情報 10分諸量 JSON — 高遠 (also kasenbosai) / 菅平 (sole source).
 # Four newest 10-min rows per file, "HH:MM" only; dated from Last-Modified.
@@ -446,32 +490,39 @@ export const CRONTAB = `
 # and :54 — the files are rewritten 12–34 s after each 10-minute mark, so :24
 # reads :20/:10/:00/:50 and :54 reads :50/:40/:30/:20: all six rows an hour.
 # One run an hour would keep only four of the six.
-24,54 * * * * ingest:nagano-kigyo
+24,54 * * * * ingest:nagano-kigyo ?jobKey=ingest:nagano-kigyo
+
+# 兵庫県企業庁 貯水状況 — 県営水道 / 県営工業用水道の 10 水源, 「YYYY年M月D日現在」
+# (weekly, the Monday figures once compiled). Writes 神谷 only (volume + rate);
+# 黒川 is the 企業庁 share of a pumped-storage reservoir, 平荘 / 権現 are
+# reservoir totals, the rest have live feeds. Priority 289. Daily at 03:40 UTC
+# (12:40 JST).
+40 3 * * * ingest:hyogo-kigyo ?jobKey=ingest:hyogo-kigyo
 
 # 佐賀県河川砂防情報システム ダム現況表 — 19 県管理ダム (岸川/庭木/繁昌/天ヶ瀬/
 # 平木場/伊岐佐/都川内/井手口川/竜門/有田/古木場/本部/矢筈/狩立日ノ峯/中木庭/
 # 岩屋川内/横竹/深浦/河内). Transposed Shift_JIS HTML table; 3 pages (7+7+5
 # dams) fetched in parallel. Dam names are column headers (not row labels).
 # Cron at :40.
-40 * * * * ingest:saga-bousai
+40 * * * * ingest:saga-bousai ?jobKey=ingest:saga-bousai
 
 # 和歌山県河川／雨量防災情報 ダム諸量 — 19 ダム (広川/二川/椿山/七川/切目川/殿山/
 # 小匠 [pref] + 猿谷/九尾/川迫/大滝/大迫/津風呂 [国直轄・吉野川系] + 坂本/池原/七色/
 # 二津野/小森/風屋 [国直轄・北山川系]). Single EUC-JP CSV (dinfo.csv); no header.
 # Priority 308. Cron at :41.
-41 * * * * ingest:wakayama-kasen
+41 * * * * ingest:wakayama-kasen ?jobKey=ingest:wakayama-kasen
 
 # 京都府 河川防災情報 ダム諸量現況表 — 6 ダム (大野/畑川 [大野ダム管理] +
 # 天ヶ瀬 [淀川ダム統管] + 日吉/高山/布目 [水資源機構]).
 # Shift_JIS HTML; standard row-per-dam table; volume in ×10³m³.
 # Priority 308. Cron at :42.
-42 * * * * ingest:kyoto-bousai
+42 * * * * ingest:kyoto-bousai ?jobKey=ingest:kyoto-bousai
 
 # 埼玉県 川の防災情報 ダム諸量 — 9 ダム (合角/有間/権現堂調節池 [県管理] +
 # 渡良瀬遊水地/二瀬/荒川第一調節池/浦山/滝沢/下久保 [国管理]).
 # UTF-8 CSV; timestamp YYYYMMDDHHmm JST; volume in 千m³; missing as "c"/"*".
 # Priority 308. Cron at :44.
-44 * * * * ingest:saitama-suibo
+44 * * * * ingest:saitama-suibo ?jobKey=ingest:saitama-suibo
 
 # 山口県土木防災情報システム ダム観測局 — 23 ダム (小瀬川/生見川/御庄川/中山川/平瀬/
 # 今富/厚東川/真締川/末武川/木屋川/向道/菅野/川上/屋代/佐波川/荒谷/一の坂/湯免/
@@ -479,24 +530,29 @@ export const CRONTAB = `
 # writes all 24 on-the-hour rows (class="hour_XX") of the page's 24-hour table;
 # waterLevel + storageRate + inflow + outflow (no volume).
 # Priority 308. Cron at :46.
-46 * * * * ingest:yamaguchi-bousai
+46 * * * * ingest:yamaguchi-bousai ?jobKey=ingest:yamaguchi-bousai
 
 # 国土交通省 中国地方整備局 福山河川国道事務所 — 芦田川河口堰 (芦田川水系, 広島/34).
 # mobile_ashidagawa/sekisyoryou.php, one 10分更新 snapshot: 堰上水位 + 貯水量(千m³)
 # + 流入量 + 放流量 (no rate). Priority 303. Cron at :02.
-2 * * * * ingest:cgr-ashida-seki
+2 * * * * ingest:cgr-ashida-seki ?jobKey=ingest:cgr-ashida-seki
+
+# 兵庫県 昭和池防災情報管理システム — 昭和池 (加東市, NDI 1539). public/DamData.jsp,
+# one 10分更新 Windows-31J snapshot: 貯水位 + 貯水量(m³) + 流入量 + 時間雨量 (越流量
+# is spill only, integer 貯水率 left to the trigger). Priority 299. Cron at :23.
+23 * * * * ingest:syowaike ?jobKey=ingest:syowaike
 
 # 高知県水防情報システム ダム諸量現況表 — 11 ダム (和食/永瀬/鎌井谷/鏡/桐見/坂本/
 # 以布利川 [pref] + 早明浦/大渡/中筋川/横瀬川 [国交省]). Pre-generated static
 # Shift_JIS HTML (tableStatusDam_0_1_0_now.html); no servlet call needed.
 # Provides storageRate + storageVolumeM3 + waterLevel + inflow + outflow.
 # Priority 308. Cron at :38.
-38 * * * * ingest:kochi-bousai
+38 * * * * ingest:kochi-bousai ?jobKey=ingest:kochi-bousai
 
 # 高知県公営企業局 発電所集中監視制御Webシステム ダム水文量表 — 物部川の発電専用
 # 吉野/杉田ダム (no other feed covers them). UTF-8 HTML, last 48 hourly rows of
 # 貯水位 + 流入量 + 放流量 + 雨量; no volume or rate. Priority 308. Cron at :44.
-44 * * * * ingest:kochi-kigyo
+44 * * * * ingest:kochi-kigyo ?jobKey=ingest:kochi-kigyo
 
 # 島根県防災Web — 14 県管理ダム (布部/山佐/三瓶/波積/八戸/浜田/第二浜田/大長見/
 # 御部/益田川/笹倉/大峠/銚子/美田). Same Remix SPA framework as 広島/鳥取県防災Web;
@@ -505,7 +561,7 @@ export const CRONTAB = `
 # 島根県水防情報システム (suibou-shimane.jp) — 19 ダム, one dam60.json per JST
 # day with every hourly snapshot; each run re-reads yesterday's and today's
 # file because the copy served at :37 lags ~2 h. Storage in 千m³. Cron at :37.
-37 * * * * ingest:shimane-bousai
+37 * * * * ingest:shimane-bousai ?jobKey=ingest:shimane-bousai
 
 # 鹿児島県 BODIK ダム諸量 — 3 dams (大和/川辺/西之谷), 10-min, 2008+, CC-BY.
 # Historical ZIP archives (monthly updates). Run on demand:

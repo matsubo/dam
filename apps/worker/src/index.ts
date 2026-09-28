@@ -12,6 +12,7 @@ import ingestAichiKasen from './tasks/ingest_aichi_kasen.ts';
 import ingestAitoyo from './tasks/ingest_aitoyo.ts';
 import ingestAkita from './tasks/ingest_akita_kasen.ts';
 import ingestAomori from './tasks/ingest_aomori.ts';
+import ingestAwajiSuido from './tasks/ingest_awaji_suido.ts';
 import ingestCgrAshidaSeki from './tasks/ingest_cgr_ashida_seki.ts';
 import ingestCgrMlit from './tasks/ingest_cgr_mlit.ts';
 import ingestCgrOkakawa from './tasks/ingest_cgr_okakawa.ts';
@@ -28,6 +29,8 @@ import ingestHiroshima from './tasks/ingest_hiroshima.ts';
 import ingestHkdMlit from './tasks/ingest_hkd_mlit.ts';
 import ingestHrrMlit from './tasks/ingest_hrr_mlit.ts';
 import ingestHyogo from './tasks/ingest_hyogo.ts';
+import ingestHyogoKigyo from './tasks/ingest_hyogo_kigyo.ts';
+import ingestHyogoSuigen from './tasks/ingest_hyogo_suigen.ts';
 import ingestIbaraki from './tasks/ingest_ibaraki_bousai.ts';
 import ingestIshikawa from './tasks/ingest_ishikawa_kasen.ts';
 import ingestIwate from './tasks/ingest_iwate_kasen.ts';
@@ -57,16 +60,19 @@ import ingestKochi from './tasks/ingest_kochi_bousai.ts';
 import ingestKochiKigyo from './tasks/ingest_kochi_kigyo.ts';
 import ingestKtrKinu from './tasks/ingest_ktr_kinu.ts';
 import ingestKtrTone from './tasks/ingest_ktr_tone_dam.ts';
+import ingestKudamatsuSuido from './tasks/ingest_kudamatsu_suido.ts';
 import ingestKumamoto from './tasks/ingest_kumamoto_bousai.ts';
 import ingestKyoto from './tasks/ingest_kyoto_bousai.ts';
 import ingestKyushuNousei from './tasks/ingest_kyushu_nousei.ts';
 import ingestMatsueSuido from './tasks/ingest_matsue_suido.ts';
 import ingestMcTottoriHydro from './tasks/ingest_mc_tottori_hydro.ts';
+import ingestMieKigyo from './tasks/ingest_mie_kigyo.ts';
 import ingestMiyagi from './tasks/ingest_miyagi_kasen.ts';
 import ingestMiyagiNousei from './tasks/ingest_miyagi_nousei.ts';
 import ingestMiyazaki from './tasks/ingest_miyazaki_bousai.ts';
 import ingestNagano from './tasks/ingest_nagano_kasen.ts';
 import ingestNaganoKigyo from './tasks/ingest_nagano_kigyo.ts';
+import ingestNagasakiCitySuido from './tasks/ingest_nagasaki_city_suido.ts';
 import ingestNagasaki from './tasks/ingest_nagasaki_kasen.ts';
 import ingestNaraKasen from './tasks/ingest_nara_kasen.ts';
 import ingestOita from './tasks/ingest_oita_bousai.ts';
@@ -84,7 +90,9 @@ import ingestSaseboSuido from './tasks/ingest_sasebo_suido.ts';
 import ingestShiga from './tasks/ingest_shiga.ts';
 import ingestShimaneBousai from './tasks/ingest_shimane_bousai.ts';
 import ingestShimokubo from './tasks/ingest_shimokubo.ts';
+import ingestShimonosekiSuido from './tasks/ingest_shimonoseki_suido.ts';
 import ingestSkrHiji from './tasks/ingest_skr_hiji.ts';
+import ingestSyowaike from './tasks/ingest_syowaike.ts';
 import ingestTndamHyogo from './tasks/ingest_tndam_hyogo.ts';
 import ingestTochigi from './tasks/ingest_tochigi.ts';
 import ingestTokushima from './tasks/ingest_tokushima_bousai.ts';
@@ -199,6 +207,7 @@ async function main(): Promise<void> {
       'ingest:kyushu-nousei': ingestKyushuNousei,
       'ingest:miyagi-nousei': ingestMiyagiNousei,
       'ingest:kagawa-tameike': ingestKagawaTameike,
+      'ingest:hyogo-suigen': ingestHyogoSuigen,
       'ingest:sado-nourin': ingestSadoNourin,
       'ingest:gifu-kasen': ingestGifuKasen,
       'ingest:aichi-kasen': ingestAichiKasen,
@@ -212,8 +221,15 @@ async function main(): Promise<void> {
       'ingest:kitakyushu-suido': ingestKitakyushuSuido,
       'ingest:sasebo-suido': ingestSaseboSuido,
       'ingest:matsue-suido': ingestMatsueSuido,
+      'ingest:nagasaki-city-suido': ingestNagasakiCitySuido,
+      'ingest:shimonoseki-suido': ingestShimonosekiSuido,
+      'ingest:kudamatsu-suido': ingestKudamatsuSuido,
       'ingest:mc-tottori-hydro': ingestMcTottoriHydro,
+      'ingest:mie-kigyo': ingestMieKigyo,
       'ingest:nagano-kigyo': ingestNaganoKigyo,
+      'ingest:syowaike': ingestSyowaike,
+      'ingest:hyogo-kigyo': ingestHyogoKigyo,
+      'ingest:awaji-suido': ingestAwajiSuido,
       'backfill:kagoshima-bodik': backfillKagoshima,
       'backfill:suimon:enqueue': backfillEnqueue,
       'backfill:suimon:run': backfillRun,

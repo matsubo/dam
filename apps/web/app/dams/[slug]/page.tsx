@@ -615,20 +615,31 @@ function DamSpecs({ d }: { d: DamSpecData }) {
  * as the first.
  */
 function NoDataReason({ status, publishedBy }: { status: string; publishedBy: string[] }) {
+  const sources = publishedBy.map((s, i) => (
+    <span key={s}>
+      {i > 0 ? '、' : ''}
+      <Link className="text-primary hover:underline" href={`/sources/${s}`}>
+        {s}
+      </Link>
+    </span>
+  ));
+  if (status === 'published_no_data') {
+    return (
+      <div className="text-sm">
+        <p className="text-muted mb-1">まだ観測値がありません。</p>
+        <p className="text-on-surface-variant">
+          このダムは {sources}{' '}
+          の一覧に載っていますが、提供元が値を出していません（調査対象外・欠測・落水など）。値が公開され次第、取り込みます。
+        </p>
+      </div>
+    );
+  }
   if (status === 'published_not_ingested') {
     return (
       <div className="text-sm">
         <p className="text-muted mb-1">まだ観測値がありません。</p>
         <p className="text-on-surface-variant">
-          このダムのデータは{' '}
-          {publishedBy.map((s, i) => (
-            <span key={s}>
-              {i > 0 ? '、' : ''}
-              <Link className="text-primary hover:underline" href={`/sources/${s}`}>
-                {s}
-              </Link>
-            </span>
-          ))}{' '}
+          このダムのデータは {sources}{' '}
           が公開しています。取り込み側の問題なので、こちらで対応します。
         </p>
       </div>

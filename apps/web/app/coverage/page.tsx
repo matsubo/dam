@@ -224,10 +224,10 @@ export default async function CoveragePage() {
       <section className="mb-10">
         <h2 className="text-lg font-semibold mb-1">未取得ダムの内訳</h2>
         <p className="text-sm text-on-surface-variant mb-4">
-          「取れていない」を、こちらの不具合で直せるものと、そもそもデータ提供元が無いものに分けます。
+          「取れていない」を、こちらの不具合で直せるもの、提供元が一覧に載せていても値を出していないもの、そもそもデータ提供元が無いものに分けます。
           各データ提供元が公開しているダム一覧を記録し、マスタと突き合わせて判定しています。
         </p>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <TriageCard
             label="取得済み"
             value={triage.covered}
@@ -241,6 +241,13 @@ export default async function CoveragePage() {
             total={Number(total)}
             tone="action"
             note="提供元が公開済み・紐付けも済み。取り込み側の不具合"
+          />
+          <TriageCard
+            label="提供元に値なし"
+            value={triage.publishedNoData}
+            total={Number(total)}
+            tone="none"
+            note="提供元の一覧には載っているが、調査対象外・欠測・落水などで値が出ていない"
           />
           <TriageCard
             label="未調査"

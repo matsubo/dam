@@ -17,6 +17,15 @@ export interface UniverseRow {
   lng?: number | null;
   /** null = upstream publishes it but we can't match it to a master dam. */
   resolvedDamId?: bigint | null;
+  /**
+   * Whether this row carried a value: true = yes, false = the provider itself
+   * marks it empty (調査対象外, "---" in every column, a page with no rows).
+   * Leave it unset when unsure — a cell the parser could not read may be our
+   * own breakage, and calling that "no data" would hide it. Every scan
+   * overwrites the stored value, unset included, so a row that stops parsing
+   * drops back to unknown instead of keeping an earlier "no data".
+   */
+  hasData?: boolean | null;
 }
 
 /**
@@ -71,6 +80,7 @@ async function recordUniverseOrThrow(sourceId: string, rows: UniverseRow[]): Pro
       lat: r.lat ?? null,
       lng: r.lng ?? null,
       resolved_dam_id: r.resolvedDamId ?? null,
+      has_data: r.hasData ?? null,
     }));
     await sql`
       INSERT INTO source_universe ${sql(values)}
@@ -85,6 +95,10 @@ async function recordUniverseOrThrow(sourceId: string, rows: UniverseRow[]): Pro
         -- be missing — turning a matched dam into unmatched backlog. A real
         -- re-match still overwrites, because it supplies a non-NULL id.
         resolved_dam_id = COALESCE(EXCLUDED.resolved_dam_id, source_universe.resolved_dam_id),
+        -- Unlike resolved_dam_id, the latest scan always wins: a row that
+        -- stops parsing (NULL) must clear an earlier FALSE, or a parser break
+        -- would hide under 提供元に値なし. Each source has a single writer.
+        has_data        = EXCLUDED.has_data,
         last_seen_at    = NOW()
     `;
   }
@@ -108,6 +122,11 @@ export type DamCoverageStatus =
   | 'covered'
   /** An upstream publishes this dam and we matched it, but nothing arrives. */
   | 'published_not_ingested'
+  /**
+   * Every source listing this dam marks its row empty (`has_data = FALSE`):
+   * the provider publishes the dam but no value, so there is nothing to fix.
+   */
+  | 'published_no_data'
   /** No scanned provider publishes it — but some provider is still unscanned. */
   | 'unknown'
   /** Every observation-producing provider has been scanned; none publishes it. */
@@ -172,7 +191,10 @@ export async function classifyDamCoverage(): Promise<DamCoverageRow[]> {
     ),
     published AS (
       SELECT su.resolved_dam_id AS dam_id,
-             ARRAY_AGG(DISTINCT su.source_id ORDER BY su.source_id) AS sources
+             ARRAY_AGG(DISTINCT su.source_id ORDER BY su.source_id) AS sources,
+             -- Every listing row says empty. A single unknown (NULL) row could
+             -- be the source we are failing to ingest, so it keeps the dam out.
+             BOOL_AND(su.has_data IS FALSE) AS no_data
       FROM source_universe su
       WHERE su.resolved_dam_id IS NOT NULL
         AND NOT EXISTS (
@@ -186,6 +208,7 @@ export async function classifyDamCoverage(): Promise<DamCoverageRow[]> {
            d.pref_code                 AS "prefCode",
            CASE
              WHEN f.dam_id IS NOT NULL          THEN 'covered'
+             WHEN p.no_data                     THEN 'published_no_data'
              WHEN p.dam_id IS NOT NULL          THEN 'published_not_ingested'
              WHEN (SELECT n FROM pending) > 0   THEN 'unknown'
              ELSE 'not_published'
@@ -201,6 +224,7 @@ export async function classifyDamCoverage(): Promise<DamCoverageRow[]> {
 export interface CoverageSummary {
   covered: number;
   publishedNotIngested: number;
+  publishedNoData: number;
   unknown: number;
   notPublished: number;
   /** Published stations we cannot tie to any master dam — the backlog. */
@@ -250,6 +274,7 @@ export async function coverageSummary(): Promise<CoverageSummary> {
   return {
     covered: count('covered'),
     publishedNotIngested: count('published_not_ingested'),
+    publishedNoData: count('published_no_data'),
     unknown: count('unknown'),
     notPublished: count('not_published'),
     unmatchedStations: Number(extra?.unresolved ?? 0),
@@ -274,7 +299,8 @@ export async function classifyOneDam(damId: bigint): Promise<DamCoverageRow | nu
         )
     ),
     published AS (
-      SELECT ARRAY_AGG(DISTINCT su.source_id ORDER BY su.source_id) AS sources
+      SELECT ARRAY_AGG(DISTINCT su.source_id ORDER BY su.source_id) AS sources,
+             BOOL_AND(su.has_data IS FALSE) AS no_data
       FROM source_universe su
       WHERE su.resolved_dam_id = ${damId}
         AND NOT EXISTS (
@@ -290,6 +316,7 @@ export async function classifyOneDam(damId: bigint): Promise<DamCoverageRow | nu
                SELECT 1 FROM observations o
                WHERE o.dam_id = d.id AND o.observed_at > NOW() - INTERVAL '30 days'
              )                                            THEN 'covered'
+             WHEN (SELECT no_data FROM published)         THEN 'published_no_data'
              WHEN (SELECT sources FROM published) IS NOT NULL THEN 'published_not_ingested'
              WHEN (SELECT n FROM pending) > 0             THEN 'unknown'
              ELSE 'not_published'
