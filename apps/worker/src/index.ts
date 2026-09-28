@@ -90,6 +90,7 @@ import ingestQsrTuruta from './tasks/ingest_qsr_turuta.ts';
 import ingestSadoNourin from './tasks/ingest_sado_nourin.ts';
 import ingestSagaBousai from './tasks/ingest_saga_bousai.ts';
 import ingestSaitama from './tasks/ingest_saitama_suibo.ts';
+import ingestSannoukai from './tasks/ingest_sannoukai.ts';
 import ingestSaseboSuido from './tasks/ingest_sasebo_suido.ts';
 import ingestShiga from './tasks/ingest_shiga.ts';
 import ingestShimaneBousai from './tasks/ingest_shimane_bousai.ts';
@@ -108,6 +109,7 @@ import ingestWakayama from './tasks/ingest_wakayama_kasen.ts';
 import ingestYamagata from './tasks/ingest_yamagata_bousai.ts';
 import ingestYamaguchi from './tasks/ingest_yamaguchi_bousai.ts';
 import ingestYamanashi from './tasks/ingest_yamanashi_dam.ts';
+import ingestYonezawaHeiya from './tasks/ingest_yonezawa_heiya.ts';
 import match from './tasks/master_match.ts';
 import refreshDamnet from './tasks/master_refresh_damnet.ts';
 import refreshNdi from './tasks/master_refresh_ndi.ts';
@@ -215,6 +217,8 @@ async function main(): Promise<void> {
       'ingest:kagawa-tameike': ingestKagawaTameike,
       'ingest:hyogo-suigen': ingestHyogoSuigen,
       'ingest:sado-nourin': ingestSadoNourin,
+      'ingest:yonezawa-heiya': ingestYonezawaHeiya,
+      'ingest:sannoukai': ingestSannoukai,
       'ingest:gifu-kasen': ingestGifuKasen,
       'ingest:aichi-kasen': ingestAichiKasen,
       'ingest:fukui-bousai': ingestFukuiBousai,
