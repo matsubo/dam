@@ -75,6 +75,8 @@ async function loadCoverage() {
         WHERE d.pref_code IS NOT NULL
           AND o.observed_at > NOW() - INTERVAL '30 days'
           AND o.source_id <> 'synthetic'
+          AND num_nonnulls(o.storage_volume_m3, o.storage_rate, o.inflow_m3s,
+                           o.outflow_m3s, o.water_level_m, o.rainfall_mm) > 0
         GROUP BY d.pref_code
       )
       SELECT
