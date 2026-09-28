@@ -51,3 +51,14 @@ describe('trusted_rate_basis for jwa-chikugo-rt', () => {
     expect(await trusted('jwa-chikugo-rt')).toBe(true);
   });
 });
+
+describe('trusted_rate_basis for the 九州北部 city-water pages', () => {
+  // Each divides by the pool it prints: 池田 183,274 / 91.6 % = 200,000 利水
+  // (有効 209,000); 神の川 89,328 / 55.8 % = 160,000 満水量 (有効 223,000);
+  // 油木 6,463 / 44.7 % = 14,450 千m³, the 洪水期 利水容量 (0219).
+  for (const sourceId of ['omura-suido', 'hirado-suido', 'kanda-suido']) {
+    test(`${sourceId} publishes a rate on its printed pool and is trusted`, async () => {
+      expect(await trusted(sourceId)).toBe(true);
+    });
+  }
+});
