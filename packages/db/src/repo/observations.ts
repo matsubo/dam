@@ -373,3 +373,40 @@ export async function findObservationsPage(
       : null;
   return { items, nextCursor };
 }
+
+/**
+ * Last ~60 daily storage volumes per dam, oldest first, keyed by dam id: the
+ * sparklines on the home page's featured-dam cards. A dam with no volume in
+ * the window (one that reports only its water level) gets no entry.
+ */
+export async function dailyVolumeSparklines(damIds: bigint[]): Promise<Map<string, number[]>> {
+  if (damIds.length === 0) return new Map();
+  // postgres.js doesn't auto-cast a JS bigint[] to BIGINT[]; pass the IDs as
+  // a stringified-int8 array so PostgreSQL can coerce.
+  const damIdStrs = damIds.map((id) => id.toString());
+  const rows = await sql<{ dam_id: bigint; series: string }[]>`
+    SELECT dam_id,
+           string_agg(last_storage_volume_m3::TEXT, ',' ORDER BY day) AS series
+    FROM (
+      SELECT dam_id, day, last_storage_volume_m3
+      FROM obs_daily
+      WHERE dam_id::TEXT = ANY(${damIdStrs}::TEXT[])
+        AND day > NOW() - INTERVAL '60 days'
+        -- string_agg over nothing but NULLs is NULL, not ''.
+        AND last_storage_volume_m3 IS NOT NULL
+      ORDER BY dam_id, day
+    ) sub
+    GROUP BY dam_id
+  `;
+  const out = new Map<string, number[]>();
+  for (const r of rows) {
+    out.set(
+      r.dam_id.toString(),
+      r.series
+        .split(',')
+        .map((v) => Number(v))
+        .filter((n) => Number.isFinite(n)),
+    );
+  }
+  return out;
+}

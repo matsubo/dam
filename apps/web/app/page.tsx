@@ -1,6 +1,7 @@
 import { sql } from '@dam/db/client';
 import { coverageHeadline } from '@dam/db/repo/coverage';
 import { listDams, lowStorageDams } from '@dam/db/repo/dams';
+import { dailyVolumeSparklines } from '@dam/db/repo/observations';
 import { nationalStorageTotals, storageRate } from '@dam/db/repo/storage_totals';
 import { driestWatersheds, nationalStorageChange } from '@dam/db/repo/watersheds';
 import type { LucideIcon } from 'lucide-react';
@@ -113,39 +114,6 @@ async function homeStats(): Promise<HomeStats> {
 
 const fmt = (n: bigint | number) => Number(n).toLocaleString('ja-JP');
 
-async function featuredSparklines(damIds: bigint[]): Promise<Map<string, number[]>> {
-  if (damIds.length === 0) return new Map();
-  // Pull the last ~30 daily volume points for each featured dam in a single
-  // round-trip; cards then render an SVG sparkline server-side, so there's
-  // no client cost beyond a tiny inline <path>.
-  // postgres.js doesn't auto-cast a JS bigint[] to BIGINT[]; pass the IDs as
-  // a stringified-int8 array so PostgreSQL can coerce.
-  const damIdStrs = damIds.map((id) => id.toString());
-  const rows = await sql<{ dam_id: bigint; series: string }[]>`
-    SELECT dam_id,
-           string_agg(last_storage_volume_m3::TEXT, ',' ORDER BY day) AS series
-    FROM (
-      SELECT dam_id, day, last_storage_volume_m3
-      FROM obs_daily
-      WHERE dam_id::TEXT = ANY(${damIdStrs}::TEXT[])
-        AND day > NOW() - INTERVAL '60 days'
-      ORDER BY dam_id, day
-    ) sub
-    GROUP BY dam_id
-  `;
-  const out = new Map<string, number[]>();
-  for (const r of rows) {
-    out.set(
-      r.dam_id.toString(),
-      r.series
-        .split(',')
-        .map((v) => Number(v))
-        .filter((n) => Number.isFinite(n)),
-    );
-  }
-  return out;
-}
-
 // Memoise the four home-page fetchers across requests. Dam metadata + the
 // daily-grain change strip + macro counts barely move within a 5-minute
 // window — caching them in-process turns warm hits into <50 ms responses
@@ -213,7 +181,7 @@ const cachedDriestWatersheds = unstable_cache(
 const cachedFeaturedSparklines = unstable_cache(
   async (idsCsv: string): Promise<Record<string, number[]>> => {
     const ids = idsCsv.split(',').map((s) => BigInt(s));
-    const m = await featuredSparklines(ids);
+    const m = await dailyVolumeSparklines(ids);
     return Object.fromEntries(m);
   },
   ['home-sparklines'],
