@@ -23,11 +23,14 @@
 // there is nothing for trusted_rate_basis to back-solve, so the source stays
 // untrusted (0048).
 //
-// Written: the uncovered 千苅/丸山/加古川大堰/竹原/猪ノ鼻/猪鼻第2. The rest have
-// 10-minute feeds with volumes (kasenbosai, hyogo-bodik, jwa-junpo); a
-// monthly row of the manager's season-aware rate would drop into those computed
-// rate series as a spike, so they go to the universe only. The row pairing
-// 呑吐 and 大川瀬 has one figure for two dams and stays unresolved.
+// Written: 千苅/丸山/加古川大堰, which have no other feed, and 鴨川 (plus 呑吐,
+// 大川瀬 and 但東 when a 渇水 layout lists them apart), whose only feeds carry
+// the level and no storage (kasenbosai, hyogo-bodik; prod 2026-09-28). Rows
+// whose dam another feed carries with volumes go to the universe only: this
+// rate-only monthly row would otherwise become the latest observation and
+// blank the dam page's volume, or drop into a computed rate series as a spike.
+// That includes 竹原/猪ノ鼻/猪鼻第2, for which awaji-suido writes volumes. The
+// row pairing 呑吐 and 大川瀬 has one figure for two dams and stays unresolved.
 //
 // Priority 287. Cron daily 01:17 UTC (10:17 JST).
 
@@ -44,21 +47,22 @@ const PAGE_URL =
 const PREF_CODE = '28';
 const SOURCE_ID = 'hyogo-suigen';
 
-// Rows whose dam another feed already carries with volumes every 10 minutes
-// (checked on prod 2026-09-28). Keyed by the page's name, furigana stripped.
+// Rows whose dam another feed already carries with a storage volume (checked on
+// prod 2026-09-28). Keyed by the page's name, furigana stripped.
 const COVERED_ELSEWHERE: Record<string, true> = {
+  // kasenbosai / hyogo-bodik / jwa-junpo, every 10 minutes.
   青野ダム: true,
   一庫ダム: true,
-  呑吐ダム: true,
-  大川瀬ダム: true,
-  鴨川ダム: true,
   生野ダム: true,
   大路ダム: true,
-  但東ダム: true,
   三宝ダム: true,
   栗柄ダム: true,
   成相ダム: true,
   牛内ダム: true,
+  // awaji-suido (淡路広域水道企業団 各水源地の貯水状況) publishes their volumes.
+  竹原ダム: true,
+  猪ノ鼻ダム: true,
+  猪ノ鼻第二ダム: true,
 };
 
 // --- parsing ----------------------------------------------------------------
