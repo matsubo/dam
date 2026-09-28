@@ -394,6 +394,16 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '山口県営 温見ダムの水位・貯水量(m³)・貯水率 (総貯水量比)。温見ダムは本ソース唯一の観測源。同ページの末武川ダムは 10 分値の他ソースで取得済みのため未取込。',
     label: '下松市上下水道局',
   },
+  'shioda-sayamaike': {
+    upstream:
+      '上田市塩田平土地改良区 (水土里ネット塩田平)「沢山池の状況図」 (midorinet-shioda.or.jp/reservoir/sayamaike/ — data/SFTP.csv)',
+    license:
+      '利用条件の記載なし (公開情報)。各ページのフッターは「copyright © 上田市塩田平土地改良区 All Rights Reserved.」。本サイトは観測値 (事実) のみを出典明示で引用。',
+    cadence:
+      '10 分毎 (CSV は毎 10 分の約 1 分後に更新され時刻を持たないため、更新時刻を 10 分単位に切り捨てて記録; 取得は毎時 :05)',
+    what: '長野県上田市の農業用ため池 沢山池の貯水位(E.L.m)・貯水量(m³)・貯水率 (総貯水量比の整数 %)・全流入量・時間雨量。放流量は 2026-03-13 以降ページに表示されていないため取り込まない。沢山池は本ソース唯一の観測源。',
+    label: '塩田平土地改良区',
+  },
   'awaji-suido': {
     upstream: '淡路広域水道企業団「各水源地の貯水状況」 (www.awaji-suido.jp/osirase-01.html)',
     license:

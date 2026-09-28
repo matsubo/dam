@@ -92,6 +92,7 @@ import ingestShiga from './tasks/ingest_shiga.ts';
 import ingestShimaneBousai from './tasks/ingest_shimane_bousai.ts';
 import ingestShimokubo from './tasks/ingest_shimokubo.ts';
 import ingestShimonosekiSuido from './tasks/ingest_shimonoseki_suido.ts';
+import ingestShiodaSayamaike from './tasks/ingest_shioda_sayamaike.ts';
 import ingestSkrHiji from './tasks/ingest_skr_hiji.ts';
 import ingestSyowaike from './tasks/ingest_syowaike.ts';
 import ingestTndamHyogo from './tasks/ingest_tndam_hyogo.ts';
@@ -228,6 +229,7 @@ async function main(): Promise<void> {
       'ingest:mc-tottori-hydro': ingestMcTottoriHydro,
       'ingest:mie-kigyo': ingestMieKigyo,
       'ingest:nagano-kigyo': ingestNaganoKigyo,
+      'ingest:shioda-sayamaike': ingestShiodaSayamaike,
       'ingest:syowaike': ingestSyowaike,
       'ingest:hyogo-kigyo': ingestHyogoKigyo,
       'ingest:awaji-suido': ingestAwajiSuido,
