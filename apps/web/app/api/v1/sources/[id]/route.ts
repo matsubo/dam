@@ -60,7 +60,7 @@ export async function GET(
     if (!source) throw new HttpError(404, 'Source not found');
 
     // Per-dam summary for the dams this source covers (capped at 200 to
-    // keep the response bounded; tokyo-waterworks has 15, jwa-junpo 26,
+    // keep the response bounded; tokyo-waterworks has 14, jwa-junpo 26,
     // synthetic >2k but that's the only one likely to hit the cap).
     const dams = await sql<DamRow[]>`
       SELECT
