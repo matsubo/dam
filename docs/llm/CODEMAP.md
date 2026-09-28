@@ -246,6 +246,7 @@ the file for detail.
 0017_api_keys.sql            api_keys (sha256 hash) + api_key_usage (per-minute bucket)
 0018_watersheds_boundary_nullable.sql  ALTER … DROP NOT NULL on boundary
 0020_quality_view.sql        quality_missing_24h view
+0131_source_universe_not_dam_reason.sql  source_universe.not_dam_reason (cited "not a master dam"; out of the backlog)
 ```
 
 ### Schemas
@@ -269,7 +270,8 @@ the file for detail.
 |---|---|
 | `src/repo/dams.ts` | `upsertDamByExternalId`, `findDamBySlug`, `latestObservation`, `nearbyDams`, `listDams` (orderBy: id\|capacity), `takenSlugs`, `appendExternalId`, `applyDamnetAttributes`, `findDamsForReconciliation` |
 | `src/repo/watersheds.ts` | `upsertWatershed`, `findWatershedBySlug`, `findWatershedContaining`, `findNearestWatershed`, `listWatersheds`, `aggregateWatershed` |
-| `src/repo/match_review.ts` | `enqueueMatchReview` |
+| `src/repo/match_review.ts` | `enqueueMatchReview` (never touches a closed review: open = `resolved_at IS NULL`; a migration closes one with `SET resolved_at = NOW(), resolved_dam_id = <id or NULL = not a dam>`) |
+| `src/repo/source_universe.ts` | `recordUniverse` (never writes `not_dam_reason`), `classifyDamCoverage`, `classifyOneDam`, `coverageSummary` (`unmatchedStations` = unresolved AND `not_dam_reason IS NULL`; `notDamStations` = unresolved with a reason). Mark a non-dam from a migration: `UPDATE source_universe SET not_dam_reason = '<cited reason>' WHERE source_id = '<src>' AND source_external_id = '<key>' AND resolved_dam_id IS NULL;` |
 | `src/repo/observations.ts` | `upsertObservations`, `findSeries{Hourly,Daily,Monthly}` |
 | `src/repo/raw_snapshots.ts` | `recordRawSnapshot`, `markParsed`, `markParseError`, `previousEtag` |
 | `src/repo/source_priorities.ts` | `preferredSource`, `priorityMap` |
