@@ -225,18 +225,25 @@ const QUANTITIES = [
 /**
  * Whether the station publishes any value (source_universe.has_data): true =
  * some quantity in the latest reading or the ~2-day 10-min / hourly history
- * passes its quality code; false = every hourly row flags every quantity
- * (滝波 / 和知: Ccd=160 across the board); null = neither, e.g. an empty
- * history or bare nulls, which may be a payload we misread.
+ * passes its quality code; false = every hourly row that carries a quality
+ * code flags it 欠測 (滝波 / 和知: Ccd=160 across the board); null = neither,
+ * e.g. an empty history or bare nulls, which may be a payload we misread.
+ *
+ * An hourly row with no Ccd at all is skipped: the HH:00 file the task reads
+ * at :03 opens with a placeholder row for the slot just started, every field
+ * null. A null Ccd beside flagged ones is a quantity the station never
+ * reports. Requiring six codes on every row made both read as unknown.
  */
 export function kasenbosaiHasData(payload: ApiResponse): boolean | null {
   const readings = [payload.obsValue, ...(payload.min10Values ?? []), ...(payload.hrValues ?? [])];
   if (readings.some((r) => r && QUANTITIES.some(([v, c]) => validOrNull(r[v], r[c]) != null))) {
     return true;
   }
-  const hr = payload.hrValues ?? [];
-  const allFlagged = hr.every((r) => QUANTITIES.every(([, c]) => r[c] != null && r[c] !== 0));
-  return hr.length > 0 && allFlagged ? false : null;
+  const codes = (payload.hrValues ?? [])
+    .map((r) => QUANTITIES.map(([, c]) => r[c]).filter((ccd) => ccd != null))
+    .filter((present) => present.length > 0);
+  const allFlagged = codes.every((present) => present.every((ccd) => ccd !== 0));
+  return codes.length > 0 && allFlagged ? false : null;
 }
 
 async function ensureSourcePriority(): Promise<void> {
