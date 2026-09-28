@@ -1,4 +1,7 @@
-// apps/worker/src/crontab.ts
+// packages/core/src/crontab.ts — the worker's schedule (apps/worker/src/index.ts
+// hands it to graphile-worker). It lives in core because the web app reads it
+// too: INGEST_INTERVAL_HOURS below is each source's poll cadence for the
+// freshness check (packages/db/src/repo/source_freshness.ts).
 // graphile-worker crontab format: https://github.com/graphile/worker
 // All times below are UTC (graphile-worker doesn't take a timezone). Display
 // time in the UI is always JST (Asia/Tokyo) — see lib/format.ts.
@@ -14,8 +17,8 @@
 // exp(min(attempts, 10)) s, so an hourly job makes ~8 attempts before the
 // next tick. A job that exhausted its attempts before the next tick would
 // have its key stripped by add_job and stay behind as a dead row, one per
-// tick; crontab.test.ts checks that every ingest line's retries outlast its
-// longest gap between runs.
+// tick; apps/worker/src/crontab.test.ts checks that every ingest line's
+// retries outlast its longest gap between runs.
 export const CRONTAB = `
 # 秋田県河川砂防情報システム ダム一覧表 — 18 県管理ダム (防災Web HTML table, Shift_JIS,
 # no session). 12 columns: level / inflow / outflow (no storage volume).
@@ -594,10 +597,9 @@ export const CRONTAB = `
 # filling in storage_rate from volume / capacity for sources that don't provide it.
 45 4 * * * storageRate:recompute
 
-# Freshness watchdog — every hour, scan source_priorities and flag any source
-# whose newest observation is older than the per-source expected window
-# (see apps/worker/src/tasks/quality_freshness.ts). Posts a digest to
-# DISCORD_FRESHNESS_WEBHOOK if set; else logs warnings only.
+# Freshness watchdog — every hour, flag any source whose newest observation is
+# older than its cadence allows (packages/db/src/repo/source_freshness.ts).
+# Posts a digest to DISCORD_FRESHNESS_WEBHOOK if set; else logs warnings only.
 35 * * * * quality:freshness-check
 
 # Cover-image and elevation refresh — monthly, staggered to avoid hitting the
@@ -605,3 +607,88 @@ export const CRONTAB = `
 0 5 2 * * images:refresh:wikipedia
 0 5 3 * * master:refresh:elevation
 `;
+
+/**
+ * One crontab field as the values it matches, the way graphile-worker reads it:
+ * a comma list of `n`, `a-b` and `*` (optionally `*\/step`). Day of week 7 is 0.
+ */
+function cronField(field: string, min: number, max: number): number[] {
+  const values = new Set<number>();
+  for (const part of field.split(',')) {
+    const wildcard = /^\*(?:\/(\d+))?$/.exec(part);
+    const range = /^(\d+)(?:-(\d+))?$/.exec(part);
+    let from: number;
+    let to: number;
+    let step = 1;
+    if (wildcard) {
+      from = min;
+      to = max;
+      step = Number(wildcard[1] ?? 1);
+    } else if (range) {
+      from = Number(range[1]);
+      to = Number(range[2] ?? range[1]);
+    } else {
+      throw new Error(`crontab: unsupported field "${field}"`);
+    }
+    const top = max === 6 ? 7 : max;
+    if (from < min || to > top || from > to || step < 1) {
+      throw new Error(`crontab: field "${field}" is outside ${min}-${max}`);
+    }
+    for (let v = from; v <= to; v += step) values.add(max === 6 ? v % 7 : v);
+  }
+  return [...values].sort((a, b) => a - b);
+}
+
+/**
+ * Longest gap between two consecutive runs of a schedule, in hours, over a
+ * year and a month of UTC days (every month length and every weekday).
+ * graphile-worker's day rule: when both day-of-month and day-of-week are
+ * restricted, either one matching is enough.
+ */
+function longestGapHours(fields: string[]): number {
+  const [minF, hourF, dateF, monthF, dowF] = fields as [string, string, string, string, string];
+  const minutes = cronField(minF, 0, 59);
+  const hours = cronField(hourF, 0, 23);
+  const dates = cronField(dateF, 1, 31);
+  const months = cronField(monthF, 1, 12);
+  const dows = cronField(dowF, 0, 6);
+  const byDate = dates.length !== 31;
+  const byDow = dows.length !== 7;
+  const start = Date.UTC(2026, 0, 1);
+  let previous: number | null = null;
+  let longest = 0;
+  for (let day = 0; day < 396; day++) {
+    const t = new Date(start + day * 86_400_000);
+    if (!months.includes(t.getUTCMonth() + 1)) continue;
+    const onDate = dates.includes(t.getUTCDate());
+    const onDow = dows.includes(t.getUTCDay());
+    if (byDate && byDow ? !(onDate || onDow) : !(onDate && onDow)) continue;
+    for (const h of hours) {
+      for (const m of minutes) {
+        const minute = day * 1440 + h * 60 + m;
+        if (previous !== null) longest = Math.max(longest, minute - previous);
+        previous = minute;
+      }
+    }
+  }
+  if (longest === 0) throw new Error(`crontab: "${fields.join(' ')}" runs less than twice a year`);
+  return longest / 60;
+}
+
+/**
+ * Each ingest line's longest gap between runs, in hours, keyed by the source
+ * the task writes (its name without `ingest:`, except kasenbosai-v2): new rows
+ * can't arrive more often than the source is polled.
+ */
+export const INGEST_INTERVAL_HOURS: Readonly<Record<string, number>> = Object.fromEntries(
+  CRONTAB.split('\n')
+    .filter((line) => !line.trimStart().startsWith('#'))
+    .map((line) => line.trim().split(/\s+/))
+    .filter((tokens) => tokens[5]?.startsWith('ingest:'))
+    .map((tokens) => {
+      const task = tokens[5] as string;
+      const sourceId =
+        task === 'ingest:kasenbosai-v2' ? 'kasenbosai' : task.slice('ingest:'.length);
+      return [sourceId, longestGapHours(tokens.slice(0, 5))];
+    }),
+);

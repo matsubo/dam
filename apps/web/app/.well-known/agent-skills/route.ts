@@ -101,7 +101,7 @@ const SKILLS: Skill[] = [
     id: 'get_coverage_triage',
     name: 'Explain why a dam has no data',
     description:
-      "Per-dam triage of observation coverage. Separates 'a data provider publishes this dam and we are failing to ingest it' (actionable) from 'every provider listing it publishes no value' (published_no_data) and 'no provider publishes it'. IMPORTANT: while summary.sourcesPendingScan > 0 the triage is incomplete — dams report 'unknown' and 'not_published' is not yet a claim that nobody publishes them.",
+      "Per-dam triage of observation coverage. Separates 'a data provider publishes this dam and we are failing to ingest it' (actionable) from 'every provider listing it publishes no value' (published_no_data) and 'no provider publishes it'. IMPORTANT: while summary.sourcesPendingScan > 0 the triage is incomplete — dams report 'unknown' and 'not_published' is not yet a claim that nobody publishes them. summary.pendingScanSources names those providers and why each is pending.",
     endpoint: `${SITE_URL}/api/v1/coverage`,
     method: 'GET',
     inputs: [

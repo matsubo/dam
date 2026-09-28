@@ -20,6 +20,10 @@ const FIXTURE = new URL('../../../../tests/fixtures/oita_nourin/r8_0908.pdf', im
 const text = await pdfToText(new Uint8Array(await Bun.file(FIXTURE).arrayBuffer()));
 const parsed = parseOitaNourinPdfText(text);
 
+const LIVE_INDEX = await Bun.file(
+  new URL('../../../../tests/fixtures/oita_nourin/index_2026-09-28.html', import.meta.url).pathname,
+).text();
+
 describe('parseOitaNourinDate', () => {
   test('reads the full-width 令和 survey timestamp as JST', () => {
     // （ 令和８年９月８日 ９：００ 現在 ） → 2026-09-08 09:00 JST → 00:00Z.
@@ -126,15 +130,24 @@ describe('findLatestPdfUrl', () => {
     expect(findLatestPdfUrl(html)).toBe('https://www.pref.oita.jp/uploaded/attachment/2276231.pdf');
   });
 
-  test('picks the newest survey, not the first link on the page', () => {
-    // The page is free to list a 過去の調査 archive above the current survey.
-    // Taking the first link would write an old survey under its own old
-    // timestamp, where nothing looks wrong — the feed just stops moving.
+  test('picks the newest survey, not the first link or the highest id', () => {
+    // The page is free to list a 過去の調査 archive above the current survey,
+    // and a re-uploaded old survey gets a fresh, higher CMS id. Either would
+    // write an old survey under its own old timestamp, where nothing looks
+    // wrong — the feed just stops moving.
     const html =
-      link('2200000', '令和8年4月1日現在の貯水率') +
+      link('2299999', '令和8年4月1日現在の貯水率') +
       link('2276594', '令和8年9月15日現在の貯水率') +
       link('2276231', '令和8年9月8日現在の貯水率');
     expect(findLatestPdfUrl(html)).toBe('https://www.pref.oita.jp/uploaded/attachment/2276594.pdf');
+  });
+
+  test('reads the date in the live index label, not the attachment id', () => {
+    // The index as served on 2026-09-28 links 「令和8年9月24日現在の貯水率
+    // [PDFファイル／62KB]」 (2277067). An older survey re-uploaded under a
+    // higher id must not displace it.
+    const html = `${LIVE_INDEX}${link('2299999', '令和8年4月1日現在の貯水率 [PDFファイル／60KB]')}`;
+    expect(findLatestPdfUrl(html)).toBe('https://www.pref.oita.jp/uploaded/attachment/2277067.pdf');
   });
 
   test('falls back to the highest attachment id when no label carries a date', () => {

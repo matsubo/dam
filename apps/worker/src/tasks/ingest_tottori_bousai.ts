@@ -43,6 +43,8 @@ import type { Task } from 'graphile-worker';
 const BASE_URL = process.env.TOTTORI_BOUSAI_URL ?? 'https://www.bousai.pref.tottori.lg.jp';
 const PREF_CODE = '31';
 const SOURCE_ID = 'tottori-bousai';
+/** managerCd of 鳥取県's own dams; "41" is 国 (the site's manager legend). */
+const PREF_MANAGER_CD = '40';
 
 interface TottoriBousaiItem {
   name: string;
@@ -133,15 +135,25 @@ export function parseTottoriItems(items: TottoriBousaiItem[]): ParsedRow[] {
     );
     const storage = storageThouM3 != null ? storageThouM3 * 1000 : null;
     // Prefer 利水容量貯水率: it is the rate the manager publishes, against the
-    // current-season 利水容量. 有効容量貯水率 divides by the full 有効貯水容量
-    // and understates flood-control dams — the inversion issue #19 found in
+    // current-season 利水容量. 有効容量貯水率 divides by an annual capacity and
+    // understates flood-control dams — the inversion issue #19 found in
     // kasenbosai. tottori-bousai is trusted_rate_basis (migration 0040), so the
     // stored rate is also back-solved into the denominator the API reports.
-    // Today every dam reports the 利水 column as null/flg=2, so this is a
-    // no-op until 鳥取県 starts publishing it.
+    // The 利水 column has been null/flg=2 for every dam since June 2026 (the
+    // site itself renders it as "-").
+    //
+    // Without it, only a dam 鳥取県 manages itself (managerCd "40" = 県) keeps
+    // the 有効 column: that is the manager's own figure, and kasenbosai stores
+    // the same value every hour. For 国's 菅沢 ("41") it is 鳥取県's
+    // republication, volume / 15,403 千m³ (2.9 % at 450 千m³) while the
+    // manager's feeds (cgr-mlit-dam, kasenbosai storPcntIrr) read ~39 %; stored
+    // as trusted it flipped the displayed rate every hour. Its rate stays NULL
+    // so the trigger derives it and flags it (bit 32, migration 0051).
     const ratePct =
       gated(it.storageRateWaterUseCapacity, it.storageRateWaterUseCapacityFlg) ??
-      gated(it.storageRateEffectiveCapacity, it.storageRateEffectiveCapacityFlg);
+      (it.managerCd === PREF_MANAGER_CD
+        ? gated(it.storageRateEffectiveCapacity, it.storageRateEffectiveCapacityFlg)
+        : null);
 
     if (level == null && inflow == null && outflow == null && storage == null && ratePct == null) {
       continue;
