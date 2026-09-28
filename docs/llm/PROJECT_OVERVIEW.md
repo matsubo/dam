@@ -16,8 +16,8 @@ the project must do:
 
 Current state (production, 2026-09-28): master is loaded with real NLNI W01 +
 Damnet data; watershed boundaries from NLNI W07 are loaded for 463/644
-systems. Observations are real: 88 ingest tasks pull from 川の防災情報, the
-MLIT regional bureaus, 水資源機構, prefectural river portals, agricultural
+systems. Observations are real: 95 scheduled ingest tasks pull from 川の防災情報,
+the MLIT regional bureaus, 水資源機構, prefectural river portals, agricultural
 survey tables and water utilities. 72 sources wrote observations in the last
 30 days, covering 975 dams; `/coverage` has the per-source breakdown.
 
@@ -85,7 +85,7 @@ observations   ── PK (dam_id, observed_at, source_id) ── HYPERTABLE on o
                                           → FK raw_snapshot_id
 raw_snapshots  ── one row per fetched HTTP response, body in MinIO
 source_priorities ── source_id → priority, higher wins the chart (77 rows on prod: feeds 279–313, e.g. kasenbosai=310, mudam=280; master ndi=80, damnet=50)
-source_universe / source_universe_runs ── each provider's whole published list per run (recordUniverse), read by /coverage
+source_universe / source_universe_runs ── each provider's whole published list per run (recordUniverse), read by /coverage; `has_data` (0103) is FALSE when the provider lists a dam with no usable value
 backfill_progress ── (source_id, dam_id, year) → status
 api_keys / api_key_usage ── public-API auth + per-key rate-limit
 obs_daily / obs_monthly  ── TimescaleDB continuous aggregates
@@ -140,7 +140,11 @@ under its own `source_id` (the task name without `ingest:`, except
 `kasenbosai-v2`, which writes `kasenbosai`) and calls `recordUniverse()` with
 the provider's whole published list (`kasenbosai`'s list is recorded by
 `match:kasenbosai`; exemptions live in `universe_instrumentation.test.ts`).
-`CODEMAP.md` has one line per task file.
+Every ingest cron line carries `?jobKey=<task>`, so a tick replaces a job
+that is still retrying instead of queueing another; `crontab.test.ts` checks
+the key and that the default 25 attempts outlast each line's longest gap.
+`CODEMAP.md` has one line per task file. 112 tasks are registered: 96
+`ingest:*` (95 on the cron, `ingest:kasenbosai` manual) and 16 others.
 
 | Task | Schedule | What it does |
 |---|---|---|
@@ -152,11 +156,11 @@ the provider's whole published list (`kasenbosai`'s list is recorded by
 | `match:kasenbosai` | Mondays 03:30 | Seed `external_ids.kasenbosai` from the 川の防災情報 dam catalogue |
 | `ingest:kasenbosai-v2` | hourly :03 | 川の防災情報 per-dam JSON for every `external_ids.kasenbosai` dam (800+) |
 | `ingest:kasenbosai` | manual | Original SourceAdapter run for 川の防災情報; superseded by v2 |
-| MLIT regional bureaus (12): `hkd-mlit-dam` `ktr-kinu-dam` `ktr-tone-dam` `hrr-mlit-dam` `kkr-mlit-dam` `cgr-mlit-dam` `cgr-okakawa-dam` `cgr-ashida-seki` `skr-hiji-dam` `qsr-turuta-dam` `qsr-ryumon-dam` `qsr-toukan-dam` | hourly; `kkr-mlit-dam` and `cgr-okakawa-dam` daily | 国管理 dam dashboards of 北海道開発局 and the 地方整備局 |
-| 水資源機構 (14): `jwa-junpo` `jwa-toneara` `jwa-tonekako` `shimokubo` `jwa-chubu` `jwa-kiso-rt` `jwa-toyokawa` `jwa-aichi-yosui` `jwa-biwako` `jwa-yoshino` `jwa-chikugo` `jwa-chikugo-rt` `jwa-fukudou` `jwa-chiba-bouso` | hourly; `jwa-junpo`, `jwa-aichi-yosui`, `jwa-chikugo`, `jwa-chiba-bouso` daily; `jwa-chubu` around its weekday report | JWA realtime pages, daily 0時 tables and the 旬報 |
-| Prefectural river / disaster portals (41): `akita-kasen` `aomori-dam` `iwate-kasen` `miyagi-kasen` `yamagata-bousai` `fukushima-kasen` `ibaraki-bousai` `tochigi-bodik` `gunma-kasen` `saitama-suibo` `kanagawa-dam` `yamanashi-dam` `nagano-kasen` `gifu-kasen` `aichi-kasen` `toyama-bousai` `ishikawa-kasen` `fukui-bousai` `shiga-bousai` `kyoto-bousai` `osaka-bousai` `hyogo-bodik` `nara-kasen` `wakayama-kasen` `tottori-dam` `tottori-bousai` `shimane-bousai` `okayama-bousai` `hiroshima-bousai` `yamaguchi-bousai` `tokushima-bousai` `kagawa-bousai` `ehime-bousai` `kochi-bousai` `saga-bousai` `nagasaki-kasen` `kumamoto-bousai` `oita-bousai` `miyazaki-bousai` `kagoshima-bousai` `kagoshima-kasen` | hourly, each at its own minute (`nagasaki-kasen` twice) | 県管理 dam tables: 防災Web HTML, JSON feeds, BODIK CSVs |
-| Agricultural (8): `fukushima-nourin` `chiba-nourin` `miyagi-nousei` `oita-nourin` `kyushu-nousei` `kagawa-tameike` `sado-nourin` `tndam-hyogo` | daily 04:15–05:54; `tndam-hyogo` hourly | 農業用ダム / ため池 survey tables and PDFs (mostly 貯水率 only) |
-| Water utilities, 企業局, other operators (12): `tokyo-waterworks` `chiba-suisei` `fukuoka-bodik` `kitakyushu-suido` `sasebo-suido` `matsue-suido` `nagasaki-city-suido` `okinawa-eb` `kochi-kigyo` `nagano-kigyo` `mc-tottori-hydro` `aitoyo` | hourly, daily or weekly per upstream | Waterworks 水源状況, 企業局 dam data, hydro operators |
+| MLIT regional bureaus (12): `hkd-mlit-dam` `ktr-kinu-dam` `ktr-tone-dam` `hrr-mlit-dam` `kkr-mlit-dam` `cgr-mlit-dam` `cgr-okakawa-dam` `cgr-ashida-seki` `skr-hiji-dam` `qsr-turuta-dam` `qsr-ryumon-dam` `qsr-toukan-dam` | hourly; `kkr-mlit-dam` daily, `cgr-okakawa-dam` twice daily | 国管理 dam dashboards of 北海道開発局 and the 地方整備局 |
+| 水資源機構 (14): `jwa-junpo` `jwa-toneara` `jwa-tonekako` `shimokubo` `jwa-chubu` `jwa-kiso-rt` `jwa-toyokawa` `jwa-aichi-yosui` `jwa-biwako` `jwa-yoshino` `jwa-chikugo` `jwa-chikugo-rt` `jwa-fukudou` `jwa-chiba-bouso` | hourly; `jwa-junpo`, `jwa-chikugo`, `jwa-chiba-bouso` daily, `jwa-aichi-yosui` twice daily; `jwa-chubu` three times each weekday around its report | JWA realtime pages, daily 0時 tables and the 旬報 |
+| Prefectural river / disaster portals (41): `akita-kasen` `aomori-dam` `iwate-kasen` `miyagi-kasen` `yamagata-bousai` `fukushima-kasen` `ibaraki-bousai` `tochigi-bodik` `gunma-kasen` `saitama-suibo` `kanagawa-dam` `yamanashi-dam` `nagano-kasen` `gifu-kasen` `aichi-kasen` `toyama-bousai` `ishikawa-kasen` `fukui-bousai` `shiga-bousai` `kyoto-bousai` `osaka-bousai` `hyogo-bodik` `nara-kasen` `wakayama-kasen` `tottori-dam` `tottori-bousai` `shimane-bousai` `okayama-bousai` `hiroshima-bousai` `yamaguchi-bousai` `tokushima-bousai` `kagawa-bousai` `ehime-bousai` `kochi-bousai` `saga-bousai` `nagasaki-kasen` `kumamoto-bousai` `oita-bousai` `miyazaki-bousai` `kagoshima-bousai` `kagoshima-kasen` | hourly (`nagasaki-kasen` twice an hour) | 県管理 dam tables: 防災Web HTML, JSON feeds, BODIK CSVs |
+| Agricultural (9): `fukushima-nourin` `chiba-nourin` `miyagi-nousei` `oita-nourin` `kyushu-nousei` `kagawa-tameike` `sado-nourin` `tndam-hyogo` `syowaike` | daily 04:15–05:54; `tndam-hyogo` and `syowaike` hourly | 農業用ダム / ため池 survey tables and PDFs (mostly 貯水率 only); 丹波 and 昭和池 telemetry |
+| Water utilities, 企業局, other operators (18): `tokyo-waterworks` `chiba-suisei` `fukuoka-bodik` `kitakyushu-suido` `sasebo-suido` `matsue-suido` `nagasaki-city-suido` `shimonoseki-suido` `kudamatsu-suido` `awaji-suido` `okinawa-eb` `kochi-kigyo` `nagano-kigyo` `mie-kigyo` `hyogo-kigyo` `hyogo-suigen` `mc-tottori-hydro` `aitoyo` | daily, `tokyo-waterworks` and `sasebo-suido` twice daily; `fukuoka-bodik`, `kochi-kigyo`, `mc-tottori-hydro` hourly, `nagano-kigyo` twice an hour | Waterworks 水源状況, 企業局 dam data, 兵庫県's monthly 県内水源 table, hydro operators; weekly or monthly pages are polled daily |
 | `backfill:mudam` | 20th of month 05:00 (last year); manual for more | NILIM ダム諸量DB daily history |
 | `backfill:jwa-junpo` / `backfill:kagoshima-bodik` | manual | JWA 旬報 archive / 鹿児島県 BODIK ZIP archives |
 | `backfill:suimon:enqueue` / `backfill:suimon:run` | manual | Populate and drain `backfill_progress` for 水文水質DB |
