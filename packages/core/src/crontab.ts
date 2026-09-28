@@ -403,6 +403,17 @@ export const CRONTAB = `
 # 貯水量 + 貯水率。調査日ベースで不定期 (月1-2回) なので日次ポーリング。
 54 5 * * * ingest:sado-nourin ?jobKey=ingest:sado-nourin
 
+# 米沢平野土地改良区「用水状況」— 水窪ダム (東北農政局) の貯水量 (千m3)。
+# 毎週月曜 (祝日は翌日) 更新、キャプションに「Y.M.D現在」。当年度アーカイブ
+# ページ (週次の全件) も毎回読み、調査日 00:00 JST へ冪等 UPSERT。
+# 月曜 13 時台の更新後に拾うため 07:13 UTC (16:13 JST) の日次。
+13 7 * * * ingest:yonezawa-heiya ?jobKey=ingest:yonezawa-heiya
+
+# 山王海土地改良区「ダムの状況」— 山王海 (再)・葛丸 (東北農政局) の貯水量 (万㎥)。
+# 値はページ内スクリプト、調査日は WordPress REST の modified_gmt (JST 日付
+# 00:00)。毎週月曜朝に更新されるので 03:22 UTC (12:22 JST) の日次。
+22 3 * * * ingest:sannoukai ?jobKey=ingest:sannoukai
+
 # 岩手県河川情報システム — 10 県管理ダム (Gamen32Servlet, Shift_JIS, one
 # request per station). Columns: level / 貯水量(千m³) / inflow / outflow.
 # Cron at :57.

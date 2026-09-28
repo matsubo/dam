@@ -62,6 +62,10 @@ export const FRESHNESS_OVERRIDE_HOURS: Readonly<Record<string, number | null>> =
   // Survey-date source: 福島県 publishes 隔週 in かんがい期 but only monthly
   // Oct–Mar, so the window has to clear a full winter gap plus publish lag.
   'fukushima-nourin': 45 * 24,
+  // Weekly (Mondays) from April into December, then the winter thins out: the
+  // 令和７年度 archive goes 2025.12.22 → 2026.1.13 → 2026.03.30, 76 days. The
+  // derived 3 × weekly gap (~3 weeks) would flag every February.
+  'yonezawa-heiya': 80 * 24,
   // Hand-edited about monthly; the index shows gaps up to 62 days (2026/3/26
   // → 5/27), and the 現在 date runs ~5 days behind the edit.
   'awaji-suido': 70 * 24,
