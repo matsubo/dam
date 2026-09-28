@@ -17,6 +17,7 @@ const EXT_IDS = [
   'COV-RATE-SMALL',
   'COV-SYNTHETIC',
   'COV-STALE',
+  'COV-EMPTY',
 ];
 const HOUR = 3600 * 1000;
 const DAY = 24 * HOUR;
@@ -26,6 +27,7 @@ let damRateRiver: bigint;
 let damRateSmall: bigint;
 let damSynthetic: bigint;
 let damStale: bigint;
+let damEmpty: bigint;
 let base: Awaited<ReturnType<typeof coverageHeadline>>;
 
 async function cleanup(): Promise<void> {
@@ -59,6 +61,7 @@ beforeAll(async () => {
   damRateSmall = await addDam('COV-RATE-SMALL', 'cov-rate-small', 10);
   damSynthetic = await addDam('COV-SYNTHETIC', 'cov-synthetic', 40);
   damStale = await addDam('COV-STALE', 'cov-stale', 40);
+  damEmpty = await addDam('COV-EMPTY', 'cov-empty', 40);
 
   const now = Date.now();
   await upsertObservations([
@@ -92,6 +95,9 @@ beforeAll(async () => {
       sourceId: 'test',
       storageRate: 0.8,
     },
+    // mudam's blank CSV days and kasenbosai's 欠測 hours: a row, but no value.
+    { damId: damEmpty, observedAt: new Date(now - HOUR), sourceId: 'test' },
+    { damId: damEmpty, observedAt: new Date(now - 60 * DAY), sourceId: 'mudam' },
   ]);
 });
 
@@ -121,6 +127,16 @@ describe('coverageHeadline', () => {
     expect(gap - baseGap).toBe(1); // the 60-day-old dam
   });
 
+  test('a row with every quantity NULL counts in neither metric', async () => {
+    const c = await coverageHeadline();
+    const rows = await sql<{ n: bigint }[]>`
+      SELECT COUNT(*)::BIGINT AS n FROM observations WHERE dam_id = ${damEmpty}
+    `;
+    expect(Number(rows[0]?.n ?? 0n)).toBe(2); // the fixture really is there
+    expect(c.realtimeDamCount - base.realtimeDamCount).toBe(3);
+    expect(c.historicalDamCount - base.historicalDamCount).toBe(4);
+  });
+
   test('the 貯水率 numerator needs a rate AND a river dam (height >= 15 m)', async () => {
     const c = await coverageHeadline();
     // Only rate-river qualifies: level-only has no rate, rate-small is 10 m,
@@ -130,9 +146,9 @@ describe('coverageHeadline', () => {
 
   test('the 貯水率 denominator is river dams, not every master row', async () => {
     const c = await coverageHeadline();
-    // 4 of the 5 fixtures are >= 15 m.
-    expect(c.riverDamCount - base.riverDamCount).toBe(4);
-    expect(c.damTotal - base.damTotal).toBe(5);
+    // 5 of the 6 fixtures are >= 15 m.
+    expect(c.riverDamCount - base.riverDamCount).toBe(5);
+    expect(c.damTotal - base.damTotal).toBe(6);
     expect(c.riverDamCount).toBeLessThanOrEqual(c.damTotal);
   });
 

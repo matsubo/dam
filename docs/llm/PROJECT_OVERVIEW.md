@@ -133,7 +133,7 @@ header. Set `API_AUTH_BYPASS=1` for local development.
 
 ## Worker tasks (graphile-worker)
 
-Cron schedule lives in `apps/worker/src/crontab.ts` (times are UTC); every task
+Cron schedule lives in `packages/core/src/crontab.ts` (times are UTC); every task
 is registered in `apps/worker/src/index.ts`. Task names use `:` separators
 because graphile-worker rejects `.` in identifiers. Each ingest task writes
 under its own `source_id` (the task name without `ingest:`, except
@@ -142,7 +142,7 @@ the provider's whole published list (`kasenbosai`'s list is recorded by
 `match:kasenbosai`, its `has_data` by `kasenbosai-v2` through
 `recordUniverseHasData`; exemptions live in `universe_instrumentation.test.ts`).
 Every ingest cron line carries `?jobKey=<task>`, so a tick replaces a job
-that is still retrying instead of queueing another; `crontab.test.ts` checks
+that is still retrying instead of queueing another; `apps/worker/src/crontab.test.ts` checks
 the key and that the default 25 attempts outlast each line's longest gap.
 `CODEMAP.md` has one line per task file. 112 tasks are registered: 96
 `ingest:*` (95 on the cron, `ingest:kasenbosai` manual) and 16 others.
@@ -158,10 +158,10 @@ the key and that the default 25 attempts outlast each line's longest gap.
 | `ingest:kasenbosai-v2` | hourly :03 | 川の防災情報 per-dam JSON for every `external_ids.kasenbosai` dam (800+) |
 | `ingest:kasenbosai` | manual | Original SourceAdapter run for 川の防災情報; superseded by v2 |
 | MLIT regional bureaus (12): `hkd-mlit-dam` `ktr-kinu-dam` `ktr-tone-dam` `hrr-mlit-dam` `kkr-mlit-dam` `cgr-mlit-dam` `cgr-okakawa-dam` `cgr-ashida-seki` `skr-hiji-dam` `qsr-turuta-dam` `qsr-ryumon-dam` `qsr-toukan-dam` | hourly; `kkr-mlit-dam` daily, `cgr-okakawa-dam` twice daily | 国管理 dam dashboards of 北海道開発局 and the 地方整備局 |
-| 水資源機構 (14): `jwa-junpo` `jwa-toneara` `jwa-tonekako` `shimokubo` `jwa-chubu` `jwa-kiso-rt` `jwa-toyokawa` `jwa-aichi-yosui` `jwa-biwako` `jwa-yoshino` `jwa-chikugo` `jwa-chikugo-rt` `jwa-fukudou` `jwa-chiba-bouso` | hourly; `jwa-junpo`, `jwa-chikugo`, `jwa-chiba-bouso` daily, `jwa-aichi-yosui` twice daily; `jwa-chubu` three times each weekday around its report | JWA realtime pages, daily 0時 tables and the 旬報 |
-| Prefectural river / disaster portals (41): `akita-kasen` `aomori-dam` `iwate-kasen` `miyagi-kasen` `yamagata-bousai` `fukushima-kasen` `ibaraki-bousai` `tochigi-bodik` `gunma-kasen` `saitama-suibo` `kanagawa-dam` `yamanashi-dam` `nagano-kasen` `gifu-kasen` `aichi-kasen` `toyama-bousai` `ishikawa-kasen` `fukui-bousai` `shiga-bousai` `kyoto-bousai` `osaka-bousai` `hyogo-bodik` `nara-kasen` `wakayama-kasen` `tottori-dam` `tottori-bousai` `shimane-bousai` `okayama-bousai` `hiroshima-bousai` `yamaguchi-bousai` `tokushima-bousai` `kagawa-bousai` `ehime-bousai` `kochi-bousai` `saga-bousai` `nagasaki-kasen` `kumamoto-bousai` `oita-bousai` `miyazaki-bousai` `kagoshima-bousai` `kagoshima-kasen` | hourly (`nagasaki-kasen` twice an hour) | 県管理 dam tables: 防災Web HTML, JSON feeds, BODIK CSVs |
+| 水資源機構 (14): `jwa-junpo` `jwa-toneara` `jwa-tonekako` `shimokubo` `jwa-chubu` `jwa-kiso-rt` `jwa-toyokawa` `jwa-aichi-yosui` `jwa-biwako` `jwa-yoshino` `jwa-chikugo` `jwa-chikugo-rt` `jwa-fukudou` `jwa-chiba-bouso` | hourly; `jwa-junpo`, `jwa-chiba-bouso` daily, `jwa-aichi-yosui` and `jwa-chikugo` twice daily; `jwa-chubu` three times each weekday around its report | JWA realtime pages, daily 0時 tables and the 旬報 |
+| Prefectural river / disaster portals (41): `akita-kasen` `aomori-dam` `iwate-kasen` `miyagi-kasen` `yamagata-bousai` `fukushima-kasen` `ibaraki-bousai` `tochigi-bodik` `gunma-kasen` `saitama-suibo` `kanagawa-dam` `yamanashi-dam` `nagano-kasen` `gifu-kasen` `aichi-kasen` `toyama-bousai` `ishikawa-kasen` `fukui-bousai` `shiga-bousai` `kyoto-bousai` `osaka-bousai` `hyogo-bodik` `nara-kasen` `wakayama-kasen` `tottori-dam` `tottori-bousai` `shimane-bousai` `okayama-bousai` `hiroshima-bousai` `yamaguchi-bousai` `tokushima-bousai` `kagawa-bousai` `ehime-bousai` `kochi-bousai` `saga-bousai` `nagasaki-kasen` `kumamoto-bousai` `oita-bousai` `miyazaki-bousai` `kagoshima-bousai` `kagoshima-kasen` | hourly (`nagasaki-kasen` twice an hour; `kanagawa-dam` is a daily 30-day window polled every 3 h) | 県管理 dam tables: 防災Web HTML, JSON feeds, BODIK CSVs |
 | Agricultural (9): `fukushima-nourin` `chiba-nourin` `miyagi-nousei` `oita-nourin` `kyushu-nousei` `kagawa-tameike` `sado-nourin` `tndam-hyogo` `syowaike` | daily 04:15–05:54; `tndam-hyogo` and `syowaike` hourly | 農業用ダム / ため池 survey tables and PDFs (mostly 貯水率 only); 丹波 and 昭和池 telemetry |
-| Water utilities, 企業局, other operators (18): `tokyo-waterworks` `chiba-suisei` `fukuoka-bodik` `kitakyushu-suido` `sasebo-suido` `matsue-suido` `nagasaki-city-suido` `shimonoseki-suido` `kudamatsu-suido` `awaji-suido` `okinawa-eb` `kochi-kigyo` `nagano-kigyo` `mie-kigyo` `hyogo-kigyo` `hyogo-suigen` `mc-tottori-hydro` `aitoyo` | daily, `tokyo-waterworks` and `sasebo-suido` twice daily; `fukuoka-bodik`, `kochi-kigyo`, `mc-tottori-hydro` hourly, `nagano-kigyo` twice an hour | Waterworks 水源状況, 企業局 dam data, 兵庫県's monthly 県内水源 table, hydro operators; weekly or monthly pages are polled daily |
+| Water utilities, 企業局, other operators (18): `tokyo-waterworks` `chiba-suisei` `fukuoka-bodik` `kitakyushu-suido` `sasebo-suido` `matsue-suido` `nagasaki-city-suido` `shimonoseki-suido` `kudamatsu-suido` `awaji-suido` `okinawa-eb` `kochi-kigyo` `nagano-kigyo` `mie-kigyo` `hyogo-kigyo` `hyogo-suigen` `mc-tottori-hydro` `aitoyo` | daily, `tokyo-waterworks` and `sasebo-suido` twice daily; `fukuoka-bodik`, `kochi-kigyo`, `mc-tottori-hydro` hourly, `aitoyo` hourly 09–20 JST (business-day page), `nagano-kigyo` twice an hour | Waterworks 水源状況, 企業局 dam data, 兵庫県's monthly 県内水源 table, hydro operators; weekly or monthly pages are polled daily |
 | `backfill:mudam` | 20th of month 05:00 (last year); manual for more | NILIM ダム諸量DB daily history |
 | `backfill:jwa-junpo` / `backfill:kagoshima-bodik` | manual | JWA 旬報 archive / 鹿児島県 BODIK ZIP archives |
 | `backfill:suimon:enqueue` / `backfill:suimon:run` | manual | Populate and drain `backfill_progress` for 水文水質DB |

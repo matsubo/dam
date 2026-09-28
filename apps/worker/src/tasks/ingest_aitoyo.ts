@@ -9,9 +9,11 @@
 //   矢作川水系 2 dams: 矢作 / 羽布
 //
 // Source: https://www.aitoyo.or.jp/fountainhead/dam/
-// Format: HTML table (TablePress plugin); the value timestamp is the
-//         daily 24:00 JST (木曽川/豊川) or 09:00 JST (矢作川). Source has
-//         a 1-2 day publication lag for confirmed values.
+// Format: HTML table (TablePress plugin) headed 「YYYY年M月D日現在」; the page
+//         notes 「貯水率は、当日の24時（木曽川・豊川）または9時（矢作川）の
+//         値」, so a row is stamped at that day's 24:00 or 09:00 JST. The page
+//         shows one day only, updated on business days (Monday shows Sunday)
+//         at a varying hour, often after 11:00 JST.
 // License: 公益財団法人 publication; 出典明示で再配布可 (public utility data).
 //
 // Cadence trade-off: daily (vs jwa-junpo's 10-day) for 5 overlap dams.
@@ -27,17 +29,23 @@ import type { Task } from 'graphile-worker';
 
 const PAGE_URL = process.env.AITOYO_URL ?? 'https://www.aitoyo.or.jp/fountainhead/dam/';
 
-const NAME_MAP: Array<{ aitoyoName: string; masterName: string; prefCodes: string[] }> = [
+// readingHourJst: the page's 当日 hour for the system — 24 (木曽川/豊川) or 9 (矢作川).
+const NAME_MAP: Array<{
+  aitoyoName: string;
+  masterName: string;
+  prefCodes: string[];
+  readingHourJst: 24 | 9;
+}> = [
   // 木曽川水系 (all overlap with jwa-junpo)
-  { aitoyoName: '牧尾ダム', masterName: '牧尾', prefCodes: ['20'] }, // 長野
-  { aitoyoName: '阿木川ダム', masterName: '阿木川', prefCodes: ['21'] }, // 岐阜
-  { aitoyoName: '味噌川ダム', masterName: '味噌川', prefCodes: ['20'] },
-  { aitoyoName: '岩屋ダム', masterName: '岩屋', prefCodes: ['21'] },
+  { aitoyoName: '牧尾ダム', masterName: '牧尾', prefCodes: ['20'], readingHourJst: 24 }, // 長野
+  { aitoyoName: '阿木川ダム', masterName: '阿木川', prefCodes: ['21'], readingHourJst: 24 }, // 岐阜
+  { aitoyoName: '味噌川ダム', masterName: '味噌川', prefCodes: ['20'], readingHourJst: 24 },
+  { aitoyoName: '岩屋ダム', masterName: '岩屋', prefCodes: ['21'], readingHourJst: 24 },
   // 豊川水系 (overlap)
-  { aitoyoName: '宇連ダム', masterName: '宇連', prefCodes: ['23'] }, // 愛知
+  { aitoyoName: '宇連ダム', masterName: '宇連', prefCodes: ['23'], readingHourJst: 24 }, // 愛知
   // 矢作川水系 (NEW vs jwa-junpo / tokyo-waterworks)
-  { aitoyoName: '矢作ダム', masterName: '矢作', prefCodes: ['23', '20'] }, // 愛知/長野 boundary
-  { aitoyoName: '羽布ダム', masterName: '羽布', prefCodes: ['23'] }, // 愛知
+  { aitoyoName: '矢作ダム', masterName: '矢作', prefCodes: ['23', '20'], readingHourJst: 9 }, // 愛知/長野 boundary
+  { aitoyoName: '羽布ダム', masterName: '羽布', prefCodes: ['23'], readingHourJst: 9 }, // 愛知
 ];
 
 // Aggregate rows in the aitoyo table — skip these.
@@ -45,6 +53,7 @@ const SKIP_NAMES = new Set(['豊川用水全体']);
 
 interface ParsedRow {
   aitoyoName: string;
+  observedAt: Date;
   storageCapacityThouM3: number;
   storageVolumeThouM3: number;
   storageRatePct: number;
@@ -68,28 +77,25 @@ function parseNum(s: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Parse 「2026年5月11日現在」 → JST midnight Date for that date. */
-export function parseAitoyoDate(text: string): Date | null {
-  const m = text.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
+/** 「2026年9月27日現在」 → that calendar date as a UTC-midnight Date. */
+function parseAitoyoDate(text: string): Date | null {
+  const m = text.match(/(\d{4})年(\d{1,2})月(\d{1,2})日現在/);
   if (!m) return null;
-  const yr = Number(m[1]);
-  const mo = Number(m[2]);
-  const day = Number(m[3]);
-  if (!yr || !mo || !day) return null;
-  const d = new Date(Date.UTC(yr, mo - 1, day - 1, 15, 0, 0, 0));
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-export function parseAitoyoHtml(html: string): { reportDate: Date | null; rows: ParsedRow[] } {
-  const reportDate = parseAitoyoDate(html);
+export function parseAitoyoHtml(html: string): ParsedRow[] {
+  const day = parseAitoyoDate(html);
   const out: ParsedRow[] = [];
-  const knownNames = new Set(NAME_MAP.map((m) => m.aitoyoName));
+  if (!day) return out;
+  const hourByName = new Map(NAME_MAP.map((m) => [m.aitoyoName, m.readingHourJst]));
 
   // Restrict to the dam-storage table. The page has multiple tables; this
   // one is the only one with column-3..column-7 storage cells.
   const tableMatch = html.match(/<table[^>]*tablepress-id-top[^>]*>([\s\S]*?)<\/table>/);
   const tableHtml = tableMatch?.[1] ?? '';
-  if (!tableHtml) return { reportDate, rows: out };
+  if (!tableHtml) return out;
 
   const seen = new Set<string>();
   const rowMatches = tableHtml.match(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g) ?? [];
@@ -105,7 +111,8 @@ export function parseAitoyoHtml(html: string): { reportDate: Date | null; rows: 
     }
     const name = cellByClass['column-2'];
     if (!name) continue;
-    if (SKIP_NAMES.has(name) || !knownNames.has(name)) continue;
+    const readingHourJst = hourByName.get(name);
+    if (SKIP_NAMES.has(name) || readingHourJst == null) continue;
     const capacity = parseNum(cellByClass['column-3'] ?? '');
     const volume = parseNum(cellByClass['column-4'] ?? '');
     const rate = parseNum(cellByClass['column-5'] ?? '');
@@ -114,12 +121,14 @@ export function parseAitoyoHtml(html: string): { reportDate: Date | null; rows: 
     seen.add(name);
     out.push({
       aitoyoName: name,
+      // JST hour h of the day = UTC hour h - 9 (24 → 15:00Z the same date).
+      observedAt: new Date(day.getTime() + (readingHourJst - 9) * 3_600_000),
       storageCapacityThouM3: capacity,
       storageVolumeThouM3: volume,
       storageRatePct: rate,
     });
   }
-  return { reportDate, rows: out };
+  return out;
 }
 
 interface DamMatch {
@@ -203,12 +212,9 @@ const task: Task = async (_payload, helpers) => {
     return;
   }
   const html = await r.text();
-  const { reportDate, rows: parsed } = parseAitoyoHtml(html);
-  log(
-    `aitoyo: parsed ${parsed.length} dam rows, reportDate=${reportDate?.toISOString() ?? '(missing)'}`,
-  );
-  if (!reportDate) {
-    log('aitoyo: could not parse year/month/day from header; aborting');
+  const parsed = parseAitoyoHtml(html);
+  if (parsed.length === 0) {
+    log('aitoyo: no rows — the 「…日現在」 date or the tablepress-id-top table is missing');
     return;
   }
 
@@ -220,7 +226,7 @@ const task: Task = async (_payload, helpers) => {
     const storageVolumeM3 = row.storageVolumeThouM3 * 1_000;
     const storageRate = Math.max(0, Math.min(1, row.storageRatePct / 100));
     inputs.push({
-      observedAt: reportDate,
+      observedAt: row.observedAt,
       damId,
       sourceId: 'aitoyo',
       storageVolumeM3,

@@ -559,7 +559,32 @@ const components = {
             sourcesPendingScan: {
               type: 'integer',
               description:
-                'まだ公開一覧を記録していないデータ提供元の数。**これが 0 より大きい間、`notPublished` は「どこも公開していない」ことの証明にならない** — 単にまだ調べていないだけ。',
+                'まだ公開一覧を記録していないデータ提供元の数 (`pendingScanSources` の件数)。**これが 0 より大きい間、`notPublished` は「どこも公開していない」ことの証明にならない** — 単にまだ調べていないだけ。',
+            },
+            pendingScanSources: {
+              type: 'array',
+              description:
+                '判定ゲートを開けたままにしている (公開一覧をまだ記録していない) データ提供元。source_id 順。',
+              items: {
+                type: 'object',
+                required: ['sourceId', 'label', 'reason', '_links'],
+                properties: {
+                  sourceId: { type: 'string', example: 'sado-nourin' },
+                  label: {
+                    type: 'string',
+                    description: '表示名。編集済みの名称が無い提供元は source_id そのまま。',
+                    example: '佐渡 農業用ダム',
+                  },
+                  reason: {
+                    type: 'string',
+                    enum: ['no_recent_observations', 'ingesting_without_list'],
+                    description:
+                      '`no_recent_observations` 直近 30 日にこの提供元の観測値が入っていない (初回実行待ち、または取り込み失敗) / `ingesting_without_list` 直近 30 日に観測値は入っているのに公開一覧を記録していない (取り込み処理に一覧の記録が無い、または毎回空の一覧を渡している)',
+                    example: 'no_recent_observations',
+                  },
+                  _links: { $ref: '#/components/schemas/HalLinks' },
+                },
+              },
             },
             sourcesNotEnumerable: {
               type: 'integer',

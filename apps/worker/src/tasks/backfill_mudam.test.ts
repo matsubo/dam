@@ -1,7 +1,9 @@
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { sql } from '@dam/db/client';
 import { bindExternalId } from '@dam/db/repo/dams';
-import { matchMaster } from './backfill_mudam.ts';
+import { matchMaster, parseMudamCsv } from './backfill_mudam.ts';
 
 // 花山 (宮城) as prod has it on 2026-09-27: NDI 269 花山（元） (1957) and NDI
 // 270 花山（再） (2004) share one coordinate, and mudam damsysId 181 is stamped
@@ -130,6 +132,48 @@ describe('matchMaster listings the name rule gets wrong (#79)', () => {
         { slug: TONO, mudam: '172' },
         { slug: TONO2, mudam: '180' },
       ]);
+    });
+  });
+});
+
+describe('parseMudamCsv', () => {
+  // 木地山 (damsysId 209), 2024, as form02/download serves it. The header
+  // reads （※空欄はデータがなし）: 2024/2/29 is `2024/2/29,,,`.
+  const csv = new TextDecoder('shift_jis').decode(
+    readFileSync(
+      join(
+        import.meta.dir,
+        '..',
+        '..',
+        '..',
+        '..',
+        'tests/fixtures/mudam/form02_day_209_2024.shiftjis.csv',
+      ),
+    ),
+  );
+
+  test('a day with every column blank is no observation', () => {
+    const rows = parseMudamCsv(csv);
+    expect(rows).toHaveLength(365); // 366 days in 2024, one of them blank
+    const iso = rows.map((r) => r.observedAt.toISOString());
+    expect(iso).not.toContain('2024-02-28T15:00:00.000Z'); // 2/29 JST
+    expect(rows.find((r) => r.observedAt.toISOString() === '2024-02-29T15:00:00.000Z')).toEqual({
+      observedAt: new Date('2024-02-29T15:00:00.000Z'), // 3/1 JST
+      waterLevelM: 470.4,
+      inflowM3s: 4.2,
+      outflowM3s: 4.39,
+    });
+  });
+
+  test('a day with any one value is kept', () => {
+    const [row] = parseMudamCsv(
+      '木地山,（※空欄はデータがなし）\n年月日,貯水位（m）,流入量（m3/S）,放流量（m3/S）\n2024/2/29,,,0.5\n',
+    );
+    expect(row).toEqual({
+      observedAt: new Date('2024-02-28T15:00:00.000Z'),
+      waterLevelM: null,
+      inflowM3s: null,
+      outflowM3s: 0.5,
     });
   });
 });

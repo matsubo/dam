@@ -4,8 +4,9 @@ import { sql } from '../client.ts';
  * The site quotes two different coverage numbers and they answer two
  * different questions:
  *
- * - `realtimeDamCount` — dams with ANY non-synthetic observation in the
- *   window. A source that only publishes 水位 or 雨量 still counts here.
+ * - `realtimeDamCount` — dams with ANY non-synthetic value in the window. A
+ *   source that only publishes 水位 or 雨量 still counts here; a row with
+ *   every quantity NULL (a blank mudam day, an all-欠測 hour) does not.
  * - `storageRateRiverDamCount` / `riverDamCount` — dams we can actually show
  *   a 貯水率 for, over the dams the ダム法 calls a dam (堤高 15 m 以上).
  *
@@ -15,9 +16,9 @@ import { sql } from '../client.ts';
 export interface CoverageHeadline {
   /** Every master row, including 堤高 15 m 未満 のため池など. */
   damTotal: number;
-  /** Dams with a non-synthetic observation inside the window. */
+  /** Dams with a non-synthetic, non-empty observation inside the window. */
   realtimeDamCount: number;
-  /** Dams with a non-synthetic observation at any time (mudam history counts). */
+  /** Dams with a non-synthetic, non-empty observation at any time (mudam history counts). */
   historicalDamCount: number;
   /** 河川管理ダム: 堤高 15 m 以上 — the 貯水率 coverage denominator. */
   riverDamCount: number;
@@ -38,10 +39,14 @@ export async function coverageHeadline(
       (SELECT COUNT(DISTINCT dam_id)::INT
          FROM observations
          WHERE observed_at > NOW() - MAKE_INTERVAL(days => ${windowDays})
-           AND source_id <> 'synthetic')                                 AS "realtimeDamCount",
+           AND source_id <> 'synthetic'
+           AND num_nonnulls(storage_volume_m3, storage_rate, inflow_m3s,
+                            outflow_m3s, water_level_m, rainfall_mm) > 0) AS "realtimeDamCount",
       (SELECT COUNT(DISTINCT dam_id)::INT
          FROM observations
-         WHERE source_id <> 'synthetic')                                 AS "historicalDamCount",
+         WHERE source_id <> 'synthetic'
+           AND num_nonnulls(storage_volume_m3, storage_rate, inflow_m3s,
+                            outflow_m3s, water_level_m, rainfall_mm) > 0) AS "historicalDamCount",
       (SELECT COUNT(*)::INT
          FROM dams
          WHERE height_m >= ${RIVER_DAM_MIN_HEIGHT_M})                    AS "riverDamCount",

@@ -1,7 +1,8 @@
 // apps/worker/src/index.ts
+
+import { CRONTAB } from '@dam/core/crontab';
 import { ensureBucket } from '@dam/storage/snapshot_store';
 import { run } from 'graphile-worker';
-import { CRONTAB } from './crontab.ts';
 import aggregatesRefresh from './tasks/aggregates_refresh.ts';
 import backfillJwaJunpo from './tasks/backfill_jwa_junpo.ts';
 import backfillKagoshima from './tasks/backfill_kagoshima_bodik.ts';

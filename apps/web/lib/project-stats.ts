@@ -15,7 +15,7 @@
 //   workspaces         git ls-files 'apps/*/package.json' 'packages/*/package.json' | wc -l
 //   workerTasks        ls apps/worker/src/tasks | grep -v '\.test\.' | wc -l
 //   ingestTasks        ls apps/worker/src/tasks | grep '^ingest_' | grep -v '\.test\.' | wc -l
-//   cronEntries        grep -cE '^[0-9*]' apps/worker/src/crontab.ts
+//   cronEntries        grep -cE '^[0-9*]' packages/core/src/crontab.ts
 //   apiRoutes          find apps/web/app/api -name route.ts | wc -l
 //   pageRoutes         find apps/web/app -name page.tsx | wc -l
 //   tables             grep -hoiE '^CREATE TABLE( IF NOT EXISTS)? [a-z_]+' packages/db/migrations/*.sql

@@ -76,27 +76,24 @@ export function parseKisoRtTimestamp(text: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function extractSection(html: string, damName: string, allNames: string[]): string {
-  const header = `<h4>${damName}</h4>`;
-  const start = html.indexOf(header);
+// A dam's section is its own table: the page goes on after 中里貯水池 with
+// unmapped blocks (調整池, 長良川河口堰, 木曽川大堰) whose rows share its labels.
+function extractSection(html: string, damName: string): string {
+  const start = html.indexOf(`<h4>${damName}</h4>`);
   if (start < 0) return '';
-  let end = html.length;
-  for (const other of allNames) {
-    if (other === damName) continue;
-    const idx = html.indexOf(`<h4>${other}</h4>`, start + header.length);
-    if (idx > start && idx < end) end = idx;
-  }
-  return html.slice(start, end);
+  const end = html.indexOf('</table>', start);
+  return html.slice(start, end < 0 ? html.length : end);
 }
 
 // Extract the first text node of the <td class="data"> following <th>LABEL</th>.
+// An empty cell yields null; it must not fall through to the next row's value.
 // Using a regex on the raw HTML avoids conflating the value with the superscript
 // unit text (e.g. 10³m³ rendered as "103m3" when stripped of tags).
 function extractLabeledValue(section: string, label: string): number | null {
   const pos = section.indexOf(`${label}</th>`);
   if (pos < 0) return null;
   const after = section.slice(pos);
-  const m = after.match(/<td[^>]*class="data"[^>]*>([^<]+)/);
+  const m = after.match(/<td[^>]*class="data"[^>]*>([^<]*)/);
   if (!m) return null;
   return parseNum((m[1] ?? '').trim());
 }
@@ -104,10 +101,9 @@ function extractLabeledValue(section: string, label: string): number | null {
 export function parseKisoRtHtml(html: string): { observedAt: Date | null; rows: ParsedRow[] } {
   const observedAt = parseKisoRtTimestamp(html);
   const rows: ParsedRow[] = [];
-  const allNames = NAME_MAP.map((m) => m.kisoName);
 
   for (const m of NAME_MAP) {
-    const section = extractSection(html, m.kisoName, allNames);
+    const section = extractSection(html, m.kisoName);
     if (!section) continue;
 
     const waterLevel = extractLabeledValue(section, '貯水位');

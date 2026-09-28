@@ -96,13 +96,29 @@ describe('GET /api/v1/coverage', () => {
       }
 
       // While > 0, `notPublished` is not a claim that nobody publishes those
-      // dams — it is "not looked at yet". The count must say so.
-      expect((await summary()).sourcesPendingScan).toBe(1);
+      // dams — it is "not looked at yet". The summary must say so, and name
+      // the source holding the gate open so a reader knows what to fix.
+      const open = await summary();
+      expect(open.sourcesPendingScan).toBe(1);
+      expect(open.pendingScanSources).toEqual([
+        {
+          sourceId: PENDING,
+          // No editorial entry for the fixture: the id stands in as its label.
+          label: PENDING,
+          reason: 'no_recent_observations',
+          _links: {
+            source: { href: `/api/v1/sources/${PENDING}` },
+            web: { href: `/sources/${PENDING}` },
+          },
+        },
+      ]);
 
       await recordUniverse(PENDING, [
         { externalId: 'p-1', name: 'Coverage gate stub', resolvedDamId: null },
       ]);
-      expect((await summary()).sourcesPendingScan).toBe(0);
+      const closed = await summary();
+      expect(closed.sourcesPendingScan).toBe(0);
+      expect(closed.pendingScanSources).toEqual([]);
     } finally {
       if (stubbed.length > 0) {
         await sql`DELETE FROM source_universe_runs WHERE source_id IN ${sql(stubbed)}`;
