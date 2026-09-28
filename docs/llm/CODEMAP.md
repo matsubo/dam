@@ -208,6 +208,7 @@ the file for detail.
 | `src/tasks/ingest_shimokubo.ts` | `shimokubo`: JWA 下久保ダム `table.json`, hourly (10-min readings) |
 | `src/tasks/ingest_shioda_sayamaike.ts` | `shioda-sayamaike`: 上田市塩田平土地改良区 沢山池の状況図 CSV (10-min upload, stamped at its Last-Modified), hourly (沢山池: level + m³ volume + rate + inflow + rain) |
 | `src/tasks/ingest_skr_hiji.ts` | `skr-hiji-dam`: 四国地方整備局 肱川 dams via www1.river.go.jp DspDamData, hourly (野村 / 鹿野川) |
+| `src/tasks/ingest_sokobaru_dam.ts` | `sokobaru-dam`: 底原ダム管理システム i-mode pages, hourly, last 13 hours (石垣島 底原/真栄里/石垣, NDI pinned; level + outflow; 底原 also rate + inflow + 総貯水量 less 堆砂, only where the printed rate ties) |
 | `src/tasks/ingest_syowaike.ts` | `syowaike`: 兵庫県 昭和池防災情報管理システム テレメータ snapshot, hourly (昭和池, NDI 1539 pinned; level + m³ volume + inflow + rain) |
 | `src/tasks/ingest_tndam_hyogo.ts` | `tndam-hyogo`: 兵庫県 丹波農林振興事務所 ダムテレメータ, latest reading per dam, hourly (6 dams) |
 | `src/tasks/ingest_tochigi.ts` | `tochigi-bodik`: 栃木県 ダム諸量 BODIK CSV (NGSI-v2 shape), hourly |
