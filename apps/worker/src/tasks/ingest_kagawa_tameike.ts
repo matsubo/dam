@@ -303,9 +303,10 @@ const task: Task = async (_payload, helpers) => {
 
 /**
  * The ため池 column of the newest report PDF. null (logged) when the PDF is
- * not linked, not served, or carries no survey date.
+ * not linked, not served, times out, cannot be read, or carries no survey
+ * date — so 宝山湖, read from the page itself, is still written.
  */
-async function readPonds(
+export async function readPonds(
   indexHtml: string,
   headers: Record<string, string>,
   log: (s: string) => void,
@@ -315,12 +316,18 @@ async function readPonds(
     log(`${SOURCE_ID}: no chosui PDF linked from the index`);
     return null;
   }
-  const pdfRes = await fetch(pdfUrl, { headers, signal: AbortSignal.timeout(30_000) });
-  if (pdfRes.status !== 200) {
-    log(`${SOURCE_ID}: PDF HTTP ${pdfRes.status} for ${pdfUrl}`);
+  let text: string;
+  try {
+    const pdfRes = await fetch(pdfUrl, { headers, signal: AbortSignal.timeout(30_000) });
+    if (pdfRes.status !== 200) {
+      log(`${SOURCE_ID}: PDF HTTP ${pdfRes.status} for ${pdfUrl}`);
+      return null;
+    }
+    text = await pdfToText(new Uint8Array(await pdfRes.arrayBuffer()));
+  } catch (err) {
+    log(`${SOURCE_ID}: PDF unreadable at ${pdfUrl}: ${err instanceof Error ? err.message : err}`);
     return null;
   }
-  const text = await pdfToText(new Uint8Array(await pdfRes.arrayBuffer()));
   const { surveyDate, rows, published } = parseKagawaTameikeText(text);
   if (!surveyDate) {
     log(`${SOURCE_ID}: no ため池 survey date in ${pdfUrl}`);
