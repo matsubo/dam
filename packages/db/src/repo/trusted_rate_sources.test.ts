@@ -35,6 +35,15 @@ describe('trusted_rate_basis after issue #71', () => {
   });
 });
 
+describe('trusted_rate_basis for shimonoseki-suido', () => {
+  // 貯水率 against the printed, season-aware 満水量: 湯の原 699,000 / 43.1 % =
+  // 1,622 千m³ in the 洪水期 (cap 1,620), 507,000 / 24.7 % = 2,053 out of it
+  // (有効 2,050) (0107).
+  test('shimonoseki-suido publishes a season-aware rate and is trusted', async () => {
+    expect(await trusted('shimonoseki-suido')).toBe(true);
+  });
+});
+
 describe('trusted_rate_basis for jwa-chikugo-rt', () => {
   // 貯水率 against the 貯水容量 pool: 寺内 volume/rate = 8,230 千m³, 大山 11,000,
   // against annual 有効 17,030 / 18,000 (0087).

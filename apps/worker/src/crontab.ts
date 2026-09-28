@@ -461,6 +461,11 @@ export const CRONTAB = `
 # Mondays but seen on a Thursday, so daily at 07:17 UTC (16:17 JST).
 17 7 * * * ingest:mie-kigyo ?jobKey=ingest:mie-kigyo
 
+# 下関市上下水道局 水源状況 — 湯の原ダム written (木屋川 and the combined 内日貯水池
+# recorded in the universe only). 貯水量 + 貯水率 at 00:00 JST, edited a few
+# times a week during the day. Daily at 07:46 UTC (16:46 JST).
+46 7 * * * ingest:shimonoseki-suido ?jobKey=ingest:shimonoseki-suido
+
 # M&C鳥取水力発電 発電所・ダム運転情報 — 鳥取県営発電 4 ダム (茗荷谷/三朝調整池/
 # 中津 + 菅沢). One current value per dam (refreshed every minute): 10分間流入量
 # and ゲート放流量 only — the published ダム水位 is a gauge height, not EL.
