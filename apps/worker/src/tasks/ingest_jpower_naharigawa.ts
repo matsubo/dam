@@ -32,7 +32,11 @@ import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
 import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
+import {
+  recordUniverse,
+  recordUniverseHasData,
+  type UniverseRow,
+} from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 
 const BASE_URL =
@@ -93,7 +97,10 @@ export function parseNaharigawaGraph(html: string): NaharigawaGraph {
   const endMonth = selected(html, 'x_month');
   const endDay = selected(html, 'x_day');
   const times = rows.get('時 ： 分');
-  const name = html.match(/<td id="x_name"[^>]*>([^<]*)<\/td>/)?.[1]?.trim() || null;
+  // A non-browser user agent gets ASP.NET's downlevel markup, which wraps
+  // the name in <font><b>; the values rows differ only in attributes.
+  const nameCell = html.match(/<td id="x_name"[^>]*>([\s\S]*?)<\/td>/)?.[1] ?? '';
+  const name = nameCell.replace(/<[^>]*>/g, '').trim() || null;
   if (year === null || endMonth === null || endDay === null || !times) {
     return { name: null, readings: [] };
   }
@@ -214,15 +221,14 @@ const task: Task = async (_payload, helpers) => {
   const damByName = await matchMaster(log);
 
   const value = graphValue(new Date());
-  // The site renders its values only for a user agent starting "Mozilla"
-  // (any other gets the table with every field blank), so the bot name
-  // follows that token, as backfill_mudam does.
-  const userAgent = `Mozilla/5.0 ${
+  const userAgent =
     process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)'
-  }`;
+    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
   const inputs = [] as Parameters<typeof upsertObservations>[0];
   let parsed = 0;
+  // Stations whose page yielded readings this run; the rest stay unknown
+  // (an HTTP error or a blank page may be ours, not the operator's).
+  const withData = new Set<string>();
   for (const { no, name } of STATIONS) {
     const url = `${BASE_URL}?value=${encodeURIComponent(value)}&no=${no}`;
     const r = await fetch(url, {
@@ -240,6 +246,7 @@ const task: Task = async (_payload, helpers) => {
       continue;
     }
     parsed += graph.readings.length;
+    if (graph.readings.length > 0) withData.add(name);
     const damId = damByName.get(name);
     if (!damId) continue;
     for (const p of graph.readings) {
@@ -259,6 +266,10 @@ const task: Task = async (_payload, helpers) => {
     }
   }
 
+  await recordUniverseHasData(
+    SOURCE_ID,
+    STATIONS.map(({ name }) => ({ externalId: name, hasData: withData.has(name) ? true : null })),
+  );
   const written = await upsertObservations(inputs);
   log(
     `${SOURCE_ID} done: value=${value} parsed=${parsed} matched=${damByName.size} written=${written}`,
