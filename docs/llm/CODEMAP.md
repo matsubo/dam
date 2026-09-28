@@ -105,7 +105,7 @@ the file for detail.
 | `src/tasks/master_refresh_damnet.ts` | monthly damnet attribute pass |
 | `src/tasks/master_match.ts` | `master:match`: placeholder, logs and returns (still on the nightly cron) |
 | `src/tasks/ingest_kasenbosai.ts` | `ingest:kasenbosai`: original SourceAdapter run for 川の防災情報 (`packages/adapters/kasenbosai`); registered, not scheduled — `kasenbosai-v2` is the live feed |
-| `src/tasks/ingest_kasenbosai_v2.ts` | `kasenbosai-v2`: hourly 川の防災情報 per-dam JSON for every `external_ids.kasenbosai` dam; a reading whose every quantity is flagged invalid is skipped, not stored empty |
+| `src/tasks/ingest_kasenbosai_v2.ts` | `kasenbosai-v2`: hourly 川の防災情報 per-dam JSON for every `external_ids.kasenbosai` dam; a reading whose every quantity is flagged invalid is skipped, not stored empty; sets kasenbosai's `source_universe.has_data` (FALSE when ~2 days of hourly rows flag every quantity) |
 | `src/tasks/ingest_shiga.ts` | `shiga-bousai`: hourly 滋賀県土木防災 dam stations, read only via `/mobile/dam/` (robots.txt disallows `/dam/`); level + flows, 6 h window re-upserted |
 | `src/tasks/ingest_aomori.ts` | `aomori-dam`: hourly 青森県河川砂防 ダム諸量グラフ for every dam the ダム諸量現況表 lists (11 on 2026-09-27), not a fixed set |
 | `src/tasks/ingest_nara_kasen.ts` | `nara-kasen`: hourly 奈良県 ダム現況表 (5 dams); volume stored as 有効 − 空容量 (usable), 大門's left null |
@@ -207,7 +207,7 @@ the file for detail.
 | `src/tasks/ingest_yamagata_bousai.ts` | `yamagata-bousai`: 山形県河川・砂防情報 防災Web JSON, hourly (~17 dams: 13 県 + 4 国) |
 | `src/tasks/ingest_yamaguchi_bousai.ts` | `yamaguchi-bousai`: 山口県土木防災情報システム, one page per dam (24 h at 10 min), hourly (23 dams) |
 | `src/tasks/ingest_yamanashi_dam.ts` | `yamanashi-dam`: 山梨県雨量・水位情報 ダム状況表, hourly (6 県管理ダム) |
-| `src/tasks/match_kasenbosai.ts` | `match:kasenbosai`: weekly sweep of the 川の防災情報 dam catalogue (~900 dams); seeds `external_ids.kasenbosai` and records kasenbosai's universe |
+| `src/tasks/match_kasenbosai.ts` | `match:kasenbosai`: weekly sweep of the 川の防災情報 dam catalogue (~900 dams); seeds `external_ids.kasenbosai` and records kasenbosai's universe (keeping the `has_data` kasenbosai-v2 set) |
 | `src/tasks/match_kasenbosai_scoring.ts` | pure scoring tiers for match_kasenbosai (name / containment / trigram / distance); not a task |
 | `src/tasks/observations_rebind.ts` | `observations:rebind`: move one source's observations to the right dam, keyed by NDI id (manual) |
 | `src/tasks/quality_freshness.ts` | `quality:freshness-check`: hourly stale-source digest to Discord (or the log) |

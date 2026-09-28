@@ -396,6 +396,8 @@ const task: Task = async (rawPayload, helpers) => {
   // to vanish into the `unmatched` counter (writeMatchReview only fires when
   // there were candidates), which is exactly the "they publish it, we don't
   // have the dam" case /coverage needs in order to say anything honest.
+  // The catalogue carries no values, so has_data stays whatever the hourly
+  // ingest:kasenbosai-v2 last saw.
   const universeRows = scored.map(({ dam: d, match: m }) => ({
     externalId: d.obsFcd,
     name: d.obsNm,
@@ -403,7 +405,7 @@ const task: Task = async (rawPayload, helpers) => {
     lng: d.lon,
     resolvedDamId: m.damId != null && winners.has(m) ? m.damId : null,
   }));
-  await recordUniverse('kasenbosai', universeRows);
+  await recordUniverse('kasenbosai', universeRows, { keepHasData: true });
   const unresolved = universeRows.filter((r) => r.resolvedDamId == null).length;
 
   log(
