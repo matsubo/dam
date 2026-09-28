@@ -8,6 +8,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   chooseMaster,
   findLatestPdfUrl,
+  masterFor,
   parseOitaNourinDate,
   parseOitaNourinPdfText,
   pdfToText,
@@ -174,5 +175,25 @@ describe('chooseMaster', () => {
     // The feed prints 耶馬渓, the master holds 耶馬溪 — the same dam in new and
     // old kanji.
     expect(chooseMaster('耶馬渓ダム', [{ id: 9n, name: '耶馬溪' }])).toBe(9n);
+  });
+});
+
+describe('masterFor', () => {
+  // 大分's masters; 大蘇 (NDI 2306) and 大谷 (2307) are filed under 熊本.
+  const masters = [{ id: 1n, name: '石山' }];
+  const pinnedIds = new Map([
+    ['2306', 10n],
+    ['2307', 11n],
+  ]);
+  const bind = (name: string) =>
+    parsed.published.includes(name) ? masterFor(name, masters, pinnedIds) : undefined;
+
+  test('links the published 大蘇ダム / 大谷ダム to their 熊本-filed NDI rows', () => {
+    expect(bind('大蘇ダム')).toBe(10n);
+    expect(bind('大谷ダム')).toBe(11n);
+  });
+
+  test('matches every other name within 大分', () => {
+    expect(bind('石山ダム')).toBe(1n);
   });
 });

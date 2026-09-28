@@ -1,7 +1,9 @@
 // /admin/match-review — Phase A3 (#4): surface uncertain matcher decisions
 // staged in `match_review` for visual confirmation. This is a READ-ONLY
-// dashboard; resolution writes go through the POST endpoint at
-// /api/v1/admin/match-review/[id]/resolve.
+// dashboard with no resolve action: a migration closes a review by setting
+// `resolved_at` (and `resolved_dam_id`, or NULL when the station is not a
+// master dam). Open means `resolved_at IS NULL`, so a review closed as
+// "not a dam" leaves the list too.
 
 import { sql } from '@dam/db/client';
 import type { Metadata } from 'next';
@@ -54,13 +56,13 @@ async function loadReview(): Promise<{
         mr.created_at
       FROM match_review mr
       LEFT JOIN dams d ON d.id = mr.best_dam_id
-      WHERE mr.resolved_dam_id IS NULL
+      WHERE mr.resolved_at IS NULL
       ORDER BY mr.confidence ASC, mr.created_at DESC
       LIMIT 200
     `,
     sql<
       { resolved: bigint }[]
-    >`SELECT COUNT(*)::BIGINT AS resolved FROM match_review WHERE resolved_dam_id IS NOT NULL`,
+    >`SELECT COUNT(*)::BIGINT AS resolved FROM match_review WHERE resolved_at IS NOT NULL`,
   ]);
   return {
     unresolved,
@@ -85,8 +87,8 @@ export default async function MatchReviewPage() {
       <h1 className="text-2xl font-semibold mb-2">マッチング確認</h1>
       <p className="text-sm text-on-surface-variant mb-6">
         ソースと master ダムのマッチングのうち、確度 (confidence) が 0.8 未満のものを stage
-        しています。下のリストから候補を選んで承認・却下できます。 確度 1.0 (完全一致) は自動で
-        external_ids に書き込み済みなので表示されません。
+        しています。確認結果はマイグレーションで反映します (紐付け先のダム、またはダムではない旨)。
+        確度 1.0 (完全一致) は自動で external_ids に書き込み済みなので表示されません。
       </p>
 
       <section className="mb-8 grid grid-cols-1 sm:grid-cols-2 gap-4">

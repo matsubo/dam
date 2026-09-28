@@ -331,7 +331,9 @@ export async function writeMatchReview(d: CatalogueDam, m: MatchResult): Promise
           best_dam_id       = EXCLUDED.best_dam_id,
           confidence        = EXCLUDED.confidence,
           payload           = EXCLUDED.payload
-      WHERE match_review.resolved_dam_id IS NULL
+      -- A closed review (resolved_at set, whether to a dam or to NULL = not a
+      -- dam) is frozen: re-staging never reopens it or rewrites its evidence.
+      WHERE match_review.resolved_at IS NULL
   `;
 }
 
