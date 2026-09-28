@@ -168,9 +168,10 @@ the file for detail.
 | `src/tasks/ingest_jwa_chikugo.ts` | `jwa-chikugo`: JWA 筑後川 water-source page, daily 0時 (7 dams incl. 松原 / 下筌 / 合所) |
 | `src/tasks/ingest_jwa_chubu.ts` | `jwa-chubu`: JWA 中部支社 水源状況 report, published once per weekday (木曽川水系 5 dams + 三重用水 中里); poll times in `packages/core/src/crontab.ts` |
 | `src/tasks/ingest_jwa_junpo.ts` | `jwa-junpo`: JWA 旬報 (10-day report), polled daily (26 JWA dams across 7 water systems) |
-| `src/tasks/ingest_jwa_kiso_rt.ts` | `jwa-kiso-rt`: JWA 中部支社 木曽川水系 realtime page, hourly (6 dams) |
+| `src/tasks/ingest_jwa_kiso_rt.ts` | `jwa-kiso-rt`: JWA 中部支社 木曽川水系 realtime page, hourly (12 facilities: 5 dams, 三重用水 調整池, 長良川河口堰, 木曽川大堰) |
 | `src/tasks/ingest_jwa_toneara.ts` | `jwa-toneara`: JWA 関東支社 利根川 / 荒川 daily 0時 table, polled hourly (13 facilities) |
-| `src/tasks/ingest_jwa_toyokawa.ts` | `jwa-toyokawa`: JWA 中部支社 豊川水系 realtime page, hourly (宇連 / 大島) |
+| `src/tasks/ingest_jwa_toyokawa.ts` | `jwa-toyokawa`: JWA 中部支社 豊川水系 realtime page, hourly (14 facilities: 宇連 / 大島, 豊川用水 調整池 and 頭首工) |
+| `src/tasks/jwa_chubu_realtime.ts` | Parser and name/prefecture binding shared by `jwa-kiso-rt` and `jwa-toyokawa` (中部支社 realtime overview maps) |
 | `src/tasks/ingest_jwa_yoshino.ts` | `jwa-yoshino`: JWA 吉野川上流総合管理所 realtime page, hourly (5 dams; rate for 早明浦 only) |
 | `src/tasks/ingest_kagawa_bousai.ts` | `kagawa-bousai`: かがわ防災Webポータル `dam_station.json`, hourly (18 dams) |
 | `src/tasks/ingest_kagoshima_bousai.ts` | `kagoshima-bousai`: 鹿児島県防災ポータル `dam_station.json`, hourly; items only during flood events |
@@ -200,6 +201,7 @@ the file for detail.
 | `src/tasks/ingest_saitama_suibo.ts` | `saitama-suibo`: 埼玉県 川の防災情報 `dinfo.csv`, hourly (9 dams / 調節池) |
 | `src/tasks/ingest_shimane_bousai.ts` | `shimane-bousai`: 島根県水防情報システム `dam60.json`, hourly (19 dams) |
 | `src/tasks/ingest_shimokubo.ts` | `shimokubo`: JWA 下久保ダム `table.json`, hourly (10-min readings) |
+| `src/tasks/ingest_shioda_sayamaike.ts` | `shioda-sayamaike`: 上田市塩田平土地改良区 沢山池の状況図 CSV (10-min upload, stamped at its Last-Modified), hourly (沢山池: level + m³ volume + rate + inflow + rain) |
 | `src/tasks/ingest_skr_hiji.ts` | `skr-hiji-dam`: 四国地方整備局 肱川 dams via www1.river.go.jp DspDamData, hourly (野村 / 鹿野川) |
 | `src/tasks/ingest_syowaike.ts` | `syowaike`: 兵庫県 昭和池防災情報管理システム テレメータ snapshot, hourly (昭和池, NDI 1539 pinned; level + m³ volume + inflow + rain) |
 | `src/tasks/ingest_tndam_hyogo.ts` | `tndam-hyogo`: 兵庫県 丹波農林振興事務所 ダムテレメータ, latest reading per dam, hourly (6 dams) |
