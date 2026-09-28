@@ -44,6 +44,14 @@ describe('trusted_rate_basis for shimonoseki-suido', () => {
   });
 });
 
+describe('trusted_rate_basis for dainichigawa-lid', () => {
+  // 貯水率 against the printed 最大貯水量 191.5 万t: 大日川 174.65 / 91.2 % =
+  // 191.5, against the master's 有効 2,032 千m³ (0213).
+  test('dainichigawa-lid publishes a rate on its own full pool and is trusted', async () => {
+    expect(await trusted('dainichigawa-lid')).toBe(true);
+  });
+});
+
 describe('trusted_rate_basis for jwa-chikugo-rt', () => {
   // 貯水率 against the 貯水容量 pool: 寺内 volume/rate = 8,230 千m³, 大山 11,000,
   // against annual 有効 17,030 / 18,000 (0087).

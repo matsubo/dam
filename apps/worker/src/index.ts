@@ -19,6 +19,7 @@ import ingestCgrMlit from './tasks/ingest_cgr_mlit.ts';
 import ingestCgrOkakawa from './tasks/ingest_cgr_okakawa.ts';
 import ingestChiba from './tasks/ingest_chiba.ts';
 import ingestChibaNourin from './tasks/ingest_chiba_nourin.ts';
+import ingestDainichigawaLid from './tasks/ingest_dainichigawa_lid.ts';
 import ingestEhimeBousai from './tasks/ingest_ehime_bousai.ts';
 import ingestFukuiBousai from './tasks/ingest_fukui_bousai.ts';
 import ingestFukuokaBodik from './tasks/ingest_fukuoka_bodik.ts';
@@ -231,6 +232,7 @@ async function main(): Promise<void> {
       'ingest:syowaike': ingestSyowaike,
       'ingest:hyogo-kigyo': ingestHyogoKigyo,
       'ingest:awaji-suido': ingestAwajiSuido,
+      'ingest:dainichigawa-lid': ingestDainichigawaLid,
       'backfill:kagoshima-bodik': backfillKagoshima,
       'backfill:suimon:enqueue': backfillEnqueue,
       'backfill:suimon:run': backfillRun,
