@@ -22,7 +22,7 @@
 // on another pool (12,722,000 / 92.1 % = 13.8 M m³ against the master's 有効
 // 18.77 M m³), so a monthly point would add nothing but a second basis.
 //
-// Priority 293. Cron daily 01:41 UTC (10:41 JST).
+// Priority 293. Cron daily 02:47 UTC (11:47 JST).
 
 import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
 import { sql } from '@dam/db/client';
