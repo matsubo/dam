@@ -11,7 +11,8 @@
     "./prefectures": "./src/prefectures.ts",
     "./similarity": "./src/similarity.ts",
     "./source_adapter": "./src/source_adapter.ts",
-    "./dam_binding": "./src/dam_binding.ts"
+    "./dam_binding": "./src/dam_binding.ts",
+    "./crontab": "./src/crontab.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
