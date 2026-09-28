@@ -113,6 +113,7 @@ the file for detail.
 | `src/tasks/ingest_cgr_ashida_seki.ts` | `cgr-ashida-seki`: 福山河川国道事務所 芦田川河口堰 mobile page, hourly (level, volume, flows) |
 | `src/tasks/ingest_cgr_okakawa.ts` | `cgr-okakawa-dam`: 岡山河川事務所 三水系主要ダム貯水状況 PDF, daily 9時 edition (11 dams + 2 weirs; only source for 小阪部川 / 坂根堰) |
 | `src/tasks/ingest_awaji_suido.ts` | `awaji-suido`: 淡路広域水道企業団 各水源地の貯水状況, hand-edited about monthly, polled daily (淡路島 utility reservoirs; volume only, written when its comma grouping — or, for a pair sharing a 合計, the 合計 minus its partner — and volume / 貯水率 basis check out) |
+| `src/tasks/ingest_hirado_suido.ts` | `hirado-suido`: 平戸市水道局 市内水道用ダムの貯水状況, re-issued about every 10 days, polled daily (神曽根第2 (NDI pin) / 箕坪 / 阿奈田 / 神の川 / 桜川 volume + rate; rate trusted, 0219; pond + two 砂防ダム universe only, not_dam_reason) |
 | `src/tasks/ingest_hyogo_kigyo.ts` | `hyogo-kigyo`: 兵庫県企業庁 貯水状況, weekly 「M月D日現在」 table polled daily (神谷 volume + rate only; 黒川 企業庁 share, 平荘 / 権現 totals and live-covered rows universe-only) |
 | `src/tasks/ingest_hyogo_suigen.ts` | `hyogo-suigen`: 兵庫県 県内の水源の状況, monthly 1日 survey (more often in a 渇水) polled daily; rate only, written for 千苅 / 丸山 / 加古川大堰 / 鴨川 (plus 呑吐 / 大川瀬 / 但東 when listed apart), dams with a volume feed elsewhere universe-only |
 | `src/tasks/ingest_jwa_aichi_yosui.ts` | `jwa-aichi-yosui`: 愛知用水総合管理所 水情報, daily 0時 (牧尾 + 東郷調整池 / 前山池; 牧尾's daily-mean flows not stored) |
@@ -121,6 +122,7 @@ the file for detail.
 | `src/tasks/ingest_jwa_fukudou.ts` | `jwa-fukudou`: 福岡導水 山口調整池, daily 0時 (volume stored as 総 − 堆砂; rate null) |
 | `src/tasks/ingest_jwa_tonekako.ts` | `jwa-tonekako`: 利根川河口堰 水位/流量 scripts, hourly 24 h window (Y.P. level + flows; only hours both tables carry) |
 | `src/tasks/ingest_kagawa_tameike.ts` | `kagawa-tameike`: 香川県「かがわの水」daily PDF, ため池貯水率 of 26 named ponds (rate only, dated by survey), plus the page's 宝山湖 block (香川用水調整池, NDI 2170; rate only, stamped at the stated 時) |
+| `src/tasks/ingest_kanda_suido.ts` | `kanda-suido`: 苅田町水道課 水源の状況, daily 「…現在」 (山口 (NDI pin, not 山口調整池) + 油木 volume + rate; rate trusted, 0219; 井ノ口池 universe only) |
 | `src/tasks/ingest_kitakyushu_suido.ts` | `kitakyushu-suido`: 北九州市上下水道局 水源状況, daily (10 sources; rate trusted, 0098) |
 | `src/tasks/ingest_kochi_kigyo.ts` | `kochi-kigyo`: 高知県公営企業局 ダム水文量表, hourly 48 h window (吉野 / 杉田 level + flows; empty hours dropped) |
 | `src/tasks/ingest_kudamatsu_suido.ts` | `kudamatsu-suido`: 下松市上下水道局 水源情報, edited about monthly, polled daily (県営温見 level + volume + rate; 末武川 universe only) |
@@ -130,9 +132,11 @@ the file for detail.
 | `src/tasks/ingest_miyagi_nousei.ts` | `miyagi-nousei`: 宮城県農政部「農業用水の状況」PDF, surveyed 1日・15日 (monthly off-season), polled daily (17 dams + 9 ため池; rate trusted, 0097) |
 | `src/tasks/ingest_nagano_kigyo.ts` | `nagano-kigyo`: 長野県企業局 10分諸量 JSON, :24 and :54 (4-row files; together all six 10-min rows) (高遠 / 菅平; priority 311 over kasenbosai's empty 高遠) |
 | `src/tasks/ingest_nagasaki_city_suido.ts` | `nagasaki-city-suido`: 長崎市上下水道局 ダム貯水量一覧表, weekly, polled daily (浦上 volume + rate, pinned to 浦上（元） NDI 2602; other 12 rows universe only) |
+| `src/tasks/ingest_omura_suido.ts` | `omura-suido`: 大村市上下水道局 ダム（水源）情報, daily 07:00 (池田（再） volume + rate on its 利水 200,000 m³, trusted 0219; the 萱瀬 city-share row universe only) |
 | `src/tasks/ingest_sado_nourin.ts` | `sado-nourin`: 佐渡地域振興局 農業用ダム pages, polled daily (7 県営農業用ダム; volume + rate, trusted in 0097) |
 | `src/tasks/ingest_sasebo_suido.ts` | `sasebo-suido`: 佐世保市水道局 daily 貯水状況 PDF (6 reservoirs; rate trusted, 0098) |
 | `src/tasks/ingest_shimonoseki_suido.ts` | `shimonoseki-suido`: 下関市上下水道局 水源状況, daily poll of a 0時 table updated a few times a week (湯の原 written, rate trusted, 0107; 木屋川 / combined 内日貯水池 universe only) |
+| `src/tasks/ingest_sue_suido.ts` | `sue-suido`: 須恵町上下水道課 貯水率, about monthly, dated by the page's 更新日, polled daily (須恵 whole-percent rate only; 3 ponds universe only) |
 | `src/tasks/backfill_suimon_enqueue.ts` | `backfill:suimon:enqueue`: populate backfill_progress for 水文水質DB (manual) |
 | `src/tasks/backfill_suimon_run.ts` | `backfill:suimon:run`: drain one batch of the suimon backfill queue (manual, not on the cron) |
 | `src/tasks/quality_recompute.ts` | `quality:recompute`: nightly missing/mismatch flagging; nulls phantom zero-storage series |
