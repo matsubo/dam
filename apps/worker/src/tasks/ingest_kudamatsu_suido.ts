@@ -164,6 +164,7 @@ const task: Task = async (_payload, helpers) => {
   // tell "published, not linked" from "nobody publishes it".
   const universe: UniverseRow[] = [];
   const inputs = [] as Parameters<typeof upsertObservations>[0];
+  const undated: string[] = [];
   let matched = 0;
   for (const d of dams) {
     const damId = await findDamId(d.name);
@@ -176,7 +177,8 @@ const task: Task = async (_payload, helpers) => {
     matched++;
     await bindExternalId(damId, SOURCE_ID, d.name);
     if (!d.observedAt) {
-      throw new Error(`${SOURCE_ID}: no 「…現在」 stamp for ${d.name} — layout change?`);
+      undated.push(d.name);
+      continue;
     }
     if (d.waterLevelM === null && d.storageVolumeM3 === null && d.storageRate === null) {
       log(`${SOURCE_ID}: ${d.name} has no values at ${d.observedAt.toISOString()}; skip`);
@@ -200,6 +202,11 @@ const task: Task = async (_payload, helpers) => {
 
   const written = await upsertObservations(inputs);
   log(`${SOURCE_ID} done: parsed=${dams.length} matched=${matched} written=${written}`);
+  // Thrown only after the universe and the dated dams are stored, so one lost
+  // stamp does not also hide the list or the other dam.
+  if (undated.length > 0) {
+    throw new Error(`${SOURCE_ID}: no 「…現在」 stamp for ${undated.join(', ')} — layout change?`);
+  }
 };
 
 export default task;
