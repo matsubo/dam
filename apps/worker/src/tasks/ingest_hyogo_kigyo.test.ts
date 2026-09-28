@@ -104,12 +104,19 @@ describe('chooseMaster', () => {
 
   test('binds a single dam by its name without ダム', () => {
     expect(chooseMaster('神谷ダム', masters)).toBe(10242n);
-    expect(chooseMaster('黒川ダム', masters)).toBe(10234n);
+    expect(chooseMaster('青野ダム', masters)).toBe(10195n);
     expect(chooseMaster('呑吐ダム', masters)).toBe(10229n);
   });
 
   test('leaves a reservoir total over several dam bodies unresolved', () => {
     expect(chooseMaster('平荘ダム', masters)).toBeNull();
     expect(chooseMaster('権現ダム', masters)).toBeNull();
+  });
+
+  test('leaves 黒川 unresolved: its figures are the 企業庁 share, not the dam', () => {
+    expect(chooseMaster('黒川ダム', masters)).toBeNull();
+    // A stamp from an earlier run must not re-bind it either.
+    const stamped = masters.map((m) => (m.id === 10234n ? { ...m, stamp: '黒川ダム' } : m));
+    expect(chooseMaster('黒川ダム', stamped)).toBeNull();
   });
 });
