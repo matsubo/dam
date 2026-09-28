@@ -122,6 +122,7 @@ the file for detail.
 | `src/tasks/ingest_kochi_kigyo.ts` | `kochi-kigyo`: 高知県公営企業局 ダム水文量表, hourly 48 h window (吉野 / 杉田 level + flows; empty hours dropped) |
 | `src/tasks/ingest_matsue_suido.ts` | `matsue-suido`: 松江市上下水道局 千本 / 大谷 daily 貯水量・貯水率 table |
 | `src/tasks/ingest_mc_tottori_hydro.ts` | `mc-tottori-hydro`: M&C鳥取水力発電 運転情報, hourly (茗荷谷/三朝調整池/中津/菅沢 flows; gauge heights not stored) |
+| `src/tasks/ingest_mie_kigyo.ts` | `mie-kigyo`: 三重県企業庁 水源状況, weekly table polled daily (伊坂 / 山村 / 菰野調整池; rate only where the printed 有効 is the master capacity, so 山村 volume-only) |
 | `src/tasks/ingest_miyagi_nousei.ts` | `miyagi-nousei`: 宮城県農政部「農業用水の状況」PDF, surveyed 1日・15日 (monthly off-season), polled daily (17 dams + 9 ため池; rate trusted, 0097) |
 | `src/tasks/ingest_nagano_kigyo.ts` | `nagano-kigyo`: 長野県企業局 10分諸量 JSON, :24 and :54 (4-row files; together all six 10-min rows) (高遠 / 菅平; priority 311 over kasenbosai's empty 高遠) |
 | `src/tasks/ingest_nagasaki_city_suido.ts` | `nagasaki-city-suido`: 長崎市上下水道局 ダム貯水量一覧表, weekly, polled daily (浦上 volume + rate, pinned to 浦上（元） NDI 2602; other 12 rows universe only) |
