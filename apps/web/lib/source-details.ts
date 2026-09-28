@@ -384,6 +384,15 @@ export const SOURCE_DETAILS: Record<string, SourceDetail> = {
     what: '下関市の水源 3 施設の貯水量(m³)・貯水率 (洪水期は制限後の満水量比)。湯の原ダムは新規カバレッジ。木屋川ダムは川の防災情報/山口県が 10 分値で提供済みのため未取込、内日貯水池は 2 ダム (内日第1/第2) の合算値のため未紐付け。',
     label: '下関市上下水道局',
   },
+  'kudamatsu-suido': {
+    upstream:
+      '下松市上下水道局「水源情報」 (city.kudamatsu.lg.jp/sui-gyoumu/~k-water/damu_001.html)',
+    license:
+      '利用条件の記載なし (公開情報)。免責事項は「下松市は利用者がこのサイトの情報を用いて行う一切の行為について、責任を負うものではありません」、フッターは「Copyright (C) Kudamatsu City All rights reserved.」。本サイトは観測値 (事実) のみを出典明示で引用。',
+    cadence: '月次程度 (月初の「○日0時現在」値; 取得は毎日 11:47 JST)',
+    what: '山口県営 温見ダムの水位・貯水量(m³)・貯水率 (総貯水量比)。温見ダムは本ソース唯一の観測源。同ページの末武川ダムは 10 分値の他ソースで取得済みのため未取込。',
+    label: '下松市上下水道局',
+  },
   'shimane-bousai': {
     upstream:
       '島根県水防情報システム (www.suibou-shimane.jp) — /dyn/dps/json/{YYYYMMDD}/dam60.json',
