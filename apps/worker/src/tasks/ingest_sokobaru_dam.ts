@@ -77,6 +77,8 @@ export interface HourlySeries {
   label: string;
   unit: string;
   points: { observedAt: Date; value: number | null }[];
+  /** Cells that are neither a number nor the office's literal ** 欠測 mark. */
+  unreadable: number;
 }
 
 /** One hourly page; null when it lacks the dated header (a 水文量 or menu page). */
@@ -91,17 +93,20 @@ export function parseHourlyPage(html: string): HourlySeries | null {
   const day = new Date(Date.UTC(Number(head[1]), Number(head[2]) - 1, Number(head[3])));
   let prevHour = Number(head[4]);
   const points: HourlySeries['points'] = [];
+  let unreadable = 0;
   for (const m of html.matchAll(/<DIV ALIGN="left">(\d{2}):00[\s\u3000]+([^<]*)<\/DIV>/g)) {
     const hour = Number(m[1]);
     if (hour > prevHour) day.setUTCDate(day.getUTCDate() - 1);
     prevHour = hour;
     const text = (m[2] ?? '').trim();
+    const numeric = /^-?\d+(?:\.\d+)?$/.test(text);
+    if (!numeric && text !== '**') unreadable++;
     points.push({
       observedAt: new Date(day.getTime() + (hour - 9) * 3_600_000),
-      value: /^-?\d+(?:\.\d+)?$/.test(text) ? Number(text) : null,
+      value: numeric ? Number(text) : null,
     });
   }
-  return { label, unit, points };
+  return { label, unit, points, unreadable };
 }
 
 /** A 水文量 page's readings and the hourly page each links to. */
@@ -163,15 +168,21 @@ export function readingsOf(series: (HourlySeries | null)[]): Reading[] {
 }
 
 /**
- * ** in every hour of every page is the office's own 欠測 (false); a value in
- * any hour is data (true). Anything else — no pages, a page that failed to
- * load or parse, a label or unit we do not store — may be our own breakage,
+ * The literal ** in every hour of every page is the office's own 欠測 (false);
+ * a value in any hour is data (true). Anything else — no pages, a page that
+ * failed to load or parse, one with no hourly rows, a cell that is neither a
+ * number nor **, a label or unit we do not store — may be our own breakage,
  * so it stays unknown.
  */
 export function hasDataOf(series: (HourlySeries | null)[]): boolean | null {
   if (readingsOf(series).length > 0) return true;
   if (series.length === 0) return null;
-  return series.every((s) => s !== null && FIELDS[s.label]?.unit === s.unit) ? false : null;
+  return series.every(
+    (s) =>
+      s !== null && FIELDS[s.label]?.unit === s.unit && s.points.length > 0 && s.unreadable === 0,
+  )
+    ? false
+    : null;
 }
 
 export interface MasterCapacity {

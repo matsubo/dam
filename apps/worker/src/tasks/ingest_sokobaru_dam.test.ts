@@ -204,6 +204,23 @@ describe('hasDataOf', () => {
   test('unknown when there are no pages', () => {
     expect(hasDataOf([])).toBeNull();
   });
+
+  test('unknown when a page has no hourly rows', async () => {
+    const [level, , outflow] = await series('00005002.html', '00005003.html', '00005004.html');
+    const empty = parseHourlyPage(
+      (await page('00005003.html')).replace(/<DIV ALIGN="left">\d{2}:00[^<]*<\/DIV>/g, ''),
+    );
+    expect(empty?.points).toEqual([]);
+    expect(hasDataOf([level ?? null, empty, outflow ?? null])).toBeNull();
+  });
+
+  test('unknown when a cell is neither a number nor the office’s ** 欠測 mark', async () => {
+    const dashed = parseHourlyPage(
+      (await page('00005003.html')).replace(/(15:00[\s\u3000]+)\*\*/, '$1---'),
+    );
+    const [level, , outflow] = await series('00005002.html', '00005003.html', '00005004.html');
+    expect(hasDataOf([level ?? null, dashed, outflow ?? null])).toBeNull();
+  });
 });
 
 describe('chooseMaster', () => {
