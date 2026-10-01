@@ -8,7 +8,7 @@ export const revalidate = 86400;
 export const metadata: Metadata = {
   title: 'ロードマップ',
   description:
-    'Dam Data Platform の運用ロードマップ。アルファ・ベータ・正式リリースの各段階で達成するゴール。',
+    'Dam Data Japan の運用ロードマップ。アルファ・ベータ・正式リリースの各段階で達成するゴール。',
   alternates: { canonical: '/roadmap' },
 };
 
