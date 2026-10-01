@@ -1,9 +1,9 @@
 import { ImageResponse } from 'next/og';
 
 // Site-wide social-share card (1200×630) used for `og:image` and
-// `twitter:image`. Dam-detail and watershed pages can ship their own
-// `opengraph-image.tsx` later for per-page cards if needed; this is the
-// fallback for everything else.
+// `twitter:image`. Dam-detail pages ship their own per-dam card
+// (app/dams/[slug]/opengraph-image.tsx); this is the fallback for
+// everything else.
 export const alt = 'Dam Data Platform — 日本のダム貯水量';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
