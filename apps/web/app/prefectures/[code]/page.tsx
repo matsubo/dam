@@ -22,6 +22,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     title: `${name}のダム`,
     description: `${name}に所在するダムの一覧と諸元。総貯水容量・水系・管理者で並び替え。`,
     alternates: { canonical: `/prefectures/${code}` },
+    // Spelled out because this object replaces layout.tsx's openGraph
+    // wholesale; the image comes from ./opengraph-image.tsx.
+    openGraph: {
+      type: 'website',
+      siteName: 'Dam Data Japan',
+      locale: 'ja_JP',
+      url: `/prefectures/${code}`,
+    },
   };
 }
 
