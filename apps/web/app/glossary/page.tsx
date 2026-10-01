@@ -6,7 +6,7 @@ export const revalidate = 86400;
 export const metadata: Metadata = {
   title: '用語集',
   description:
-    'Dam Data Platform で使われる用語の定義。ダム・水系・河川・貯水量・有効貯水容量・利水容量・貯水率・観測レコードなど、サイト上での意味と計算方法を明示します。',
+    'Dam Data Japan で使われる用語の定義。ダム・水系・河川・貯水量・有効貯水容量・利水容量・貯水率・観測レコードなど、サイト上での意味と計算方法を明示します。',
   alternates: { canonical: '/glossary' },
 };
 
