@@ -50,10 +50,16 @@ test('/sitemap.xml lists dam URLs', async ({ request }) => {
   expect(text).toMatch(/<loc>https?:\/\/[^<]+\/dams\/[^<]+<\/loc>/);
 });
 
-test('/robots.txt allows everything except /api/', async ({ request }) => {
+test('/robots.txt allows everything except the JSON API under /api/', async ({ request }) => {
   const r = await request.get('/robots.txt');
   expect(r.status()).toBe(200);
   const text = await r.text();
   expect(text).toContain('User-agent: *');
   expect(text).toContain('Disallow: /api/');
+  // Every group that disallows /api/ re-allows the human docs page.
+  const groups = text
+    .split(/\n(?=User-agent: )/)
+    .filter((g) => g.startsWith('User-agent: ') && g.includes('Disallow: /api/'));
+  expect(groups.length).toBeGreaterThan(1);
+  for (const g of groups) expect(g).toContain('Allow: /api/docs');
 });

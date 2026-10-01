@@ -6,11 +6,13 @@ import {
 } from '@dam/db/repo/watersheds';
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import type { CSSProperties } from 'react';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
 import { EntityIcon } from '../../components/entity-icon.tsx';
 import { WatershedSpotlight } from '../../components/watershed-spotlight.tsx';
 import { fmtPct } from '../../lib/format.ts';
 import { rateBand } from '../../lib/rate-color.ts';
+import styles from './page.module.css';
 
 // Legend bands shown once at the top so the colour coding is self-explanatory.
 const LEGEND: { at: number; label: string }[] = [
@@ -106,72 +108,11 @@ export default async function WatershedsPage() {
         })}
       </div>
 
-      {/* Mobile: stacked cards. */}
-      <ul className="md:hidden space-y-2">
-        {ordered.map((w) => {
-          const rate = rates.get(w.id.toString()) ?? null;
-          const kindLabel = w.kind === 'first' ? '一級' : w.kind === 'second' ? '二級' : 'その他';
-          return (
-            <li key={w.slug} className="bg-white border border-outline-variant rounded-xl p-3">
-              <Link
-                href={`/watersheds/${w.slug}`}
-                className="font-display font-semibold inline-flex items-center gap-1.5 text-on-surface no-underline hover:text-primary"
-              >
-                <EntityIcon kind="watershed" size={14} className="shrink-0" />
-                {w.name}
-              </Link>
-              <div className="text-xs text-on-surface-variant mt-1 flex flex-wrap items-center gap-x-2">
-                <span>{kindLabel}水系</span>
-                <span aria-hidden="true">·</span>
-                <span className="inline-flex items-center gap-1">
-                  <EntityIcon kind="dam" size={11} className="text-primary shrink-0" />
-                  {w.damCount} 基
-                </span>
-                {(() => {
-                  const rc = realDamCounts.get(w.id.toString()) ?? 0;
-                  return rc > 0 ? (
-                    <>
-                      <span aria-hidden="true">·</span>
-                      <span className="inline-flex items-center gap-1 text-emerald-700">
-                        <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
-                        実測 {rc} 基
-                      </span>
-                    </>
-                  ) : null;
-                })()}
-              </div>
-              <div className="mt-2 flex items-center gap-3">
-                <span className="text-[11px] text-on-surface-variant w-12 shrink-0">貯水率</span>
-                {rate != null ? (
-                  <>
-                    <div
-                      className="relative h-2 rounded-full bg-surface-container overflow-hidden flex-1"
-                      aria-label={`貯水率 ${(rate * 100).toFixed(1)}% ${rateBand(rate).label}`}
-                    >
-                      <div
-                        className="absolute inset-y-0 left-0 rounded-full"
-                        style={{ width: `${rate * 100}%`, background: rateBand(rate).color }}
-                      />
-                    </div>
-                    <span
-                      className="text-xs font-bold w-12 text-right tabular-nums"
-                      style={{ color: rateBand(rate).color }}
-                    >
-                      {fmtPct(rate)}
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-xs text-on-surface-variant">—</span>
-                )}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-
-      {/* Desktop: classic table. */}
-      <div className="hidden md:block overflow-x-auto">
-        <table>
+      {/* One table for every breakpoint — page.module.css reflows it into cards
+          below md and draws icons, dots and bars as pseudo-elements, so ~650
+          rows stay at 7 elements each instead of being rendered twice. */}
+      <div className="overflow-x-auto">
+        <table className={styles.list}>
           <thead>
             <tr>
               <th>水系</th>
@@ -184,57 +125,31 @@ export default async function WatershedsPage() {
           <tbody>
             {ordered.map((w) => {
               const rate = rates.get(w.id.toString()) ?? null;
+              const rc = realDamCounts.get(w.id.toString()) ?? 0;
               return (
                 <tr key={w.slug}>
                   <td>
-                    <span className="inline-flex items-center gap-1.5">
-                      <EntityIcon kind="watershed" size={14} className="shrink-0" />
-                      <Link href={`/watersheds/${w.slug}`}>{w.name}</Link>
-                    </span>
+                    <Link href={`/watersheds/${w.slug}`}>{w.name}</Link>
                   </td>
                   <td>{w.kind === 'first' ? '一級' : w.kind === 'second' ? '二級' : 'その他'}</td>
-                  <td className="text-right tabular-nums">
-                    <span className="inline-flex items-center gap-1 justify-end">
-                      <EntityIcon kind="dam" size={12} className="text-primary shrink-0" />
-                      {w.damCount}
-                    </span>
-                  </td>
-                  <td className="text-right tabular-nums text-xs">
-                    {(() => {
-                      const rc = realDamCounts.get(w.id.toString()) ?? 0;
-                      return rc > 0 ? (
-                        <span className="inline-flex items-center gap-1 justify-end text-emerald-700">
-                          <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
-                          {rc} 基
-                        </span>
-                      ) : (
-                        <span className="text-on-surface-variant">—</span>
-                      );
-                    })()}
-                  </td>
-                  <td className="text-right tabular-nums">
-                    {rate != null ? (
-                      <div className="inline-flex items-center gap-2 min-w-[140px]">
-                        <div
-                          className="relative h-2 rounded-full bg-surface-container overflow-hidden flex-1"
-                          aria-label={`貯水率 ${(rate * 100).toFixed(1)}% ${rateBand(rate).label}`}
-                        >
-                          <div
-                            className="absolute inset-y-0 left-0 rounded-full"
-                            style={{ width: `${rate * 100}%`, background: rateBand(rate).color }}
-                          />
-                        </div>
-                        <span
-                          className="text-xs font-bold w-12 text-right"
-                          style={{ color: rateBand(rate).color }}
-                        >
-                          {fmtPct(rate)}
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-on-surface-variant">—</span>
-                    )}
-                  </td>
+                  <td>{w.damCount}</td>
+                  {/* Cells 4–5 stay empty without a value; the stylesheet draws "—". */}
+                  <td>{rc > 0 ? `${rc} 基` : null}</td>
+                  {rate != null ? (
+                    <td
+                      aria-label={`貯水率 ${(rate * 100).toFixed(1)}% ${rateBand(rate).label}`}
+                      style={
+                        {
+                          '--r': `${(rate * 100).toFixed(1)}%`,
+                          '--c': rateBand(rate).color,
+                        } as CSSProperties
+                      }
+                    >
+                      {fmtPct(rate)}
+                    </td>
+                  ) : (
+                    <td />
+                  )}
                 </tr>
               );
             })}

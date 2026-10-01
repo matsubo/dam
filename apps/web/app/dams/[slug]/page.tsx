@@ -1,5 +1,7 @@
 import { PREFECTURES } from '@dam/core/prefectures';
 import {
+  canonicalTwin,
+  earliestObservationAt,
   findDamBySlug,
   latestObservation,
   latestRateByDam,
@@ -15,6 +17,7 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { cache } from 'react';
 import { Breadcrumbs } from '../../../components/breadcrumbs.tsx';
 import { DamCard } from '../../../components/dam-card.tsx';
 import { DamLocationMap } from '../../../components/dam-location-map.tsx';
@@ -35,6 +38,23 @@ export const revalidate = 900;
 export const dynamicParams = true;
 
 const PREF_NAME = new Map(PREFECTURES.map((p) => [p.code, p.name]));
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dam.teraren.com';
+
+// generateMetadata and the page both need these; cache() runs each once per
+// request.
+const getDam = cache(findDamBySlug);
+const getLatest = cache(latestObservation);
+const getTwin = cache(canonicalTwin);
+
+/**
+ * Whether the page has a reading to show (latestObservation), and — only when
+ * it does not — the （元）/（再） twin that carries this facility's readings.
+ */
+async function readingState(damId: bigint) {
+  const latest = await getLatest(damId);
+  const twin = latest ? null : await getTwin(damId);
+  return { latest, twin };
+}
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -43,43 +63,94 @@ interface PageProps {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug: rawSlug } = await params;
   const slug = decodeURIComponent(rawSlug);
-  const d = await findDamBySlug(slug);
+  const d = await getDam(slug);
   if (!d) return { title: 'ダムが見つかりません' };
-  // Search intent is "〇〇ダム 貯水率" — the display name carries the ダム
-  // suffix and the title/description lead with 貯水率.
   const dn = damDisplayName(d.name);
   const pref = PREF_NAME.get(d.prefCode) ?? d.prefCode;
+  const { latest, twin } = await readingState(d.id);
+  // A twin with no readings of its own defers to the one that has them; the
+  // page stays live and links across.
+  const canonical = `/dams/${twin?.slug ?? slug}`;
+  // Search intent is "〇〇ダム 貯水率" — the display name carries the ダム
+  // suffix and the title/description lead with 貯水率. Without a reading the
+  // page is 諸元 and 所在地 only, so say that instead of promising a rate.
+  const where = d.watershedName ? `${pref}・${d.watershedName}水系` : pref;
+  const copy = latest
+    ? {
+        title: `${dn}の貯水率・貯水量（${pref}）`,
+        description: `${dn}（${pref}）の現在の貯水率・貯水量・流入量・放流量と推移グラフ。${d.manager ? `${d.manager}が管理。` : ''}1時間ごとに更新。`,
+        ogTitle: `${dn}の貯水率・貯水量`,
+        ogDescription: `${dn}（${pref}）の現在の貯水率と貯水量の推移`,
+      }
+    : {
+        title: noDataHeading(dn, pref),
+        description: `${dn}（${where}）の諸元${specSummary(d)}と所在地。観測値（貯水率・貯水量）は未提供です。`,
+        ogTitle: noDataHeading(dn),
+        ogDescription: `${dn}（${where}）の諸元と所在地`,
+      };
   return {
-    title: `${dn}の貯水率・貯水量（${pref}）`,
-    description: `${dn}（${pref}）の現在の貯水率・貯水量・流入量・放流量と推移グラフ。${d.manager ? `${d.manager}が管理。` : ''}1時間ごとに更新。`,
-    alternates: { canonical: `/dams/${slug}` },
+    title: copy.title,
+    description: copy.description,
+    alternates: { canonical },
+    // Spelled out because this object replaces layout.tsx's openGraph
+    // wholesale; the image comes from ./opengraph-image.tsx.
     openGraph: {
-      title: `${dn}の貯水率・貯水量`,
-      description: `${dn}（${pref}）の現在の貯水率と貯水量の推移`,
+      type: 'website',
+      siteName: 'Dam Data Japan',
+      locale: 'ja_JP',
+      url: canonical,
+      title: copy.ogTitle,
+      description: copy.ogDescription,
     },
   };
+}
+
+/** Title/H1 for a dam with no reading: what the page actually has. */
+function noDataHeading(dn: string, pref?: string): string {
+  return `${dn}の諸元・所在地${pref ? `（${pref}）` : ''}`;
+}
+
+/** "（総貯水容量 …、堤高 …、型式 …、管理者 …）" from whichever are known. */
+function specSummary(d: {
+  totalCapacityM3: string | null;
+  heightM: string | null;
+  type: string | null;
+  manager: string | null;
+}): string {
+  const specs = [
+    d.totalCapacityM3 ? `総貯水容量 ${fmtCapacityMcm(d.totalCapacityM3)}` : null,
+    d.heightM ? `堤高 ${fmtN(d.heightM)} m` : null,
+    d.type ? `型式 ${d.type}` : null,
+    d.manager ? `管理者 ${d.manager}` : null,
+  ].filter((s) => s !== null);
+  return specs.length > 0 ? `（${specs.join('、')}）` : '';
 }
 
 export default async function DamDetail({ params }: PageProps) {
   const { slug: rawSlug } = await params;
   const slug = decodeURIComponent(rawSlug);
-  const d = await findDamBySlug(slug);
+  const d = await getDam(slug);
   if (!d) notFound();
   const dn = damDisplayName(d.name);
-  const [latest, change, nearby, watershed, watershedDams, norm, triage] = await Promise.all([
-    latestObservation(d.id),
-    storageChange(d.id),
-    nearbyDams(d.id, 20_000, 6),
-    d.watershedSlug ? findWatershedBySlug(d.watershedSlug) : Promise.resolve(null),
-    d.watershedSlug
-      ? listDams({ watershedSlug: d.watershedSlug, pageSize: 12 })
-      : Promise.resolve({ items: [], nextCursor: null }),
-    damSeasonalNorm(d.id),
-    // Only consulted when there is nothing to show — answers "why is this
-    // dam empty?" instead of leaving the reader to guess.
-    classifyOneDam(d.id),
+  const pref = PREF_NAME.get(d.prefCode) ?? d.prefCode;
+  const [{ latest, twin }, change, nearby, watershed, watershedDams, norm, triage] =
+    await Promise.all([
+      readingState(d.id),
+      storageChange(d.id),
+      nearbyDams(d.id, 20_000, 6),
+      d.watershedSlug ? findWatershedBySlug(d.watershedSlug) : Promise.resolve(null),
+      d.watershedSlug
+        ? listDams({ watershedSlug: d.watershedSlug, pageSize: 12 })
+        : Promise.resolve({ items: [], nextCursor: null }),
+      damSeasonalNorm(d.id),
+      // Only consulted when there is nothing to show — answers "why is this
+      // dam empty?" instead of leaving the reader to guess.
+      classifyOneDam(d.id),
+    ]);
+  const [watershedAgg, earliest] = await Promise.all([
+    watershed ? aggregateWatershed(watershed.id) : null,
+    latest ? earliestObservationAt(d.id) : null,
   ]);
-  const watershedAgg = watershed ? await aggregateWatershed(watershed.id) : null;
   const otherInWatershed = watershedDams.items.filter((w) => w.id !== d.id).slice(0, 6);
   // Latest 貯水率 per "同じ水系の他のダム" card.
   const otherRates =
@@ -87,18 +158,55 @@ export default async function DamDetail({ params }: PageProps) {
       ? await latestRateByDam(otherInWatershed.map((n) => n.id))
       : new Map<string, number | null>();
 
+  const geo = { '@type': 'GeoCoordinates', latitude: d.lat, longitude: d.lng };
   const ld = {
     '@context': 'https://schema.org',
     '@type': 'Place',
     name: dn,
     alternateName: d.name,
-    geo: { '@type': 'GeoCoordinates', latitude: d.lat, longitude: d.lng },
+    geo,
     address: {
       '@type': 'PostalAddress',
       addressCountry: 'JP',
-      addressRegion: PREF_NAME.get(d.prefCode) ?? d.prefCode,
+      addressRegion: pref,
     },
   };
+  // Only a dam with readings is a dataset. The CSV link spans its whole
+  // history: the daily series is [from, to), so `to` is the day after the
+  // latest reading.
+  const datasetLd = latest
+    ? (() => {
+        const first = (earliest ?? latest.observedAt).toISOString().slice(0, 10);
+        const last = latest.observedAt.toISOString().slice(0, 10);
+        const to = new Date(latest.observedAt.valueOf() + 86_400_000).toISOString().slice(0, 10);
+        const path = encodeURIComponent(slug);
+        return {
+          '@context': 'https://schema.org',
+          '@type': 'Dataset',
+          name: `${dn}の貯水量・貯水率 観測データ`,
+          description: `${dn}（${pref}）の貯水量・貯水率・流入量・放流量の観測データ。データ提供元が公開する観測値を Dam Data Japan が収集・整理したもので、日別の値を CSV でダウンロードできます。`,
+          url: `${SITE_URL}/dams/${path}`,
+          isAccessibleForFree: true,
+          license: `${SITE_URL}/legal/terms`,
+          creator: { '@type': 'Organization', name: 'Dam Data Japan', url: SITE_URL },
+          spatialCoverage: { '@type': 'Place', name: dn, geo },
+          temporalCoverage: `${first}/${last}`,
+          variableMeasured: [
+            { '@type': 'PropertyValue', name: '貯水量', unitText: 'm³' },
+            { '@type': 'PropertyValue', name: '貯水率' },
+            { '@type': 'PropertyValue', name: '流入量', unitText: 'm³/s' },
+            { '@type': 'PropertyValue', name: '放流量', unitText: 'm³/s' },
+          ],
+          distribution: {
+            '@type': 'DataDownload',
+            encodingFormat: 'text/csv',
+            contentUrl: `${SITE_URL}/api/v1/dams/${path}/observations?interval=daily&format=csv&from=${first}&to=${to}`,
+          },
+        };
+      })()
+    : null;
+
+  const ldJson = JSON.stringify(datasetLd ? [ld, datasetLd] : ld);
 
   return (
     <div className="max-w-7xl mx-auto px-5 md:px-10 py-8">
@@ -149,7 +257,7 @@ export default async function DamDetail({ params }: PageProps) {
         })()}
         <h1 className="text-3xl font-semibold inline-flex items-center gap-2">
           <EntityIcon kind="dam" size={28} className="text-primary shrink-0" />
-          <span>{dn}の貯水率・貯水量</span>
+          <span>{latest ? `${dn}の貯水率・貯水量` : noDataHeading(dn)}</span>
         </h1>
       </div>
       <p className="text-muted mb-6">
@@ -326,10 +434,21 @@ export default async function DamDetail({ params }: PageProps) {
             );
           })()
         ) : (
-          <NoDataReason
-            status={triage?.status ?? 'unknown'}
-            publishedBy={triage?.publishedBy ?? []}
-          />
+          <>
+            {twin ? (
+              <p className="text-sm mb-2" data-testid="twin-link">
+                この施設の観測値は{' '}
+                <Link className="text-primary hover:underline" href={`/dams/${twin.slug}`}>
+                  {damDisplayName(twin.name)}
+                </Link>{' '}
+                のページにあります。
+              </p>
+            ) : null}
+            <NoDataReason
+              status={triage?.status ?? 'unknown'}
+              publishedBy={triage?.publishedBy ?? []}
+            />
+          </>
         )}
       </section>
 
@@ -493,7 +612,7 @@ export default async function DamDetail({ params }: PageProps) {
       )}
 
       {/* biome-ignore lint/security/noDangerouslySetInnerHtml: required to emit schema.org JSON-LD */}
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: ldJson }} />
     </div>
   );
 }
