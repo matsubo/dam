@@ -29,7 +29,8 @@ const Query = z.object({
 
 /** Why a dam has no data, in the terms a caller can act on. */
 const MEANING: Record<DamCoverageStatus, string> = {
-  covered: '直近 30 日に観測値あり。',
+  covered:
+    '取得済み。直近 30 日に観測値がある、または月次・不定期の提供元が公開している最新の値 (提供元自身の日付) を取り込み済み。',
   published_not_ingested:
     'データ提供元が公開しており、マスタとの紐付けも済んでいるのに観測値が入っていない。取り込み側の不具合で、こちらで直せる。',
   published_no_data:

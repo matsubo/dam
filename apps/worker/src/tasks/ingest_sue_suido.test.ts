@@ -61,13 +61,15 @@ describe('chooseMaster', () => {
 });
 
 describe('planSue', () => {
-  test('records all four and writes 須恵 only', () => {
-    const { universe, writes } = planSue(parseSueRates(html).rows, MASTERS);
-    expect(universe.map((u) => [u.externalId, u.resolvedDamId])).toEqual([
-      ['須恵ダム', 11081n],
-      ['中柱田貯水池', null],
-      ['旧男鳥溜池', null],
-      ['新男鳥溜池', null],
+  test('records all four and writes 須恵 only, dated by the 更新日', () => {
+    const page = parseSueRates(html);
+    if (!page.observedAt) throw new Error('fixture has a 更新日');
+    const { universe, writes } = planSue(page.rows, MASTERS, page.observedAt);
+    expect(universe.map((u) => [u.externalId, u.resolvedDamId, u.publishedAt])).toEqual([
+      ['須恵ダム', 11081n, new Date('2026-08-31T15:00:00Z')],
+      ['中柱田貯水池', null, null],
+      ['旧男鳥溜池', null, null],
+      ['新男鳥溜池', null, null],
     ]);
     expect(writes).toEqual([{ damId: 11081n, row: { name: '須恵ダム', storageRate: 1 } }]);
   });

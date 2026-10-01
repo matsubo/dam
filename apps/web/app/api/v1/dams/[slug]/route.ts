@@ -4,6 +4,7 @@ import {
   latestRateAndSourceByDam,
   nearbyDams,
 } from '@dam/db/repo/dams';
+import { classifyOneDam, providerAvailability } from '@dam/db/repo/source_universe';
 import { authorize, makeUnauthorized, rateLimitHeaders } from '../../../../../lib/api/auth.ts';
 import { asProblem, HttpError } from '../../../../../lib/api/error.ts';
 import { hal } from '../../../../../lib/api/response.ts';
@@ -50,11 +51,13 @@ export async function GET(
     const dam = await findDamBySlug(slug);
     if (!dam) throw new HttpError(404, 'Dam not found');
 
-    const [latest, nearby, rateAndSource] = await Promise.all([
+    const [latest, nearby, rateAndSource, triage] = await Promise.all([
       latestObservation(dam.id),
       nearbyDams(dam.id, 20_000, 10),
       latestRateAndSourceByDam([dam.id]),
+      classifyOneDam(dam.id),
     ]);
+    const coverageStatus = triage?.status ?? 'unknown';
     const ras = rateAndSource.get(dam.id.toString());
     const realSourceId = ras?.realSourceId ?? null;
 
@@ -78,6 +81,14 @@ export async function GET(
           hasRealDataLast30d: realSourceId !== null,
           realSourceId,
         },
+        // Whether any data provider publishes this dam: 'available',
+        // 'none' (提供元なし) or 'unknown' (not every provider's list is
+        // recorded yet). coverageStatus is the /api/v1/coverage triage.
+        dataProvider: {
+          availability: providerAvailability(coverageStatus),
+          coverageStatus,
+          publishedBy: triage?.publishedBy ?? [],
+        },
         nearby: nearby.map(damPublicView),
       },
       {
@@ -89,6 +100,7 @@ export async function GET(
         watershed: dam.watershedSlug ? { href: `/api/v1/watersheds/${dam.watershedSlug}` } : null,
         prefecture: { href: `/api/v1/prefectures/${dam.prefCode}/dams` },
         sources: { href: `/api/v1/dams/${slug}/sources` },
+        coverage: { href: `/api/v1/coverage?pref=${dam.prefCode}` },
         web: { href: `/dams/${slug}` },
       },
       { headers: rateLimitHeaders(auth.rate) },

@@ -78,6 +78,8 @@ export interface ParsedRow {
   storageVolumeM3: number | null;
   /** 貯水率 as a 0..1 fraction. */
   storageRate: number | null;
+  /** The city prints 休止中 for the dam: it publishes no readings for it. */
+  suspended: boolean;
 }
 
 export interface ParsedPage {
@@ -130,6 +132,7 @@ export function parseNagasakiDamList(html: string): ParsedPage {
       capacityM3: num(cells[cells.length - 3]),
       storageVolumeM3: num(cells[cells.length - 2]),
       storageRate: rate === null ? null : rate / 100,
+      suspended: flat(cells[cells.length - 3] ?? '') === '休止中',
     });
   }
   return { observedAt, rows };
@@ -221,7 +224,16 @@ const task: Task = async (_payload, helpers) => {
   const drift: string[] = [];
   for (const p of rows) {
     const damId = chooseMaster(p.name, masters);
-    universe.push({ externalId: p.name, name: p.name, prefCode: PREF_CODE, resolvedDamId: damId });
+    const row: UniverseRow = {
+      externalId: p.name,
+      name: p.name,
+      prefCode: PREF_CODE,
+      resolvedDamId: damId,
+      // 休止中 is the city saying the dam has no readings; a blank cell on a
+      // live dam stays unknown, since that may be our parser.
+      hasData: p.suspended ? false : null,
+    };
+    universe.push(row);
     const want = WRITE[p.name];
     if (!want) continue;
     if (!damId) {
@@ -234,6 +246,9 @@ const task: Task = async (_payload, helpers) => {
     }
     await bindExternalId(damId, SOURCE_ID, p.name);
     if (p.storageVolumeM3 === null && p.storageRate === null) continue;
+    // The 「…現在」 date is the newest value the city publishes: holding it
+    // keeps 浦上 covered while the weekly table lapses (8月24日 on 2026-10-02).
+    row.publishedAt = observedAt;
     inputs.push({
       observedAt,
       damId,
