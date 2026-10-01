@@ -53,7 +53,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     title: `${dn}の貯水率・貯水量（${pref}）`,
     description: `${dn}（${pref}）の現在の貯水率・貯水量・流入量・放流量と推移グラフ。${d.manager ? `${d.manager}が管理。` : ''}1時間ごとに更新。`,
     alternates: { canonical: `/dams/${slug}` },
+    // Spelled out because this object replaces layout.tsx's openGraph
+    // wholesale; the image comes from ./opengraph-image.tsx.
     openGraph: {
+      type: 'website',
+      siteName: 'Dam Data Platform',
+      locale: 'ja_JP',
+      url: `/dams/${slug}`,
       title: `${dn}の貯水率・貯水量`,
       description: `${dn}（${pref}）の現在の貯水率と貯水量の推移`,
     },

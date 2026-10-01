@@ -28,6 +28,7 @@ the file for detail.
 | `app/page.tsx` | home: counts + 6 largest dams + map CTA |
 | `app/dams/page.tsx` | dam list table with pref/watershed filter |
 | `app/dams/[slug]/page.tsx` | dam detail (stat block, ObservationChart, watershed section, nearby) |
+| `app/dams/[slug]/opengraph-image.tsx` | per-dam 1200×630 share card: name, 都道府県・水系, 貯水量/容量, latest 貯水率 bucket (`twitter-image.tsx` re-exports it) |
 | `app/watersheds/page.tsx` | watershed list grouped by kind |
 | `app/watersheds/[slug]/page.tsx` | watershed detail with aggregate + dam list |
 | `app/prefectures/[code]/page.tsx` | prefecture-scoped dam list |
