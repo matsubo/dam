@@ -8,7 +8,11 @@ import {
   storageChange,
 } from '@dam/db/repo/dams';
 import { damSeasonalNorm } from '@dam/db/repo/seasonal';
-import { classifyOneDam } from '@dam/db/repo/source_universe';
+import {
+  classifyOneDam,
+  type ProviderAvailability,
+  providerAvailability,
+} from '@dam/db/repo/source_universe';
 import { aggregateWatershed, findWatershedBySlug } from '@dam/db/repo/watersheds';
 import { ExternalLink } from 'lucide-react';
 import type { Metadata } from 'next';
@@ -36,6 +40,22 @@ export const dynamicParams = true;
 
 const PREF_NAME = new Map(PREFECTURES.map((p) => [p.code, p.name]));
 
+/** Whether a data provider publishes this dam, stated on every dam page. */
+const PROVIDER_CHIP: Record<ProviderAvailability, { label: string; className: string }> = {
+  available: {
+    label: '提供元あり',
+    className: 'border-emerald-300 bg-emerald-50 text-emerald-800',
+  },
+  none: {
+    label: '提供元なし',
+    className: 'border-outline-variant bg-surface-container-low text-on-surface-variant',
+  },
+  unknown: {
+    label: '提供元: 未調査',
+    className: 'border-outline-variant bg-white text-on-surface-variant',
+  },
+};
+
 interface PageProps {
   params: Promise<{ slug: string }>;
 }
@@ -49,13 +69,22 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   // suffix and the title/description lead with 貯水率.
   const dn = damDisplayName(d.name);
   const pref = PREF_NAME.get(d.prefCode) ?? d.prefCode;
+  const triage = await classifyOneDam(d.id);
+  // No provider publishes it: promising a chart and hourly updates would be false.
+  const description =
+    triage?.status === 'not_published'
+      ? `${dn}（${pref}）の諸元・所在地。このダムの観測値を公開しているデータ提供元はありません（提供元なし）。${d.manager ? `${d.manager}が管理。` : ''}`
+      : `${dn}（${pref}）の現在の貯水率・貯水量・流入量・放流量と推移グラフ。${d.manager ? `${d.manager}が管理。` : ''}1時間ごとに更新。`;
   return {
     title: `${dn}の貯水率・貯水量（${pref}）`,
-    description: `${dn}（${pref}）の現在の貯水率・貯水量・流入量・放流量と推移グラフ。${d.manager ? `${d.manager}が管理。` : ''}1時間ごとに更新。`,
+    description,
     alternates: { canonical: `/dams/${slug}` },
     openGraph: {
       title: `${dn}の貯水率・貯水量`,
-      description: `${dn}（${pref}）の現在の貯水率と貯水量の推移`,
+      description:
+        triage?.status === 'not_published'
+          ? `${dn}（${pref}）— 提供元なし`
+          : `${dn}（${pref}）の現在の貯水率と貯水量の推移`,
     },
   };
 }
@@ -75,11 +104,13 @@ export default async function DamDetail({ params }: PageProps) {
       ? listDams({ watershedSlug: d.watershedSlug, pageSize: 12 })
       : Promise.resolve({ items: [], nextCursor: null }),
     damSeasonalNorm(d.id),
-    // Only consulted when there is nothing to show — answers "why is this
-    // dam empty?" instead of leaving the reader to guess.
+    // Answers "why is this dam empty?" instead of leaving the reader to
+    // guess, and marks a dam no provider publishes as 提供元なし.
     classifyOneDam(d.id),
   ]);
   const watershedAgg = watershed ? await aggregateWatershed(watershed.id) : null;
+  const provider = providerAvailability(triage?.status ?? 'unknown');
+  const notPublished = provider === 'none';
   const otherInWatershed = watershedDams.items.filter((w) => w.id !== d.id).slice(0, 6);
   // Latest 貯水率 per "同じ水系の他のダム" card.
   const otherRates =
@@ -147,9 +178,17 @@ export default async function DamDetail({ params }: PageProps) {
             </figure>
           );
         })()}
-        <h1 className="text-3xl font-semibold inline-flex items-center gap-2">
+        <h1 className="text-3xl font-semibold inline-flex flex-wrap items-center gap-2">
           <EntityIcon kind="dam" size={28} className="text-primary shrink-0" />
           <span>{dn}の貯水率・貯水量</span>
+          <Link
+            href="/coverage"
+            data-testid="provider-availability"
+            data-provider={provider}
+            className={`text-xs font-medium rounded-full border px-2.5 py-0.5 hover:border-primary ${PROVIDER_CHIP[provider].className}`}
+          >
+            {PROVIDER_CHIP[provider].label}
+          </Link>
         </h1>
       </div>
       <p className="text-muted mb-6">
@@ -333,19 +372,23 @@ export default async function DamDetail({ params }: PageProps) {
         )}
       </section>
 
-      <section className="mb-8">
-        <h2 className="text-lg font-semibold mb-3">推移グラフ</h2>
-        <ObservationChart
-          slug={slug}
-          capacityM3={d.activeCapacityM3 ? Number(d.activeCapacityM3) : null}
-        />
-        {latest ? (
-          <div className="mt-5">
-            <div className="text-xs text-muted mb-2">貯水量の変化</div>
-            <StorageChangeStrip change={change} />
-          </div>
-        ) : null}
-      </section>
+      {/* A dam no provider publishes gets no chart at all, even when it has
+          past (mudam) data. */}
+      {notPublished ? null : (
+        <section className="mb-8">
+          <h2 className="text-lg font-semibold mb-3">推移グラフ</h2>
+          <ObservationChart
+            slug={slug}
+            capacityM3={d.activeCapacityM3 ? Number(d.activeCapacityM3) : null}
+          />
+          {latest ? (
+            <div className="mt-5">
+              <div className="text-xs text-muted mb-2">貯水量の変化</div>
+              <StorageChangeStrip change={change} />
+            </div>
+          ) : null}
+        </section>
+      )}
 
       <section className="mb-8">
         <h2 className="text-lg font-semibold mb-3">所在地</h2>
@@ -648,13 +691,13 @@ function NoDataReason({ status, publishedBy }: { status: string; publishedBy: st
   if (status === 'not_published') {
     return (
       <div className="text-sm">
-        <p className="text-muted mb-1">まだ観測値がありません。</p>
+        <p className="font-semibold mb-1">提供元なし</p>
         <p className="text-on-surface-variant">
-          現時点で、このダムの貯水量を公開しているデータ提供元が見つかっていません。
+          このダムの観測値を公開しているデータ提供元はありません。各データ提供元の公開一覧をすべて照合し、どの一覧にも載っていないことを確認しています。
           <Link className="text-primary hover:underline mx-1" href="/coverage">
             カバレッジ
           </Link>
-          に全体の内訳があります。
+          の分母にも含めていません。
         </p>
       </div>
     );

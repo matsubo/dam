@@ -55,6 +55,7 @@ describe('parseNagasakiDamList', () => {
       capacityM3: 1_900_000,
       storageVolumeM3: 1_812_000,
       storageRate: 0.953,
+      suspended: false,
     });
   });
 
@@ -64,16 +65,18 @@ describe('parseNagasakiDamList', () => {
       capacityM3: 386_000,
       storageVolumeM3: 297_000,
       storageRate: 0.769,
+      suspended: false,
     });
     expect(page.rows.find((r) => r.name === '本河内低部')?.storageRate).toBe(1);
   });
 
-  test('leaves the 休止中 dam with no readings', () => {
+  test('marks the 休止中 dam suspended, with no readings', () => {
     expect(page.rows.find((r) => r.name === '落矢')).toEqual({
       name: '落矢',
       capacityM3: null,
       storageVolumeM3: null,
       storageRate: null,
+      suspended: true,
     });
   });
 

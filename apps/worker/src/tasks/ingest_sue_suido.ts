@@ -97,18 +97,24 @@ export interface SuePlan {
   writes: { damId: bigint; row: ParsedRow }[];
 }
 
-/** The whole list for the universe; the rate for every matched row that has one. */
-export function planSue(rows: ParsedRow[], masters: SueMaster[]): SuePlan {
+/**
+ * The whole list for the universe; the rate for every matched row that has
+ * one. A written row carries the page's 更新日 as its `publishedAt`: it is the
+ * newest value the town publishes, so the dam stays covered between issues.
+ */
+export function planSue(rows: ParsedRow[], masters: SueMaster[], observedAt: Date): SuePlan {
   const universe: UniverseRow[] = [];
   const writes: SuePlan['writes'] = [];
   for (const row of rows) {
     const damId = chooseMaster(row.name, masters);
+    const written = damId !== null && row.storageRate !== null;
     universe.push({
       externalId: row.name,
       name: row.name,
       prefCode: PREF_CODE,
       resolvedDamId: damId,
       hasData: row.storageRate === null ? null : true,
+      publishedAt: written ? observedAt : null,
     });
     if (damId && row.storageRate !== null) writes.push({ damId, row });
   }
@@ -161,7 +167,7 @@ const task: Task = async (_payload, helpers) => {
     SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
     FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
   `;
-  const plan = planSue(rows, masters);
+  const plan = planSue(rows, masters, observedAt);
   // What this source publishes, matched or not — recorded so /coverage can
   // say "they publish it, we failed to link it" instead of guessing.
   await recordUniverse(SOURCE_ID, plan.universe);
