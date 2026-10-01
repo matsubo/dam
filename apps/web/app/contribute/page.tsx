@@ -28,7 +28,7 @@ export const revalidate = 900;
 export const metadata: Metadata = {
   title: '開発者募集',
   description:
-    'Dam Data Platform は一人で開発・運用しているオープンデータ基盤です。全国のダムのカバレッジを上げる開発者を募集しています。技術スタック・規模・条件・寄付について。',
+    'Dam Data Japan は一人で開発・運用しているオープンデータ基盤です。全国のダムのカバレッジを上げる開発者を募集しています。技術スタック・規模・条件・寄付について。',
   alternates: { canonical: '/contribute' },
 };
 
@@ -113,7 +113,7 @@ export default async function ContributePage() {
 
       <h1 className="text-3xl font-bold tracking-tight mb-3">開発者募集</h1>
       <p className="text-base text-on-surface-variant leading-relaxed mb-6">
-        Dam Data Platform は、全国 {fmtN(Number(live.damTotal))}{' '}
+        Dam Data Japan は、全国 {fmtN(Number(live.damTotal))}{' '}
         基のダムの諸元と貯水量履歴を集約して無償で公開しているオープンデータ基盤です。
         設計から実装、データソースの開拓、サーバー運用まで、
         <strong className="text-on-surface font-semibold">現在は一人でやっています</strong>。

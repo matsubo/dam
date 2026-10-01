@@ -28,15 +28,20 @@ const AI_BOTS = [
 ];
 
 export function GET(): Response {
-  const aiBlocks = AI_BOTS.map((b) => `User-agent: ${b}\nAllow: /\nDisallow: /api/\n`).join('\n');
+  const aiBlocks = AI_BOTS.map(
+    (b) => `User-agent: ${b}\nAllow: /\nAllow: /api/docs\nDisallow: /api/\n`,
+  ).join('\n');
 
   const body = `# Dam Data Japan — robots.txt
 # Public open data on Japanese reservoirs. Crawling is welcome including by
 # AI agents; the JSON API under /api/ is excluded so machines use the
-# documented endpoints (see /api/docs and /.well-known/api-catalog).
+# documented endpoints (see /api/docs and /.well-known/api-catalog). The
+# human-readable docs page /api/docs stays crawlable: the longer Allow rule
+# wins over Disallow: /api/ for Google and other RFC 9309 crawlers.
 
 User-agent: *
 Allow: /
+Allow: /api/docs
 Disallow: /api/
 
 # Content Signals (RFC draft / IETF AI Preferences WG).

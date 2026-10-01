@@ -1,43 +1,35 @@
-'use client';
+import type { Metadata } from 'next';
+import Link from 'next/link';
+import { RedocViewer } from '../../../components/redoc-viewer.tsx';
 
-import dynamic from 'next/dynamic';
+export const metadata: Metadata = {
+  title: 'ダムデータ API ドキュメント',
+  description:
+    '全国2,700基以上のダムの貯水量・貯水率・流入量・放流量を JSON / CSV で取得できる無料 API のドキュメント。HAL+JSON 形式の応答と API キー認証、各エンドポイントの仕様と応答例を掲載。',
+  alternates: { canonical: '/api/docs' },
+};
 
-// Redoc touches `window` during init, so it has to be client-only. The
-// `RedocStandalone` React component pulls the spec, renders the three-pane
-// reference docs, and applies our colour palette via the `theme` prop.
-const RedocStandalone = dynamic(
-  () => import('redoc').then((m) => ({ default: m.RedocStandalone })),
-  {
-    ssr: false,
-    loading: () => (
-      <div
-        className="animate-pulse bg-gray-100 rounded-xl mx-auto max-w-7xl my-8"
-        style={{ height: '70vh' }}
-        aria-label="API ドキュメントを読み込み中"
-      />
-    ),
-  },
-);
-
+// The heading and intro are server-rendered so crawlers and no-JS clients see
+// what the page is; the Redoc reference below renders client-side only.
 export default function ApiDocsPage() {
   return (
-    <RedocStandalone
-      specUrl="/api/v1/openapi.json"
-      options={{
-        hideDownloadButton: false,
-        nativeScrollbars: true,
-        scrollYOffset: 64, // matches the sticky nav (h-16)
-        theme: {
-          colors: { primary: { main: '#0057c0' } },
-          typography: {
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif',
-            headings: { fontFamily: 'inherit' },
-            code: {
-              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-            },
-          },
-        },
-      }}
-    />
+    <>
+      <div className="max-w-7xl mx-auto px-5 md:px-10 pt-8">
+        <h1 className="text-2xl font-semibold mb-3">ダムデータ API ドキュメント</h1>
+        <p className="text-base text-on-surface-variant leading-relaxed max-w-3xl">
+          全国のダムの諸元と貯水量・貯水率・流入量・放流量の履歴を HAL+JSON または CSV で返す無料の
+          REST API です。利用には{' '}
+          <Link href="/account/keys" className="text-primary hover:underline">
+            API キー
+          </Link>
+          が必要で、仕様は{' '}
+          <a href="/api/v1/openapi.json" className="text-primary hover:underline">
+            OpenAPI
+          </a>{' '}
+          形式でも取得できます。
+        </p>
+      </div>
+      <RedocViewer />
+    </>
   );
 }

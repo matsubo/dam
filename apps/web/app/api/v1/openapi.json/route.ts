@@ -1286,7 +1286,7 @@ export async function GET() {
   const spec = {
     openapi: '3.1.0',
     info: {
-      title: 'Dam Data Platform API',
+      title: 'Dam Data Japan API',
       version: APP_VERSION,
       summary:
         '日本国内 2,749 基のダムマスタと貯水量履歴の公開 API。リアルタイム値は再配信していません。',
