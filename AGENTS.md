@@ -76,7 +76,12 @@ cd apps/web && API_AUTH_BYPASS=1 \
   bun next dev -H 0.0.0.0 -p 3030
 
 # Tests
-bun run test                            # 85 unit/integration tests
+# Unit/integration (~2,000) on a scratch DB, as CI does — the shared `dam`
+# DB gives phantom failures. The admin jobs tests need graphile-worker's schema.
+UNIT_DB=$(bun run bin/test_db.ts "$DATABASE_URL" "$PWD")
+DATABASE_URL=$UNIT_DB bun run --filter @dam/db migrate
+(cd apps/worker && bunx graphile-worker --schema-only -c "$UNIT_DB")
+DATABASE_URL=$UNIT_DB bun run test
 # E2E runs on what CI builds: a migrated scratch DB plus the fixture seed,
 # which writes rows it never removes — never seed the shared `dam` DB.
 export DATABASE_URL=$(bun run bin/test_db.ts "$DATABASE_URL" "$PWD/e2e")
