@@ -1,5 +1,11 @@
 import { sql } from '@dam/db/client';
-import { coverageHeadline } from '@dam/db/repo/coverage';
+import {
+  coverageDamTotal,
+  coverageHeadline,
+  coverageRiverDamCount,
+  realtimeCoveragePct,
+  storageRateCoveragePct,
+} from '@dam/db/repo/coverage';
 import { listDams, lowStorageDams } from '@dam/db/repo/dams';
 import { dailyVolumeSparklines } from '@dam/db/repo/observations';
 import { nationalStorageTotals, storageRate } from '@dam/db/repo/storage_totals';
@@ -61,15 +67,23 @@ interface HomeStats extends MasterStats {
   observedDamCount: number;
   /** Sum of each observed dam's own denominator — the 全国貯水率 denominator. */
   observedActiveCapacityM3: string | null;
-  /** Distinct dams that have at least one non-synthetic observation in the last 30 days. */
+  /** Dams classified covered (a value in the last 30 days, or a dated provider's newest). */
   realDamCount: number;
-  /** Dams with height_m >= 15 (ダム法の定義: 提高15m以上). Used as the denominator for 貯水率取得ダムカバレッジ. */
+  /** River dams (堤高 15 m 以上) minus 提供元なし / 提供元に値なし — the 貯水率 denominator. */
   riverDamCount: number;
   /** Distinct dams (height_m >= 15) with storage_rate in the last 30 days. Numerator for coverage. */
   storageRateRiverDamCount: number;
   /** Distinct dams that have at least one non-synthetic observation EVER
    *  (mudam-style historical data counts; vastly larger than the 30 d figure). */
   historicalDamCount: number;
+  /** Every dam minus 提供元なし / 提供元に値なし — the 実測 / 歴史 coverage denominator. */
+  coverageDamCount: number;
+  notPublishedDamCount: number;
+  publishedNoDataDamCount: number;
+  /** 実測データ取得カバレッジ [0..100] — the headline; null on an empty denominator. */
+  realtimeCoveragePct: number | null;
+  /** 貯水率取得ダムカバレッジ [0..100], null on an empty denominator. */
+  storageRateCoveragePct: number | null;
 }
 
 async function homeStats(): Promise<HomeStats> {
@@ -106,9 +120,14 @@ async function homeStats(): Promise<HomeStats> {
     observedDamCount: totals.observedDamCount,
     observedActiveCapacityM3: totals.activeCapacityM3,
     realDamCount: coverage.realtimeDamCount,
-    riverDamCount: coverage.riverDamCount,
+    riverDamCount: coverageRiverDamCount(coverage),
     storageRateRiverDamCount: coverage.storageRateRiverDamCount,
     historicalDamCount: coverage.historicalDamCount,
+    coverageDamCount: coverageDamTotal(coverage),
+    notPublishedDamCount: coverage.notPublishedDamCount,
+    publishedNoDataDamCount: coverage.publishedNoDataDamCount,
+    realtimeCoveragePct: realtimeCoveragePct(coverage),
+    storageRateCoveragePct: storageRateCoveragePct(coverage),
   };
 }
 
@@ -142,6 +161,11 @@ const cachedHomeStats = unstable_cache(
       riverDamCount: Number(s.riverDamCount),
       storageRateRiverDamCount: Number(s.storageRateRiverDamCount),
       historicalDamCount: Number(s.historicalDamCount),
+      coverageDamCount: s.coverageDamCount,
+      notPublishedDamCount: s.notPublishedDamCount,
+      publishedNoDataDamCount: s.publishedNoDataDamCount,
+      realtimeCoveragePct: s.realtimeCoveragePct,
+      storageRateCoveragePct: s.storageRateCoveragePct,
       oldestObsIso: s.oldestObs?.toISOString() ?? null,
     };
   },
@@ -493,16 +517,14 @@ export default async function Home() {
               </div>
             ) : null}
           </div>
-          {/* Coverage bar: dams with storage_rate / river management dams (height >= 15 m) */}
+          {/* Headline: 実測 coverage over the dams there is something to obtain for. */}
           {(() => {
-            const pct =
-              s.riverDamCount > 0
-                ? ((s.storageRateRiverDamCount / s.riverDamCount) * 100).toFixed(1)
-                : null;
+            const pct = s.realtimeCoveragePct?.toFixed(1) ?? null;
+            const ratePct = s.storageRateCoveragePct?.toFixed(1) ?? null;
             return (
               <div className="bg-white border border-outline-variant rounded-xl p-4 mb-3 flex items-center gap-4 flex-wrap">
                 <div className="text-sm font-medium text-on-surface whitespace-nowrap">
-                  貯水率取得ダムカバレッジ
+                  実測データ取得カバレッジ
                 </div>
                 <div className="flex-1 min-w-[160px]">
                   <div className="h-2 bg-surface-container-low rounded-full overflow-hidden">
@@ -516,7 +538,13 @@ export default async function Home() {
                   {pct ? `${pct} %` : '—'}
                 </div>
                 <div className="basis-full text-xs text-on-surface-variant">
-                  {`直近 30 日に貯水率データあり: ${fmt(s.storageRateRiverDamCount)} 基 / 河川管理ダム ${fmt(s.riverDamCount)} 基（高さ 15 m 以上）`}
+                  {`データ提供元が公開している値を取得済み: ${fmt(s.realDamCount)} 基 / 取得できるダム ${fmt(s.coverageDamCount)} 基（提供元なし ${fmt(s.notPublishedDamCount)} 基・提供元に値なし ${fmt(s.publishedNoDataDamCount)} 基を除く）`}
+                  <Link href="/coverage" className="text-primary hover:underline ml-1">
+                    内訳
+                  </Link>
+                </div>
+                <div className="basis-full text-xs text-on-surface-variant">
+                  {`貯水率取得ダムカバレッジ: ${ratePct ? `${ratePct} %` : '—'}（直近 30 日に貯水率あり ${fmt(s.storageRateRiverDamCount)} 基 / 河川管理ダム ${fmt(s.riverDamCount)} 基。高さ 15 m 以上、取得できないダムを除く）`}
                 </div>
               </div>
             );
@@ -553,13 +581,13 @@ export default async function Home() {
             <Stat
               label="実測データ"
               value={fmt(s.realDamCount)}
-              sub={`基（直近 30 日 / 全 ${fmt(s.damCount)} 基中）→ 一覧へ`}
+              sub={`基（取得できる ${fmt(s.coverageDamCount)} 基中）→ 一覧へ`}
               href="/dams?real=1"
             />
             <Stat
               label="歴史データ"
               value={fmt(s.historicalDamCount)}
-              sub={`基（NILIM mudam 経由の過去 5 年分含む / 全 ${fmt(s.damCount)} 基中）`}
+              sub={`基（NILIM mudam 経由の過去 5 年分含む / 取得できる ${fmt(s.coverageDamCount)} 基中）`}
             />
           </div>
         </div>

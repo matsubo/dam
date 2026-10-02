@@ -274,6 +274,44 @@ describe('source universe coverage triage', () => {
     expect((await classifyOneDam(stale))?.status).toBe('covered');
   });
 
+  test('a dated provider whose newest value we hold is covered, however old', async () => {
+    // 佐渡 still printed its 8月15日 survey on 2026-10-02: older than the
+    // 30-day window, yet nothing newer exists to take.
+    const survey = new Date(Date.now() - 60 * 86_400_000);
+    await upsertObservations([
+      { observedAt: survey, damId: stale, sourceId: SRC_A, storageRate: 0.8 },
+    ]);
+    const status = async (): Promise<[string | undefined, string | undefined]> => [
+      only(await classifyDamCoverage(), stale),
+      (await classifyOneDam(stale))?.status,
+    ];
+
+    // No date told: the 30-day rule alone, so an ingestion gap.
+    await recordUniverse(SRC_A, [{ externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale }]);
+    expect(await status()).toEqual(['published_not_ingested', 'published_not_ingested']);
+
+    await recordUniverse(SRC_A, [
+      { externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale, publishedAt: survey },
+    ]);
+    expect(await status()).toEqual(['covered', 'covered']);
+
+    // The provider moved on and we did not store it: the bug is ours again.
+    await recordUniverse(SRC_A, [
+      { externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale, publishedAt: new Date() },
+    ]);
+    expect(await status()).toEqual(['published_not_ingested', 'published_not_ingested']);
+
+    // A date only a scan from over a week ago vouched for proves nothing now.
+    await recordUniverse(SRC_A, [
+      { externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale, publishedAt: survey },
+    ]);
+    await sql`
+      UPDATE source_universe SET last_seen_at = NOW() - INTERVAL '8 days'
+      WHERE source_id = ${SRC_A} AND source_external_id = 'a-2'
+    `;
+    expect(await status()).toEqual(['published_not_ingested', 'published_not_ingested']);
+  });
+
   test('a dam its publishers list with no value is 提供元に値なし, not an ingestion bug', async () => {
     // 鉄山 / 坂下 (調査対象外) and 滝波 (every column "---") are on their
     // provider's page with nothing in the value cells. Calling that
