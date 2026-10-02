@@ -1,4 +1,5 @@
 import postgres from 'postgres';
+import { connectionOptions } from './client_options.ts';
 
 // During `next build` Next.js runs "Collecting page data" which loads every
 // route module — but the build host has no DATABASE_URL. We accept a
@@ -11,6 +12,7 @@ function makeClient() {
   return postgres(url, {
     max: 10,
     prepare: false,
+    connection: connectionOptions(process.env),
     types: {
       bigint: postgres.BigInt,
     },

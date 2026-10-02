@@ -346,4 +346,5 @@ fi
 
 log "[bootstrap] starting Next.js"
 cd /app/apps/web
-exec bun next start -p 3000
+# Bound every web query (public endpoints); migrations and seeds above ran without it.
+PG_STATEMENT_TIMEOUT_MS="${PG_STATEMENT_TIMEOUT_MS:-30000}" exec bun next start -p 3000
