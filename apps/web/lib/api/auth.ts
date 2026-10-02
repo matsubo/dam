@@ -32,7 +32,10 @@ function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
   return diff === 0;
 }
 
-const ADMIN_BYPASS = (): boolean => process.env.API_AUTH_BYPASS === '1';
+// Local dev and E2E only (both run `next dev`). Ignored in production so a
+// stray env var in Coolify cannot open every keyed route.
+const ADMIN_BYPASS = (): boolean =>
+  process.env.API_AUTH_BYPASS === '1' && process.env.NODE_ENV !== 'production';
 
 function extractKey(req: Request): string | null {
   // 1. Authorization: Bearer <key>
