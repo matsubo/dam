@@ -33,6 +33,7 @@ import { LocateWatershedButton } from '../components/locate-watershed-button.tsx
 import { StorageChangeStrip } from '../components/storage-change-strip.tsx';
 import { WatershedSpotlight } from '../components/watershed-spotlight.tsx';
 import { fmtCapacityMcm } from '../lib/format.ts';
+import { jsonLd } from '../lib/json-ld.ts';
 
 // force-dynamic skips Next's build-time prerender (which would fail because
 // the build container can't reach the DB). Real caching happens in
@@ -323,17 +324,17 @@ export default async function Home() {
       <script
         type="application/ld+json"
         // biome-ignore lint/security/noDangerouslySetInnerHtml: trusted JSON-LD
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(datasetLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLd(datasetLd) }}
       />
       <script
         type="application/ld+json"
         // biome-ignore lint/security/noDangerouslySetInnerHtml: trusted JSON-LD
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLd(websiteLd) }}
       />
       <script
         type="application/ld+json"
         // biome-ignore lint/security/noDangerouslySetInnerHtml: trusted JSON-LD
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(orgLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLd(orgLd) }}
       />
       {/* Hero */}
       <section className="relative overflow-hidden pt-20 md:pt-28 pb-14 bg-white">
@@ -377,7 +378,7 @@ export default async function Home() {
               </div>
               <div className="flex items-center gap-2">
                 <BadgeCheck className="text-primary" size={18} aria-hidden="true" />
-                <span className="text-on-surface-variant">商用利用可</span>
+                <span className="text-on-surface-variant">非商用なら無償</span>
               </div>
             </div>
           </div>
@@ -483,7 +484,7 @@ export default async function Home() {
           </div>
           <p className="text-white/90 text-body-md font-medium text-center md:text-right max-w-md">
             Google でサインインして発行 (600 req/min · 100,000
-            req/day)。研究・防災・教育・商用、いずれも無償でご利用いただけます。
+            req/day)。研究・教育・防災啓発などの非商用目的なら無償でご利用いただけます。
           </p>
         </div>
       </section>

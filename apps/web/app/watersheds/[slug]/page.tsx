@@ -12,6 +12,7 @@ import { DamTable } from '../../../components/dam-table.tsx';
 import { EntityIcon } from '../../../components/entity-icon.tsx';
 import { ObservationChart } from '../../../components/observation-chart.tsx';
 import { ReservoirGauge } from '../../../components/reservoir-gauge.tsx';
+import { SafetyNote } from '../../../components/safety-note.tsx';
 import { StorageChangeStrip } from '../../../components/storage-change-strip.tsx';
 import { estimateDepletionDays } from '../../../lib/depletion.ts';
 import { fmtCapacityMcm, fmtDate, fmtPct } from '../../../lib/format.ts';
@@ -145,6 +146,7 @@ export default async function WatershedDetail({ params }: PageProps) {
 
       <section className="mb-8">
         <h2 className="text-lg font-semibold mb-3">推移グラフ（水系合計）</h2>
+        <SafetyNote />
         <ObservationChart
           slug={rawSlug}
           kind="watershed"

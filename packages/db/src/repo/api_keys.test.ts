@@ -3,14 +3,49 @@ import { sql } from '../client.ts';
 import {
   hashKey,
   issueKey,
+  issueSelfServiceKey,
   lookupByPrefix,
+  MAX_ACTIVE_KEYS_PER_EMAIL,
   recordUsage,
   revoke,
   usageInLastMinute,
 } from './api_keys.ts';
 
 afterAll(async () => {
-  await sql`DELETE FROM api_keys WHERE email = 'test@example.com'`;
+  await sql`DELETE FROM api_keys WHERE email IN ('test@example.com', 'cap-test@example.com')`;
+});
+
+describe('issueSelfServiceKey', () => {
+  // Rate limits apply per key, so unlimited self-service keys would multiply
+  // one account's quota.
+  test('stops issuing once an email holds the maximum of active keys', async () => {
+    const email = 'cap-test@example.com';
+    await sql`DELETE FROM api_keys WHERE email = ${email}`;
+    for (let i = 0; i < MAX_ACTIVE_KEYS_PER_EMAIL; i++) {
+      expect(await issueSelfServiceKey(email, `k${i}`)).not.toBeNull();
+    }
+    expect(await issueSelfServiceKey(email, 'one too many')).toBeNull();
+  });
+
+  test('parallel submissions cannot overshoot the cap', async () => {
+    const email = 'cap-test@example.com';
+    await sql`DELETE FROM api_keys WHERE email = ${email}`;
+    const results = await Promise.all(
+      Array.from({ length: MAX_ACTIVE_KEYS_PER_EMAIL + 5 }, (_, i) =>
+        issueSelfServiceKey(email, `p${i}`),
+      ),
+    );
+    expect(results.filter((r) => r !== null).length).toBe(MAX_ACTIVE_KEYS_PER_EMAIL);
+  });
+
+  test('a revoked key frees its slot', async () => {
+    const email = 'cap-test@example.com';
+    const [first] = await sql<{ id: bigint }[]>`
+      SELECT id FROM api_keys WHERE email = ${email} AND revoked_at IS NULL LIMIT 1`;
+    if (!first) throw new Error('fixture missing');
+    await revoke(first.id);
+    expect(await issueSelfServiceKey(email, 'replacement')).not.toBeNull();
+  });
 });
 
 describe('api_keys repo', () => {

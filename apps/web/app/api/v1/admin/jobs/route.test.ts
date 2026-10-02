@@ -94,6 +94,27 @@ describe('GET /api/v1/admin/jobs — failing_jobs (#31)', () => {
     expect(entry?.last_error).toContain('decompression limit');
   });
 
+  test('publishes only the first line of last_error, never the stack trace', async () => {
+    // GET is public; a graphile-worker last_error carries the full stack
+    // (file paths, upstream URLs, SQL). The detail stays in the server log.
+    await POST(post({ task: 'aggregates:refresh' }));
+    const stack = `Error: upstream said no\n    at ingest (/app/apps/worker/src/tasks/x.ts:10:5)\n${'x'.repeat(500)}`;
+    await sql`
+      UPDATE graphile_worker._private_jobs j
+      SET attempts = 1, last_error = ${stack}
+      FROM graphile_worker._private_tasks t
+      WHERE j.task_id = t.id AND t.identifier = 'aggregates:refresh'
+    `;
+
+    const body = await (await GET()).json();
+    for (const section of ['failing_jobs', 'active_or_pending_jobs'] as const) {
+      const entry = (body[section] as { task: string; last_error: string | null }[]).find(
+        (j) => j.task === 'aggregates:refresh',
+      );
+      expect(entry?.last_error).toBe('Error: upstream said no');
+    }
+  });
+
   test('stays empty while nothing has errored', async () => {
     await POST(post({ task: 'aggregates:refresh' })); // queued, zero attempts
     const body = await (await GET()).json();

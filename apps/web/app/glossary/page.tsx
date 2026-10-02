@@ -202,7 +202,7 @@ const SECTIONS: { title: string; terms: Term[] }[] = [
       {
         id: 'app-version',
         term: 'バージョン番号',
-        body: 'サイトと API の semver。0.x.y はアルファ、0.next.* がベータ予定、≥1.0.0 で GA。フッターおよび OpenAPI info.version に同じ値が出る（ルートの package.json の version が単一ソース。リリースは同じ番号の Git タグ vX.Y.Z と GitHub Release で公開）。',
+        body: 'サイトと API の semver。v0.2 まではアルファ、v0.3 以降がベータ、≥1.0.0 で GA。フッターおよび OpenAPI info.version に同じ値が出る（ルートの package.json の version が単一ソース。リリースは同じ番号の Git タグ vX.Y.Z と GitHub Release で公開）。',
       },
     ],
   },

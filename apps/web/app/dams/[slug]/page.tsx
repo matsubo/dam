@@ -29,12 +29,14 @@ import { EntityIcon } from '../../../components/entity-icon.tsx';
 import { ObservationChart } from '../../../components/observation-chart.tsx';
 import { QualityBadge } from '../../../components/quality-badge.tsx';
 import { ReservoirGauge } from '../../../components/reservoir-gauge.tsx';
+import { SafetyNote } from '../../../components/safety-note.tsx';
 import { SourceBadge } from '../../../components/source-badge.tsx';
 import { StorageChangeStrip } from '../../../components/storage-change-strip.tsx';
 import { damDisplayName } from '../../../lib/dam-name.ts';
 import { flowStatus } from '../../../lib/flow-status.ts';
 import { fmtCapacityMcm, fmtDate, fmtN, fmtPct } from '../../../lib/format.ts';
 import { imageCredit } from '../../../lib/image-credit.ts';
+import { jsonLd } from '../../../lib/json-ld.ts';
 import { rateDenominator } from '../../../lib/rate-basis.ts';
 
 export const dynamic = 'force-dynamic';
@@ -238,7 +240,7 @@ export default async function DamDetail({ params }: PageProps) {
         })()
       : null;
 
-  const ldJson = JSON.stringify(datasetLd ? [ld, datasetLd] : ld);
+  const ldJson = jsonLd(datasetLd ? [ld, datasetLd] : ld);
 
   return (
     <div className="max-w-7xl mx-auto px-5 md:px-10 py-8">
@@ -497,6 +499,7 @@ export default async function DamDetail({ params }: PageProps) {
       {notPublished ? null : (
         <section className="mb-8">
           <h2 className="text-lg font-semibold mb-3">推移グラフ</h2>
+          <SafetyNote />
           <ObservationChart
             slug={slug}
             capacityM3={d.activeCapacityM3 ? Number(d.activeCapacityM3) : null}

@@ -18,6 +18,7 @@
 // ADMIN_SECRET is set in the worker/web environment. If unset, POST is
 // disabled (returns 503) to avoid accidental exposure.
 
+import { timingSafeEqual } from 'node:crypto';
 import { sql } from '@dam/db/client';
 import { type StaleSource, staleSources } from '@dam/db/repo/source_freshness';
 import { type NextRequest, NextResponse } from 'next/server';
@@ -38,6 +39,22 @@ interface ActiveJob {
   run_at: string;
   last_error: string | null;
 }
+
+/**
+ * GET is public, and graphile-worker's last_error holds the whole stack (file
+ * paths, upstream URLs, SQL). Publish the first line, capped; the full text
+ * stays in the worker log.
+ */
+function publicError(message: string | null): string | null {
+  if (message === null) return null;
+  const first = message.split('\n', 1)[0] ?? '';
+  return first.length > 200 ? `${first.slice(0, 200)}…` : first;
+}
+
+const withPublicError = <T extends { last_error: string | null }>(job: T): T => ({
+  ...job,
+  last_error: publicError(job.last_error),
+});
 
 interface CoverageRow {
   dams_total: number;
@@ -249,7 +266,10 @@ export async function GET(): Promise<NextResponse> {
       (SELECT COUNT(*)::int FROM doy JOIN fresh USING (dam_id))               AS dams_with_both,
       (SELECT COALESCE(json_agg(d.slug ORDER BY d.slug), '[]'::json)
          FROM doy JOIN fresh USING (dam_id) JOIN dams d ON d.id = doy.dam_id) AS both_slugs
-  `.catch((e: unknown) => [{ error: (e as Error).message }] as never);
+  `.catch((e: unknown) => {
+    console.error('admin/jobs: obs_daily_health failed:', e);
+    return [{ error: 'query failed' }] as never;
+  });
 
   const cov = coverage[0] ?? {
     dams_total: 0,
@@ -263,8 +283,8 @@ export async function GET(): Promise<NextResponse> {
     {
       generated_at: new Date().toISOString(),
       cron_schedule: cron,
-      active_or_pending_jobs: active,
-      failing_jobs: failing,
+      active_or_pending_jobs: active.map(withPublicError),
+      failing_jobs: failing.map(withPublicError),
       stale_sources: stale.map((s) => ({
         source_id: s.sourceId,
         newest_observed_at: s.newestObservedAt?.toISOString() ?? null,
@@ -334,8 +354,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'ADMIN_SECRET not configured' }, { status: 503 });
   }
 
-  const auth = req.headers.get('authorization') ?? '';
-  if (auth !== `Bearer ${secret}`) {
+  const auth = new TextEncoder().encode(req.headers.get('authorization') ?? '');
+  const expected = new TextEncoder().encode(`Bearer ${secret}`);
+  if (auth.byteLength !== expected.byteLength || !timingSafeEqual(auth, expected)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

@@ -1,5 +1,6 @@
 import type { NextConfig } from 'next';
 import { CACHE_HEADER_ROUTES } from './lib/cache-control.ts';
+import { SECURITY_HEADERS } from './lib/security-headers.ts';
 
 const nextConfig: NextConfig = {
   // typedRoutes is incompatible with our dynamic-cursor pagination links;
@@ -12,11 +13,19 @@ const nextConfig: NextConfig = {
   // middleware.ts sets it too, but Next.js's framework default for
   // `dynamic = 'force-dynamic'` pages (private/no-store/no-cache) is applied
   // AFTER middleware, whereas headers() runs in the routing layer and wins.
+  // Crawlers and old clients ask for /favicon.ico regardless of <link rel=icon>;
+  // serve the generated app/icon.tsx there instead of a 404.
+  async rewrites() {
+    return [{ source: '/favicon.ico', destination: '/icon' }];
+  },
   async headers() {
-    return CACHE_HEADER_ROUTES.map(({ source, value }) => ({
-      source,
-      headers: [{ key: 'Cache-Control', value }],
-    }));
+    return [
+      { source: '/:path*', headers: SECURITY_HEADERS },
+      ...CACHE_HEADER_ROUTES.map(({ source, value }) => ({
+        source,
+        headers: [{ key: 'Cache-Control', value }],
+      })),
+    ];
   },
   images: {
     // Wikimedia is the only permitted photo host. ダム便覧 was removed

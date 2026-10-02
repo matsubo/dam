@@ -2,7 +2,7 @@ import { CircleCheck, CircleDashed, CircleDot } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
-import { APP_STAGE, APP_VERSION } from '../../lib/version.ts';
+import { APP_STAGE, APP_VERSION, STAGE_JA } from '../../lib/version.ts';
 
 export const revalidate = 86400;
 export const metadata: Metadata = {
@@ -84,7 +84,7 @@ export default function RoadmapPage() {
         現在のバージョン{' '}
         <span className="font-mono font-semibold text-on-surface">v{APP_VERSION}</span> ／ ステージ{' '}
         <span className="font-semibold text-primary uppercase">{APP_STAGE}</span>
-        。本サービスは現在アルファ段階です。
+        。本サービスは現在{STAGE_JA[APP_STAGE]}段階です。
       </p>
       <ol className="space-y-6">
         {STAGES.map((s) => {
