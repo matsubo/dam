@@ -39,9 +39,9 @@ test('全国貯水率 agrees between the home page and /stats', async ({ page })
 });
 
 test('貯水率カバレッジ agrees between the home page and /coverage', async ({ page }) => {
-  // "直近 30 日に貯水率データあり: 1 基 / 河川管理ダム 5 基（高さ 15 m 以上）"
+  // "（直近 30 日に貯水率あり 1 基 / 河川管理ダム 5 基。高さ 15 m 以上、取得できないダムを除く）"
   const home = (await bodyText(page, '/')).match(
-    /貯水率データあり:\s*([\d,]+)\s*基\s*\/\s*河川管理ダム\s*([\d,]+)\s*基/,
+    /貯水率あり\s*([\d,]+)\s*基\s*\/\s*河川管理ダム\s*([\d,]+)\s*基/,
   );
   // "貯水率取得 (直近 30 日) … 20.00% … 1 / 5 基"
   const coverage = (await bodyText(page, '/coverage')).match(
