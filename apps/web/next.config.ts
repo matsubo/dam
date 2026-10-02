@@ -1,5 +1,6 @@
 import type { NextConfig } from 'next';
 import { CACHE_HEADER_ROUTES } from './lib/cache-control.ts';
+import { SECURITY_HEADERS } from './lib/security-headers.ts';
 
 const nextConfig: NextConfig = {
   // typedRoutes is incompatible with our dynamic-cursor pagination links;
@@ -13,10 +14,13 @@ const nextConfig: NextConfig = {
   // `dynamic = 'force-dynamic'` pages (private/no-store/no-cache) is applied
   // AFTER middleware, whereas headers() runs in the routing layer and wins.
   async headers() {
-    return CACHE_HEADER_ROUTES.map(({ source, value }) => ({
-      source,
-      headers: [{ key: 'Cache-Control', value }],
-    }));
+    return [
+      { source: '/:path*', headers: SECURITY_HEADERS },
+      ...CACHE_HEADER_ROUTES.map(({ source, value }) => ({
+        source,
+        headers: [{ key: 'Cache-Control', value }],
+      })),
+    ];
   },
   images: {
     // Wikimedia is the only permitted photo host. ダム便覧 was removed
