@@ -170,7 +170,12 @@ synthetic seeder. Document any access agreement in `docs/superpowers/plans/`.
 
 ## Backup / restore (production, Coolify)
 
-Configured in `deploy/backup/pgbackrest.conf`. Default schedule:
+> **Not deployed (checked 2026-10-02).** Coolify has no backup schedule on
+> `dam-db`, and `deploy/backup/pgbackrest.conf` holds placeholders that no
+> container mounts. Until one of the two is set up there is no restore point.
+> The plan below is the intended configuration, not the running one.
+
+Intended configuration (`deploy/backup/pgbackrest.conf`):
 - full backup weekly (Sun 02:00 UTC)
 - diff hourly
 - retention: 4 fulls + 14 diffs
@@ -220,23 +225,17 @@ After first deploy: run `just migrate` inside the web container, then
 
 ## Long-running / cron tasks
 
-Worker process registers these task names:
-
-```
-master:refresh:ndi          monthly 1st 03:00
-master:refresh:damnet       monthly 5th 03:00
-master:match                nightly 04:00
-ingest:kasenbosai           hourly :05
-backfill:suimon:enqueue     manual (add_job from psql)
-backfill:suimon:run         every 5 min
-quality:recompute           nightly 04:30
-```
+The schedule lives in `CRONTAB` (`packages/core/src/crontab.ts`), registered
+by `apps/worker/src/index.ts`; `apps/worker/src/crontab.test.ts` checks it.
+Read it there rather than from a copy here. Tasks registered without a cron
+line (run on demand via `POST /api/v1/admin/jobs` or `add_job`) include
+`ingest:kasenbosai` (v1; v2 is the scheduled one), `observations:rebind`
+and the `backfill:*` family.
 
 To trigger a one-off run from psql:
 
 ```sql
 SELECT graphile_worker.add_job('quality:recompute');
-SELECT graphile_worker.add_job('backfill:suimon:enqueue', '{"fromYear":2015,"toYear":2024}');
 ```
 
 To inspect queued + failed jobs:
