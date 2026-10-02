@@ -10,6 +10,26 @@ function mockServer(handler: (req: Request) => Response | Promise<Response>) {
 }
 
 describe('HttpClient', () => {
+  test('times out a response whose body stalls after the headers', async () => {
+    // Headers arrive at once, then the body never finishes. The timeout used
+    // to be cleared as soon as fetch() resolved, so this hung the task.
+    const srv = mockServer(
+      () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('partial'));
+            },
+          }),
+        ),
+    );
+    const c = new HttpClient({ userAgent: 'test/1.0', timeoutMs: 200 });
+    const t0 = Date.now();
+    await expect(c.get(srv.url)).rejects.toThrow();
+    srv.stop();
+    expect(Date.now() - t0).toBeLessThan(2_000);
+  }, 5_000);
+
   test('respects min interval between requests', async () => {
     let count = 0;
     const srv = mockServer(() => {
