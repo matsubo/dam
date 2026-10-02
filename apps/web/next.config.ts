@@ -13,6 +13,11 @@ const nextConfig: NextConfig = {
   // middleware.ts sets it too, but Next.js's framework default for
   // `dynamic = 'force-dynamic'` pages (private/no-store/no-cache) is applied
   // AFTER middleware, whereas headers() runs in the routing layer and wins.
+  // Crawlers and old clients ask for /favicon.ico regardless of <link rel=icon>;
+  // serve the generated app/icon.tsx there instead of a 404.
+  async rewrites() {
+    return [{ source: '/favicon.ico', destination: '/icon' }];
+  },
   async headers() {
     return [
       { source: '/:path*', headers: SECURITY_HEADERS },

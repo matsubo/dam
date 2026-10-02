@@ -31,6 +31,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${base}/faq`, changeFrequency: 'monthly', priority: 0.4 },
     { url: `${base}/coverage`, changeFrequency: 'daily', priority: 0.5 },
     { url: `${base}/contribute`, changeFrequency: 'monthly', priority: 0.5 },
+    { url: `${base}/api/docs`, changeFrequency: 'monthly', priority: 0.5 },
+    { url: `${base}/legal/terms`, changeFrequency: 'yearly', priority: 0.2 },
+    { url: `${base}/legal/privacy`, changeFrequency: 'yearly', priority: 0.2 },
     ...dams.map((d) => ({
       url: `${base}/dams/${encodeURIComponent(d.slug)}`,
       lastModified: d.lastModified,
