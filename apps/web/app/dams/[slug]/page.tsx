@@ -29,6 +29,7 @@ import { EntityIcon } from '../../../components/entity-icon.tsx';
 import { ObservationChart } from '../../../components/observation-chart.tsx';
 import { QualityBadge } from '../../../components/quality-badge.tsx';
 import { ReservoirGauge } from '../../../components/reservoir-gauge.tsx';
+import { SafetyNote } from '../../../components/safety-note.tsx';
 import { SourceBadge } from '../../../components/source-badge.tsx';
 import { StorageChangeStrip } from '../../../components/storage-change-strip.tsx';
 import { damDisplayName } from '../../../lib/dam-name.ts';
@@ -498,6 +499,7 @@ export default async function DamDetail({ params }: PageProps) {
       {notPublished ? null : (
         <section className="mb-8">
           <h2 className="text-lg font-semibold mb-3">推移グラフ</h2>
+          <SafetyNote />
           <ObservationChart
             slug={slug}
             capacityM3={d.activeCapacityM3 ? Number(d.activeCapacityM3) : null}
