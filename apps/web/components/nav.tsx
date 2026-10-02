@@ -4,6 +4,7 @@ import { Droplets, Menu, Search, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { APP_STAGE, STAGE_GLYPH, STAGE_JA } from '../lib/stage.ts';
 import { EntityIcon, type EntityKind } from './entity-icon.tsx';
 
 const ITEMS: {
@@ -45,15 +46,26 @@ export function Nav() {
   return (
     <header className="fixed top-0 w-full z-50 bg-white/85 backdrop-blur-md border-b border-outline-variant">
       <nav className="max-w-7xl mx-auto px-5 md:px-10 flex justify-between items-center h-16">
-        <Link href="/" className="flex items-center gap-2.5 group no-underline">
-          <Droplets className="text-primary" size={24} aria-hidden="true" />
-          <span className="font-display text-lg font-extrabold tracking-tight text-on-surface">
-            Dam Data
-          </span>
-          <span className="hidden md:inline text-xs text-on-surface-variant font-semibold">
-            · 日本のダム情報
-          </span>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/" className="flex items-center gap-2.5 group no-underline">
+            <Droplets className="text-primary" size={24} aria-hidden="true" />
+            <span className="font-display text-lg font-extrabold tracking-tight text-on-surface">
+              Dam Data
+            </span>
+            <span className="hidden md:inline text-xs text-on-surface-variant font-semibold">
+              · 日本のダム情報
+            </span>
+          </Link>
+          {STAGE_GLYPH[APP_STAGE] ? (
+            <Link
+              href="/roadmap"
+              aria-label={`${STAGE_GLYPH[APP_STAGE]}版（${STAGE_JA[APP_STAGE]}）— ロードマップを見る`}
+              className="px-1.5 py-0.5 rounded text-xs font-bold leading-none bg-primary/10 text-primary no-underline hover:bg-primary/20"
+            >
+              {STAGE_GLYPH[APP_STAGE]}
+            </Link>
+          ) : null}
+        </div>
         <div className="hidden lg:flex items-center gap-8">
           {ITEMS.map((it) => (
             <Link

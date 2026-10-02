@@ -9,15 +9,12 @@
 //   - apps/web/app/api/v1/openapi.json/route.ts  — OpenAPI `info.version`
 //   - apps/web/app/roadmap/page.tsx              — current-stage badge
 //
-// Lifecycle (see /roadmap):
-//   0.x.y  — alpha (current): bootstrap + scheduled ingest stable
-//   ≥0.next — beta:           data accuracy hardened
-//   ≥1.0.0 — GA:              third-party SLA, latency budget, infra HA
+// Lifecycle stage lives in ./stage.ts (alpha ≤ v0.2, beta from v0.3, GA ≥ v1.0.0).
 //
 // Within a stage: minor for additive endpoints, patch for fixes.
 import manifest from '../../../package.json';
 
 export const APP_VERSION: string = manifest.version;
 
-/** Lifecycle stage label rendered in the footer + OpenAPI description + /roadmap. */
-export const APP_STAGE: 'alpha' | 'beta' | 'ga' = 'alpha';
+/** Lifecycle stage label rendered in the header, footer, OpenAPI description and /roadmap. */
+export { APP_STAGE, STAGE_JA } from './stage.ts';
