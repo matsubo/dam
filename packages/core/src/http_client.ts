@@ -45,11 +45,12 @@ export class HttpClient {
 
     let attempt = 0;
     while (true) {
+      // The timeout covers the body too: a server that sends headers and then
+      // stalls would otherwise hang the task until the job runner kills it.
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), this.opts.timeoutMs);
       try {
-        const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), this.opts.timeoutMs);
         const res = await fetch(url, { headers, signal: ctrl.signal });
-        clearTimeout(t);
         if (res.status === 304) {
           return {
             status: 304,
@@ -79,6 +80,8 @@ export class HttpClient {
           continue;
         }
         throw err;
+      } finally {
+        clearTimeout(t);
       }
     }
   }
