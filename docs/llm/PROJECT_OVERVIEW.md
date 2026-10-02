@@ -85,7 +85,7 @@ observations   ── PK (dam_id, observed_at, source_id) ── HYPERTABLE on o
                                           → FK raw_snapshot_id
 raw_snapshots  ── one row per fetched HTTP response, body in MinIO
 source_priorities ── source_id → priority, higher wins the chart (77 rows on prod: feeds 279–313, e.g. kasenbosai=310, mudam=280; master ndi=80, damnet=50)
-source_universe / source_universe_runs ── each provider's whole published list per run (recordUniverse), read by /coverage; `has_data` (0103) is FALSE when the provider lists a dam with no usable value
+source_universe / source_universe_runs ── each provider's whole published list per run (recordUniverse), read by /coverage; `has_data` (0103) is FALSE when the provider lists a dam with no usable value; `published_at` (0221) is a dated provider's stamp on its newest value, which keeps a monthly survey's dam `covered` past the 30-day window
 backfill_progress ── (source_id, dam_id, year) → status
 api_keys / api_key_usage ── public-API auth + per-key rate-limit
 obs_daily / obs_monthly  ── TimescaleDB continuous aggregates

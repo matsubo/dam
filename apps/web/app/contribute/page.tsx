@@ -5,6 +5,7 @@
 // figures live in lib/project-stats.ts with their regeneration commands.
 
 import { sql } from '@dam/db/client';
+import { coverageDamTotal, coverageHeadline, realtimeCoveragePct } from '@dam/db/repo/coverage';
 import {
   CircleDot,
   Database,
@@ -39,7 +40,6 @@ interface Live {
   obsLast24h: bigint;
   rawSnapshots: bigint;
   sourcesActive: bigint;
-  damsCovered30d: bigint;
   oldestObs: Date | null;
   newestObs: Date | null;
 }
@@ -56,20 +56,12 @@ async function loadLive(): Promise<Live> {
       (SELECT COUNT(DISTINCT source_id) FROM observations
        WHERE observed_at > NOW() - INTERVAL '30 days'
          AND source_id <> 'synthetic')::BIGINT                                AS "sourcesActive",
-      (SELECT COUNT(DISTINCT dam_id) FROM observations
-       WHERE observed_at > NOW() - INTERVAL '30 days'
-         AND source_id <> 'synthetic')::BIGINT                                AS "damsCovered30d",
       (SELECT MIN(observed_at) FROM observations)                             AS "oldestObs",
       (SELECT MAX(observed_at) FROM observations)                             AS "newestObs"
   `;
   const row = rows[0];
   if (!row) throw new Error('project figures query returned no rows');
   return row;
-}
-
-function pct(n: bigint, d: bigint): number {
-  if (d === 0n) return 0;
-  return Number((n * 1000n) / d) / 10;
 }
 
 function Section({
@@ -103,9 +95,15 @@ function Figure({ label, value, note }: { label: string; value: string; note?: s
 }
 
 export default async function ContributePage() {
-  const live = await loadLive();
-  const coverage = pct(live.damsCovered30d, live.damTotal);
-  const uncovered = live.damTotal - live.damsCovered30d;
+  const [live, headline] = await Promise.all([loadLive(), coverageHeadline()]);
+  // Same definition as /coverage: 提供元なし / 提供元に値なし dams are in no denominator.
+  const denominator = coverageDamTotal(headline);
+  const coverage = realtimeCoveragePct(headline) ?? 0;
+  const uncovered = denominator - headline.realtimeDamCount;
+  const unobtainable = headline.notPublishedDamCount + headline.publishedNoDataDamCount;
+  // The history below is about the whole master, not the obtainable part.
+  const shareOfAll =
+    headline.damTotal > 0 ? (100 * headline.realtimeDamCount) / headline.damTotal : 0;
 
   return (
     <div className="max-w-3xl mx-auto px-5 md:px-10 py-8">
@@ -128,11 +126,13 @@ export default async function ContributePage() {
         <p className="text-sm leading-relaxed">
           <strong>データカバレッジを上げること</strong>。実測値が取れているのは{' '}
           <span className="font-semibold tabular-nums">
-            {fmtN(Number(live.damsCovered30d))} / {fmtN(Number(live.damTotal))} 基（
-            {coverage.toFixed(1)}%）
+            {fmtN(headline.realtimeDamCount)} / {fmtN(denominator)} 基（{coverage.toFixed(1)}%）
           </span>
-          で、残り {fmtN(Number(uncovered))} 基はまだ諸元しかありません。
-          取得頻度の改善は後回しでよいので、まずは「まだ取れていないダム」を減らしたい。
+          で、残り {fmtN(uncovered)} 基はまだ取れていません
+          {unobtainable > 0
+            ? `（どの提供元も公開していない、または提供元が値を出していない ${fmtN(unobtainable)} 基は分母から除外）`
+            : ''}
+          。 取得頻度の改善は後回しでよいので、まずは「まだ取れていないダム」を減らしたい。
         </p>
         <div className="flex flex-wrap gap-3 mt-4">
           <a
@@ -185,7 +185,8 @@ export default async function ContributePage() {
             になり、cron エントリは {PROJECT_STATS.cronEntries} 行に膨らみました。
           </p>
           <p>
-            それでもカバレッジは {coverage.toFixed(1)}% です。残りの多くは農業用ダムや小規模ダムで、
+            それでも全 {fmtN(headline.damTotal)} 基のうち実測値が取れているのは{' '}
+            {shareOfAll.toFixed(1)}% です。残りの多くは農業用ダムや小規模ダムで、
             そもそも実測値が公開されていないか、公開先をまだ見つけられていません。つまり、
             <strong className="text-on-surface font-semibold">
               100% のカバレッジと高頻度の更新を同時に達成するのは、一人では難しい

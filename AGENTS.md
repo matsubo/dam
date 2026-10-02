@@ -157,6 +157,13 @@ bun run apps/web/bin/seed_synthetic_observations.ts     --hourly-days 30 --years
    unset when unsure: an unreadable cell may be our own parser breaking. Each
    scan overwrites the stored value (unset included), so a row that stops
    parsing drops back to unknown rather than keeping an earlier `false`.
+   A provider that prints its own date and publishes less often than every
+   30 days (a monthly survey, a weekly table that lapses) should also pass
+   `publishedAt` — the exact `observedAt` it stores for that row — on rows it
+   writes. Holding that value keeps the dam `covered` past the 30-day window;
+   without it the dam reads as an ingestion bug the day the survey turns 31.
+   `ingest_sado_nourin.ts` / `ingest_hyogo_suigen.ts` / `ingest_sue_suido.ts`
+   / `ingest_nagasaki_city_suido.ts` are the reference implementations.
    An unmatched row that is **not a master dam at all** (a 堰, a 調整池 not
    in the NDI master, a combined row like 呑吐・大川瀬, a station with no dam)
    leaves the backlog (`coverageSummary().unmatchedStations`) once a

@@ -13,11 +13,19 @@
 import { PREFECTURES } from '@dam/core/prefectures';
 import { sql } from '@dam/db/client';
 import {
+  coverageDamTotal,
   coverageHeadline,
+  coverageRiverDamCount,
+  historicalCoveragePct,
   realtimeCoveragePct,
   storageRateCoveragePct,
 } from '@dam/db/repo/coverage';
-import { coverageSummary, type PendingScanReason } from '@dam/db/repo/source_universe';
+import {
+  classifyDamCoverage,
+  coverageSummary,
+  isUnobtainable,
+  type PendingScanReason,
+} from '@dam/db/repo/source_universe';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
@@ -43,12 +51,12 @@ interface SourceRow {
 
 interface PrefRow {
   prefCode: string;
-  damTotal: bigint;
-  damsCovered: bigint;
+  damTotal: number;
+  damsCovered: number;
 }
 
 async function loadCoverage() {
-  const [headline, sources, prefs] = await Promise.all([
+  const [headline, sources, triageRows] = await Promise.all([
     coverageHeadline(),
     sql<SourceRow[]>`
       SELECT
@@ -61,39 +69,23 @@ async function loadCoverage() {
       GROUP BY source_id
       ORDER BY COUNT(DISTINCT dam_id) DESC
     `,
-    sql<PrefRow[]>`
-      WITH per_pref AS (
-        SELECT pref_code, COUNT(*)::BIGINT AS total
-        FROM dams
-        WHERE pref_code IS NOT NULL
-        GROUP BY pref_code
-      ),
-      covered AS (
-        SELECT d.pref_code, COUNT(DISTINCT o.dam_id)::BIGINT AS covered
-        FROM dams d
-        JOIN observations o ON o.dam_id = d.id
-        WHERE d.pref_code IS NOT NULL
-          AND o.observed_at > NOW() - INTERVAL '30 days'
-          AND o.source_id <> 'synthetic'
-          AND num_nonnulls(o.storage_volume_m3, o.storage_rate, o.inflow_m3s,
-                           o.outflow_m3s, o.water_level_m, o.rainfall_mm) > 0
-        GROUP BY d.pref_code
-      )
-      SELECT
-        p.pref_code AS "prefCode",
-        p.total     AS "damTotal",
-        COALESCE(c.covered, 0::BIGINT) AS "damsCovered"
-      FROM per_pref p
-      LEFT JOIN covered c ON c.pref_code = p.pref_code
-      ORDER BY p.pref_code
-    `,
+    classifyDamCoverage(),
   ]);
-  return { headline, sources, prefs };
+  // Same definition as the headline: covered over the dams there is
+  // something to obtain for (提供元なし / 提供元に値なし are in no denominator).
+  const byPref = new Map<string, PrefRow>();
+  for (const r of triageRows) {
+    if (r.prefCode == null || isUnobtainable(r.status)) continue;
+    const p = byPref.get(r.prefCode) ?? { prefCode: r.prefCode, damTotal: 0, damsCovered: 0 };
+    p.damTotal += 1;
+    if (r.status === 'covered') p.damsCovered += 1;
+    byPref.set(r.prefCode, p);
+  }
+  return { headline, sources, prefs: [...byPref.values()] };
 }
 
-function pct(n: bigint, d: bigint): number {
-  if (d === 0n) return 0;
-  return Number((n * 10000n) / d) / 100;
+function pct(n: number, d: number): number {
+  return d === 0 ? 0 : (100 * n) / d;
 }
 
 const PENDING_REASON: Record<PendingScanReason, string> = {
@@ -187,9 +179,10 @@ export default async function CoveragePage() {
     coverageSummary(),
   ]);
   const total = headline.damTotal;
+  const denominator = coverageDamTotal(headline);
   const rtPct = realtimeCoveragePct(headline) ?? 0;
   const ratePct = storageRateCoveragePct(headline) ?? 0;
-  const histPct = total > 0 ? (100 * headline.historicalDamCount) / total : 0;
+  const histPct = historicalCoveragePct(headline) ?? 0;
   const sortedPrefs = [...prefs].sort(
     (a, b) => pct(a.damsCovered, a.damTotal) - pct(b.damsCovered, b.damTotal),
   );
@@ -202,6 +195,16 @@ export default async function CoveragePage() {
         全国 <strong>{Number(total).toLocaleString()}</strong> ダムに対する実測データ取得状況。
         「実測」は水位・雨量だけでも 1 基と数え、「貯水率取得」は貯水率を表示できるダムに限った、
         より厳しい指標です（分母も河川管理ダムに限定）。数字が食い違って見えるのはこの定義差によるものです。
+        {headline.notPublishedDamCount + headline.publishedNoDataDamCount > 0 ? (
+          <>
+            {' '}
+            どのデータ提供元も公開していない「提供元なし」の{' '}
+            {headline.notPublishedDamCount.toLocaleString()}{' '}
+            基と、提供元が値を出していない「提供元に値なし」の{' '}
+            {headline.publishedNoDataDamCount.toLocaleString()} 基は、取得しようがないため
+            カバレッジの分母に含めていません（分母 {denominator.toLocaleString()} 基）。
+          </>
+        ) : null}
         今後の方針は{' '}
         <Link className="text-primary hover:underline" href="/roadmap">
           ロードマップ
@@ -236,7 +239,7 @@ export default async function CoveragePage() {
             value={triage.covered}
             total={Number(total)}
             tone="ok"
-            note="直近 30 日に観測値あり"
+            note="直近 30 日に観測値あり。月次・不定期の提供元は、公開中の最新値を取り込み済み"
           />
           <TriageCard
             label="公開されているが未取得"
@@ -311,24 +314,24 @@ export default async function CoveragePage() {
 
       <section className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
         <HeadlineCard
-          label="実測 (直近 30 日)"
+          label="実測データ取得"
           pct={rtPct}
           value={headline.realtimeDamCount}
-          total={total}
-          note="何らかの観測値が届いているダム。水位・雨量だけの提供元も含みます。"
+          total={denominator}
+          note="提供元が公開している値を取得済みのダム（「取得済み」と同じ）。水位・雨量だけの提供元も含みます。トップページの見出しと同じ指標です。"
         />
         <HeadlineCard
           label="貯水率取得 (直近 30 日)"
           pct={ratePct}
           value={headline.storageRateRiverDamCount}
-          total={headline.riverDamCount}
-          note="貯水率を表示できるダム。分母は河川管理ダム (堤高 15 m 以上)。トップページと同じ指標です。"
+          total={coverageRiverDamCount(headline)}
+          note="貯水率を表示できるダム。分母は河川管理ダム (堤高 15 m 以上) のうち提供元なし・提供元に値なしを除いたもの。"
         />
         <HeadlineCard
           label="歴史データ含む (mudam 等)"
           pct={histPct}
           value={headline.historicalDamCount}
-          total={total}
+          total={denominator}
           note="過去に一度でも実測が届いたダム。現在も更新中とは限りません。"
         />
       </section>
