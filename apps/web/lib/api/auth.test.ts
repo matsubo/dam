@@ -50,21 +50,23 @@ describe('authorize (Stripe-style bearer)', () => {
 });
 
 describe('API_AUTH_BYPASS', () => {
+  // NODE_ENV is typed read-only; the test needs to flip it.
+  const env = process.env as Record<string, string | undefined>;
   const saved = { bypass: process.env.API_AUTH_BYPASS, env: process.env.NODE_ENV };
   afterAll(() => {
     process.env.API_AUTH_BYPASS = saved.bypass;
-    process.env.NODE_ENV = saved.env;
+    env.NODE_ENV = saved.env;
   });
 
   test('opens keyed routes outside production (dev server, E2E)', async () => {
     process.env.API_AUTH_BYPASS = '1';
-    process.env.NODE_ENV = 'development';
+    env.NODE_ENV = 'development';
     expect((await authorize(req())).ok).toBe(true);
   });
 
   test('is ignored in production, so a stray env var cannot open the API', async () => {
     process.env.API_AUTH_BYPASS = '1';
-    process.env.NODE_ENV = 'production';
+    env.NODE_ENV = 'production';
     const r = await authorize(req());
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.status).toBe(401);
