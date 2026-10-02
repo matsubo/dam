@@ -1,5 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto';
+import type { TransactionSql } from 'postgres';
 import { sql } from '../client.ts';
+
+type Tx = TransactionSql<{ bigint: bigint }>;
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
@@ -31,17 +34,21 @@ export interface IssuedKey {
 }
 
 export async function issueKey(input: IssueInput): Promise<IssuedKey> {
+  return sql.begin((tx) => insertKey(tx, input));
+}
+
+async function insertKey(db: Tx, input: IssueInput): Promise<IssuedKey> {
   let prefix = randomFromAlphabet(8);
   // retry on improbable collision
   for (let i = 0; i < 5; i++) {
-    const exists = await sql<{ n: number }[]>`SELECT 1 AS n FROM api_keys WHERE prefix = ${prefix}`;
+    const exists = await db<{ n: number }[]>`SELECT 1 AS n FROM api_keys WHERE prefix = ${prefix}`;
     if (exists.length === 0) break;
     prefix = randomFromAlphabet(8);
   }
   const secret = randomFromAlphabet(40);
   const plaintext = `${prefix}_${secret}`;
   const hash = hashKey(plaintext);
-  const rows = await sql<{ id: bigint }[]>`
+  const rows = await db<{ id: bigint }[]>`
     INSERT INTO api_keys (prefix, hash, email, label, tier)
     VALUES (${prefix}, ${Buffer.from(hash)}, ${input.email}, ${input.label ?? null}, ${
       input.tier ?? 'free'
@@ -64,12 +71,16 @@ export async function issueSelfServiceKey(
   email: string,
   label: string | undefined,
 ): Promise<IssuedKey | null> {
-  const [row] = await sql<{ n: number }[]>`
-    SELECT COUNT(*)::int AS n FROM api_keys
-    WHERE email = ${email} AND active AND revoked_at IS NULL
-  `;
-  if ((row?.n ?? 0) >= MAX_ACTIVE_KEYS_PER_EMAIL) return null;
-  return issueKey({ email, label });
+  // Count and insert under a per-email lock, or parallel submits all see 4.
+  return sql.begin(async (tx) => {
+    await tx`SELECT pg_advisory_xact_lock(hashtext(${`api_keys:${email}`}))`;
+    const [row] = await tx<{ n: number }[]>`
+      SELECT COUNT(*)::int AS n FROM api_keys
+      WHERE email = ${email} AND active AND revoked_at IS NULL
+    `;
+    if ((row?.n ?? 0) >= MAX_ACTIVE_KEYS_PER_EMAIL) return null;
+    return insertKey(tx, { email, label });
+  });
 }
 
 export interface KeyRow {
