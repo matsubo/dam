@@ -202,7 +202,13 @@ const task: Task = async (_payload, helpers) => {
   for (const p of rows) {
     // One figure for two dams belongs to neither.
     const damId = p.damNames.length === 1 ? chooseMaster(p.name, masters) : null;
-    universe.push({ externalId: p.name, name: p.name, prefCode: PREF_CODE, resolvedDamId: damId });
+    const row: UniverseRow = {
+      externalId: p.name,
+      name: p.name,
+      prefCode: PREF_CODE,
+      resolvedDamId: damId,
+    };
+    universe.push(row);
     if (!damId) {
       log(`${SOURCE_ID}: no master for "${p.name}"`);
       continue;
@@ -210,6 +216,9 @@ const task: Task = async (_payload, helpers) => {
     matched++;
     await bindExternalId(damId, SOURCE_ID, p.name);
     if (COVERED_ELSEWHERE[p.name] || p.storageRate === null || !observedAt) continue;
+    // The 【…現在】 date is the newest value the page publishes: holding it
+    // keeps the dam covered through the month until the next survey.
+    row.publishedAt = observedAt;
     inputs.push({
       observedAt,
       damId,

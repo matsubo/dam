@@ -1,6 +1,7 @@
 import { listDams } from '@dam/db/repo/dams';
 import { z } from 'zod';
 import { authorize, makeUnauthorized, rateLimitHeaders } from '../../../../../../lib/api/auth.ts';
+import { damListItems } from '../../../../../../lib/api/dam-list-item.ts';
 import { asProblem, HttpError } from '../../../../../../lib/api/error.ts';
 import { pageLinks, rfc5988Link } from '../../../../../../lib/api/pagination.ts';
 import { hal } from '../../../../../../lib/api/response.ts';
@@ -44,17 +45,7 @@ export async function GET(
     return hal(
       {
         prefCode: code,
-        items: r.items.map((d) => ({
-          id: d.id.toString(),
-          slug: d.slug,
-          name: d.name,
-          prefCode: d.prefCode,
-          manager: d.manager,
-          totalCapacityM3: d.totalCapacityM3,
-          activeCapacityM3: d.activeCapacityM3,
-          location: { lat: d.lat, lng: d.lng },
-          watershed: d.watershedSlug ? { slug: d.watershedSlug, name: d.watershedName } : null,
-        })),
+        items: await damListItems(r.items),
         count: r.items.length,
       },
       {

@@ -26,6 +26,15 @@ export interface UniverseRow {
    * drops back to unknown instead of keeping an earlier "no data".
    */
   hasData?: boolean | null;
+  /**
+   * The `observedAt` the task stores for this row's current value, when the
+   * provider prints its own date (a monthly survey, a weekly table). A dam
+   * whose newest observation from this source is at or after it counts as
+   * covered even when that date is older than the 30-day window: there is
+   * nothing newer to take. Leave it unset for real-time feeds. Every scan
+   * overwrites the stored value, unset included.
+   */
+  publishedAt?: Date | null;
 }
 
 /**
@@ -98,6 +107,7 @@ async function recordUniverseOrThrow(
       lng: r.lng ?? null,
       resolved_dam_id: r.resolvedDamId ?? null,
       has_data: r.hasData ?? null,
+      published_at: r.publishedAt ?? null,
     }));
     await sql`
       INSERT INTO source_universe ${sql(values)}
@@ -118,6 +128,8 @@ async function recordUniverseOrThrow(
         -- writer: this call, or recordUniverseHasData when keepHasData is set.
         has_data        = CASE WHEN ${keepHasData} THEN source_universe.has_data
                                ELSE EXCLUDED.has_data END,
+        -- Same rule as an unset has_data: the latest scan wins.
+        published_at    = EXCLUDED.published_at,
         -- not_dam_reason is deliberately absent: migrations set it (0131) and
         -- no scan can know a station is a 堰 rather than an unlinked dam.
         last_seen_at    = NOW()
@@ -165,7 +177,10 @@ export async function recordUniverseHasData(
 }
 
 export type DamCoverageStatus =
-  /** An observation landed in the last 30 days. */
+  /**
+   * An observation landed in the last 30 days, or we hold the newest value a
+   * provider that prints its own date publishes (`source_universe.published_at`).
+   */
   | 'covered'
   /** An upstream publishes this dam and we matched it, but nothing arrives. */
   | 'published_not_ingested'
@@ -178,6 +193,28 @@ export type DamCoverageStatus =
   | 'unknown'
   /** Every observation-producing provider has been scanned; none publishes it. */
   | 'not_published';
+
+/**
+ * Whether a data provider publishes the dam, as one word for readers and API
+ * clients: `available` (a provider publishes it, values or not), `none`
+ * (提供元なし: every provider's list was recorded and none carries it) or
+ * `unknown` (some provider's list is not recorded yet).
+ */
+export type ProviderAvailability = 'available' | 'none' | 'unknown';
+
+export function providerAvailability(status: DamCoverageStatus): ProviderAvailability {
+  if (status === 'not_published') return 'none';
+  if (status === 'unknown') return 'unknown';
+  return 'available';
+}
+
+/**
+ * Not data we could be missing: nobody publishes the dam, or everyone who
+ * lists it marks it empty. Such dams are in no coverage denominator.
+ */
+export function isUnobtainable(status: DamCoverageStatus): boolean {
+  return status === 'not_published' || status === 'published_no_data';
+}
 
 export interface DamCoverageRow {
   damId: bigint;
@@ -235,11 +272,29 @@ export async function classifyDamCoverage(): Promise<DamCoverageRow[]> {
     -- kasenbosai's all-欠測 hours were stored that way, and counting them
     -- called dams covered that have never delivered a value.
     fresh AS (
-      SELECT DISTINCT dam_id
+      SELECT dam_id
       FROM observations
       WHERE observed_at > NOW() - INTERVAL '30 days'
+        AND source_id <> 'synthetic'
         AND num_nonnulls(storage_volume_m3, storage_rate, inflow_m3s,
                          outflow_m3s, water_level_m, rainfall_mm) > 0
+      UNION
+      -- We hold the newest value a dated provider publishes (0221), however
+      -- old: a monthly survey has nothing newer to take. Only a scan from
+      -- the last 7 days vouches for that date.
+      SELECT su.resolved_dam_id
+      FROM source_universe su
+      WHERE su.resolved_dam_id IS NOT NULL
+        AND su.published_at IS NOT NULL
+        AND su.last_seen_at > NOW() - INTERVAL '7 days'
+        AND EXISTS (
+          SELECT 1 FROM observations o
+          WHERE o.dam_id = su.resolved_dam_id
+            AND o.source_id = su.source_id
+            AND o.observed_at >= su.published_at
+            AND num_nonnulls(o.storage_volume_m3, o.storage_rate, o.inflow_m3s,
+                             o.outflow_m3s, o.water_level_m, o.rainfall_mm) > 0
+        )
     ),
     published AS (
       SELECT su.resolved_dam_id AS dam_id,
@@ -426,6 +481,17 @@ export async function classifyOneDam(damId: bigint): Promise<DamCoverageRow | nu
              WHEN EXISTS (
                SELECT 1 FROM observations o
                WHERE o.dam_id = d.id AND o.observed_at > NOW() - INTERVAL '30 days'
+                 AND o.source_id <> 'synthetic'
+                 AND num_nonnulls(o.storage_volume_m3, o.storage_rate, o.inflow_m3s,
+                                  o.outflow_m3s, o.water_level_m, o.rainfall_mm) > 0
+             ) OR EXISTS (
+               SELECT 1 FROM source_universe su
+               JOIN observations o
+                 ON o.dam_id = su.resolved_dam_id
+                AND o.source_id = su.source_id
+                AND o.observed_at >= su.published_at
+               WHERE su.resolved_dam_id = d.id
+                 AND su.last_seen_at > NOW() - INTERVAL '7 days'
                  AND num_nonnulls(o.storage_volume_m3, o.storage_rate, o.inflow_m3s,
                                   o.outflow_m3s, o.water_level_m, o.rainfall_mm) > 0
              )                                            THEN 'covered'

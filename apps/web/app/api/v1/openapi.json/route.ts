@@ -249,7 +249,7 @@ const components = {
 
     DamListItem: {
       type: 'object',
-      required: ['id', 'slug', 'name', 'prefCode', 'location'],
+      required: ['id', 'slug', 'name', 'prefCode', 'location', 'dataProvider'],
       properties: {
         id: { type: 'string', example: '7163' },
         slug: { type: 'string', example: 'doushi-14' },
@@ -286,6 +286,19 @@ const components = {
           properties: {
             slug: { type: 'string', example: '相模川' },
             name: { type: 'string', example: '相模川' },
+          },
+        },
+        dataProvider: {
+          type: 'object',
+          description:
+            'このダムの観測値を公開しているデータ提供元があるか。`available` 提供元あり (値の有無を問わず、いずれかの提供元の公開一覧に載っている、または観測値が届いている) / `none` 提供元なし (全提供元の公開一覧を記録済みで、どれにも載っていない。サイトでは推移グラフを出さず、カバレッジの分母にも含めない) / `unknown` 未調査 (公開一覧が未記録の提供元が残っている)。',
+          required: ['availability'],
+          properties: {
+            availability: {
+              type: 'string',
+              enum: ['available', 'none', 'unknown'],
+              example: 'available',
+            },
           },
         },
       },
@@ -397,6 +410,35 @@ const components = {
                   description:
                     '直近 30 日で最新の観測値の source_id (`tokyo-waterworks`, `jwa-junpo`, 等)。',
                   example: 'tokyo-waterworks',
+                },
+              },
+            },
+            dataProvider: {
+              type: 'object',
+              description:
+                '一覧の `dataProvider` に、`/api/v1/coverage` と同じ判定 (`coverageStatus`) と、このダムを公開一覧に載せている提供元 (`publishedBy`) を加えたもの。',
+              required: ['availability', 'coverageStatus', 'publishedBy'],
+              properties: {
+                availability: {
+                  type: 'string',
+                  enum: ['available', 'none', 'unknown'],
+                  example: 'available',
+                },
+                coverageStatus: {
+                  type: 'string',
+                  enum: [
+                    'covered',
+                    'published_not_ingested',
+                    'published_no_data',
+                    'unknown',
+                    'not_published',
+                  ],
+                  example: 'covered',
+                },
+                publishedBy: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  example: ['kasenbosai'],
                 },
               },
             },
@@ -517,7 +559,7 @@ const components = {
             'not_published',
           ],
           description:
-            '`covered` 取得済み / `published_not_ingested` 提供元は公開・紐付けも済みだが観測値が入っていない (取り込み側の不具合) / `published_no_data` 提供元の公開一覧には載っているが、掲載するすべての提供元が値を出していない (調査対象外・欠測・落水など) / `unknown` 未調査 / `not_published` 全提供元の公開一覧に現れなかった',
+            '`covered` 取得済み (直近 30 日に観測値あり、または月次・不定期の提供元が公開している最新値を取り込み済み) / `published_not_ingested` 提供元は公開・紐付けも済みだが観測値が入っていない (取り込み側の不具合) / `published_no_data` 提供元の公開一覧には載っているが、掲載するすべての提供元が値を出していない (調査対象外・欠測・落水など) / `unknown` 未調査 / `not_published` 全提供元の公開一覧に現れなかった (提供元なし)',
           example: 'published_not_ingested',
         },
         publishedBy: {
@@ -837,6 +879,7 @@ const paths = {
                     activeCapacityM3: '616000.00',
                     location: { lat: 35.55056, lng: 139.13361 },
                     watershed: { slug: '相模川', name: '相模川' },
+                    dataProvider: { availability: 'available' },
                   },
                 ],
                 nextCursor: '7164',
@@ -889,6 +932,11 @@ const paths = {
                 lng: 139.13361,
                 elevationM: 311,
                 externalIds: { ndi: '716', damnet: '0699' },
+                dataProvider: {
+                  availability: 'available',
+                  coverageStatus: 'covered',
+                  publishedBy: ['kanagawa-dam', 'kasenbosai'],
+                },
                 _links: {
                   self: { href: '/api/v1/dams/doushi-14' },
                   observations: {

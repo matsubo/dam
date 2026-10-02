@@ -142,15 +142,15 @@ const task: Task = async (_payload, helpers) => {
   `;
 
   // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing. Recorded
-  // before any page fetch so one failing page cannot discard it.
+  // say "they publish it, we failed to link it" instead of guessing. Built
+  // from the index, not from the pages that loaded, so one failing page
+  // cannot drop a dam; recorded after the loop to carry each page's date.
   const universe: UniverseRow[] = links.map((link) => ({
     externalId: link.name,
     name: link.name,
     prefCode: PREF_CODE,
     resolvedDamId: chooseMaster(link.name, masters),
   }));
-  await recordUniverse(SOURCE_ID, universe);
 
   const inputs = [] as Parameters<typeof upsertObservations>[0];
   let fetched = 0;
@@ -183,6 +183,10 @@ const task: Task = async (_payload, helpers) => {
       continue;
     }
     parsed += 1;
+    // The survey date is the newest value the page publishes: holding it
+    // keeps the dam covered between the twice-monthly surveys.
+    const row = universe[i];
+    if (row) row.publishedAt = page.observedAt;
     inputs.push({
       observedAt: page.observedAt,
       damId,
@@ -198,6 +202,7 @@ const task: Task = async (_payload, helpers) => {
     });
   }
 
+  await recordUniverse(SOURCE_ID, universe);
   const written = await upsertObservations(inputs);
   log(
     `${SOURCE_ID} done: published=${links.length} parsed=${parsed} matched=${inputs.length} written=${written}`,
