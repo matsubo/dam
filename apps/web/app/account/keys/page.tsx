@@ -73,7 +73,9 @@ export default async function KeysPage({ searchParams }: SP) {
         </div>
       </header>
 
-      <IssueKeyForm />
+      {/* Remount on revoke so the just-issued plaintext doesn't outlive its key.
+          Issuing doesn't change the revoked count, so the banner survives that. */}
+      <IssueKeyForm key={keys.filter((k) => k.revokedAt).length} />
 
       <h2 className="font-display font-semibold mb-3">発行済み</h2>
       {keys.length === 0 ? (

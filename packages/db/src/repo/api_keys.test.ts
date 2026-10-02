@@ -27,6 +27,17 @@ describe('issueSelfServiceKey', () => {
     expect(await issueSelfServiceKey(email, 'one too many')).toBeNull();
   });
 
+  test('parallel submissions cannot overshoot the cap', async () => {
+    const email = 'cap-test@example.com';
+    await sql`DELETE FROM api_keys WHERE email = ${email}`;
+    const results = await Promise.all(
+      Array.from({ length: MAX_ACTIVE_KEYS_PER_EMAIL + 5 }, (_, i) =>
+        issueSelfServiceKey(email, `p${i}`),
+      ),
+    );
+    expect(results.filter((r) => r !== null).length).toBe(MAX_ACTIVE_KEYS_PER_EMAIL);
+  });
+
   test('a revoked key frees its slot', async () => {
     const email = 'cap-test@example.com';
     const [first] = await sql<{ id: bigint }[]>`
