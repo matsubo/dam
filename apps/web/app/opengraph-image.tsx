@@ -1,10 +1,10 @@
 import { ImageResponse } from 'next/og';
 
 // Site-wide social-share card (1200×630) used for `og:image` and
-// `twitter:image`. Dam-detail and watershed pages can ship their own
-// `opengraph-image.tsx` later for per-page cards if needed; this is the
-// fallback for everything else.
-export const alt = 'Dam Data Platform — 日本のダム貯水量';
+// `twitter:image`. Dam-detail pages ship their own per-dam card
+// (app/dams/[slug]/opengraph-image.tsx); this is the fallback for
+// everything else.
+export const alt = 'Dam Data Japan — 日本のダム貯水量';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -24,7 +24,10 @@ export default function OG() {
       <div
         style={{
           position: 'absolute',
-          inset: 0,
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
           background:
             'radial-gradient(circle at 18% 28%, rgba(255,255,255,0.18), transparent 45%), radial-gradient(circle at 78% 72%, rgba(255,255,255,0.12), transparent 45%)',
         }}

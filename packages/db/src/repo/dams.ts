@@ -527,6 +527,85 @@ export async function latestObservation(damId: bigint): Promise<LatestObservatio
   return rows[0] ?? null;
 }
 
+/**
+ * When the dam's displayable history starts — `latestObservation`'s
+ * counterpart, under the same rule (every source but 'synthetic', see
+ * display_observation). Null when there is none.
+ */
+export async function earliestObservationAt(damId: bigint): Promise<Date | null> {
+  const rows = await sql<{ observedAt: Date }[]>`
+    SELECT observed_at AS "observedAt"
+    FROM observations
+    WHERE dam_id = ${damId} AND source_id <> 'synthetic'
+    ORDER BY observed_at ASC
+    LIMIT 1
+  `;
+  return rows[0]?.observedAt ?? null;
+}
+
+/**
+ * The master carries a rebuilt dam and the structure it replaced as two rows
+ * — 佐久間（再） and 佐久間（元）, same pref_code — and the upstreams publish
+ * readings under only one of them. Scalar SQL over the outer alias `d`: the
+ * slug of the twin (same base name, the other suffix, same pref_code) that
+ * `d`'s page should declare canonical. That is the case only when `d` has no
+ * displayable observation (display_observation(…, FALSE), the row the detail
+ * page shows) and exactly one twin has one; NULL otherwise.
+ */
+function canonicalTwinSlug() {
+  return sql`(
+    SELECT CASE WHEN COUNT(*) = 1 THEN MIN(t.slug) END
+    FROM dams t
+    WHERE RIGHT(d.name, 3) IN ('（元）', '（再）')
+      AND t.pref_code = d.pref_code
+      AND t.name = LEFT(d.name, -3)
+                   || CASE RIGHT(d.name, 3) WHEN '（元）' THEN '（再）' ELSE '（元）' END
+      AND NOT EXISTS (SELECT 1 FROM display_observation(d.id, FALSE))
+      AND EXISTS (SELECT 1 FROM display_observation(t.id, FALSE))
+  )`;
+}
+
+export interface CanonicalTwin {
+  slug: string;
+  name: string;
+}
+
+/** The （元）/（再） twin this dam's page canonicalises to, if any (see canonicalTwinSlug). */
+export async function canonicalTwin(damId: bigint): Promise<CanonicalTwin | null> {
+  const rows = await sql<CanonicalTwin[]>`
+    SELECT t.slug, t.name
+    FROM dams d
+    JOIN dams t ON t.slug = ${canonicalTwinSlug()}
+    WHERE d.id = ${damId}
+  `;
+  return rows[0] ?? null;
+}
+
+export interface SitemapDam {
+  slug: string;
+  lastModified: Date;
+}
+
+/**
+ * Dams whose page is its own canonical, with the later of the master row's
+ * updated_at and the newest displayable observation as lastModified.
+ */
+export async function sitemapDams(): Promise<SitemapDam[]> {
+  return sql<SitemapDam[]>`
+    WITH latest AS (
+      SELECT dam_id, MAX(observed_at) AS observed_at
+      FROM observations
+      WHERE source_id <> 'synthetic'
+      GROUP BY dam_id
+    )
+    SELECT d.slug, GREATEST(d.updated_at, l.observed_at) AS "lastModified"
+    FROM dams d
+    LEFT JOIN latest l ON l.dam_id = d.id
+    WHERE ${canonicalTwinSlug()} IS NULL
+    ORDER BY d.id
+  `;
+}
+
 export interface StorageChange {
   /** Storage volume at the latest observation (m³, string for bigint safety). */
   current: string | null;

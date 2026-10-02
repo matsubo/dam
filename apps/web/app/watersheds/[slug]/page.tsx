@@ -33,6 +33,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     title: `${w.name}水系の貯水率・ダム一覧`,
     description: `${w.name}水系の現在の貯水率（水系合計）と、属するダムの貯水量・貯水率一覧。渇水状況の確認に。毎時間更新。`,
     alternates: { canonical: `/watersheds/${slug}` },
+    // Spelled out because this object replaces layout.tsx's openGraph
+    // wholesale; the image comes from ./opengraph-image.tsx.
+    openGraph: {
+      type: 'website',
+      siteName: 'Dam Data Japan',
+      locale: 'ja_JP',
+      url: `/watersheds/${slug}`,
+    },
   };
 }
 

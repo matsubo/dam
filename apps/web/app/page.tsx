@@ -40,7 +40,7 @@ import { fmtCapacityMcm } from '../lib/format.ts';
 // shared across requests at runtime.
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
-  title: { absolute: '日本のダム貯水率・貯水量マップ — Dam Data Platform' },
+  title: { absolute: '日本のダム貯水率・貯水量マップ — Dam Data Japan' },
   description: '日本全国のダム諸元と貯水量履歴。長期トレンドを 1 時間〜月次の粒度で参照。',
   alternates: { canonical: '/' },
 };
@@ -299,7 +299,8 @@ export default async function Home() {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
     url: 'https://dam.teraren.com/',
-    name: 'Dam Data Platform',
+    name: 'Dam Data Japan',
+    alternateName: 'dam.teraren.com',
     inLanguage: 'ja',
     potentialAction: {
       '@type': 'SearchAction',
