@@ -378,7 +378,7 @@ export default async function Home() {
               </div>
               <div className="flex items-center gap-2">
                 <BadgeCheck className="text-primary" size={18} aria-hidden="true" />
-                <span className="text-on-surface-variant">商用利用可</span>
+                <span className="text-on-surface-variant">非商用なら無償</span>
               </div>
             </div>
           </div>
@@ -484,7 +484,7 @@ export default async function Home() {
           </div>
           <p className="text-white/90 text-body-md font-medium text-center md:text-right max-w-md">
             Google でサインインして発行 (600 req/min · 100,000
-            req/day)。研究・防災・教育・商用、いずれも無償でご利用いただけます。
+            req/day)。研究・教育・防災啓発などの非商用目的なら無償でご利用いただけます。
           </p>
         </div>
       </section>
