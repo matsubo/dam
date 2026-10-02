@@ -1,0 +1,169 @@
+@reference "../globals.css";
+
+/* The /watersheds list is one <table> for every breakpoint: a table from md
+   up, reflowed into cards below it. Icons, the observed-dam dot, the storage
+   bar and the card-only words are pseudo-elements, so each of the ~650 rows
+   is 7 DOM elements and nothing is rendered twice (Lighthouse dom-size).
+   Cells: 1 name link · 2 kind · 3 dam count · 4 observed-dam count ·
+   5 storage rate. Cells 4 and 5 are left empty when there is no value and
+   draw "—"; cell 5 carries `--r` (bar width) and `--c` (band colour). */
+
+.list td:nth-child(1)::before,
+.list td:nth-child(3)::before {
+  content: "";
+  display: inline-block;
+  vertical-align: -0.125em;
+  background-color: currentColor;
+  mask-position: center;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+}
+/* lucide git-branch (EntityIcon kind="watershed") */
+.list td:nth-child(1)::before {
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 6a9 9 0 0 0-9 9V3'/%3E%3Ccircle cx='18' cy='6' r='3'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3C/svg%3E");
+}
+/* lucide dam (EntityIcon kind="dam") */
+.list td:nth-child(3)::before {
+  @apply text-primary;
+  width: 12px;
+  height: 12px;
+  margin-right: 4px;
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M11 11.31c1.17.56 1.54 1.69 3.5 1.69 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1'/%3E%3Cpath d='M11.75 18c.35.5 1.45 1 2.75 1 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1'/%3E%3Cpath d='M2 10h4'/%3E%3Cpath d='M2 14h4'/%3E%3Cpath d='M2 18h4'/%3E%3Cpath d='M2 6h4'/%3E%3Cpath d='M7 3a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1L10 4a1 1 0 0 0-1-1z'/%3E%3C/svg%3E");
+}
+
+.list td:nth-child(4):not(:empty) {
+  @apply text-emerald-700;
+}
+.list td:nth-child(4):not(:empty)::before {
+  @apply bg-emerald-600;
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 4px;
+  border-radius: 9999px;
+  vertical-align: middle;
+}
+.list td:nth-child(4):empty::after,
+.list td:nth-child(5):empty::after {
+  @apply text-xs text-on-surface-variant;
+  content: "—";
+}
+
+.list td:nth-child(5):not(:empty) {
+  @apply text-xs font-bold tabular-nums;
+  color: var(--c);
+}
+.list td:nth-child(5):not(:empty)::after {
+  @apply bg-surface-container;
+  content: "";
+  height: 0.5rem;
+  border-radius: 9999px;
+  background-image: linear-gradient(var(--c), var(--c));
+  background-size: var(--r) 100%;
+  background-repeat: no-repeat;
+}
+
+@media (width >= 48rem) {
+  .list td:nth-child(n + 3) {
+    @apply text-right tabular-nums;
+  }
+  .list td:nth-child(4) {
+    @apply text-xs;
+  }
+  /* 140px for bar + gap + 3rem percentage, the bar pinned left of the text. */
+  .list td:nth-child(5) {
+    position: relative;
+    width: calc(140px + 1.5rem);
+  }
+  .list td:nth-child(5):not(:empty)::after {
+    position: absolute;
+    top: 50%;
+    right: 4.25rem;
+    width: calc(140px - 3.5rem);
+    margin-top: -0.25rem;
+  }
+}
+
+@media (width < 48rem) {
+  .list {
+    display: block;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    overflow: visible;
+  }
+  .list thead {
+    display: none;
+  }
+  .list tbody {
+    @apply flex flex-col gap-2;
+  }
+  .list tr {
+    @apply flex flex-wrap items-center gap-x-2 p-3 bg-white border border-outline-variant;
+    @apply rounded-xl text-xs text-on-surface-variant;
+  }
+  .list td {
+    @apply p-0 mt-1;
+  }
+  .list td:nth-child(1) {
+    @apply basis-full mt-0 text-base text-on-surface;
+  }
+  .list td:nth-child(1) a {
+    @apply font-display font-semibold text-on-surface no-underline hover:text-primary;
+  }
+  .list td:nth-child(2)::after {
+    content: "水系";
+  }
+  .list td:nth-child(3)::before {
+    width: 11px;
+    height: 11px;
+  }
+  .list td:nth-child(3)::after {
+    content: " 基";
+  }
+  /* "·" separators before the dam count and the observed count. */
+  .list td:nth-child(3),
+  .list td:nth-child(4) {
+    padding-left: calc(0.5rem + 3px);
+    background: radial-gradient(
+        circle at 1.5px 55%,
+        --theme(--color-on-surface-variant) 1px,
+        transparent 1.5px
+      )
+      no-repeat;
+  }
+  .list td:nth-child(4):empty {
+    display: none;
+  }
+  /* The card has no column header, so the dot is drawn behind a "実測" label. */
+  .list td:nth-child(4):not(:empty)::before {
+    content: "実測";
+    width: auto;
+    height: auto;
+    padding-left: 10px;
+    border-radius: 0;
+    vertical-align: baseline;
+    background: radial-gradient(
+      circle at 3px 50%,
+      --theme(--color-emerald-600) 3px,
+      transparent 3.5px
+    );
+  }
+  /* "貯水率" label · bar · percentage, aligned across cards like a table row. */
+  .list td:nth-child(5) {
+    @apply basis-full mt-2 grid grid-cols-[3rem_1fr_3rem] items-center gap-x-3 text-right;
+  }
+  .list td:nth-child(5)::before {
+    @apply text-left text-[11px] font-normal text-on-surface-variant;
+    content: "貯水率";
+    order: -2;
+  }
+  .list td:nth-child(5)::after {
+    order: -1;
+    text-align: left;
+  }
+}

@@ -9,7 +9,7 @@ export const revalidate = 3600;
 export const metadata: Metadata = {
   title: 'よくある質問',
   description:
-    '貯水率は公式発表値か計算値か、複数の出典がある場合どれを表示するか、貯水率の分母、（元）/（再）の 2 件表示など、Dam Data Platform のデータの見方をまとめました。',
+    '貯水率は公式発表値か計算値か、複数の出典がある場合どれを表示するか、貯水率の分母、（元）/（再）の 2 件表示など、Dam Data Japan のデータの見方をまとめました。',
   alternates: { canonical: '/faq' },
 };
 

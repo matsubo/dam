@@ -13,21 +13,26 @@ function fakeFetch(body: unknown, status = 200): { calls: Call[]; fetch: typeof 
 }
 
 describe('purgeCdn', () => {
-  test('purges the whole zone with the bearer token', async () => {
+  test("purges only the site's hostname with the bearer token", async () => {
     const { calls, fetch } = fakeFetch({ success: true });
-    const result = await purgeCdn({ zoneId: 'z1', token: 't1' }, fetch);
+    const result = await purgeCdn({ zoneId: 'z1', token: 't1', host: 'dam.teraren.com' }, fetch);
     expect(result).toBe('purged');
     expect(calls).toHaveLength(1);
     expect(calls[0]?.url).toBe('https://api.cloudflare.com/client/v4/zones/z1/purge_cache');
     expect(calls[0]?.init.method).toBe('POST');
     expect(new Headers(calls[0]?.init.headers).get('authorization')).toBe('Bearer t1');
-    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ purge_everything: true });
+    // The zone (teraren.com) is shared with other sites; never purge_everything.
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ hosts: ['dam.teraren.com'] });
   });
 
   test('skips without calling Cloudflare when credentials are missing', async () => {
     const { calls, fetch } = fakeFetch({ success: true });
-    expect(await purgeCdn({ zoneId: undefined, token: 't1' }, fetch)).toBe('skipped');
-    expect(await purgeCdn({ zoneId: 'z1', token: '' }, fetch)).toBe('skipped');
+    expect(await purgeCdn({ zoneId: undefined, token: 't1', host: 'dam.teraren.com' }, fetch)).toBe(
+      'skipped',
+    );
+    expect(await purgeCdn({ zoneId: 'z1', token: '', host: 'dam.teraren.com' }, fetch)).toBe(
+      'skipped',
+    );
     expect(calls).toHaveLength(0);
   });
 
@@ -36,8 +41,8 @@ describe('purgeCdn', () => {
       { success: false, errors: [{ code: 10000, message: 'Authentication error' }] },
       403,
     );
-    await expect(purgeCdn({ zoneId: 'z1', token: 'bad' }, fetch)).rejects.toThrow(
-      'Authentication error',
-    );
+    await expect(
+      purgeCdn({ zoneId: 'z1', token: 'bad', host: 'dam.teraren.com' }, fetch),
+    ).rejects.toThrow('Authentication error');
   });
 });

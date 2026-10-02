@@ -9,17 +9,18 @@ import { APP_STAGE, APP_VERSION } from '../lib/version.ts';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: { default: 'Dam Data Platform', template: '%s — Dam Data Platform' },
+  title: { default: 'Dam Data Japan', template: '%s — Dam Data Japan' },
   description: '日本全国のダム諸元と貯水量の履歴データ。長期トレンドを 1 時間〜月次の粒度で。',
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'),
   // Sitewide OpenGraph + Twitter defaults. Per-page metadata can override
   // any of these; the auto-generated opengraph-image.tsx / twitter-image.tsx
-  // supplies the image without us listing it here.
+  // supplies the image without us listing it here. No `url` here: a default
+  // would stamp the home URL as og:url on every page that doesn't override
+  // it, and share previews would credit the home page.
   openGraph: {
     type: 'website',
-    siteName: 'Dam Data Platform',
+    siteName: 'Dam Data Japan',
     locale: 'ja_JP',
-    url: process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000',
   },
   twitter: { card: 'summary_large_image', site: '@matsubokkuri' },
   // Google Search Console verification token — set via NEXT_PUBLIC_GSC_VERIFICATION

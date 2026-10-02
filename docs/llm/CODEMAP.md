@@ -27,16 +27,19 @@ the file for detail.
 | `app/layout.tsx` | nav + footer + metadata defaults |
 | `app/page.tsx` | home: counts + 6 largest dams + map CTA |
 | `app/dams/page.tsx` | dam list table with pref/watershed filter |
-| `app/dams/[slug]/page.tsx` | dam detail (stat block, ObservationChart, watershed section, nearby) |
-| `app/watersheds/page.tsx` | watershed list grouped by kind |
+| `app/dams/[slug]/page.tsx` | dam detail (stat block, ObservationChart, watershed section, nearby); no-reading dams get 諸元-focused title/H1, an empty （元）/（再） twin canonicalises to the twin with data (`canonicalTwin`), dams with readings emit Dataset JSON-LD |
+| `app/dams/[slug]/opengraph-image.tsx` | per-dam 1200×630 share card: name, 都道府県・水系, 貯水量/容量, latest 貯水率 bucket (`twitter-image.tsx` re-exports it) |
+| `app/watersheds/page.tsx` | watershed list grouped by kind; one `<table>` restyled into cards below `md` by `page.module.css` (icons/bars are CSS, keeps the HTML small) |
 | `app/watersheds/[slug]/page.tsx` | watershed detail with aggregate + dam list |
+| `app/watersheds/[slug]/opengraph-image.tsx` | per-watershed share card: kind, dam count, capacities, 水系合計貯水率 bucket (`twitter-image.tsx` re-exports it) |
 | `app/prefectures/[code]/page.tsx` | prefecture-scoped dam list |
+| `app/prefectures/[code]/opengraph-image.tsx` | per-prefecture share card: dam count, capacities, dams with data in the last 30 days (`twitter-image.tsx` re-exports it) |
 | `app/map/page.tsx` | server fetches all coords, JapanMap renders client-side |
 | `app/sources/page.tsx` | data-source transparency table |
 | `app/contribute/page.tsx` | contributor recruitment: history, live scale figures, stack, terms, credits |
-| `app/api/docs/page.tsx` | Swagger UI on `/api/v1/openapi.json` |
-| `app/sitemap.ts` | dynamic sitemap (dams + watersheds + prefectures) |
-| `app/robots.ts` | allows everything except `/api/` |
+| `app/api/docs/page.tsx` | server-rendered h1 + intro, then Redoc (`components/redoc-viewer.tsx`, client-only) on `/api/v1/openapi.json` |
+| `app/sitemap.ts` | dynamic sitemap: static pages, /stats, every dam (minus canonicalised twins, `sitemapDams`), watersheds, prefectures, /sources/* — slugs percent-encoded, lastmod only where a real change date exists |
+| `app/robots.txt/route.ts` | allows everything except `/api/` (re-allows `/api/docs`); Content-Signal + per-AI-bot groups |
 | `app/not-found.tsx` | 404 page |
 | `app/error.tsx` | client error boundary |
 
@@ -82,6 +85,7 @@ the file for detail.
 | `lib/format.ts` | `fmtN`, `fmtPct`, `fmtDate`, `fmtCapacityMcm` |
 | `lib/project-stats.ts` | hand-maintained codebase figures + stack table for `/contribute` (regen commands in the header) |
 | `lib/contributors.ts` | permanent contributor credits list rendered at `/contribute#contributors` |
+| `lib/og-card.tsx` | shared Satori frame for the share cards: `OgCard`, `BucketGauge`, `Caption` |
 
 ### One-off scripts (`apps/web/bin/`, run from repo root)
 
@@ -283,7 +287,7 @@ the file for detail.
 
 | File | Functions |
 |---|---|
-| `src/repo/dams.ts` | `upsertDamByExternalId`, `findDamBySlug`, `latestObservation`, `nearbyDams`, `listDams` (orderBy: id\|capacity), `takenSlugs`, `appendExternalId`, `applyDamnetAttributes`, `findDamsForReconciliation` |
+| `src/repo/dams.ts` | `upsertDamByExternalId`, `findDamBySlug`, `latestObservation`, `earliestObservationAt`, `canonicalTwin` + `sitemapDams` (one shared （元）/（再） twin rule), `nearbyDams`, `listDams` (orderBy: id\|capacity), `takenSlugs`, `appendExternalId`, `applyDamnetAttributes`, `findDamsForReconciliation` |
 | `src/repo/watersheds.ts` | `upsertWatershed`, `findWatershedBySlug`, `findWatershedContaining`, `findNearestWatershed`, `listWatersheds`, `aggregateWatershed` |
 | `src/repo/match_review.ts` | `enqueueMatchReview` (never touches a closed review: open = `resolved_at IS NULL`; a migration closes one with `SET resolved_at = NOW(), resolved_dam_id = <id or NULL = not a dam>`) |
 | `src/repo/source_universe.ts` | `recordUniverse` (never writes `not_dam_reason`; `publishedAt` = the provider's own date for the row's newest value, 0221), `classifyDamCoverage`, `classifyOneDam` (`covered` = a value in 30 days OR a scan from the last 7 days whose `published_at` we hold an observation at), `providerAvailability` (`available` / `none` = 提供元なし / `unknown`), `isUnobtainable` (提供元なし or 提供元に値なし), `coverageSummary` (`unmatchedStations` = unresolved AND `not_dam_reason IS NULL`; `notDamStations` = unresolved with a reason; `pendingScanSources` = the gate-holding sources, each `no_recent_observations` / `ingesting_without_list` (30-day window), `sourcesPendingScan` its length). Mark a non-dam from a migration: `UPDATE source_universe SET not_dam_reason = '<cited reason>' WHERE source_id = '<src>' AND source_external_id = '<key>' AND resolved_dam_id IS NULL;` |
