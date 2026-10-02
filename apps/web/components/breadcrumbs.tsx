@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { jsonLd } from '../lib/json-ld.ts';
 
 interface Crumb {
   label: string;
@@ -31,7 +32,7 @@ export function Breadcrumbs({ items }: { items: Crumb[] }) {
         </ol>
       </nav>
       {/* biome-ignore lint/security/noDangerouslySetInnerHtml: required to emit schema.org JSON-LD */}
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(ld) }} />
     </>
   );
 }
