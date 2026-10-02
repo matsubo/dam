@@ -1,14 +1,10 @@
-import {
-  deleteAccountByEmail,
-  issueKey,
-  listKeysByEmail,
-  revokeForEmail,
-} from '@dam/db/repo/api_keys';
+import { deleteAccountByEmail, listKeysByEmail, revokeForEmail } from '@dam/db/repo/api_keys';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { auth, signOut } from '../../../auth.ts';
 import { Breadcrumbs } from '../../../components/breadcrumbs.tsx';
 import { fmtDateOnly } from '../../../lib/format.ts';
+import { IssueKeyForm } from './issue-key-form.tsx';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
@@ -17,7 +13,7 @@ export const metadata: Metadata = {
 };
 
 interface SP {
-  searchParams?: Promise<{ issued?: string; prefix?: string; delete_error?: string }>;
+  searchParams?: Promise<{ delete_error?: string }>;
 }
 
 export default async function KeysPage({ searchParams }: SP) {
@@ -29,23 +25,13 @@ export default async function KeysPage({ searchParams }: SP) {
   const sp = (await searchParams) ?? {};
   const keys = await listKeysByEmail(email);
 
-  // Server Actions
-  async function issue(formData: FormData): Promise<void> {
-    'use server';
-    const me = (await auth())?.user?.email;
-    if (!me) redirect('/account/sign-in');
-    const label = String(formData.get('label') ?? '').slice(0, 80) || null;
-    const r = await issueKey({ email: me, label: label ?? undefined });
-    // Surface the plaintext via URL once — it's never stored cleartext, so
-    // this redirect is the single chance to copy it.
-    redirect(`/account/keys?issued=${encodeURIComponent(r.plaintext)}&prefix=${r.prefix}`);
-  }
+  // Server Actions (issuing lives in ./actions.ts so the key never enters a URL)
   async function revoke(formData: FormData): Promise<void> {
     'use server';
     const me = (await auth())?.user?.email;
     if (!me) redirect('/account/sign-in');
-    const id = BigInt(String(formData.get('id') ?? '0'));
-    if (id) await revokeForEmail(id, me);
+    const raw = String(formData.get('id') ?? '');
+    if (/^\d{1,19}$/.test(raw)) await revokeForEmail(BigInt(raw), me);
     redirect('/account/keys');
   }
   async function doSignOut(): Promise<void> {
@@ -87,46 +73,7 @@ export default async function KeysPage({ searchParams }: SP) {
         </div>
       </header>
 
-      {sp.issued ? (
-        <section className="mb-8 border-2 border-primary rounded-xl p-5 bg-primary/5">
-          <h2 className="font-display font-bold text-on-surface mb-2">
-            ✅ 新しい API キーを発行しました
-          </h2>
-          <p className="text-sm text-on-surface-variant mb-3">
-            このキーは <strong>この画面でしか見られません</strong>
-            。今すぐ安全な場所に保存してください。
-          </p>
-          <code className="block bg-[#0e141b] text-white font-code text-sm p-3 rounded-lg break-all select-all">
-            {sp.issued}
-          </code>
-          <p className="text-xs text-on-surface-variant mt-3">
-            使用例:{' '}
-            <code className="font-code">
-              curl -H "Authorization: Bearer {sp.issued}" https://dam.teraren.com/api/v1/dams
-            </code>
-          </p>
-        </section>
-      ) : null}
-
-      <section className="card-surface mb-8">
-        <h2 className="font-display font-semibold mb-3">新規発行</h2>
-        <form action={issue} className="flex flex-wrap gap-2 items-center text-sm">
-          <input
-            type="text"
-            name="label"
-            placeholder="ラベル(任意): 例「研究用」「個人ダッシュボード」"
-            maxLength={80}
-            className="flex-1 min-w-[260px] border border-outline-variant rounded-lg px-3 py-2"
-          />
-          <button type="submit" className="btn-primary !py-2 !px-5 text-sm">
-            発行
-          </button>
-        </form>
-        <p className="text-xs text-on-surface-variant mt-2">
-          無料枠: 600 req/min、100,000 req/day。`Authorization: Bearer …` で送信 (旧仕様の
-          `X-API-Key` ヘッダも互換のため引き続き受け付けます)。
-        </p>
-      </section>
+      <IssueKeyForm />
 
       <h2 className="font-display font-semibold mb-3">発行済み</h2>
       {keys.length === 0 ? (
