@@ -2,6 +2,7 @@ import { sql } from '@dam/db/client';
 import type { Metadata } from 'next';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
 import { FAQ } from '../../lib/faq.ts';
+import { jsonLd } from '../../lib/json-ld.ts';
 
 // Reads source_priorities, so it cannot be prerendered at build time (no DB).
 export const dynamic = 'force-dynamic';
@@ -93,7 +94,7 @@ export default async function FaqPage() {
       ))}
 
       {/* biome-ignore lint/security/noDangerouslySetInnerHtml: required to emit schema.org JSON-LD */}
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(ld) }} />
     </div>
   );
 }

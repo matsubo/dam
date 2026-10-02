@@ -35,6 +35,7 @@ import { damDisplayName } from '../../../lib/dam-name.ts';
 import { flowStatus } from '../../../lib/flow-status.ts';
 import { fmtCapacityMcm, fmtDate, fmtN, fmtPct } from '../../../lib/format.ts';
 import { imageCredit } from '../../../lib/image-credit.ts';
+import { jsonLd } from '../../../lib/json-ld.ts';
 import { rateDenominator } from '../../../lib/rate-basis.ts';
 
 export const dynamic = 'force-dynamic';
@@ -238,7 +239,7 @@ export default async function DamDetail({ params }: PageProps) {
         })()
       : null;
 
-  const ldJson = JSON.stringify(datasetLd ? [ld, datasetLd] : ld);
+  const ldJson = jsonLd(datasetLd ? [ld, datasetLd] : ld);
 
   return (
     <div className="max-w-7xl mx-auto px-5 md:px-10 py-8">

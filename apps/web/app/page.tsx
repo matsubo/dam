@@ -33,6 +33,7 @@ import { LocateWatershedButton } from '../components/locate-watershed-button.tsx
 import { StorageChangeStrip } from '../components/storage-change-strip.tsx';
 import { WatershedSpotlight } from '../components/watershed-spotlight.tsx';
 import { fmtCapacityMcm } from '../lib/format.ts';
+import { jsonLd } from '../lib/json-ld.ts';
 
 // force-dynamic skips Next's build-time prerender (which would fail because
 // the build container can't reach the DB). Real caching happens in
@@ -323,17 +324,17 @@ export default async function Home() {
       <script
         type="application/ld+json"
         // biome-ignore lint/security/noDangerouslySetInnerHtml: trusted JSON-LD
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(datasetLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLd(datasetLd) }}
       />
       <script
         type="application/ld+json"
         // biome-ignore lint/security/noDangerouslySetInnerHtml: trusted JSON-LD
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLd(websiteLd) }}
       />
       <script
         type="application/ld+json"
         // biome-ignore lint/security/noDangerouslySetInnerHtml: trusted JSON-LD
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(orgLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLd(orgLd) }}
       />
       {/* Hero */}
       <section className="relative overflow-hidden pt-20 md:pt-28 pb-14 bg-white">
