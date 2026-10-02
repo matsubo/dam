@@ -3,6 +3,7 @@ import { findSeries, type SeriesPoint } from '@dam/db/repo/observations';
 import { preferredSourceForDam } from '@dam/db/repo/source_priorities';
 import { z } from 'zod';
 import { asProblem, HttpError } from '../../../../../../lib/api/error.ts';
+import { parseObservationWindow } from '../../../../../../lib/api/observation-window.ts';
 import { hal } from '../../../../../../lib/api/response.ts';
 
 export const dynamic = 'force-dynamic';
@@ -64,11 +65,11 @@ export async function GET(
       all_sources: url.searchParams.get('all_sources') ?? undefined,
     });
     if (!parsed.success) throw new HttpError(400, 'Invalid query');
-    const from = new Date(parsed.data.from);
-    const to = new Date(parsed.data.to);
-    if (Number.isNaN(from.valueOf()) || Number.isNaN(to.valueOf())) {
-      throw new HttpError(400, 'Invalid from/to');
-    }
+    const { from, to } = parseObservationWindow(
+      parsed.data.from,
+      parsed.data.to,
+      parsed.data.interval,
+    );
 
     const damRows = await sql<{ id: bigint }[]>`SELECT id FROM dams WHERE slug = ${slug} LIMIT 1`;
     const dam = damRows[0];

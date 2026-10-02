@@ -2,6 +2,7 @@ import { sql } from '@dam/db/client';
 import { findWatershedSeries, type SeriesPoint } from '@dam/db/repo/observations';
 import { z } from 'zod';
 import { asProblem, HttpError } from '../../../../../../lib/api/error.ts';
+import { parseObservationWindow } from '../../../../../../lib/api/observation-window.ts';
 import { hal } from '../../../../../../lib/api/response.ts';
 
 export const dynamic = 'force-dynamic';
@@ -55,11 +56,11 @@ export async function GET(
       all_sources: url.searchParams.get('all_sources') ?? undefined,
     });
     if (!parsed.success) throw new HttpError(400, 'Invalid query');
-    const from = new Date(parsed.data.from);
-    const to = new Date(parsed.data.to);
-    if (Number.isNaN(from.valueOf()) || Number.isNaN(to.valueOf())) {
-      throw new HttpError(400, 'Invalid from/to');
-    }
+    const { from, to } = parseObservationWindow(
+      parsed.data.from,
+      parsed.data.to,
+      parsed.data.interval,
+    );
 
     // Rate denominator = 有効貯水容量 of the rate-able subset only (dams with
     // a known active_capacity_m3). Excluded dams don't contribute to either
