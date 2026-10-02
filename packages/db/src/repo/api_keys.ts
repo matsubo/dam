@@ -53,6 +53,25 @@ export async function issueKey(input: IssueInput): Promise<IssuedKey> {
   return { id, prefix, plaintext };
 }
 
+/** Active keys one email may hold via /account/keys. Rate limits are per key. */
+export const MAX_ACTIVE_KEYS_PER_EMAIL = 5;
+
+/**
+ * Self-service issuance: like issueKey, but returns null once the email holds
+ * MAX_ACTIVE_KEYS_PER_EMAIL active keys. The admin CLI keeps using issueKey.
+ */
+export async function issueSelfServiceKey(
+  email: string,
+  label: string | undefined,
+): Promise<IssuedKey | null> {
+  const [row] = await sql<{ n: number }[]>`
+    SELECT COUNT(*)::int AS n FROM api_keys
+    WHERE email = ${email} AND active AND revoked_at IS NULL
+  `;
+  if ((row?.n ?? 0) >= MAX_ACTIVE_KEYS_PER_EMAIL) return null;
+  return issueKey({ email, label });
+}
+
 export interface KeyRow {
   id: bigint;
   prefix: string;
