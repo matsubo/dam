@@ -1,0 +1,114 @@
+name: Deploy to k3s
+
+# Build the web and worker images, push them to GHCR, then join the home
+# tailnet and roll them out to the k3s cluster (t1/t2/t3). Public traffic
+# reaches the cluster through the in-cluster Cloudflare tunnel; nothing here is
+# exposed to the internet.
+#
+# The roll-out job only runs while the repository variable DEPLOY_K3S is
+# `true`. It is a switch for moves of the database: with it unset, pushes keep
+# building images but leave namespace dam alone.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-k3s
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write # push ghcr.io/matsubo/dam-web and dam-worker
+  id-token: write # Tailscale OIDC trust credential (no stored Tailscale secret)
+
+env:
+  IMAGE_WEB: ghcr.io/matsubo/dam-web
+  IMAGE_WORKER: ghcr.io/matsubo/dam-worker
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # NEXT_PUBLIC_* are inlined into the client bundle at build time.
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/coolify/Dockerfile.web
+          push: true
+          build-args: |
+            NEXT_PUBLIC_SITE_URL=https://dam.teraren.com
+            NEXT_PUBLIC_GTM_ID=GTM-KKX548LX
+          tags: |
+            ${{ env.IMAGE_WEB }}:${{ github.sha }}
+            ${{ env.IMAGE_WEB }}:main
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/coolify/Dockerfile.worker
+          push: true
+          tags: |
+            ${{ env.IMAGE_WORKER }}:${{ github.sha }}
+            ${{ env.IMAGE_WORKER }}:main
+          cache-from: type=gha,scope=worker
+          cache-to: type=gha,mode=max,scope=worker
+
+  deploy:
+    needs: build
+    if: vars.DEPLOY_K3S == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      # Joins as an ephemeral tag:ci node. The tailnet policy lets tag:ci reach
+      # only tcp:6443 on t1/t2/t3, so the tailnet's DNS (AdGuard on n4) is out of
+      # reach: keep the runner's own resolver with --accept-dns=false.
+      - uses: tailscale/github-action@d1b6cd204f8dceda5b3eaad7f1f767be390056cd # v4.2.0
+        with:
+          oauth-client-id: TNSPGzaJJp11CNTRL-kDFtSUjpDP11CNTRL
+          audience: api.tailscale.com/TNSPGzaJJp11CNTRL-kDFtSUjpDP11CNTRL
+          tags: tag:ci
+          args: --accept-dns=false
+
+      # kubectl comes with the ubuntu-latest runner image.
+
+      # KUBECONFIG is the dam/deployer ServiceAccount: it can manage the
+      # Deployments, Service, Ingress and the CDN purge Job in namespace dam,
+      # and cannot read Secrets.
+      - name: Roll out
+        env:
+          KUBECONFIG_DATA: ${{ secrets.KUBECONFIG }}
+        run: |
+          install -m 600 /dev/null "$RUNNER_TEMP/kubeconfig"
+          printf '%s' "$KUBECONFIG_DATA" > "$RUNNER_TEMP/kubeconfig"
+          export KUBECONFIG="$RUNNER_TEMP/kubeconfig"
+          sed -e "s|image: IMAGE_WEB$|image: $IMAGE_WEB:$GITHUB_SHA|" \
+              -e "s|image: IMAGE_WORKER$|image: $IMAGE_WORKER:$GITHUB_SHA|" \
+              deploy/k8s.yaml | kubectl apply -f -
+          kubectl -n dam rollout status deploy/dam-web --timeout=900s
+          kubectl -n dam rollout status deploy/dam-worker --timeout=300s
+
+      # Coolify's post-deploy command: drop the CDN copies of the old build.
+      - name: Purge the CDN
+        run: |
+          export KUBECONFIG="$RUNNER_TEMP/kubeconfig"
+          kubectl -n dam delete job dam-purge-cdn --ignore-not-found --wait
+          sed "s|image: IMAGE_WEB$|image: $IMAGE_WEB:$GITHUB_SHA|" deploy/purge-cdn.yaml | kubectl apply -f -
+          kubectl -n dam wait --for=condition=complete job/dam-purge-cdn --timeout=300s
+          kubectl -n dam logs job/dam-purge-cdn

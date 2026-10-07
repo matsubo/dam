@@ -30,6 +30,10 @@ COPY apps/web ./apps/web
 
 WORKDIR /app/apps/web
 ENV NEXT_TELEMETRY_DISABLED=1
+# NEXT_PUBLIC_* are inlined into the client bundle by `next build`, so they
+# must be present at build time (GitHub Actions passes them as build args).
+ARG NEXT_PUBLIC_SITE_URL
+ARG NEXT_PUBLIC_GTM_ID
 RUN bun next build
 
 # ---------------------------------------------------------------------------
