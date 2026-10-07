@@ -10,27 +10,26 @@ config in [`deploy/backup/`](../backup/). Read this before paging anyone.
 
 ## 0. Topology (since 2026-09-11, #30)
 
-Production is four Coolify resources, not one compose stack: `dam-web`
-(Next.js, rolling updates), `dam-worker` (graphile-worker), `dam-db`
-(TimescaleDB, image pinned by digest) and `dam-minio` (raw-snapshot bucket).
+Production is three Coolify resources, not one compose stack: `dam-web`
+(Next.js, rolling updates), `dam-worker` (graphile-worker) and `dam-db`
+(TimescaleDB, image pinned by digest).
 Layout, env vars, rolling-update rules and rollback are in
 `deploy/coolify/README.md`. Where this runbook says "the `app` container" read
 `dam-web`; "the `worker` service" read `dam-worker`; "the `db` container" read
-`dam-db`; "the `minio` service" read `dam-minio`. Each is its own Coolify
+`dam-db`. Each is its own Coolify
 resource with its own terminal, logs and Stop/Start buttons. The former compose
 file is kept at `deploy/coolify/docker-compose.legacy.yaml` for reference.
 
 ## 1. First-time bring-up
 
 Assumes a fresh Coolify resource has been created from
-the four resources described in `deploy/coolify/README.md` exist and all required env vars are set
+the three resources described in `deploy/coolify/README.md` exist and all required env vars are set
 (see [`deploy/coolify/README.md`](../coolify/README.md)).
 
 ```sh
 # All commands below run inside the `app` container's Coolify terminal.
 just up                                  # only relevant when you ssh into the host
 bun run --filter @dam/db migrate         # equivalent: just migrate
-bun run packages/storage/src/ensure-bucket.ts   # equivalent: just ensure-bucket
 
 # Master data — order matters (watersheds before dams):
 bun run packages/adapters/ndi/src/cli.ts watersheds
@@ -151,26 +150,13 @@ Restore objective: RTO 1h, RPO 1h (matches the diff-backup cadence).
 
 ## 5. Image bumps
 
-### 5.1 MinIO
-
-1. Find the latest tag at https://hub.docker.com/r/pgsty/minio/tags (use
-   a pinned `RELEASE.YYYY-MM-DDTHH-MM-SSZ` tag — never `latest`). MinIO removed
-   its Docker Hub repositories and `quay.io/minio/*` now refuses anonymous
-   pulls (401, 2026-09-25), so CI and local dev use the community-maintained
-   fork `pgsty/minio` / `pgsty/mc`. Production `dam-minio` still runs the
-   cached `quay.io` image; it moves to `pgsty/minio` on its next bump.
-2. Coolify UI → `dam-minio` → edit the compose (`minio.image`) and restart.
-3. Open a PR. After merge, Coolify auto-deploys.
-4. The first start after a major bump may run an internal data migration; tail
-   the `minio` logs in Coolify until you see `API: ... :9000`.
-
-### 5.2 Postgres / TimescaleDB
+### 5.1 Postgres / TimescaleDB
 
 Major-version bumps require `pg_dump`/`pg_restore`. Do NOT bump the major in
 the compose file without first taking a manual full pgBackRest backup and
 testing the restore path on a staging host.
 
-### 5.3 Bun
+### 5.2 Bun
 
 The image base `oven/bun:1.4` is pinned to a major+minor and must match the
 bun that maintains `bun.lock` (`bun --version` locally). A mismatch fails the
@@ -187,9 +173,7 @@ bumping bun locally, bump both Dockerfiles in the same commit and run
 | --- | --- |
 | App / worker stdout | Coolify UI → resource → service → "Logs" tab |
 | Postgres logs | Coolify UI → `db` service → "Logs" |
-| MinIO access log | Coolify UI → `minio` service → "Logs" |
 | pgBackRest | Coolify UI → pgbackrest sidecar → "Logs"; archived under `/var/log/pgbackrest` inside the sidecar |
-| Raw HTTP snapshots from scrapers | MinIO bucket `dam-raw` (prefix per source) |
 
 Coolify retains roughly the last few hundred MB of stdout per service; for
 longer retention forward to a syslog target via Coolify's log drains.
@@ -217,31 +201,20 @@ psql -U dam -d dam -c "
 The task identifier (`scrape_kasenbosai`, `scrape_damnet`, `scrape_ndi`,
 `scrape_suimon`) tells you which adapter to inspect.
 
-### 7.2 Capture the new upstream response
-
-The worker stores raw HTTP responses in MinIO (`dam-raw` bucket). Pull the
-latest failed snapshot:
-
-```sh
-mc cp local/dam-raw/<source>/<latest-key> /tmp/upstream.html
-```
-
-If the failure is a parser error, that file is your new fixture.
-
-### 7.3 Add a fixture and a test
+### 7.2 Add a fixture and a test
 
 Each adapter under `packages/adapters/<name>/` has a `tests/` (or
-`__tests__/`) directory with HTML/CSV fixtures. Add the new capture there and
+`__tests__/`) directory with HTML/CSV fixtures. Fetch the current upstream
+response and add it there, then
 write a unit test that asserts the parser returns the expected structured
 output. **Do not skip this step** — the fixture is the regression guard.
 
 ```sh
 # Examples (paths may differ slightly):
-ls packages/adapters/kasenbosai/tests/fixtures/
 ls packages/adapters/damnet/tests/fixtures/
 ```
 
-### 7.4 Fix the parser
+### 7.3 Fix the parser
 
 Edit the adapter's parser (typically `packages/adapters/<name>/src/parse.ts`
 or `parser.ts`). Run:
@@ -256,7 +229,7 @@ Once green, run the full suite:
 bun test
 ```
 
-### 7.5 Validate against the live upstream (optional but recommended)
+### 7.4 Validate against the live upstream (optional but recommended)
 
 Each adapter ships a CLI that can be run as a one-shot fetch+parse:
 
@@ -266,7 +239,7 @@ bun run packages/adapters/<name>/src/cli.ts --once
 
 If that prints sensible records, ship it.
 
-### 7.6 Ship the fix
+### 7.5 Ship the fix
 
 1. Commit (`fix(<adapter>): handle <change> upstream`) and push.
 2. Coolify rebuilds and redeploys.

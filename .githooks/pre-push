@@ -10,8 +10,8 @@ set -e
 
 echo "[pre-push] bun test"
 
-# Probe the local DB. Integration tests (repo/, pipeline, reconciler, storage,
-# adapter importers, API routes) require a live PostgreSQL + MinIO instance.
+# Probe the local DB. Integration tests (repo/, reconciler, adapter importers,
+# API routes) require a live PostgreSQL instance.
 # When the local DB is not up, skip those paths so unit tests still gate the push.
 #
 # Where the connection details come from, highest precedence first:
@@ -75,9 +75,7 @@ else
   #     /tmp/nodb.log | sort -u
   exec bun test apps packages \
     --path-ignore-patterns "packages/db/src/repo/**" \
-    --path-ignore-patterns "packages/ingest/**" \
     --path-ignore-patterns "packages/reconciler/**" \
-    --path-ignore-patterns "packages/storage/**" \
     --path-ignore-patterns "packages/adapters/damnet/**" \
     --path-ignore-patterns "packages/adapters/ndi/**" \
     --path-ignore-patterns "apps/web/app/api/**" \

@@ -262,7 +262,7 @@ if [ "${kick}" = "1" ]; then
   # fetch each) and finish in seconds. Keyed like their cron line, so the
   # next tick replaces a kick that is still retrying (see packages/core/src/crontab.ts).
   for task in \
-    ingest:kasenbosai ingest:tokyo-waterworks ingest:jwa-junpo ingest:aitoyo \
+    ingest:tokyo-waterworks ingest:jwa-junpo ingest:aitoyo \
     ingest:jwa-chikugo ingest:kanagawa-dam ingest:shiga-bousai ingest:tottori-dam \
     ingest:aomori-dam ingest:hkd-mlit-dam ingest:cgr-mlit-dam ingest:ktr-kinu-dam \
     ingest:hrr-mlit-dam ingest:kasenbosai-v2 ingest:chiba-suisei ingest:okayama-bousai \

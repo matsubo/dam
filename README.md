@@ -28,8 +28,8 @@ the Security tab, not in a public issue.
 
 ```
 upstream sites ──► apps/worker (graphile-worker tasks) ──► PostgreSQL + TimescaleDB ──► apps/web (Next.js)
-                        │                                                                  ├─ web pages
-                        └─► MinIO (raw payload archive)                                    └─ /api/v1 (HAL+JSON)
+                                                                                        ├─ web pages
+                                                                                        └─ /api/v1 (HAL+JSON)
 ```
 
 | Path | Role |
@@ -39,7 +39,7 @@ upstream sites ──► apps/worker (graphile-worker tasks) ──► PostgreSQ
 | `packages/db` | SQL migrations, the postgres.js client and repository functions |
 | `packages/adapters/*` | Parsers for the master and history sources (NDI, ダム便覧, 川の防災情報, 水文水質DB) |
 | `packages/reconciler` | Matches upstream dam names and coordinates to master records |
-| `packages/ingest`, `packages/storage`, `packages/core` | Shared ingest plumbing, raw-payload storage, domain types |
+| `packages/core` | Shared domain types |
 
 Start with [AGENTS.md](AGENTS.md), then `docs/llm/`: `PROJECT_OVERVIEW`, `CODEMAP`,
 `DATA_FLOW`, `RUNBOOK` and `CONVENTIONS`. The product and architecture spec is
@@ -52,8 +52,7 @@ Requires [Bun](https://bun.sh), Node.js 24+, Docker and [just](https://github.co
 ```sh
 cp .env.example .env
 bun install
-just up              # Postgres (TimescaleDB) + MinIO
-just ensure-bucket   # create the raw-payload bucket
+just up              # Postgres (TimescaleDB)
 just migrate
 just dev-web         # http://localhost:3000
 just dev-worker      # graphile-worker with every task registered

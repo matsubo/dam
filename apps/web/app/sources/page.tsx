@@ -383,8 +383,8 @@ export default async function SourcesPage() {
         <h2 className="text-xl font-semibold mb-3">3. データ構造 (ER 図)</h2>
         <p className="text-sm text-on-surface-variant mb-4 max-w-3xl">
           中心は <strong>dams</strong> (マスタ) と <strong>observations</strong> (時系列)。
-          外部の生データ (raw_snapshots) は監査用に S3 へ保管し、解析後の値だけを observations
-          に書き戻す Lakehouse 風の構成です。
+          外部サイトから取得した値は解析して observations に書き込みます。raw_snapshots は 2026-09
+          までの取得記録で、現在は更新していません。
         </p>
         <div className="overflow-x-auto">
           <ErdSvg />
@@ -589,8 +589,7 @@ export default async function SourcesPage() {
             を自動更新。グラフ・統計はこの集計を読みます。
           </li>
           <li>
-            <strong>retention</strong>: 原始データは無期限保持 (容量効率は Timescale の 列圧縮)。S3
-            上の生スナップショット (raw_snapshots) も無期限。
+            <strong>retention</strong>: 原始データは無期限保持 (容量効率は Timescale の 列圧縮)。
           </li>
           <li>
             <strong>品質フラグ</strong>:{' '}
@@ -844,11 +843,11 @@ function ErdSvg() {
           w={W_RIGHT}
           h={RS_H}
           title="raw_snapshots"
-          subtitle="生バイナリの監査ログ"
+          subtitle="取得記録 (2026-09 まで)"
         >
           <BoxLine y={row(RS_Y, 0)}>id (PK), source_id, target_id</BoxLine>
           <BoxLine y={row(RS_Y, 1)}>fetched_at, http_status</BoxLine>
-          <BoxLine y={row(RS_Y, 2)}>etag, storage_uri (s3://)</BoxLine>
+          <BoxLine y={row(RS_Y, 2)}>etag, storage_uri</BoxLine>
           <BoxLine y={row(RS_Y, 3)}>bytes, content_type</BoxLine>
           <BoxLine y={row(RS_Y, 4)}>parse_status</BoxLine>
         </Box>

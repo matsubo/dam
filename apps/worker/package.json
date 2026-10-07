@@ -9,13 +9,10 @@
   },
   "dependencies": {
     "@dam/adapters-damnet": "workspace:*",
-    "@dam/adapters-kasenbosai": "workspace:*",
     "@dam/adapters-ndi": "workspace:*",
     "@dam/adapters-suimon": "workspace:*",
     "@dam/core": "workspace:*",
     "@dam/db": "workspace:*",
-    "@dam/ingest": "workspace:*",
-    "@dam/storage": "workspace:*",
     "fflate": "^0.8.3",
     "graphile-worker": "^0.18.0",
     "unpdf": "^1.8.1"

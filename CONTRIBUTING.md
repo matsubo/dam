@@ -22,7 +22,7 @@ Discord (https://discord.gg/UbWqspWbAk) is fine for questions and discussion.
 ## Running it locally
 
 ```sh
-just up && just ensure-bucket && just migrate
+just up && just migrate
 just dev-web
 bun run typecheck && bun run lint && bun run test
 ```

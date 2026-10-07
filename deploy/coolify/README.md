@@ -7,7 +7,7 @@ need to understand and operate the production layout.
 
 ## Layout
 
-Production is **four Coolify resources** on the `coolify` Docker network
+Production is **three Coolify resources** on the `coolify` Docker network
 (since 2026-09-11, #30). Nothing runs from a compose file any more.
 
 | Resource | Coolify type | Built from | Notes |
@@ -15,7 +15,6 @@ Production is **four Coolify resources** on the `coolify` Docker network
 | `dam-web` | Application, build pack **Dockerfile** | `deploy/coolify/Dockerfile.web` | Serves `dam.teraren.com` on `:3000`. Health check = the Dockerfile `HEALTHCHECK` (`/api/v1/healthz`); Coolify's own probe is **off** because the run image has neither curl nor wget. This is the resource that gets **rolling updates**. |
 | `dam-worker` | Application, build pack **Dockerfile** | `deploy/coolify/Dockerfile.worker` | graphile-worker. No domain, no health check; a deploy briefly overlaps two workers, which graphile-worker tolerates (job locks live in Postgres). |
 | `dam-db` | Database → PostgreSQL | image pinned to the `timescale/timescaledb-ha:pg16-all` **digest** that was running before the split | Data volume mounted at `/home/postgres/pgdata/data` (the image's `PGDATA`), not Coolify's default `/var/lib/postgresql`. Reachable as `postgres://dam:…@<db-uuid>:5432/dam`. |
-| `dam-minio` | Service (raw compose) | `quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z` | Bucket `dam-raw`. Reachable as `http://minio-<service-uuid>:9000` ("Connect to predefined network" is on). |
 
 | File | Purpose |
 | --- | --- |
@@ -33,8 +32,6 @@ Set in the Coolify UI on **both** `dam-web` and `dam-worker` (they share the
 same set; unused keys are harmless):
 
 - `DATABASE_URL` — `postgres://dam:<POSTGRES_PASSWORD>@<dam-db uuid>:5432/dam`
-- `S3_ENDPOINT` — `http://minio-<dam-minio uuid>:9000`; `S3_REGION` — `us-east-1`; `S3_BUCKET` — `dam-raw`
-- `S3_ACCESS_KEY`, `S3_SECRET_KEY` — also set on the `dam-minio` service as its root credentials
 - `POSTGRES_PASSWORD` — the password inside `DATABASE_URL`
 - `API_KEY_PEPPER` — generate with `openssl rand -hex 32`
 - `ADMIN_SECRET` — bearer for `POST /api/v1/admin/jobs`
@@ -62,21 +59,16 @@ rolling updates silently degrade to stop-then-start:
 - Coolify's health polling window is `interval × retries` even when its probe
   is off; `dam-web` uses 5 s × 40 so a 3 min bootstrap still fits.
 
-`dam-db` and `dam-minio` only restart when *you* restart them.
+`dam-db` only restarts when *you* restart it.
 
 ## First-time bring-up (fresh server)
 
 1. Create `dam-db` (PostgreSQL, image `timescale/timescaledb-ha:pg16-all`,
    user/db `dam`), add a persistent storage at `/home/postgres/pgdata/data`, start.
-2. Create `dam-minio` from `docker-compose.legacy.yaml`'s `minio` service
-   (raw compose), set `S3_ACCESS_KEY` / `S3_SECRET_KEY`, enable "Connect to
-   predefined network", start.
-3. Create `dam-web` and `dam-worker` (Dockerfile build pack, base directory
+2. Create `dam-web` and `dam-worker` (Dockerfile build pack, base directory
    `/`), set the variables above, deploy `dam-web` first: `bootstrap.sh`
    restores `/seed/master.sql.gz` into an empty database.
-4. Create the bucket from the `dam-web` terminal:
-   `bun run packages/storage/src/ensure-bucket.ts`
-5. Issue the first API key: `bun run bin/api_key.ts issue --email you@example.com --label bootstrap`.
+3. Issue the first API key: `bun run bin/api_key.ts issue --email you@example.com --label bootstrap`.
 
 ## Rollback
 
@@ -84,7 +76,7 @@ rolling updates silently degrade to stop-then-start:
   Redeploy (rolling, no downtime). Same for `dam-worker`.
 - **Whole stack** (only if the split itself is the problem): the legacy compose
   resource `frd6so0qmtknwe7kogjyalkw` is stopped with auto-deploy off and still
-  owns volumes `frd6so0qmtknwe7kogjyalkw_db-data` / `_minio-data` as they were
+  owns its volumes (`frd6so0qmtknwe7kogjyalkw_db-data` among them) as they were
   at cutover. Point its compose location at `deploy/coolify/docker-compose.legacy.yaml`,
   stop `dam-web`/`dam-worker`, start it. Data written after the cutover stays in
   `dam-db` only.
@@ -93,7 +85,7 @@ rolling updates silently degrade to stop-then-start:
 
 Coolify UI → resource → "Logs". `dam-web` logs are the Next.js server plus
 `bootstrap.sh` (also served at `/bootstrap.txt`); `dam-worker` logs are the
-task runner. `dam-db` and `dam-minio` have their own log tabs.
+task runner. `dam-db` has its own log tab.
 
 ## See also
 

@@ -48,7 +48,7 @@ shared key. We match by:
   rainfall_mm, quality_flag, source_id.
 - \`obs_daily\`, \`obs_monthly\` — continuous aggregates auto-maintained
   by Timescale.
-- \`raw_snapshots\` — audit log of every fetched bytes blob (S3 URI).
+- \`raw_snapshots\` — historical fetch log (until 2026-09); no longer written.
 - \`match_review\` — pending fuzzy matches awaiting manual review.
 
 ## Granularity

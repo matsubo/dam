@@ -14,8 +14,8 @@ the file for detail.
 | `biome.json` | lint + format config |
 | `playwright.config.ts` | spawns dev server on 3031 unless `E2E_BASE_URL` is set |
 | `justfile` | infra + import + test recipes |
-| `docker-compose.yml` | local Postgres (port 5433) + MinIO (9000) |
-| `.env.example` | DATABASE_URL, S3_*, NEXT_PUBLIC_SITE_URL, API_AUTH_BYPASS |
+| `docker-compose.yml` | local Postgres (port 5433) |
+| `.env.example` | DATABASE_URL, NEXT_PUBLIC_SITE_URL, API_AUTH_BYPASS |
 | `.github/workflows/ci.yml` | lint+typecheck+migrate+unit+E2E with TimescaleDB-HA service |
 
 ## apps/web (Next.js)
@@ -109,7 +109,6 @@ the file for detail.
 | `src/tasks/master_refresh_ndi.ts` | monthly NLNI reimport |
 | `src/tasks/master_refresh_damnet.ts` | monthly damnet attribute pass |
 | `src/tasks/master_match.ts` | `master:match`: placeholder, logs and returns (still on the nightly cron) |
-| `src/tasks/ingest_kasenbosai.ts` | `ingest:kasenbosai`: original SourceAdapter run for 川の防災情報 (`packages/adapters/kasenbosai`); registered, not scheduled — `kasenbosai-v2` is the live feed |
 | `src/tasks/ingest_kasenbosai_v2.ts` | `kasenbosai-v2`: hourly 川の防災情報 per-dam JSON for every `external_ids.kasenbosai` dam; a reading whose every quantity is flagged invalid is skipped, not stored empty; sets kasenbosai's `source_universe.has_data` (FALSE when ~2 days of hourly rows flag every quantity) |
 | `src/tasks/ingest_shiga.ts` | `shiga-bousai`: hourly 滋賀県土木防災 dam stations, read only via `/mobile/dam/` (robots.txt disallows `/dam/`); level + flows, 6 h window re-upserted |
 | `src/tasks/ingest_aomori.ts` | `aomori-dam`: hourly 青森県河川砂防 ダム諸量グラフ for every dam the ダム諸量現況表 lists (11 on 2026-09-27), not a fixed set |
@@ -294,26 +293,11 @@ the file for detail.
 | `src/repo/coverage.ts` | `coverageHeadline` + `realtimeCoveragePct` (the home headline: `covered` ÷ dams minus 提供元なし and 提供元に値なし), `storageRateCoveragePct`, `historicalCoveragePct`; shared by `/`, `/coverage`, `/contribute` |
 | `src/repo/source_freshness.ts` | `staleSources` (threshold = 3 × cadence + publication lag; cadence = the longer of the cron gap and the 90th-percentile spacing of the last 20 stamps, lag = median `created_at − observed_at`), `FRESHNESS_OVERRIDE_HOURS` (explicit thresholds; `null` = silent by design). Feeds `stale_sources` in `/api/v1/admin/jobs` and `quality:freshness-check` |
 | `src/repo/observations.ts` | `upsertObservations`, `findSeries{Hourly,Daily,Monthly}` |
-| `src/repo/raw_snapshots.ts` | `recordRawSnapshot`, `markParsed`, `markParseError`, `previousEtag` |
 | `src/repo/source_priorities.ts` | `preferredSource`, `priorityMap` |
 | `src/repo/backfill_progress.ts` | `nextPending`, `startRunning`, `complete`, `fail`, `enqueueAllDams` |
 | `src/repo/api_keys.ts` | `issueKey`, `lookupByPrefix`, `revoke`, `recordUsage`, `usageInLastMinute`, `usageToday`, `hashKey`, `touchLastUsed` |
 | `src/migrate.ts` | numbered-SQL runner, ENOENT-tolerant |
 | `src/client.ts` | postgres.js singleton with bigint round-trip |
-
-## packages/storage
-
-| File | Purpose |
-|---|---|
-| `src/client.ts` | S3Client configured for MinIO (path-style URLs) |
-| `src/snapshot_store.ts` | `rawSnapshotKey`, `putSnapshot`, `getSnapshot` |
-
-## packages/ingest
-
-| File | Purpose |
-|---|---|
-| `src/pipeline.ts` | `runIngestForAdapter(adapter, ctx)` end-to-end |
-| `src/quality.ts` | `QualityFlag` bits, `isPhysicallyValid`, `detectOutlier` |
 
 ## packages/reconciler
 
@@ -328,7 +312,6 @@ the file for detail.
 |---|---|---|---|
 | `ndi/` | yes (T8 of Plan 4) | on-demand | W01 dams + W07 watershed boundaries |
 | `damnet/` | yes | on-demand | Old `damnet.or.jp` adapter; the live data comes from `bin/capture_damnet.ts` against the new `dambinran.damnet.or.jp` JSON API |
-| `kasenbosai/` | yes | hourly | XML parser; production endpoint blocks scrapers (synthetic seed in use) |
 | `suimon/` | yes | on-demand | CSV parser; deferred (EUC-JP HTML form) |
 
 ## tests

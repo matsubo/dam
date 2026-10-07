@@ -26,11 +26,10 @@ survey tables and water utilities. 72 sources wrote observations in the last
 Bun-based monorepo. Three apps (`apps/web` Next.js, `apps/worker`
 graphile-worker, plus `bin/` admin scripts), and a set of `packages/*` for
 shared concerns: db (schema + repo), core (types + utilities), adapters
-(per-source crawlers), reconciler (cross-source name matching), ingest
-(shared pipeline), storage (S3 client). Postgres 16 with TimescaleDB +
-PostGIS extensions provides the time-series hypertable, continuous
-aggregates (daily/monthly), and watershed-polygon geocoding. MinIO holds
-raw scraped snapshots so we can re-parse without re-fetching.
+(per-source crawlers), reconciler (cross-source name matching). Postgres 16
+with TimescaleDB + PostGIS extensions provides the time-series hypertable,
+continuous aggregates (daily/monthly), and watershed-polygon geocoding.
+Fetched response bodies are parsed in memory and not kept.
 
 ## Package map
 
@@ -59,13 +58,10 @@ packages/
 │       ├── client.ts       #  postgres.js singleton (configured for bigint round-trip)
 │       ├── schema/         #  Drizzle schema mirrors of every table
 │       └── repo/           #  query functions; one file per resource
-├── storage/                # S3-compatible MinIO client
-├── ingest/                 # SourceAdapter → raw_snapshot → observation pipeline
 ├── reconciler/             # match incoming source records to existing dams
 └── adapters/
     ├── ndi/                # NLNI W01 (dams) + W07 (watersheds)
     ├── damnet/             # ダム便覧 (dambinran.damnet.or.jp)
-    ├── kasenbosai/         # 川の防災情報 SourceAdapter (the live feed is the ingest:kasenbosai-v2 task)
     └── suimon/             # 水文水質DB (deferred — EUC-JP form-based)
 ```
 
@@ -82,8 +78,8 @@ observations   ── PK (dam_id, observed_at, source_id) ── HYPERTABLE on o
                                           storage_volume_m3, storage_rate, inflow_m3s,
                                           outflow_m3s, water_level_m, rainfall_mm,
                                           quality_flag bitfield
-                                          → FK raw_snapshot_id
-raw_snapshots  ── one row per fetched HTTP response, body in MinIO
+                                          → FK raw_snapshot_id (NULL on new rows)
+raw_snapshots  ── frozen historical ledger of fetched HTTP responses (last written 2026-09-11; bodies archived offline by the operator)
 source_priorities ── source_id → priority, higher wins the chart (77 rows on prod: feeds 279–313, e.g. kasenbosai=310, mudam=280; master ndi=80, damnet=50)
 source_universe / source_universe_runs ── each provider's whole published list per run (recordUniverse), read by /coverage; `has_data` (0103) is FALSE when the provider lists a dam with no usable value; `published_at` (0221) is a dated provider's stamp on its newest value, which keeps a monthly survey's dam `covered` past the 30-day window
 backfill_progress ── (source_id, dam_id, year) → status
@@ -144,8 +140,8 @@ the provider's whole published list (`kasenbosai`'s list is recorded by
 Every ingest cron line carries `?jobKey=<task>`, so a tick replaces a job
 that is still retrying instead of queueing another; `apps/worker/src/crontab.test.ts` checks
 the key and that the default 25 attempts outlast each line's longest gap.
-`CODEMAP.md` has one line per task file. 124 tasks are registered: 108
-`ingest:*` (107 on the cron, `ingest:kasenbosai` manual) and 16 others.
+`CODEMAP.md` has one line per task file. 123 tasks are registered: 107
+`ingest:*` (all on the cron) and 16 others.
 
 | Task | Schedule | What it does |
 |---|---|---|
@@ -156,7 +152,6 @@ the key and that the default 25 attempts outlast each line's longest gap.
 | `master:match` | nightly 04:00 | Placeholder; logs and returns |
 | `match:kasenbosai` | Mondays 03:30 | Seed `external_ids.kasenbosai` from the 川の防災情報 dam catalogue |
 | `ingest:kasenbosai-v2` | hourly :03 | 川の防災情報 per-dam JSON for every `external_ids.kasenbosai` dam (800+) |
-| `ingest:kasenbosai` | manual | Original SourceAdapter run for 川の防災情報; superseded by v2 |
 | MLIT regional bureaus (12): `hkd-mlit-dam` `ktr-kinu-dam` `ktr-tone-dam` `hrr-mlit-dam` `kkr-mlit-dam` `cgr-mlit-dam` `cgr-okakawa-dam` `cgr-ashida-seki` `skr-hiji-dam` `qsr-turuta-dam` `qsr-ryumon-dam` `qsr-toukan-dam` | hourly; `kkr-mlit-dam` daily, `cgr-okakawa-dam` twice daily | 国管理 dam dashboards of 北海道開発局 and the 地方整備局 |
 | 水資源機構 (14): `jwa-junpo` `jwa-toneara` `jwa-tonekako` `shimokubo` `jwa-chubu` `jwa-kiso-rt` `jwa-toyokawa` `jwa-aichi-yosui` `jwa-biwako` `jwa-yoshino` `jwa-chikugo` `jwa-chikugo-rt` `jwa-fukudou` `jwa-chiba-bouso` | hourly; `jwa-junpo`, `jwa-chiba-bouso` daily, `jwa-aichi-yosui` and `jwa-chikugo` twice daily; `jwa-chubu` three times each weekday around its report | JWA realtime pages, daily 0時 tables and the 旬報 |
 | Prefectural river / disaster portals (43): `akita-kasen` `aomori-dam` `iwate-kasen` `miyagi-kasen` `yamagata-bousai` `fukushima-kasen` `ibaraki-bousai` `ibaraki-kasumigaura` `tochigi-bodik` `gunma-kasen` `saitama-suibo` `kanagawa-dam` `kanagawa-suibou` `yamanashi-dam` `nagano-kasen` `gifu-kasen` `aichi-kasen` `toyama-bousai` `ishikawa-kasen` `fukui-bousai` `shiga-bousai` `kyoto-bousai` `osaka-bousai` `hyogo-bodik` `nara-kasen` `wakayama-kasen` `tottori-dam` `tottori-bousai` `shimane-bousai` `okayama-bousai` `hiroshima-bousai` `yamaguchi-bousai` `tokushima-bousai` `kagawa-bousai` `ehime-bousai` `kochi-bousai` `saga-bousai` `nagasaki-kasen` `kumamoto-bousai` `oita-bousai` `miyazaki-bousai` `kagoshima-bousai` `kagoshima-kasen` | hourly (`nagasaki-kasen` twice an hour; `kanagawa-dam` is a daily 30-day window polled every 3 h) | 県管理 dam tables: 防災Web HTML, JSON feeds, BODIK CSVs |
@@ -193,7 +188,6 @@ this.
 - **Runtime**: Bun ≥ 1.3, Node ≥ 24 (via Bun)
 - **Web**: Next.js 15 App Router, React 19, Tailwind 3
 - **DB**: PostgreSQL 16 + TimescaleDB 2.26 + PostGIS 3.6 + pg_trgm + pgcrypto
-- **Storage**: MinIO (S3-compatible)
 - **Worker**: graphile-worker on Postgres
 - **Lint/format**: Biome (one tool — no ESLint or Prettier)
 - **Test**: bun:test (unit/integration), Playwright (E2E)
