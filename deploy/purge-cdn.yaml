@@ -1,0 +1,26 @@
+# Purges dam.teraren.com from the Cloudflare cache after a rollout (Coolify ran
+# `bun run bin/purge_cdn.ts` as its post-deploy command). Applied by
+# .github/workflows/deploy.yml with IMAGE_WEB replaced, after the old Job of the
+# same name is deleted (a Job's pod template is immutable).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: dam-purge-cdn
+  namespace: dam
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: purge
+          image: IMAGE_WEB
+          workingDir: /app/apps/web
+          command: [bun, run, bin/purge_cdn.ts]
+          # CF_API_TOKEN, CF_ZONE_ID and NEXT_PUBLIC_SITE_URL.
+          envFrom:
+            - secretRef: { name: dam-env }
+          resources:
+            requests: { cpu: 10m, memory: 64Mi }
+            limits: { memory: 256Mi }

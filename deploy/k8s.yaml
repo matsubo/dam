@@ -1,0 +1,111 @@
+# Applied by .github/workflows/deploy.yml on every push to main, with IMAGE_WEB
+# and IMAGE_WORKER replaced by ghcr.io/matsubo/dam-web:<sha> and
+# ghcr.io/matsubo/dam-worker:<sha>. The namespace, the deployer's RBAC, the
+# database (StatefulSet dam-db, Service dam-db) and the Secrets dam-env /
+# ghcr-pull are cluster-side and live in matsubo/network-setting (k8s/dam.yaml).
+#
+# Both pods read the same env (dam-env), like the two Coolify applications did.
+# Never add the one-shot BOOTSTRAP_* flags to it: bootstrap.sh runs on every web
+# start (see deploy/coolify/bootstrap.sh).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dam-web
+  namespace: dam
+spec:
+  replicas: 1
+  # The new pod runs bootstrap.sh (migrations + master upsert) and turns Ready
+  # before the old one stops, so a deploy has no downtime. Migrations must stay
+  # additive: old and new pods serve side by side for a moment.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels: { app: dam-web }
+  template:
+    metadata:
+      labels: { app: dam-web }
+    spec:
+      containers:
+        - name: web
+          image: IMAGE_WEB
+          envFrom:
+            - secretRef: { name: dam-env }
+          ports:
+            - { name: http, containerPort: 3000 }
+          # bootstrap.sh runs before Next.js listens: ~12 s on k3s, mostly the
+          # 16 MB master upsert; a slow migration may take minutes.
+          startupProbe:
+            httpGet: { path: /api/v1/healthz, port: http }
+            periodSeconds: 1
+            timeoutSeconds: 2
+            failureThreshold: 600
+          readinessProbe:
+            httpGet: { path: /api/v1/healthz, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet: { path: /api/v1/healthz, port: http }
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
+          # 160-185 MiB under a replayed crawl on k3s; 330 MiB on Coolify.
+          resources:
+            requests: { cpu: 100m, memory: 384Mi }
+            limits: { memory: 1Gi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dam-web
+  namespace: dam
+spec:
+  selector: { app: dam-web }
+  ports:
+    - { name: http, port: 80, targetPort: http }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dam-web
+  namespace: dam
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: dam.teraren.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dam-web
+                port: { name: http }
+---
+# graphile-worker: the ingest crons (packages/core/src/crontab.ts). A rollout
+# briefly overlaps two workers, which graphile-worker tolerates (job locks
+# live in Postgres).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dam-worker
+  namespace: dam
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: dam-worker }
+  template:
+    metadata:
+      labels: { app: dam-worker }
+    spec:
+      # graphile-worker finishes running jobs on SIGTERM before it exits.
+      terminationGracePeriodSeconds: 120
+      containers:
+        - name: worker
+          image: IMAGE_WORKER
+          envFrom:
+            - secretRef: { name: dam-env }
+          # ~75-90 MiB on Coolify; the PDF and CSV parsers spike while a job runs.
+          resources:
+            requests: { cpu: 50m, memory: 192Mi }
+            limits: { memory: 768Mi }

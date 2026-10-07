@@ -188,6 +188,19 @@ SELECT COUNT(*) FROM dams;
 
 ## Deploy
 
+Production is moving from Coolify to the home k3s cluster (namespace `dam`).
+`.github/workflows/deploy.yml` builds `ghcr.io/matsubo/dam-web` and
+`ghcr.io/matsubo/dam-worker` on every push to main and, while the repository
+variable `DEPLOY_K3S` is `true`, applies `deploy/k8s.yaml` (web Deployment,
+Service, Ingress, worker Deployment) through Tailscale and then runs the CDN
+purge Job (`deploy/purge-cdn.yaml`). The database (StatefulSet `dam-db`), the
+namespace, RBAC and the `dam-env` Secret are cluster-side, in
+matsubo/network-setting `k8s/dam.yaml`. `NEXT_PUBLIC_SITE_URL` and
+`NEXT_PUBLIC_GTM_ID` are build args in the workflow; runtime env is `dam-env`.
+
+Until the move is finished, the Coolify setup below still exists (auto-deploy
+off):
+
 Coolify pulls from main and builds two separate applications: `dam-web`
 (`deploy/coolify/Dockerfile.web`, rolling updates) and `dam-worker`
 (`deploy/coolify/Dockerfile.worker`). Postgres (`dam-db`) is its own Coolify
