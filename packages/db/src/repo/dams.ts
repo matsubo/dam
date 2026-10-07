@@ -629,40 +629,21 @@ export interface StorageChange {
   d1825AgeS: number | null;
 }
 
+type StorageChangeWindow = 'h1' | 'h6' | 'h12' | 'd1' | 'd7' | 'd30' | 'd365' | 'd1825';
+
 /**
- * Returns the latest storage_volume plus the closest historical observation
- * at the four lookback windows used by the TradingView-style change %
- * display on the dam page. We pick "the most recent observation at or before
- * NOW() - INTERVAL X" so a sparse observation cadence (e.g. 1/day) still
- * yields a usable comparison.
+ * One row per lookback window: the latest displayed reading plus the most
+ * recent volume-bearing observation at or before (latest − window).
+ *
+ * A single LATERAL lookup, so `observations` is planned once. The previous
+ * form — 16 scalar subqueries — planned the hypertable 16 times over every
+ * chunk (their bound comes from `latest`, so nothing is excluded at plan
+ * time): on production (220 chunks) 0.47 s of planning and ~270 MB that glibc
+ * then keeps in the backend, so every pooled web connection ended up holding
+ * it. This form: 0.1 s and ~50 MB for the same rows.
  */
-export async function storageChange(damId: bigint): Promise<StorageChange> {
-  // 8 lookback windows. The query picks "the most recent observation at or
-  // before NOW() - INTERVAL X" for each, so a 1-hour ingest cadence still
-  // resolves the short windows accurately while sparser data degrades
-  // gracefully (the StorageChangeStrip flags stale picks visually).
-  const rows = await sql<
-    {
-      current: string | null;
-      h1: string | null;
-      h6: string | null;
-      h12: string | null;
-      d1: string | null;
-      d7: string | null;
-      d30: string | null;
-      d365: string | null;
-      d1825: string | null;
-      currentAt: Date | null;
-      h1At: Date | null;
-      h6At: Date | null;
-      h12At: Date | null;
-      d1At: Date | null;
-      d7At: Date | null;
-      d30At: Date | null;
-      d365At: Date | null;
-      d1825At: Date | null;
-    }[]
-  >`
+export function storageChangeQuery(damId: bigint) {
+  return sql`
     WITH latest AS (
       -- The same row the page displays (#32/#45), not merely the newest one.
       -- Picking independently here meant the 増減 baseline could come from one
@@ -672,116 +653,73 @@ export async function storageChange(damId: bigint): Promise<StorageChange> {
       SELECT storage_volume_m3, observed_at FROM display_observation(${damId})
     )
     SELECT
-      (SELECT storage_volume_m3::TEXT FROM latest) AS current,
-      (SELECT observed_at FROM latest)             AS "currentAt",
-      (SELECT storage_volume_m3::TEXT FROM observations
-        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
-          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '1 hour'
-        ORDER BY observed_at DESC LIMIT 1) AS h1,
-      (SELECT observed_at FROM observations
-        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
-          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '1 hour'
-        ORDER BY observed_at DESC LIMIT 1) AS "h1At",
-      (SELECT storage_volume_m3::TEXT FROM observations
-        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
-          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '6 hours'
-        ORDER BY observed_at DESC LIMIT 1) AS h6,
-      (SELECT observed_at FROM observations
-        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
-          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '6 hours'
-        ORDER BY observed_at DESC LIMIT 1) AS "h6At",
-      (SELECT storage_volume_m3::TEXT FROM observations
-        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
-          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '12 hours'
-        ORDER BY observed_at DESC LIMIT 1) AS h12,
-      (SELECT observed_at FROM observations
-        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
-          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '12 hours'
-        ORDER BY observed_at DESC LIMIT 1) AS "h12At",
-      (SELECT storage_volume_m3::TEXT FROM observations
-        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
-          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '1 day'
-        ORDER BY observed_at DESC LIMIT 1) AS d1,
-      (SELECT observed_at FROM observations
-        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
-          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '1 day'
-        ORDER BY observed_at DESC LIMIT 1) AS "d1At",
-      (SELECT storage_volume_m3::TEXT FROM observations
-        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
-          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '7 days'
-        ORDER BY observed_at DESC LIMIT 1) AS d7,
-      (SELECT observed_at FROM observations
-        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
-          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '7 days'
-        ORDER BY observed_at DESC LIMIT 1) AS "d7At",
-      (SELECT storage_volume_m3::TEXT FROM observations
-        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
-          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '30 days'
-        ORDER BY observed_at DESC LIMIT 1) AS d30,
-      (SELECT observed_at FROM observations
-        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
-          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '30 days'
-        ORDER BY observed_at DESC LIMIT 1) AS "d30At",
-      (SELECT storage_volume_m3::TEXT FROM observations
-        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
-          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '365 days'
-        ORDER BY observed_at DESC LIMIT 1) AS d365,
-      (SELECT observed_at FROM observations
-        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
-          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '365 days'
-        ORDER BY observed_at DESC LIMIT 1) AS "d365At",
-      (SELECT storage_volume_m3::TEXT FROM observations
-        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
-          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '1825 days'
-        ORDER BY observed_at DESC LIMIT 1) AS d1825,
-      (SELECT observed_at FROM observations
-        WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
-          AND observed_at <= (SELECT observed_at FROM latest) - INTERVAL '1825 days'
-        ORDER BY observed_at DESC LIMIT 1) AS "d1825At"
+      latest.storage_volume_m3::TEXT AS current,
+      latest.observed_at             AS "currentAt",
+      w.label                        AS "window",
+      o.storage_volume_m3::TEXT      AS volume,
+      o.observed_at                  AS "observedAt"
+    FROM latest
+    CROSS JOIN (VALUES
+      ('h1', INTERVAL '1 hour'), ('h6', INTERVAL '6 hours'), ('h12', INTERVAL '12 hours'),
+      ('d1', INTERVAL '1 day'), ('d7', INTERVAL '7 days'), ('d30', INTERVAL '30 days'),
+      ('d365', INTERVAL '365 days'), ('d1825', INTERVAL '1825 days')
+    ) AS w(label, back)
+    LEFT JOIN LATERAL (
+      SELECT storage_volume_m3, observed_at FROM observations
+      WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
+        AND observed_at <= latest.observed_at - w.back
+      ORDER BY observed_at DESC LIMIT 1
+    ) o ON TRUE
   `;
-  const r = rows[0];
-  if (!r) {
-    return {
-      current: null,
-      h1: null,
-      h6: null,
-      h12: null,
-      d1: null,
-      d7: null,
-      d30: null,
-      d365: null,
-      d1825: null,
-      h1AgeS: null,
-      h6AgeS: null,
-      h12AgeS: null,
-      d1AgeS: null,
-      d7AgeS: null,
-      d30AgeS: null,
-      d365AgeS: null,
-      d1825AgeS: null,
-    };
-  }
-  const ageS = (a: Date | null, b: Date | null): number | null =>
-    a && b ? Math.round((a.getTime() - b.getTime()) / 1000) : null;
-  return {
-    current: r.current,
-    h1: r.h1,
-    h6: r.h6,
-    h12: r.h12,
-    d1: r.d1,
-    d7: r.d7,
-    d30: r.d30,
-    d365: r.d365,
-    d1825: r.d1825,
-    h1AgeS: ageS(r.currentAt, r.h1At),
-    h6AgeS: ageS(r.currentAt, r.h6At),
-    h12AgeS: ageS(r.currentAt, r.h12At),
-    d1AgeS: ageS(r.currentAt, r.d1At),
-    d7AgeS: ageS(r.currentAt, r.d7At),
-    d30AgeS: ageS(r.currentAt, r.d30At),
-    d365AgeS: ageS(r.currentAt, r.d365At),
-    d1825AgeS: ageS(r.currentAt, r.d1825At),
+}
+
+/**
+ * Returns the latest storage_volume plus the closest historical observation
+ * at the eight lookback windows used by the TradingView-style change %
+ * display on the dam page. We pick "the most recent observation at or before
+ * NOW() - INTERVAL X" so a sparse observation cadence (e.g. 1/day) still
+ * yields a usable comparison.
+ */
+export async function storageChange(damId: bigint): Promise<StorageChange> {
+  // 8 lookback windows. The query picks "the most recent observation at or
+  // before NOW() - INTERVAL X" for each, so a 1-hour ingest cadence still
+  // resolves the short windows accurately while sparser data degrades
+  // gracefully (the StorageChangeStrip flags stale picks visually).
+  const rows = (await storageChangeQuery(damId)) as unknown as {
+    current: string | null;
+    currentAt: Date | null;
+    window: StorageChangeWindow;
+    volume: string | null;
+    observedAt: Date | null;
+  }[];
+  const change: StorageChange = {
+    current: null,
+    h1: null,
+    h6: null,
+    h12: null,
+    d1: null,
+    d7: null,
+    d30: null,
+    d365: null,
+    d1825: null,
+    h1AgeS: null,
+    h6AgeS: null,
+    h12AgeS: null,
+    d1AgeS: null,
+    d7AgeS: null,
+    d30AgeS: null,
+    d365AgeS: null,
+    d1825AgeS: null,
   };
+  for (const r of rows) {
+    change.current = r.current;
+    change[r.window] = r.volume;
+    change[`${r.window}AgeS`] =
+      r.currentAt && r.observedAt
+        ? Math.round((r.currentAt.getTime() - r.observedAt.getTime()) / 1000)
+        : null;
+  }
+  return change;
 }
 
 export interface NearbyDam extends DamListItem {

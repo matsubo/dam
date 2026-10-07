@@ -1,5 +1,5 @@
 import postgres from 'postgres';
-import { connectionOptions } from './client_options.ts';
+import { connectionOptions, POOL_IDLE_TIMEOUT_S, POOL_MAX_LIFETIME_S } from './client_options.ts';
 
 // During `next build` Next.js runs "Collecting page data" which loads every
 // route module — but the build host has no DATABASE_URL. We accept a
@@ -11,6 +11,8 @@ const url = process.env.DATABASE_URL ?? 'postgres://build@build/build';
 function makeClient() {
   return postgres(url, {
     max: 10,
+    idle_timeout: POOL_IDLE_TIMEOUT_S,
+    max_lifetime: POOL_MAX_LIFETIME_S,
     prepare: false,
     connection: connectionOptions(process.env),
     types: {
