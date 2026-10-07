@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { sql } from '../client.ts';
-import { storageChange, upsertDamByExternalId } from './dams.ts';
+import { storageChange, storageChangeQuery, upsertDamByExternalId } from './dams.ts';
 import { upsertObservations } from './observations.ts';
 
 // Safer than `!`: throws with a clear message if the assumption is ever
@@ -108,5 +108,16 @@ describe('storageChange', () => {
     } finally {
       await sql`DELETE FROM dams WHERE id = ${emptyId}`;
     }
+  });
+
+  test('plans observations once, not once per window', async () => {
+    // Each scalar subquery over the hypertable is planned over every chunk;
+    // 16 of them took ~450 MB per call on production (220 chunks), memory the
+    // backend keeps afterwards. The windows must share one lookup.
+    const [row] = await sql<{ 'QUERY PLAN': unknown }[]>`
+      EXPLAIN (FORMAT JSON) ${storageChangeQuery(damId)}
+    `;
+    const plan = JSON.stringify(row?.['QUERY PLAN']);
+    expect(plan.match(/"Subplan Name"/g) ?? []).toEqual([]);
   });
 });
