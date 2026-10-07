@@ -107,6 +107,17 @@ spec:
     spec:
       # graphile-worker finishes running jobs on SIGTERM before it exits.
       terminationGracePeriodSeconds: 120
+      # Keep it off the database's node: when that node ran short of memory
+      # the two failed together (the worker crash-looped on a lost DB
+      # endpoint), and the node holding dam-db has the least room to spare.
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels: { app: dam-db }
       containers:
         - name: worker
           image: IMAGE_WORKER
