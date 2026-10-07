@@ -3,17 +3,9 @@ set shell := ["bash", "-cu"]
 default:
     @just --list
 
-# Bring up the local infra (db + minio)
+# Bring up the local database
 up:
     docker compose -f docker-compose.dev.yml up -d
-
-# Ensure the local raw-snapshot bucket exists in MinIO
-# Uses the compose network so this works on macOS Docker Desktop (no --network host).
-ensure-bucket:
-    docker run --rm --network dam_default \
-        -e MC_HOST_local=http://${S3_ACCESS_KEY:-minio}:${S3_SECRET_KEY:-minio12345}@minio:9000 \
-        pgsty/mc:RELEASE.2026-09-16T00-00-00Z \
-        mb --ignore-existing local/${S3_BUCKET:-dam-raw}
 
 down:
     docker compose -f docker-compose.dev.yml down

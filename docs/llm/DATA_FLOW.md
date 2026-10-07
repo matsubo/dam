@@ -106,24 +106,21 @@ apps/web/bin/seed_synthetic_observations.ts
   └─ refresh_continuous_aggregate('obs_daily'); same for obs_monthly
 ```
 
-When a real upstream lands:
+When a real upstream lands (川の防災情報 as the example):
 
 ```
-apps/worker/src/tasks/ingest_kasenbosai.ts (cron @ :05)
-  └─ runIngestForAdapter(kasenbosaiAdapter, { runAt: now })
-       ├─ adapter.fetchTargets() — DB query for dams with kasenbosai external_id
-       ├─ for each target:
-       │    ├─ adapter.fetchRaw() — HttpClient.get with If-None-Match (skip on 304)
-       │    ├─ putSnapshot() — body bytes → MinIO at raw/kasenbosai/yyyy/mm/dd/hh/{id}.xml
-       │    ├─ recordRawSnapshot() → DB ledger
-       │    ├─ adapter.parse() — XML → ParsedReading[]
-       │    ├─ for each reading:
-       │    │    ├─ damIdByExternalId('kasenbosai', id) → dam_id
-       │    │    ├─ isPhysicallyValid() / detectOutlier() → quality_flag bits
-       │    │    └─ accumulate ObservationInput
-       │    └─ upsertObservations(batch) → ON CONFLICT DO UPDATE
-       │         (PK is dam_id+observed_at+source_id, so multiple sources coexist)
-       └─ markParsed(rawId)
+apps/worker/src/tasks/ingest_kasenbosai_v2.ts (cron @ :03, ingest:kasenbosai-v2)
+  ├─ ensureSourcePriority() — upsert source_priorities.kasenbosai = 310
+  ├─ loadTargets() — dams with a 13-digit external_ids.kasenbosai
+  │    (seeded weekly by match:kasenbosai)
+  ├─ for each target, in small concurrent batches:
+  │    ├─ fetch /kawabou/file/files/tmlist/dam/{YYYYMMDD}/{HHMM}/{obs_fcd}.json
+  │    │    (404 / empty / bad JSON → no reading; the body is not stored)
+  │    ├─ parseKasenbosaiObsValue() — obsValue → level, volume, rate, flows
+  │    └─ accumulate ObservationInput (rawSnapshotId: null)
+  ├─ upsertObservations(chunk of 1,000) → ON CONFLICT DO UPDATE
+  │    (PK is dam_id+observed_at+source_id, so multiple sources coexist)
+  └─ recordUniverseHasData('kasenbosai', …) → source_universe.has_data
 ```
 
 ## Read path (chart → API → DB)
@@ -170,8 +167,10 @@ GET /dams/yamba-10
 
 Every `observation` row carries:
 - `source_id` — which adapter wrote it (`synthetic`, `kasenbosai`, `suimon`, …)
-- `raw_snapshot_id` — FK to the row in `raw_snapshots`, whose `storage_uri`
-  points at MinIO so the original bytes can be re-parsed
+- `raw_snapshot_id` — FK to `raw_snapshots`; NULL on new rows. The table is a
+  frozen historical ledger (last written 2026-09-11); its `storage_uri`
+  values refer to bodies archived offline by the operator, not to anything
+  the app can read
 - `quality_flag` bitfield — `1=missing`, `2=outlier`, `4=interpolated`,
   `8=mismatch_with_other_source`, `16=manual_review`
 

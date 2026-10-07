@@ -108,11 +108,6 @@ export const STACK: StackGroup[] = [
       { name: 'PostGIS', version: 'pg16 同梱', role: '流域ポリゴンの point-in-polygon 検索' },
       { name: 'postgres.js', version: '^3.4', role: '生 SQL クライアント。ORM は原則使わない' },
       { name: 'Drizzle ORM', version: '^0.36', role: 'スキーマ定義と型の出どころのみ' },
-      {
-        name: 'MinIO / S3',
-        version: 'AWS SDK ^3.66',
-        role: '取得した生レスポンスのスナップショット保管',
-      },
     ],
   },
   {
@@ -131,7 +126,7 @@ export const STACK: StackGroup[] = [
     entries: [
       { name: 'bun test', version: '—', role: 'ユニット・結合テスト' },
       { name: 'Playwright', version: '^1.59', role: 'E2E' },
-      { name: 'Docker Compose', version: '—', role: 'ローカル基盤（db + minio）' },
+      { name: 'Docker Compose', version: '—', role: 'ローカル基盤（db）' },
       { name: 'Coolify', version: '—', role: '本番デプロイ（セルフホスト PaaS）' },
       { name: 'GitHub Actions', version: '—', role: 'CI: typecheck / lint / test' },
       { name: 'just', version: '—', role: 'タスクランナー（justfile）' },

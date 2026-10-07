@@ -1,7 +1,6 @@
 // apps/worker/src/index.ts
 
 import { CRONTAB } from '@dam/core/crontab';
-import { ensureBucket } from '@dam/storage/snapshot_store';
 import { run } from 'graphile-worker';
 import aggregatesRefresh from './tasks/aggregates_refresh.ts';
 import backfillJwaJunpo from './tasks/backfill_jwa_junpo.ts';
@@ -59,7 +58,6 @@ import ingestKagoshimaKasen from './tasks/ingest_kagoshima_kasen.ts';
 import ingestKanagawa from './tasks/ingest_kanagawa.ts';
 import ingestKanagawaSuibou from './tasks/ingest_kanagawa_suibou.ts';
 import ingestKandaSuido from './tasks/ingest_kanda_suido.ts';
-import ingestKasenbosai from './tasks/ingest_kasenbosai.ts';
 import ingestKasenbosaiV2 from './tasks/ingest_kasenbosai_v2.ts';
 import ingestKitakyushuSuido from './tasks/ingest_kitakyushu_suido.ts';
 import ingestKkrMlit from './tasks/ingest_kkr_mlit.ts';
@@ -132,10 +130,6 @@ async function main(): Promise<void> {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error('DATABASE_URL not set');
 
-  await ensureBucket().catch((e: unknown) => {
-    console.error(`storage: ensureBucket failed (continuing): ${(e as Error).message}`);
-  });
-
   const runner = await run({
     connectionString: url,
     concurrency: Number(process.env.WORKER_CONCURRENCY ?? '4'),
@@ -147,7 +141,6 @@ async function main(): Promise<void> {
       'master:refresh:damnet': refreshDamnet,
       'master:match': match,
       'match:kasenbosai': matchKasenbosai,
-      'ingest:kasenbosai': ingestKasenbosai,
       'ingest:kasenbosai-v2': ingestKasenbosaiV2,
       'ingest:tokyo-waterworks': ingestTokyoWaterworks,
       'ingest:jwa-junpo': ingestJwaJunpo,

@@ -4,8 +4,7 @@
 
 ```sh
 cp .env.example .env
-just up                    # docker compose: db (5433) + minio (9000)
-just ensure-bucket         # creates dam-raw bucket
+just up                    # docker compose: db (5433)
 just migrate               # applies 0000–0020 migrations
 
 # (optional) populate master data
@@ -48,8 +47,8 @@ cd apps/web && API_AUTH_BYPASS=1 \
 ## Day-to-day commands
 
 ```sh
-just up                     # start db + minio
-just down                   # stop both
+just up                     # start db
+just down                   # stop it
 just migrate                # apply pending migrations
 just reset-db               # wipe + recreate (drops volume!)
 just dev-web                # next dev (default)
@@ -151,16 +150,6 @@ SELECT source_id, COUNT(*) FROM observations GROUP BY source_id;
 Either bump the source that has data, or have the synth seeder run again
 (it pins synthetic to 200).
 
-### MinIO image not pullable
-
-`docker compose pull minio` may fail if the pinned tag was rotated. MinIO
-removed its Docker Hub repositories, and `quay.io/minio/*` refuses anonymous
-pulls since 2026-09 (401). Use the community-maintained fork `pgsty/minio`
-(and `pgsty/mc` for the client): pick a recent `RELEASE.*` tag from
-https://hub.docker.com/r/pgsty/minio/tags and update
-`docker-compose.dev.yml`, `justfile` and `.github/workflows/ci.yml` together.
-Bucket survives the restart.
-
 ### Real upstream blocks the scraper
 
 `www.river.go.jp/kawabou/` returns 403 with explicit message
@@ -201,19 +190,15 @@ SELECT COUNT(*) FROM dams;
 
 Coolify pulls from main and builds two separate applications: `dam-web`
 (`deploy/coolify/Dockerfile.web`, rolling updates) and `dam-worker`
-(`deploy/coolify/Dockerfile.worker`). Postgres (`dam-db`) and MinIO
-(`dam-minio`) are their own Coolify resources and are not touched by a
-push. Layout and env vars: `deploy/coolify/README.md`. The former single
+(`deploy/coolify/Dockerfile.worker`). Postgres (`dam-db`) is its own Coolify
+resource and is not touched by a push. Layout and env vars:
+`deploy/coolify/README.md`. The former single
 compose stack is kept at `deploy/coolify/docker-compose.legacy.yaml`.
 
 Required Coolify secrets:
 
 ```
 DATABASE_URL              postgres://dam:CHANGEME@<dam-db uuid>:5432/dam
-S3_ENDPOINT               http://minio-<dam-minio uuid>:9000
-S3_ACCESS_KEY             CHANGEME
-S3_SECRET_KEY             CHANGEME
-S3_BUCKET                 dam-raw
 NEXT_PUBLIC_SITE_URL      https://your-public-host
 HTTP_CONTACT_EMAIL        ops@your-domain
 KASENBOSAI_BASE_URL       (leave unset until access granted)
@@ -229,8 +214,7 @@ The schedule lives in `CRONTAB` (`packages/core/src/crontab.ts`), registered
 by `apps/worker/src/index.ts`; `apps/worker/src/crontab.test.ts` checks it.
 Read it there rather than from a copy here. Tasks registered without a cron
 line (run on demand via `POST /api/v1/admin/jobs` or `add_job`) include
-`ingest:kasenbosai` (v1; v2 is the scheduled one), `observations:rebind`
-and the `backfill:*` family.
+`observations:rebind` and the `backfill:*` family.
 
 To trigger a one-off run from psql:
 

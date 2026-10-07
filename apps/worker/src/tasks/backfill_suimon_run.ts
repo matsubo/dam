@@ -2,8 +2,6 @@
 import { suimonAdapter } from '@dam/adapters-suimon';
 import { complete, fail, startRunning } from '@dam/db/repo/backfill_progress';
 import { upsertObservations } from '@dam/db/repo/observations';
-import { markParsed, recordRawSnapshot } from '@dam/db/repo/raw_snapshots';
-import { putSnapshot, rawSnapshotKey } from '@dam/storage/snapshot_store';
 import type { Task } from 'graphile-worker';
 
 const task: Task = async (_payload, helpers) => {
@@ -23,18 +21,6 @@ const task: Task = async (_payload, helpers) => {
         continue;
       }
       const parsed = await suimonAdapter.parse(raw, t);
-      const key = rawSnapshotKey('suimon', t.targetId, ctx.runAt, 'csv');
-      const uri = `s3://${process.env.S3_BUCKET ?? 'dam-raw'}/${key}`;
-      await putSnapshot(key, raw.bytes, raw.contentType);
-      const rawId = await recordRawSnapshot({
-        sourceId: 'suimon',
-        targetId: t.targetId,
-        fetchedAt: ctx.runAt,
-        storageUri: uri,
-        httpStatus: raw.status,
-        bytes: raw.bytes.byteLength,
-        contentType: raw.contentType,
-      });
       const inputs = parsed.map((p) => ({
         observedAt: p.observedAt,
         damId,
@@ -45,11 +31,10 @@ const task: Task = async (_payload, helpers) => {
         outflowM3s: p.outflowM3s ?? null,
         waterLevelM: p.waterLevelM ?? null,
         rainfallMm: p.rainfallMm ?? null,
-        rawSnapshotId: rawId,
+        rawSnapshotId: null,
         qualityFlag: 0,
       }));
       const written = await upsertObservations(inputs);
-      await markParsed(rawId);
       await complete('suimon', damId, year, written);
       totalObs += written;
     } catch (e) {

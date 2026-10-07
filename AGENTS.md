@@ -63,9 +63,8 @@ canonical product/architecture spec. It precedes any LLM-written doc.
 ## Common commands
 
 ```sh
-# Bring up local infra (Postgres + MinIO)
+# Bring up local infra (Postgres)
 just up
-just ensure-bucket
 just migrate
 
 # Dev server (uses .env)

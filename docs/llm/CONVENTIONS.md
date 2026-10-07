@@ -124,9 +124,12 @@ pattern instead of inventing a new one.
 
 - **Adapter contract**: `packages/core/src/source_adapter.ts:SourceAdapter`.
   Implementations live under `packages/adapters/<name>/src/adapter.ts`.
-- **Snapshots are first-class**: every fetch results in a row in
-  `raw_snapshots` with the body persisted to MinIO. Never parse without
-  saving the bytes.
+- **No raw-body store**: tasks parse the response in memory and write
+  only observations; fetched bytes are not kept, and `raw_snapshot_id` is
+  NULL on every new observation. `raw_snapshots` is a frozen historical
+  ledger (last written 2026-09-11, still read by `/stats`, `/contribute`
+  and `/sources`); never write to it. Its `storage_uri` values point at
+  bodies archived offline by the operator.
 - **Quality bits propagate**: `quality_flag` is a bitfield, not an enum.
   Multiple bits can be set on the same row. The nightly recompute task
   fans out per-bit.
