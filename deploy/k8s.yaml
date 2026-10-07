@@ -26,9 +26,16 @@ spec:
     metadata:
       labels: { app: dam-web }
     spec:
+      # preStop keeps a terminating pod serving while it is removed from the
+      # Service endpoints; without it Traefik kept sending it requests during a
+      # rollout and answered 504 after its 30 s dial timeout.
+      terminationGracePeriodSeconds: 45
       containers:
         - name: web
           image: IMAGE_WEB
+          lifecycle:
+            preStop:
+              sleep: { seconds: 10 }
           envFrom:
             - secretRef: { name: dam-env }
           ports:
