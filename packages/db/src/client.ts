@@ -1,5 +1,6 @@
 import postgres from 'postgres';
 import { connectionOptions, POOL_IDLE_TIMEOUT_S, POOL_MAX_LIFETIME_S } from './client_options.ts';
+import { withRetry } from './retry.ts';
 
 // During `next build` Next.js runs "Collecting page data" which loads every
 // route module — but the build host has no DATABASE_URL. We accept a
@@ -8,17 +9,28 @@ import { connectionOptions, POOL_IDLE_TIMEOUT_S, POOL_MAX_LIFETIME_S } from './c
 // runtime.
 const url = process.env.DATABASE_URL ?? 'postgres://build@build/build';
 
+// The database is a 2-instance CloudNativePG cluster: a switchover or a
+// failover leaves no writable primary for ~3-10 s, and every query in that
+// window fails with a connection error. withRetry re-issues such queries with
+// backoff for up to 20 s so visitors see a slow response instead of a 500.
+// A statement that never reached a writable server (connection refused,
+// cannot_connect_now, read-only standby) is retried whatever it is. One cut
+// off mid-flight (connection closed, admin_shutdown) may already have
+// committed, so only reads are retried; writes surface the error rather than
+// risk running twice. See retry.ts for the exact codes and the read rule.
 function makeClient() {
-  return postgres(url, {
-    max: 10,
-    idle_timeout: POOL_IDLE_TIMEOUT_S,
-    max_lifetime: POOL_MAX_LIFETIME_S,
-    prepare: false,
-    connection: connectionOptions(process.env),
-    types: {
-      bigint: postgres.BigInt,
-    },
-  });
+  return withRetry(
+    postgres(url, {
+      max: 10,
+      idle_timeout: POOL_IDLE_TIMEOUT_S,
+      max_lifetime: POOL_MAX_LIFETIME_S,
+      prepare: false,
+      connection: connectionOptions(process.env),
+      types: {
+        bigint: postgres.BigInt,
+      },
+    }),
+  );
 }
 
 // Pin the postgres pool to globalThis so Next dev's HMR cycle (which re-evals

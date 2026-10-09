@@ -297,7 +297,8 @@ the file for detail.
 | `src/repo/backfill_progress.ts` | `nextPending`, `startRunning`, `complete`, `fail`, `enqueueAllDams` |
 | `src/repo/api_keys.ts` | `issueKey`, `lookupByPrefix`, `revoke`, `recordUsage`, `usageInLastMinute`, `usageToday`, `hashKey`, `touchLastUsed` |
 | `src/migrate.ts` | numbered-SQL runner, ENOENT-tolerant |
-| `src/client.ts` | postgres.js singleton with bigint round-trip |
+| `src/client.ts` | postgres.js singleton with bigint round-trip, wrapped by `withRetry` |
+| `src/retry.ts` | `withRetry`: re-issues queries that fail with a connection error (CNPG switchover/failover) for up to 20 s; never-sent errors for any statement, outcome-unknown errors only for reads (`isReadStatement`); `begin` only on never-sent |
 
 ## packages/reconciler
 
