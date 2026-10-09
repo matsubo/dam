@@ -1,5 +1,11 @@
 import postgres from 'postgres';
-import { connectionOptions, POOL_IDLE_TIMEOUT_S, POOL_MAX_LIFETIME_S } from './client_options.ts';
+import {
+  connectionOptions,
+  POOL_CONNECT_TIMEOUT_S,
+  POOL_IDLE_TIMEOUT_S,
+  POOL_MAX_LIFETIME_S,
+  poolReconnectBackoffS,
+} from './client_options.ts';
 import { withRetry } from './retry.ts';
 
 // During `next build` Next.js runs "Collecting page data" which loads every
@@ -24,6 +30,8 @@ function makeClient() {
       max: 10,
       idle_timeout: POOL_IDLE_TIMEOUT_S,
       max_lifetime: POOL_MAX_LIFETIME_S,
+      connect_timeout: POOL_CONNECT_TIMEOUT_S,
+      backoff: poolReconnectBackoffS,
       prepare: false,
       connection: connectionOptions(process.env),
       types: {
