@@ -74,7 +74,7 @@ spec:
             failureThreshold: 5
           # 160-185 MiB under a replayed crawl on k3s; 330 MiB on Coolify.
           resources:
-            requests: { cpu: 100m, memory: 384Mi }
+            requests: { cpu: 100m, memory: 448Mi }
             limits: { memory: 1Gi }
 ---
 # Voluntary evictions (kubectl drain, kured reboots) take one web pod at a
@@ -159,5 +159,5 @@ spec:
             - secretRef: { name: dam-env }
           # ~75-90 MiB on Coolify; the PDF and CSV parsers spike while a job runs.
           resources:
-            requests: { cpu: 50m, memory: 192Mi }
+            requests: { cpu: 50m, memory: 128Mi }
             limits: { memory: 768Mi }
