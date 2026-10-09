@@ -89,8 +89,8 @@ jobs:
       # kubectl comes with the ubuntu-latest runner image.
 
       # KUBECONFIG is the dam/deployer ServiceAccount: it can manage the
-      # Deployments, Service, Ingress and the CDN purge Job in namespace dam,
-      # and cannot read Secrets.
+      # Deployments, Service, Ingress, PodDisruptionBudget and the CDN purge
+      # Job in namespace dam, and cannot read Secrets.
       - name: Roll out
         env:
           KUBECONFIG_DATA: ${{ secrets.KUBECONFIG }}
