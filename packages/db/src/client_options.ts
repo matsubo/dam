@@ -28,3 +28,20 @@ export function connectionOptions(env: Record<string, string | undefined>): {
  */
 export const POOL_IDLE_TIMEOUT_S = 30;
 export const POOL_MAX_LIFETIME_S = 10 * 60;
+
+/**
+ * Reconnect timing, in seconds, sized for a CloudNativePG switchover (~8 s
+ * with no writable primary; withRetry in retry.ts keeps re-issuing queries
+ * for 20 s). postgres.js's defaults let a pool sleep long after the primary
+ * is back:
+ * - connect_timeout 30 s: a connect the Service routes to a pod IP that is
+ *   already gone hangs that long instead of failing and being retried.
+ * - reconnect backoff (0.5-1) × min(3^n / 100, 20) s after n failed connects
+ *   in a row: 7-20 s once a switchover has refused a few connects.
+ * Here a connect gives up after 3 s, and the wait before reconnecting grows
+ * by 0.25 s per failed connect up to 1 s.
+ */
+export const POOL_CONNECT_TIMEOUT_S = 3;
+export function poolReconnectBackoffS(failedConnects: number): number {
+  return Math.min(0.25 * failedConnects, 1);
+}
