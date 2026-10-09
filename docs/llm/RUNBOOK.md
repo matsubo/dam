@@ -191,8 +191,9 @@ SELECT COUNT(*) FROM dams;
 Production is moving from Coolify to the home k3s cluster (namespace `dam`).
 `.github/workflows/deploy.yml` builds `ghcr.io/matsubo/dam-web` and
 `ghcr.io/matsubo/dam-worker` on every push to main and, while the repository
-variable `DEPLOY_K3S` is `true`, applies `deploy/k8s.yaml` (web Deployment,
-Service, Ingress, worker Deployment) through Tailscale and then runs the CDN
+variable `DEPLOY_K3S` is `true`, applies `deploy/k8s.yaml` (web Deployment with
+two replicas spread over nodes plus its PodDisruptionBudget, Service, Ingress,
+worker Deployment) through Tailscale and then runs the CDN
 purge Job (`deploy/purge-cdn.yaml`). The database (StatefulSet `dam-db`), the
 namespace, RBAC and the `dam-env` Secret are cluster-side, in
 matsubo/network-setting `k8s/dam.yaml`. `NEXT_PUBLIC_SITE_URL` and

@@ -13,10 +13,18 @@ metadata:
   name: dam-web
   namespace: dam
 spec:
-  replicas: 1
-  # The new pod runs bootstrap.sh (migrations + master upsert) and turns Ready
-  # before the old one stops, so a deploy has no downtime. Migrations must stay
-  # additive: old and new pods serve side by side for a moment.
+  # Two pods on different nodes (topologySpreadConstraints below, PDB
+  # dam-web further down), so a node drain, a node failure or a pod restart
+  # never leaves the site without a serving pod. Every web pod is stateless:
+  # JWT sessions, API rate limits in Postgres, no local uploads.
+  replicas: 2
+  # A new pod runs bootstrap.sh (migrations + master upsert) and turns Ready
+  # before an old one stops, so a deploy has no downtime. Migrations must stay
+  # additive: old and new pods serve side by side for a moment. Two pods may
+  # also boot at the same time (both replaced at once, e.g. when replicas
+  # change); migrate.ts then runs a migration in one transaction per pod and
+  # the _migrations primary key lets only one commit it (the other logs a
+  # non-fatal failure), and the master upsert is idempotent.
   strategy:
     type: RollingUpdate
     rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
@@ -26,6 +34,14 @@ spec:
     metadata:
       labels: { app: dam-web }
     spec:
+      # Spread the two pods over nodes; ScheduleAnyway so a pod still starts
+      # when only one node has room (e.g. during a node outage).
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: { app: dam-web }
       # preStop keeps a terminating pod serving while it is removed from the
       # Service endpoints; without it Traefik kept sending it requests during a
       # rollout and answered 504 after its 30 s dial timeout.
@@ -61,6 +77,21 @@ spec:
             requests: { cpu: 100m, memory: 384Mi }
             limits: { memory: 1Gi }
 ---
+# Voluntary evictions (kubectl drain, kured reboots) take one web pod at a
+# time, so the other keeps serving while the evicted one is recreated
+# elsewhere. AlwaysAllow lets a drain evict a pod that is not Ready anyway
+# instead of blocking on it.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: dam-web
+  namespace: dam
+spec:
+  maxUnavailable: 1
+  unhealthyPodEvictionPolicy: AlwaysAllow
+  selector:
+    matchLabels: { app: dam-web }
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -91,7 +122,10 @@ spec:
 ---
 # graphile-worker: the ingest crons (packages/core/src/crontab.ts). A rollout
 # briefly overlaps two workers, which graphile-worker tolerates (job locks
-# live in Postgres).
+# live in Postgres). It stays at one replica and without a PDB: it serves no
+# requests, a drain or node loss only delays the next cron tick until the pod
+# is back on another node, and a second worker would double the parser
+# memory spikes and database connections for no user-visible gain.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
