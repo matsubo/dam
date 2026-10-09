@@ -75,6 +75,7 @@ else
   #     /tmp/nodb.log | sort -u
   exec bun test apps packages \
     --path-ignore-patterns "packages/db/src/repo/**" \
+    --path-ignore-patterns "packages/db/src/client_retry.test.ts" \
     --path-ignore-patterns "packages/reconciler/**" \
     --path-ignore-patterns "packages/adapters/damnet/**" \
     --path-ignore-patterns "packages/adapters/ndi/**" \
