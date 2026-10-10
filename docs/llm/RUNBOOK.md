@@ -194,7 +194,7 @@ Production is moving from Coolify to the home k3s cluster (namespace `dam`).
 variable `DEPLOY_K3S` is `true`, applies `deploy/k8s.yaml` (web Deployment with
 two replicas spread over nodes plus its PodDisruptionBudget, Service, Ingress,
 worker Deployment) through Tailscale and then runs the CDN
-purge Job (`deploy/purge-cdn.yaml`). The database (StatefulSet `dam-db`), the
+purge Job (`deploy/purge-cdn.yaml`). The database (CloudNativePG Cluster `dam-pg`, two instances, Service `dam-pg-rw`), the
 namespace, RBAC and the `dam-env` Secret are cluster-side, in
 matsubo/network-setting `k8s/dam.yaml`. `NEXT_PUBLIC_SITE_URL` and
 `NEXT_PUBLIC_GTM_ID` are build args in the workflow; runtime env is `dam-env`.

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 #
-# PostgreSQL image for the CloudNativePG cluster dam-db-cnpg (cluster side:
+# PostgreSQL image for the CloudNativePG cluster dam-pg (cluster side:
 # matsubo/network-setting, k8s/dam.yaml). Built and pushed by
 # .github/workflows/postgres-image.yml as
 # ghcr.io/matsubo/dam-postgres:<PG>-ts<TimescaleDB>-tk<toolkit>-postgis<PostGIS>;
