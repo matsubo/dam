@@ -282,19 +282,25 @@ export async function classifyDamCoverage(): Promise<DamCoverageRow[]> {
       -- We hold the newest value a dated provider publishes (0221), however
       -- old: a monthly survey has nothing newer to take. Only a scan from
       -- the last 7 days vouches for that date.
+      -- A LATERAL ... LIMIT 1 probe, not EXISTS: the planner turned the
+      -- EXISTS into a Hash Semi Join that hashed every observation and
+      -- spilled ~335 MB of temp files per call (#105). The probe hits the
+      -- (dam_id, observed_at) chunk indexes once per universe row.
       SELECT su.resolved_dam_id
       FROM source_universe su
+      CROSS JOIN LATERAL (
+        SELECT 1
+        FROM observations o
+        WHERE o.dam_id = su.resolved_dam_id
+          AND o.source_id = su.source_id
+          AND o.observed_at >= su.published_at
+          AND num_nonnulls(o.storage_volume_m3, o.storage_rate, o.inflow_m3s,
+                           o.outflow_m3s, o.water_level_m, o.rainfall_mm) > 0
+        LIMIT 1
+      ) hit
       WHERE su.resolved_dam_id IS NOT NULL
         AND su.published_at IS NOT NULL
         AND su.last_seen_at > NOW() - INTERVAL '7 days'
-        AND EXISTS (
-          SELECT 1 FROM observations o
-          WHERE o.dam_id = su.resolved_dam_id
-            AND o.source_id = su.source_id
-            AND o.observed_at >= su.published_at
-            AND num_nonnulls(o.storage_volume_m3, o.storage_rate, o.inflow_m3s,
-                             o.outflow_m3s, o.water_level_m, o.rainfall_mm) > 0
-        )
     ),
     published AS (
       SELECT su.resolved_dam_id AS dam_id,

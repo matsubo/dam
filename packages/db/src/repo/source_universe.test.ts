@@ -312,6 +312,39 @@ describe('source universe coverage triage', () => {
     expect(await status()).toEqual(['published_not_ingested', 'published_not_ingested']);
   });
 
+  test('the dated branch needs a valued observation from that source at or after the date', async () => {
+    // The dated branch is a per-row LATERAL probe into observations (#105);
+    // each of its predicates must still hold on its own.
+    const survey = new Date(Date.now() - 60 * 86_400_000);
+    const status = async (): Promise<[string | undefined, string | undefined]> => [
+      only(await classifyDamCoverage(), stale),
+      (await classifyOneDam(stale))?.status,
+    ];
+    await recordUniverse(SRC_A, [
+      { externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale, publishedAt: survey },
+    ]);
+
+    // A date and a fresh scan, but nothing stored.
+    expect(await status()).toEqual(['published_not_ingested', 'published_not_ingested']);
+
+    // Another source's value for that date is not this provider's value.
+    await upsertObservations([
+      { observedAt: survey, damId: stale, sourceId: SRC_B, storageRate: 0.8 },
+    ]);
+    expect(await status()).toEqual(['published_not_ingested', 'published_not_ingested']);
+
+    // A row with every quantity NULL is not a value.
+    await upsertObservations([{ observedAt: survey, damId: stale, sourceId: SRC_A }]);
+    expect(await status()).toEqual(['published_not_ingested', 'published_not_ingested']);
+
+    await upsertObservations([
+      { observedAt: survey, damId: stale, sourceId: SRC_A, storageRate: 0.8 },
+    ]);
+    expect(await status()).toEqual(['covered', 'covered']);
+    // The dated branch must not duplicate the dam in the result.
+    expect((await classifyDamCoverage()).filter((r) => r.damId === stale)).toHaveLength(1);
+  });
+
   test('a dam its publishers list with no value is 提供元に値なし, not an ingestion bug', async () => {
     // 鉄山 / 坂下 (調査対象外) and 滝波 (every column "---") are on their
     // provider's page with nothing in the value cells. Calling that
