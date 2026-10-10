@@ -1,8 +1,9 @@
 # Applied by .github/workflows/deploy.yml on every push to main, with IMAGE_WEB
 # and IMAGE_WORKER replaced by ghcr.io/matsubo/dam-web:<sha> and
 # ghcr.io/matsubo/dam-worker:<sha>. The namespace, the deployer's RBAC, the
-# database (StatefulSet dam-db, Service dam-db) and the Secrets dam-env /
-# ghcr-pull are cluster-side and live in matsubo/network-setting (k8s/dam.yaml).
+# database (CloudNativePG Cluster dam-pg, Service dam-pg-rw) and the Secrets
+# dam-env / ghcr-pull are cluster-side and live in matsubo/network-setting
+# (k8s/dam.yaml).
 #
 # Both pods read the same env (dam-env), like the two Coolify applications did.
 # Never add the one-shot BOOTSTRAP_* flags to it: bootstrap.sh runs on every web
@@ -141,17 +142,6 @@ spec:
     spec:
       # graphile-worker finishes running jobs on SIGTERM before it exits.
       terminationGracePeriodSeconds: 120
-      # Keep it off the database's node: when that node ran short of memory
-      # the two failed together (the worker crash-looped on a lost DB
-      # endpoint), and the node holding dam-db has the least room to spare.
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                topologyKey: kubernetes.io/hostname
-                labelSelector:
-                  matchLabels: { app: dam-db }
       containers:
         - name: worker
           image: IMAGE_WORKER
