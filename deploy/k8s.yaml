@@ -73,10 +73,11 @@ spec:
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 5
-          # 160-185 MiB under a replayed crawl on k3s; 330 MiB on Coolify.
+          # Measured on k3s 10-07..10-12 (64 h, excl. 10-09/10): working set p95
+          # 516 / max 543 MiB, CPU p95 37m. Request p95 +10%, limit max x1.25.
           resources:
-            requests: { cpu: 100m, memory: 448Mi }
-            limits: { memory: 1Gi }
+            requests: { cpu: 40m, memory: 576Mi }
+            limits: { memory: 864Mi }
 ---
 # Voluntary evictions (kubectl drain, kured reboots) take one web pod at a
 # time, so the other keeps serving while the evicted one is recreated
@@ -147,7 +148,9 @@ spec:
           image: IMAGE_WORKER
           envFrom:
             - secretRef: { name: dam-env }
-          # ~75-90 MiB on Coolify; the PDF and CSV parsers spike while a job runs.
+          # Measured on k3s 10-07..10-12 (64 h, excl. 10-09/10): working set p95
+          # 108 / max 117 MiB, CPU p95 7m. Limit request x1.5 (the PDF and CSV
+          # parsers spike while a job runs).
           resources:
-            requests: { cpu: 50m, memory: 128Mi }
-            limits: { memory: 768Mi }
+            requests: { cpu: 10m, memory: 128Mi }
+            limits: { memory: 192Mi }
