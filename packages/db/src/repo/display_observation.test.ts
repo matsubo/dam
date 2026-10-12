@@ -264,3 +264,64 @@ describe('display_observation — derived rates (#45)', () => {
     expect(row?.source_id).toBe(UNTRUSTED);
   });
 });
+
+// 0223: several sources stamp the same observed_at. The pick used to depend on
+// the plan; now the higher active source_priorities.priority wins, then the
+// greater source_id — in display_observation() and in obs_daily's last value.
+describe('timestamp ties (0223)', () => {
+  /** The source the rule picks among TRUSTED and UNTRUSTED, from their real rows. */
+  async function expectedWinner(): Promise<string> {
+    const rows = await sql<{ source_id: string }[]>`
+      SELECT source_id FROM source_priorities
+      WHERE source_id IN (${TRUSTED}, ${UNTRUSTED})
+      ORDER BY COALESCE(CASE WHEN active THEN priority END, -1) DESC, source_id DESC
+      LIMIT 1
+    `;
+    return rows[0]?.source_id as string;
+  }
+
+  test('display_observation picks the higher-priority source on a tie', async () => {
+    if (!dbAvailable) return;
+
+    await sql`DELETE FROM observations WHERE dam_id = ${damId}`;
+    // Three days old, so neither row is a current trusted reading: only the
+    // tie-break decides.
+    await sql`
+      INSERT INTO observations (dam_id, observed_at, source_id, storage_volume_m3, storage_rate)
+      VALUES
+        (${damId}, date_trunc('hour', NOW()) - INTERVAL '3 days', ${UNTRUSTED}, 1660000, 0.114),
+        (${damId}, date_trunc('hour', NOW()) - INTERVAL '3 days', ${TRUSTED},   1800000, 0.836)
+      ON CONFLICT (dam_id, observed_at, source_id) DO NOTHING
+    `;
+
+    const row = await displayed();
+    expect(row?.source_id).toBe(await expectedWinner());
+  });
+
+  test("obs_daily's last value takes the tie's higher-priority volume, never a level-only NULL", async () => {
+    if (!dbAvailable) return;
+
+    await sql`DELETE FROM observations WHERE dam_id = ${damId}`;
+    await sql`
+      INSERT INTO observations (dam_id, observed_at, source_id, storage_volume_m3, water_level_m)
+      VALUES
+        (${damId}, '2001-01-01T12:00:00Z', ${UNTRUSTED}, 1660000, NULL),
+        (${damId}, '2001-01-01T12:00:00Z', ${TRUSTED},   1800000, NULL),
+        (${damId}, '2001-01-01T13:00:00Z', ${UNTRUSTED}, NULL,    100.5)
+      ON CONFLICT (dam_id, observed_at, source_id) DO NOTHING
+    `;
+    const refresh = `CALL refresh_continuous_aggregate('obs_daily', '2001-01-01', '2001-01-02', force => true)`;
+    try {
+      await sql.unsafe(refresh);
+      const [day] = await sql<{ last: string | null }[]>`
+        SELECT last_storage_volume_m3::TEXT AS last FROM obs_daily
+        WHERE dam_id = ${damId} AND day = '2001-01-01T00:00:00Z'
+      `;
+      const winner = await expectedWinner();
+      expect(Number(day?.last)).toBe(winner === TRUSTED ? 1800000 : 1660000);
+    } finally {
+      await sql`DELETE FROM observations WHERE dam_id = ${damId}`;
+      await sql.unsafe(refresh);
+    }
+  });
+});
