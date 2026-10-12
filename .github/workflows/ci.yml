@@ -9,7 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     services:
       db:
-        image: timescale/timescaledb-ha:pg16
+        # Same PostgreSQL major as production (CloudNativePG cluster dam-pg18).
+        image: timescale/timescaledb-ha:pg18
         env:
           POSTGRES_DB: dam
           POSTGRES_USER: dam
