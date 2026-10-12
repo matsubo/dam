@@ -26,7 +26,7 @@ survey tables and water utilities. 72 sources wrote observations in the last
 Bun-based monorepo. Three apps (`apps/web` Next.js, `apps/worker`
 graphile-worker, plus `bin/` admin scripts), and a set of `packages/*` for
 shared concerns: db (schema + repo), core (types + utilities), adapters
-(per-source crawlers), reconciler (cross-source name matching). Postgres 16
+(per-source crawlers), reconciler (cross-source name matching). PostgreSQL 18
 with TimescaleDB + PostGIS extensions provides the time-series hypertable,
 continuous aggregates (daily/monthly), and watershed-polygon geocoding.
 Fetched response bodies are parsed in memory and not kept.
@@ -187,11 +187,14 @@ this.
 
 - **Runtime**: Bun ≥ 1.3, Node ≥ 24 (via Bun)
 - **Web**: Next.js 15 App Router, React 19, Tailwind 3
-- **DB**: PostgreSQL 16 + TimescaleDB 2.26 + PostGIS 3.6 + pg_trgm + pgcrypto
+- **DB**: PostgreSQL 18 + TimescaleDB 2.26 + PostGIS 3.6 + pg_trgm + pgcrypto
+  (production: CloudNativePG Cluster `dam-pg18`, Service `dam-postgres-rw`)
 - **Worker**: graphile-worker on Postgres
 - **Lint/format**: Biome (one tool — no ESLint or Prettier)
 - **Test**: bun:test (unit/integration), Playwright (E2E)
 - **Charts**: ECharts via `echarts-for-react`
 - **Maps**: Leaflet directly (no react-leaflet) on GSI tiles
-- **Build/deploy**: Coolify (self-hosted PaaS), pgBackRest for backups
+- **Build/deploy**: GitHub Actions → home k3s (`deploy/k8s.yaml`); the database
+  and its daily volume-snapshot backups are cluster-side (matsubo/network-setting
+  `k8s/dam.yaml`). The former Coolify setup is kept with auto-deploy off
 - **CI**: GitHub Actions (lint → typecheck → migrate → unit → E2E)

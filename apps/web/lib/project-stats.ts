@@ -102,10 +102,10 @@ export const STACK: StackGroup[] = [
     entries: [
       {
         name: 'PostgreSQL + TimescaleDB',
-        version: 'timescale/timescaledb-ha:pg16-all',
+        version: 'PostgreSQL 18 + TimescaleDB 2.26',
         role: '観測値は hypertable。obs_daily / obs_monthly の連続集計と圧縮ポリシー付き',
       },
-      { name: 'PostGIS', version: 'pg16 同梱', role: '流域ポリゴンの point-in-polygon 検索' },
+      { name: 'PostGIS', version: '3.6', role: '流域ポリゴンの point-in-polygon 検索' },
       { name: 'postgres.js', version: '^3.4', role: '生 SQL クライアント。ORM は原則使わない' },
       { name: 'Drizzle ORM', version: '^0.36', role: 'スキーマ定義と型の出どころのみ' },
     ],
