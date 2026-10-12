@@ -17,7 +17,13 @@ describe('obs_daily one row per (dam_id, day)', () => {
                       VALUES (-115, '1990-01-01T00:00:00Z', 1, 0)`;
       await sql.unsafe(insert);
       // Last statement: the error aborts the transaction withTestDb rolls back.
-      await expect(sql.unsafe(insert)).rejects.toThrow(/obs_daily_dam_id_day_key/);
+      // (postgres.js runs a query only once it is awaited, so catch it here
+      // rather than handing the pending query to expect().rejects.)
+      const error = await sql.unsafe(insert).then(
+        () => null,
+        (e: unknown) => e,
+      );
+      expect(String(error)).toContain('obs_daily_dam_id_day_key');
     });
   });
 });
