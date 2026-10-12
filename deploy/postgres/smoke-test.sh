@@ -3,10 +3,13 @@
 # .github/workflows/postgres-image.yml: starts a throwaway server and checks
 # that PostgreSQL and every extension the production catalog uses load at
 # exactly the pinned version, that TimescaleDB is the TSL edition (compression
-# works) and that a compressed hypertable survives pg_dump/pg_restore.
+# works), that a compressed hypertable survives pg_dump/pg_restore, and that
+# a catalog at the previous versions (*_PREV_VERSION, what the cluster runs
+# while this image rolls out) still loads and updates in place.
 set -euo pipefail
 
 : "${PG_VERSION:?}" "${TIMESCALEDB_VERSION:?}" "${TOOLKIT_VERSION:?}" "${POSTGIS_VERSION:?}"
+: "${TIMESCALEDB_PREV_VERSION:?}" "${TOOLKIT_PREV_VERSION:?}"
 
 for bin in initdb postgres pg_ctl pg_controldata pg_basebackup pg_dump pg_restore; do
   command -v "$bin" >/dev/null || { echo "missing on PATH: $bin"; exit 1; }
@@ -70,6 +73,32 @@ export PGDATABASE=restored
 expect restored_rows "SELECT count(*) FROM obs" 73
 expect restored_compressed "SELECT count(*) FROM chunk_compression_stats('obs') WHERE compression_status = 'Compressed'" "$chunks"
 expect restored_toolkit "SELECT extversion FROM pg_extension WHERE extname = 'timescaledb_toolkit'" "$TOOLKIT_VERSION"
+
+# The previous catalog on this image: TimescaleDB at the previous version
+# (its own .so through the same loader), with a compressed chunk and a
+# continuous aggregate, then `ALTER EXTENSION timescaledb UPDATE` as the
+# first statement of a fresh psql -X session, as in production.
+export PGDATABASE=postgres
+q "CREATE DATABASE upgrade"
+export PGDATABASE=upgrade
+q "CREATE EXTENSION timescaledb VERSION '$TIMESCALEDB_PREV_VERSION'"
+expect prev_timescaledb "SELECT extversion FROM pg_extension WHERE extname = 'timescaledb'" "$TIMESCALEDB_PREV_VERSION"
+q "CREATE TABLE obs (ts timestamptz NOT NULL, dam int NOT NULL, v double precision)"
+q "SELECT create_hypertable('obs', 'ts')" >/dev/null
+q "INSERT INTO obs SELECT t, 1, random() FROM generate_series(now() - interval '3 days', now(), interval '1 hour') t"
+q "ALTER TABLE obs SET (timescaledb.compress, timescaledb.compress_segmentby = 'dam')"
+q "SELECT count(compress_chunk(c)) FROM show_chunks('obs') c" >/dev/null
+q "CREATE MATERIALIZED VIEW obs_daily WITH (timescaledb.continuous) AS SELECT dam, time_bucket('1 day', ts) AS day, avg(v) FROM obs GROUP BY 1, 2 WITH NO DATA"
+q "ALTER EXTENSION timescaledb UPDATE"
+expect updated_timescaledb "SELECT extversion FROM pg_extension WHERE extname = 'timescaledb'" "$TIMESCALEDB_VERSION"
+expect updated_rows "SELECT count(*) FROM obs" 73
+expect updated_compressed "SELECT count(*) = count(*) FILTER (WHERE compression_status = 'Compressed') FROM chunk_compression_stats('obs')" t
+q "CALL refresh_continuous_aggregate('obs_daily', NULL, NULL)"
+expect updated_cagg "SELECT count(*) > 0 FROM obs_daily" t
+# The toolkit package ships only its newest library; the image adds the
+# previous one so functions created by the previous version keep working.
+q "LOAD 'timescaledb_toolkit-$TOOLKIT_PREV_VERSION'"
+echo "ok   prev_toolkit_lib loads"
 
 pg_ctl -w stop >/dev/null
 echo "smoke test passed"
