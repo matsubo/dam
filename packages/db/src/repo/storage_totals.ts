@@ -1,4 +1,5 @@
 import { sql } from '../client.ts';
+import { newestFirst, sourceRankJoin } from './newest_row.ts';
 
 /**
  * 全国貯水率 (and its per-prefecture / per-watershed cuts) is computed over the
@@ -34,24 +35,30 @@ interface TotalsRow {
 
 /**
  * The cohort itself: one row per dam, carrying the latest volume-bearing
- * observation. Filtering on `storage_volume_m3 IS NOT NULL` *before*
- * DISTINCT ON matters — a newer level-only row would otherwise win and null
- * out a dam that does have a usable reading.
+ * observation. Filtering on `storage_volume_m3 IS NOT NULL` *before* the
+ * pick matters — a newer level-only row would otherwise win and null out a
+ * dam that does have a usable reading. Same-timestamp ties follow the
+ * newest-row rule (#122).
  */
 function cohort(freshDays: number) {
   return sql`
-    SELECT DISTINCT ON (o.dam_id)
-      o.dam_id,
-      o.storage_volume_m3,
+    SELECT
+      d.id AS dam_id,
+      latest.storage_volume_m3,
       d.active_capacity_m3,
       d.pref_code,
       d.watershed_id
-    FROM observations o
-    JOIN dams d ON d.id = o.dam_id
-    WHERE o.observed_at > NOW() - MAKE_INTERVAL(days => ${freshDays})
-      AND o.storage_volume_m3 IS NOT NULL
-      AND d.active_capacity_m3 IS NOT NULL
-    ORDER BY o.dam_id, o.observed_at DESC
+    FROM dams d
+    CROSS JOIN LATERAL (
+      SELECT o.storage_volume_m3
+      FROM observations o ${sourceRankJoin()}
+      WHERE o.dam_id = d.id
+        AND o.observed_at > NOW() - MAKE_INTERVAL(days => ${freshDays})
+        AND o.storage_volume_m3 IS NOT NULL
+      ORDER BY ${newestFirst()}
+      LIMIT 1
+    ) latest
+    WHERE d.active_capacity_m3 IS NOT NULL
   `;
 }
 

@@ -1,4 +1,5 @@
 import { sql } from '../client.ts';
+import { newestFirst, sourceRankJoin } from './newest_row.ts';
 
 export interface UpsertWatershedInput {
   code: string;
@@ -270,7 +271,7 @@ export async function watershedStorageChange(watershedId: bigint): Promise<Water
     -- For each bucket, take each dam's most recent observation <= anchor − lookback,
     -- then sum. One LIMIT 1 probe per dam and bucket on (dam_id, observed_at):
     -- a DISTINCT ON over the join read the dams' whole history nine times
-    -- (7.6 s for 石狩川, #118).
+    -- (7.6 s for 石狩川, #118). Same-timestamp ties: newest-row rule (#122).
     per_bucket AS (
       SELECT
         b.bucket,
@@ -282,11 +283,11 @@ export async function watershedStorageChange(watershedId: bigint): Promise<Water
         FROM latest_per_dam l
         CROSS JOIN LATERAL (
           SELECT o.storage_volume_m3, o.observed_at
-          FROM observations o
+          FROM observations o ${sourceRankJoin()}
           WHERE o.dam_id = l.dam_id
             AND o.storage_volume_m3 IS NOT NULL
             AND o.observed_at <= (SELECT t FROM anchor) - b.lookback
-          ORDER BY o.observed_at DESC
+          ORDER BY ${newestFirst()}
           LIMIT 1
         ) p
       ) picks ON TRUE
@@ -350,7 +351,7 @@ export async function nationalStorageChange(): Promise<WatershedStorageChange> {
       JOIN ds ON ds.id = od.dam_id
     ),
     recent_obs AS (
-      SELECT o.dam_id, o.storage_volume_m3, o.observed_at
+      SELECT o.dam_id, o.storage_volume_m3, o.observed_at, o.source_id
       FROM observations o
       JOIN ds ON ds.id = o.dam_id
       WHERE o.storage_volume_m3 IS NOT NULL
@@ -358,7 +359,10 @@ export async function nationalStorageChange(): Promise<WatershedStorageChange> {
         AND o.observed_at <  ((SELECT d FROM anchor_day) + INTERVAL '2 days')
     ),
     anchor AS (SELECT MAX(observed_at) AS t FROM recent_obs),
-    -- Sub-day buckets: snap each dam's latest obs at-or-before (anchor - lookback).
+    -- Sub-day buckets: snap each dam's latest obs at-or-before (anchor - lookback),
+    -- same-timestamp ties by the newest-row rule (#122). Over this bounded
+    -- window the DISTINCT ON stays cheaper than per-dam probes, which lose
+    -- chunk exclusion on the anchor-derived bounds.
     sub_day AS (
       SELECT b.bucket, b.lookback, picks.dam_id, picks.storage_volume_m3, picks.observed_at
       FROM (VALUES
@@ -369,9 +373,9 @@ export async function nationalStorageChange(): Promise<WatershedStorageChange> {
       ) AS b(bucket, lookback)
       LEFT JOIN LATERAL (
         SELECT DISTINCT ON (o.dam_id) o.dam_id, o.storage_volume_m3, o.observed_at
-        FROM recent_obs o
+        FROM recent_obs o ${sourceRankJoin()}
         WHERE o.observed_at <= (SELECT t FROM anchor) - b.lookback
-        ORDER BY o.dam_id, o.observed_at DESC
+        ORDER BY o.dam_id, ${newestFirst()}
       ) picks ON TRUE
     ),
     sub_day_totals AS (

@@ -1,4 +1,5 @@
 import { sql } from '../client.ts';
+import { newestFirst, sourceRankJoin } from './newest_row.ts';
 import { RATE_FRESHNESS_DAYS } from './watersheds.ts';
 
 // 平年比 (comparison against the seasonal norm): for "is this year unusually
@@ -34,11 +35,11 @@ export async function damSeasonalNorm(damId: bigint): Promise<SeasonalNorm | nul
   const rows = await sql<SeasonalNorm[]>`
     WITH current AS (
       SELECT o.storage_volume_m3
-      FROM observations o
+      FROM observations o ${sourceRankJoin()}
       WHERE o.dam_id = ${damId}
         AND o.storage_volume_m3 IS NOT NULL
         AND o.observed_at > NOW() - make_interval(days => ${RATE_FRESHNESS_DAYS})
-      ORDER BY o.observed_at DESC
+      ORDER BY ${newestFirst()}
       LIMIT 1
     ),
     norm AS (
@@ -74,13 +75,18 @@ export async function damSeasonalNorm(damId: bigint): Promise<SeasonalNorm | nul
 export async function watershedSeasonalNorm(watershedId: bigint): Promise<SeasonalNorm | null> {
   const rows = await sql<SeasonalNorm[]>`
     WITH cohort AS (
-      SELECT DISTINCT ON (o.dam_id) o.dam_id, o.storage_volume_m3 AS current_volume
-      FROM observations o
-      JOIN dams d ON d.id = o.dam_id
+      SELECT d.id AS dam_id, latest.storage_volume_m3 AS current_volume
+      FROM dams d
+      CROSS JOIN LATERAL (
+        SELECT o.storage_volume_m3
+        FROM observations o ${sourceRankJoin()}
+        WHERE o.dam_id = d.id
+          AND o.storage_volume_m3 IS NOT NULL
+          AND o.observed_at > NOW() - make_interval(days => ${RATE_FRESHNESS_DAYS})
+        ORDER BY ${newestFirst()}
+        LIMIT 1
+      ) latest
       WHERE d.watershed_id = ${watershedId}
-        AND o.storage_volume_m3 IS NOT NULL
-        AND o.observed_at > NOW() - make_interval(days => ${RATE_FRESHNESS_DAYS})
-      ORDER BY o.dam_id, o.observed_at DESC
     ),
     norm AS (
       SELECT od.dam_id,

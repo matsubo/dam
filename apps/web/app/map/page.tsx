@@ -1,11 +1,12 @@
 import { sql } from '@dam/db/client';
+import { newestFirst, sourceRankJoin } from '@dam/db/repo/newest_row';
 import type { Metadata } from 'next';
 import { unstable_cache } from 'next/cache';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
 import { JapanMap, type MapPoint } from '../../components/japan-map.tsx';
 
-// Map page: 2,749 dam pins, expensive to compute (DISTINCT ON over recent
-// observations + ST_X/ST_Y projection). force-dynamic skips Next's
+// Map page: 2,749 dam pins, expensive to compute (a newest-row probe per dam
+// over recent observations + ST_X/ST_Y projection). force-dynamic skips Next's
 // build-time static prerender (which fails because the build container
 // can't reach the DB). The actual caching is provided by unstable_cache
 // below — 24 h TTL across requests at runtime.
@@ -20,13 +21,8 @@ async function fetchPoints(): Promise<MapPoint[]> {
   // Bring back capacity + the latest storage_rate per dam so the map can
   // encode (size = capacity, color = storage_rate). The aggregate-source
   // observations don't carry storage_rate so we fall back to volume / capacity.
+  // Same-timestamp ties follow the newest-row rule (#122).
   return sql<MapPoint[]>`
-    WITH latest AS (
-      SELECT DISTINCT ON (dam_id) dam_id, storage_volume_m3, storage_rate
-      FROM observations
-      WHERE observed_at > NOW() - INTERVAL '30 days'
-      ORDER BY dam_id, observed_at DESC
-    )
     SELECT
       d.slug,
       d.name,
@@ -43,7 +39,13 @@ async function fetchPoints(): Promise<MapPoint[]> {
         ELSE NULL
       END                                   AS "storageRate"
     FROM dams d
-    LEFT JOIN latest l ON l.dam_id = d.id
+    LEFT JOIN LATERAL (
+      SELECT o.storage_volume_m3, o.storage_rate
+      FROM observations o ${sourceRankJoin()}
+      WHERE o.dam_id = d.id AND o.observed_at > NOW() - INTERVAL '30 days'
+      ORDER BY ${newestFirst()}
+      LIMIT 1
+    ) l ON TRUE
     ORDER BY d.total_capacity_m3 DESC NULLS LAST
   `;
 }
