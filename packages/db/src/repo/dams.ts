@@ -1,4 +1,5 @@
 import { sql } from '../client.ts';
+import { newestFirst, sourceRankJoin } from './newest_row.ts';
 
 export interface UpsertDamInput {
   slug: string;
@@ -665,10 +666,11 @@ export function storageChangeQuery(damId: bigint) {
       ('d365', INTERVAL '365 days'), ('d1825', INTERVAL '1825 days')
     ) AS w(label, back)
     LEFT JOIN LATERAL (
-      SELECT storage_volume_m3, observed_at FROM observations
-      WHERE dam_id = ${damId} AND storage_volume_m3 IS NOT NULL
-        AND observed_at <= latest.observed_at - w.back
-      ORDER BY observed_at DESC LIMIT 1
+      SELECT o.storage_volume_m3, o.observed_at
+      FROM observations o ${sourceRankJoin()}
+      WHERE o.dam_id = ${damId} AND o.storage_volume_m3 IS NOT NULL
+        AND o.observed_at <= latest.observed_at - w.back
+      ORDER BY ${newestFirst()} LIMIT 1
     ) o ON TRUE
   `;
 }
@@ -809,11 +811,11 @@ export async function latestRateAndSourceByDam(
     ) eff_cap ON TRUE
     LEFT JOIN LATERAL (
       SELECT o.source_id
-      FROM observations o
+      FROM observations o ${sourceRankJoin()}
       WHERE o.dam_id = d.id
         AND o.source_id <> 'synthetic'
         AND o.observed_at > NOW() - INTERVAL '30 days'
-      ORDER BY o.observed_at DESC
+      ORDER BY ${newestFirst()}
       LIMIT 1
     ) real_src ON TRUE
     WHERE d.id::TEXT = ANY(${ids}::TEXT[])
