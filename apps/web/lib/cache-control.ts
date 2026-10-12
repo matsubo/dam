@@ -1,5 +1,5 @@
 // The one Cache-Control policy for HTML pages and the OpenAPI document. Read by
-// middleware.ts (per request) and next.config.ts headers() (which runs after
+// proxy.ts (per request) and next.config.ts headers() (which runs after
 // Next's framework defaults and so wins for force-dynamic pages).
 //
 // Cloudflare caches these responses at the edge for s-maxage. Every deploy
@@ -49,6 +49,6 @@ export const CACHE_HEADER_ROUTES: ReadonlyArray<{ source: string; value: string 
     source,
     value: pickCacheControl(source.replace(/\/:\w+\*?$/, '/x')),
   })),
-  // Outside the middleware matcher; force-static, changes only on deploy.
+  // Outside the proxy matcher; force-static, changes only on deploy.
   { source: '/api/v1/openapi.json', value: CACHE_LOOSE },
 ];

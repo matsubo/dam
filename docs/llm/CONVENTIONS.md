@@ -56,7 +56,7 @@ pattern instead of inventing a new one.
   `JSON.stringify`. Native bigints throw.
 - **Cursor pagination**, never offset. `cursor=<last_id>` on next links.
 
-## Page conventions (Next.js 15 App Router)
+## Page conventions (Next.js 16 App Router)
 
 - **ISR with `export const revalidate = 900`** for content pages, longer
   for taxonomy pages. SSG only when zero per-request DB work.

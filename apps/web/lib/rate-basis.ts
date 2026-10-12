@@ -44,3 +44,13 @@ export function rateDenominator(
   const deviation = Math.abs(effectiveCapacityM3 - staticActiveCapacityM3) / staticActiveCapacityM3;
   return { capacityM3: effectiveCapacityM3, differsFromStatic: deviation > DEVIATION_TOLERANCE };
 }
+
+/** The 貯水率 a dam page shows: volume ÷ the observation's denominator, capped at 100%. */
+export function displayRate(
+  capacityM3: number | null,
+  storageVolumeM3: number | null,
+): number | null {
+  return capacityM3 && capacityM3 > 0 && storageVolumeM3 != null
+    ? Math.min(1, storageVolumeM3 / capacityM3)
+    : null;
+}

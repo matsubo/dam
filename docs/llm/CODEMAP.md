@@ -39,7 +39,10 @@ the file for detail.
 | `app/contribute/page.tsx` | contributor recruitment: history, live scale figures, stack, terms, credits |
 | `app/api/docs/page.tsx` | server-rendered h1 + intro, then Redoc (`components/redoc-viewer.tsx`, client-only) on `/api/v1/openapi.json` |
 | `app/sitemap.ts` | dynamic sitemap: static pages, /stats, every dam (minus canonicalised twins, `sitemapDams`), watersheds, prefectures, /sources/* — slugs percent-encoded, lastmod only where a real change date exists |
-| `app/robots.txt/route.ts` | allows everything except `/api/` (re-allows `/api/docs`); Content-Signal + per-AI-bot groups |
+| `app/robots.txt/route.ts` | allows everything except `/api/` (re-allows `/api/docs` and `/api/v1/openapi.json`); Content-Signal + per-AI-bot groups |
+| `app/llms.txt/route.ts` | llmstxt.org summary: overview, endpoints, sources, link lists of pages and Markdown views |
+| `app/md/**/route.ts` | Markdown twins of `/`, `/sources`, `/legal/*` (hand-written) and `/dams/[slug]` (from the DB); each page links its twin via `<link rel="alternate" type="text/markdown">`. All answer through `lib/markdown-response.ts` (`private`: Cloudflare ignores `Vary: Accept`) |
+| `proxy.ts` | Next 16 proxy (ex-middleware): agent `Link` header, `Accept: text/markdown` → `/md/*` rewrite, legacy `watershed-` 308 |
 | `app/not-found.tsx` | 404 page |
 | `app/error.tsx` | client error boundary |
 

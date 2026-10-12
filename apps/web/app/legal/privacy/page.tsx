@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   title: 'プライバシーポリシー',
   description:
     '本サイトが収集する情報、利用目的、第三者提供、Cookie の取り扱い、利用者の権利についてのポリシー。',
-  alternates: { canonical: '/legal/privacy' },
+  alternates: { canonical: '/legal/privacy', types: { 'text/markdown': '/md/legal/privacy' } },
 };
 
 const LAST_UPDATED = '2026-09-26';

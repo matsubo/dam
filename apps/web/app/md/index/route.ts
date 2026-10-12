@@ -1,4 +1,6 @@
-// Markdown variant of the homepage, served when middleware rewrites
+import { markdownResponse } from '../../../lib/markdown-response.ts';
+
+// Markdown variant of the homepage, served when proxy.ts rewrites
 // `/` requests that arrive with `Accept: text/markdown`. Hand-curated so
 // agents see the structured summary an HTML→MD converter wouldn't capture.
 
@@ -56,12 +58,5 @@ Donations: https://github.com/sponsors/matsubo
 `;
 
 export function GET(): Response {
-  return new Response(BODY, {
-    status: 200,
-    headers: {
-      'content-type': 'text/markdown; charset=utf-8',
-      'cache-control': 'public, max-age=3600',
-      vary: 'Accept',
-    },
-  });
+  return markdownResponse(BODY);
 }
