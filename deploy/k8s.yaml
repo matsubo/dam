@@ -1,7 +1,8 @@
 # Applied by .github/workflows/deploy.yml on every push to main, with IMAGE_WEB
 # and IMAGE_WORKER replaced by ghcr.io/matsubo/dam-web:<sha> and
 # ghcr.io/matsubo/dam-worker:<sha>. The namespace, the deployer's RBAC, the
-# database (CloudNativePG Cluster dam-pg, Service dam-pg-rw) and the Secrets
+# database (CloudNativePG Cluster dam-pg18, PostgreSQL 18, reached through
+# Service dam-postgres-rw) and the Secrets
 # dam-env / ghcr-pull are cluster-side and live in matsubo/network-setting
 # (k8s/dam.yaml).
 #

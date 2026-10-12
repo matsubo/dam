@@ -2,6 +2,7 @@ name: dam
 
 services:
   db:
+    # Still pg16 (prod/CI run 18): an existing pg16 db_data volume won't start on pg18 without a dump/restore.
     image: timescale/timescaledb-ha:pg16
     environment:
       POSTGRES_DB: dam
