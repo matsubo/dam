@@ -35,7 +35,7 @@ Fetched response bodies are parsed in memory and not kept.
 
 ```
 apps/
-├── web/                    # Next.js 15 App Router
+├── web/                    # Next.js 16 App Router
 │   ├── app/                #  pages + API routes
 │   ├── components/         #  shared UI (nav, dam-table, observation-chart, japan-map…)
 │   ├── lib/                #  api helpers (auth, hateoas response, formatters)
@@ -186,9 +186,10 @@ this.
 ## Tech stack snapshot
 
 - **Runtime**: Bun ≥ 1.3, Node ≥ 24 (via Bun)
-- **Web**: Next.js 15 App Router, React 19, Tailwind 3
-- **DB**: PostgreSQL 18 + TimescaleDB 2.26 + PostGIS 3.6 + pg_trgm + pgcrypto
-  (production: CloudNativePG Cluster `dam-pg18`, Service `dam-postgres-rw`)
+- **Web**: Next.js 16 App Router, React 19, Tailwind 4
+- **DB**: PostgreSQL 18 + TimescaleDB 2.30 + PostGIS 3.6 + pg_trgm + pgcrypto
+  (production: CloudNativePG Cluster `dam-pg18`, two instances — primary +
+  standby — behind Service `dam-postgres-rw`)
 - **Worker**: graphile-worker on Postgres
 - **Lint/format**: Biome (one tool — no ESLint or Prettier)
 - **Test**: bun:test (unit/integration), Playwright (E2E)

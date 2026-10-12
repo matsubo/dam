@@ -68,9 +68,9 @@ export interface StackGroup {
 }
 
 /**
- * The stack, read off apps/*&#47;package.json, packages/*&#47;package.json and
- * deploy/coolify/docker-compose.legacy.yaml. Keep the versions verbatim — a contributor sizing up
- * the work needs to know it's Next 15 / React 19, not "recent Next".
+ * The stack, read off apps/*&#47;package.json, packages/*&#47;package.json,
+ * deploy/k8s.yaml and deploy/postgres/Dockerfile. Keep the versions verbatim — a contributor
+ * sizing up the work needs to know it's Next 16 / React 19, not "recent Next".
  */
 export const STACK: StackGroup[] = [
   {
@@ -82,19 +82,20 @@ export const STACK: StackGroup[] = [
         role: 'パッケージ管理・実行・テストランナー',
       },
       { name: 'Node.js', version: '>=24', role: 'Next.js のビルド互換用' },
-      { name: 'TypeScript', version: '^5.6', role: '全パッケージ strict モード' },
-      { name: 'Biome', version: '^1.9', role: 'lint + format（ESLint / Prettier は不使用）' },
+      { name: 'TypeScript', version: '^7.0', role: '全パッケージ strict モード' },
+      { name: 'Biome', version: '^2.5', role: 'lint + format（ESLint / Prettier は不使用）' },
     ],
   },
   {
     title: 'Web (apps/web)',
     entries: [
-      { name: 'Next.js', version: '^15 (App Router)', role: 'SSR ページ + REST API ルート' },
+      { name: 'Next.js', version: '^16 (App Router)', role: 'SSR ページ + REST API ルート' },
       { name: 'React', version: '^19', role: 'UI。ページは原則サーバーコンポーネント' },
-      { name: 'Tailwind CSS', version: '^3.4', role: 'Material Design 3 風のトークンセット' },
+      { name: 'Tailwind CSS', version: '^4.3', role: 'Material Design 3 風のトークンセット' },
       { name: 'Leaflet', version: '^1.9', role: '地図（地理院タイル）' },
       { name: 'NextAuth.js', version: '^5.0.0-beta', role: 'Google サインイン → API キー発行' },
-      { name: 'Redoc', version: '—', role: '/api/docs の OpenAPI レンダリング' },
+      { name: 'Zod', version: '^4.6', role: 'REST API のクエリパラメータ検証' },
+      { name: 'Redoc', version: '^2.5', role: '/api/docs の OpenAPI レンダリング' },
     ],
   },
   {
@@ -102,12 +103,12 @@ export const STACK: StackGroup[] = [
     entries: [
       {
         name: 'PostgreSQL + TimescaleDB',
-        version: 'PostgreSQL 18 + TimescaleDB 2.26',
+        version: 'PostgreSQL 18.6 + TimescaleDB 2.30.2',
         role: '観測値は hypertable。obs_daily / obs_monthly の連続集計と圧縮ポリシー付き',
       },
-      { name: 'PostGIS', version: '3.6', role: '流域ポリゴンの point-in-polygon 検索' },
+      { name: 'PostGIS', version: '3.6.4', role: '流域ポリゴンの point-in-polygon 検索' },
       { name: 'postgres.js', version: '^3.4', role: '生 SQL クライアント。ORM は原則使わない' },
-      { name: 'Drizzle ORM', version: '^0.36', role: 'スキーマ定義と型の出どころのみ' },
+      { name: 'Drizzle ORM', version: '^0.45', role: 'スキーマ定義と型の出どころのみ' },
     ],
   },
   {
@@ -115,20 +116,44 @@ export const STACK: StackGroup[] = [
     entries: [
       {
         name: 'graphile-worker',
-        version: '^0.16',
+        version: '^0.18',
         role: 'Postgres 上のジョブキュー。cron・リトライ・バックフィルを担当',
       },
-      { name: 'Zod', version: '^3.23', role: 'スクレイプ結果のスキーマ検証' },
+    ],
+  },
+  {
+    title: '本番インフラ',
+    entries: [
+      {
+        name: 'k3s',
+        version: '—',
+        role: '自宅クラスタ（namespace dam）。web は 2 レプリカをノードに分散し PodDisruptionBudget で無停止更新、worker は 1 レプリカ',
+      },
+      { name: 'Traefik', version: '—', role: 'Ingress（k3s 同梱）' },
+      {
+        name: 'CloudNativePG',
+        version: '—',
+        role: 'PostgreSQL クラスタ dam-pg18 をプライマリ + スタンバイの 2 インスタンスで冗長化。アプリは Service dam-postgres-rw 経由で常に現プライマリへ接続。日次でボリュームスナップショットを取得',
+      },
+      {
+        name: 'GHCR',
+        version: '—',
+        role: 'dam-web / dam-worker / dam-postgres（TimescaleDB・PostGIS 入り）のイメージ',
+      },
+      { name: 'Cloudflare', version: '—', role: 'CDN。デプロイ後にホスト単位でキャッシュをパージ' },
     ],
   },
   {
     title: '品質・運用',
     entries: [
       { name: 'bun test', version: '—', role: 'ユニット・結合テスト' },
-      { name: 'Playwright', version: '^1.59', role: 'E2E' },
+      { name: 'Playwright', version: '^1.63', role: 'E2E' },
       { name: 'Docker Compose', version: '—', role: 'ローカル基盤（db）' },
-      { name: 'Coolify', version: '—', role: '本番デプロイ（セルフホスト PaaS）' },
-      { name: 'GitHub Actions', version: '—', role: 'CI: typecheck / lint / test' },
+      {
+        name: 'GitHub Actions',
+        version: '—',
+        role: 'CI: typecheck / lint / test。main への push でイメージをビルドし Tailscale 経由で k3s へデプロイ',
+      },
       { name: 'just', version: '—', role: 'タスクランナー（justfile）' },
     ],
   },
