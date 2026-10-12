@@ -265,6 +265,7 @@ the file for detail.
 0018_watersheds_boundary_nullable.sql  ALTER … DROP NOT NULL on boundary
 0020_quality_view.sql        quality_missing_24h view
 0131_source_universe_not_dam_reason.sql  source_universe.not_dam_reason (cited "not a master dam"; out of the backlog)
+0222_obs_daily_one_row_per_dam_day.sql  recompress chunks with overlapping batches, recompute split obs_daily groups, UNIQUE (dam_id, day) on its materialization hypertable (#115)
 ```
 
 ### Schemas
