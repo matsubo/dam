@@ -58,16 +58,29 @@ interface PrefRow {
 async function loadCoverage() {
   const [headline, sources, triageRows] = await Promise.all([
     coverageHeadline(),
+    // Two levels on purpose (#108): COUNT(DISTINCT dam_id) per source sorted
+    // all 5.9 M observations (external merge, ~460 MB of temp files and ~4 s
+    // per render on prod). Grouping by (source_id, dam_id) first keeps ~2,400
+    // groups in a hash table (vectorized per compressed chunk), and the outer
+    // count over them is the distinct-dam count.
     sql<SourceRow[]>`
       SELECT
         source_id AS "sourceId",
-        COUNT(DISTINCT dam_id)::BIGINT AS "damsCovered",
-        COUNT(*) FILTER (WHERE observed_at > NOW() - INTERVAL '30 days')::BIGINT AS "obsLast30d",
-        MAX(observed_at) AS "lastObs"
-      FROM observations
-      WHERE source_id <> 'synthetic'
+        COUNT(*)::BIGINT AS "damsCovered",
+        SUM(n_last_30d)::BIGINT AS "obsLast30d",
+        MAX(last_obs) AS "lastObs"
+      FROM (
+        SELECT
+          source_id,
+          dam_id,
+          COUNT(*) FILTER (WHERE observed_at > NOW() - INTERVAL '30 days') AS n_last_30d,
+          MAX(observed_at) AS last_obs
+        FROM observations
+        WHERE source_id <> 'synthetic'
+        GROUP BY source_id, dam_id
+      ) per_dam
       GROUP BY source_id
-      ORDER BY COUNT(DISTINCT dam_id) DESC
+      ORDER BY COUNT(*) DESC
     `,
     classifyDamCoverage(),
   ]);
