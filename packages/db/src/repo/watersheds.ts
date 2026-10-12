@@ -239,13 +239,19 @@ export async function watershedStorageChange(watershedId: bigint): Promise<Water
       SELECT id FROM dams
       WHERE watershed_id = ${watershedId} AND active_capacity_m3 IS NOT NULL
     ),
+    -- Each dam's newest volume, one index probe per dam. A dam without any
+    -- volume drops out here, so the lookbacks below skip it instead of
+    -- searching every chunk for it.
     latest_per_dam AS (
-      SELECT DISTINCT ON (o.dam_id)
-             o.dam_id, o.storage_volume_m3, o.observed_at
-      FROM observations o
-      JOIN ds ON ds.id = o.dam_id
-      WHERE o.storage_volume_m3 IS NOT NULL
-      ORDER BY o.dam_id, o.observed_at DESC
+      SELECT ds.id AS dam_id, x.observed_at
+      FROM ds
+      CROSS JOIN LATERAL (
+        SELECT o.observed_at
+        FROM observations o
+        WHERE o.dam_id = ds.id AND o.storage_volume_m3 IS NOT NULL
+        ORDER BY o.observed_at DESC
+        LIMIT 1
+      ) x
     ),
     -- "Now" for the watershed = max observed_at in the rate-able subset.
     -- We use the same anchor for every lookback so the windows align.
@@ -262,7 +268,9 @@ export async function watershedStorageChange(watershedId: bigint): Promise<Water
       SELECT 'd1825',  INTERVAL '1825 days'
     ),
     -- For each bucket, take each dam's most recent observation <= anchor − lookback,
-    -- then sum.
+    -- then sum. One LIMIT 1 probe per dam and bucket on (dam_id, observed_at):
+    -- a DISTINCT ON over the join read the dams' whole history nine times
+    -- (7.6 s for 石狩川, #118).
     per_bucket AS (
       SELECT
         b.bucket,
@@ -270,13 +278,17 @@ export async function watershedStorageChange(watershedId: bigint): Promise<Water
         MIN(picks.observed_at) AS picked_at
       FROM buckets b
       LEFT JOIN LATERAL (
-        SELECT DISTINCT ON (o.dam_id)
-               o.dam_id, o.storage_volume_m3, o.observed_at
-        FROM observations o
-        JOIN ds ON ds.id = o.dam_id
-        WHERE o.storage_volume_m3 IS NOT NULL
-          AND o.observed_at <= (SELECT t FROM anchor) - b.lookback
-        ORDER BY o.dam_id, o.observed_at DESC
+        SELECT p.storage_volume_m3, p.observed_at
+        FROM latest_per_dam l
+        CROSS JOIN LATERAL (
+          SELECT o.storage_volume_m3, o.observed_at
+          FROM observations o
+          WHERE o.dam_id = l.dam_id
+            AND o.storage_volume_m3 IS NOT NULL
+            AND o.observed_at <= (SELECT t FROM anchor) - b.lookback
+          ORDER BY o.observed_at DESC
+          LIMIT 1
+        ) p
       ) picks ON TRUE
       GROUP BY b.bucket
     )
