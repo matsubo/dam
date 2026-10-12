@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   title: 'データソースとデータ構造',
   description:
     '使用している外部データソース、ダム名寄せの方法、ER 図、欠損データの分布、観測値の粒度。',
-  alternates: { canonical: '/sources' },
+  alternates: { canonical: '/sources', types: { 'text/markdown': '/md/sources' } },
 };
 
 interface SourceRow {

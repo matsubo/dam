@@ -1,3 +1,5 @@
+import { markdownResponse } from '../../../../lib/markdown-response.ts';
+
 export const dynamic = 'force-static';
 export const revalidate = 3600;
 
@@ -42,12 +44,5 @@ Full terms (HTML): ${SITE_URL}/legal/terms
 `;
 
 export function GET(): Response {
-  return new Response(BODY, {
-    status: 200,
-    headers: {
-      'content-type': 'text/markdown; charset=utf-8',
-      'cache-control': 'public, max-age=3600',
-      vary: 'Accept',
-    },
-  });
+  return markdownResponse(BODY);
 }

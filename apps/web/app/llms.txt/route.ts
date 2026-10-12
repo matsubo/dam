@@ -32,7 +32,9 @@ const BODY = `# Dam Data Japan
 - OpenAPI spec: ${SITE_URL}/api/v1/openapi.json
 - HTML docs (Redoc): ${SITE_URL}/api/docs
 - Markdown views: \`Accept: text/markdown\` works on /, /sources,
-  /legal/terms, /legal/privacy
+  /legal/terms, /legal/privacy and every /dams/{slug}; each page also
+  links its twin with \`<link rel="alternate" type="text/markdown">\`
+  (see Markdown views below)
 
 ## Key endpoints
 
@@ -74,6 +76,32 @@ Documented at: ${SITE_URL}/sources
   利水容量貯水率, in which case the denominator that rate implies is used.
   Dams with no capacity in source data are excluded from rate aggregations
   rather than mis-labelled.
+
+## Pages
+
+- [ダム一覧](${SITE_URL}/dams): every dam, filter by prefecture / watershed / manager
+- [ダム詳細](${SITE_URL}/dams/{slug}): specs, location, latest reading and its source, chart
+- [水系一覧](${SITE_URL}/watersheds): 644 一級・二級 watersheds with dam counts and storage trends
+- [地図](${SITE_URL}/map): all dams on a map — circle size = total capacity, colour = latest storage rate
+- [統計](${SITE_URL}/stats): nationwide figures by prefecture, watershed and size, latest storage rates
+- [カバレッジ](${SITE_URL}/coverage): which dams have readings, by source and prefecture
+- [データソース](${SITE_URL}/sources): providers, cadence, licences, matching method
+- [FAQ](${SITE_URL}/faq): published vs computed 貯水率, which source is shown, the rate denominator, （元）/（再） pairs
+- [用語集](${SITE_URL}/glossary): definitions of 有効貯水容量, 利水容量, 貯水率 and other terms as used on the site
+
+## Markdown views
+
+- [Home](${SITE_URL}/md/index): overview of the platform
+- [Dam](${SITE_URL}/md/dams/{slug}): one dam's specs and latest reading
+- [Data sources](${SITE_URL}/md/sources): providers and methodology
+- [Terms](${SITE_URL}/md/legal/terms): usage terms and licences
+- [Privacy](${SITE_URL}/md/legal/privacy): privacy policy
+
+## Optional
+
+- [OpenAPI document](${SITE_URL}/api/v1/openapi.json): every endpoint and schema
+- [API catalog](${SITE_URL}/.well-known/api-catalog): RFC 9727 linkset
+- [Agent skills](${SITE_URL}/.well-known/agent-skills): task-shaped endpoint list
 
 ## Contributing
 

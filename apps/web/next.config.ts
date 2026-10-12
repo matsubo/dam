@@ -10,9 +10,9 @@ const nextConfig: NextConfig = {
   // as cross-origin (which surfaces as a console warning in the browser).
   allowedDevOrigins: ['mini', 'mini.local', 'mini.saga-lionfish.ts.net', '127.0.0.1'],
   // Cache-Control for public pages; the policy lives in lib/cache-control.ts.
-  // middleware.ts sets it too, but Next.js's framework default for
+  // proxy.ts sets it too, but Next.js's framework default for
   // `dynamic = 'force-dynamic'` pages (private/no-store/no-cache) is applied
-  // AFTER middleware, whereas headers() runs in the routing layer and wins.
+  // AFTER the proxy, whereas headers() runs in the routing layer and wins.
   // Crawlers and old clients ask for /favicon.ico regardless of <link rel=icon>;
   // serve the generated app/icon.tsx there instead of a 404.
   async rewrites() {

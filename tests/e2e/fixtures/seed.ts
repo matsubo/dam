@@ -23,7 +23,7 @@
  * not a no-op: the observation and the `e2e-fixture` universe rows land on
  * any database and nothing removes them, so run it only on CI's database or
  * a scratch one (AGENTS.md "Tests"), never on the shared dev `dam`.
- * The slugs deliberately avoid the `watershed-` prefix, which the middleware
+ * The slugs deliberately avoid the `watershed-` prefix, which proxy.ts
  * treats as a legacy redirect.
  *
  * Usage: DATABASE_URL=postgres://... bun run tests/e2e/fixtures/seed.ts

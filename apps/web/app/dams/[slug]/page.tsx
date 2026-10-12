@@ -37,7 +37,7 @@ import { flowStatus } from '../../../lib/flow-status.ts';
 import { fmtCapacityMcm, fmtDate, fmtN, fmtPct } from '../../../lib/format.ts';
 import { imageCredit } from '../../../lib/image-credit.ts';
 import { jsonLd } from '../../../lib/json-ld.ts';
-import { rateDenominator } from '../../../lib/rate-basis.ts';
+import { displayRate, rateDenominator } from '../../../lib/rate-basis.ts';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 900;
@@ -122,7 +122,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title: copy.title,
     description: copy.description,
-    alternates: { canonical },
+    alternates: {
+      canonical,
+      types: { 'text/markdown': `/md/dams/${encodeURIComponent(slug)}` },
+    },
     // Spelled out because this object replaces layout.tsx's openGraph
     // wholesale; the image comes from ./opengraph-image.tsx.
     openGraph: {
@@ -358,7 +361,7 @@ export default async function DamDetail({ params }: PageProps) {
               ? Number(latest.effectiveActiveCapacityM3)
               : null;
             const vol = latest.storageVolumeM3 ? Number(latest.storageVolumeM3) : null;
-            const rate = cap && cap > 0 && vol != null ? Math.min(1, vol / cap) : null;
+            const rate = displayRate(cap, vol);
             const denominator = rateDenominator(
               cap,
               d.activeCapacityM3 ? Number(d.activeCapacityM3) : null,

@@ -43,7 +43,7 @@ export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
   title: { absolute: '日本のダム貯水率・貯水量マップ — Dam Data Japan' },
   description: '日本全国のダム諸元と貯水量履歴。長期トレンドを 1 時間〜月次の粒度で参照。',
-  alternates: { canonical: '/' },
+  alternates: { canonical: '/', types: { 'text/markdown': '/md/index' } },
 };
 
 /** Master-side counters this page owns. Everything observation-derived is

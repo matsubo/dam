@@ -10,7 +10,10 @@ import { pickCacheControl } from './lib/cache-control.ts';
 // 2. Markdown content negotiation. When a client sends `Accept: text/markdown`
 //    and the requested page has a Markdown alternative under /md/<path>,
 //    we rewrite to that route. Agents that prefer Markdown can opt into it
-//    with one Accept header — no separate URL discovery needed.
+//    with one Accept header — no separate URL discovery needed. Cloudflare
+//    keys its cache on the URL alone (it ignores `Vary: Accept`), so the
+//    /md handlers answer `private` (lib/markdown-response.ts) and the edge
+//    never stores Markdown under an HTML URL.
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dam.teraren.com';
 
@@ -25,12 +28,22 @@ const LINK_HEADER = [
   `<${SITE_URL}/legal/privacy>; rel="privacy-policy"; type="text/html"`,
 ].join(', ');
 
-// Pages that have a hand-curated Markdown sibling. Anything outside this list
-// gets a 406 if the client demanded Markdown — better than serving HTML
-// labelled as Markdown.
-const MD_ROUTES = new Set<string>(['/', '/sources', '/legal/terms', '/legal/privacy']);
+// Pages that have a Markdown sibling under /md. A Markdown request for any
+// other page gets the HTML.
+const MD_ROUTES: Record<string, true> = {
+  '/sources': true,
+  '/legal/terms': true,
+  '/legal/privacy': true,
+};
 
-function prefersMarkdown(accept: string | null): boolean {
+/** The /md/* sibling of `pathname`, or null when the page has none. */
+export function markdownSibling(pathname: string): string | null {
+  if (pathname === '/') return '/md/index';
+  if (MD_ROUTES[pathname] || /^\/dams\/[^/]+$/.test(pathname)) return `/md${pathname}`;
+  return null;
+}
+
+export function prefersMarkdown(accept: string | null): boolean {
   if (!accept) return false;
   // Trivial Accept parser: split by comma, look for `text/markdown` with a
   // higher q than `text/html` (or no q at all).
@@ -52,7 +65,7 @@ function prefersMarkdown(accept: string | null): boolean {
   return mdQ > 0 && mdQ >= htmlQ;
 }
 
-export function middleware(req: NextRequest): NextResponse {
+export function proxy(req: NextRequest): NextResponse {
   const { pathname } = req.nextUrl;
 
   // Legacy-slug redirect: watersheds used to be stored as `watershed-{name}`
@@ -68,13 +81,15 @@ export function middleware(req: NextRequest): NextResponse {
   const cacheControl = pickCacheControl(pathname);
 
   // Markdown negotiation: rewrite to the /md/* sibling when applicable.
-  if (prefersMarkdown(req.headers.get('accept')) && MD_ROUTES.has(pathname)) {
+  const mdPath = prefersMarkdown(req.headers.get('accept')) ? markdownSibling(pathname) : null;
+  if (mdPath) {
     const url = req.nextUrl.clone();
-    url.pathname = `/md${pathname === '/' ? '/index' : pathname}`;
+    url.pathname = mdPath;
     const res = NextResponse.rewrite(url);
     res.headers.set('Link', LINK_HEADER);
     res.headers.set('Vary', 'Accept');
-    res.headers.set('Cache-Control', cacheControl);
+    // Cache-Control comes from the /md handler (lib/markdown-response.ts),
+    // which wins over anything set here.
     return res;
   }
 
@@ -91,6 +106,9 @@ export function middleware(req: NextRequest): NextResponse {
 
 export const config = {
   // Skip Next internals + the API itself + static assets so we don't override
-  // upstream Link / Vary headers there.
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|.well-known).*)'],
+  // upstream Link / Vary headers there. /md/* is skipped too: the proxy's
+  // public page Cache-Control would replace its handlers' private one.
+  matcher: [
+    '/((?!api|md/|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|.well-known).*)',
+  ],
 };

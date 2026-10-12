@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: '利用規約',
   description:
     '本サイト・公開 API の利用条件、API キー、レート制限、再配布、免責事項に関する規約。',
-  alternates: { canonical: '/legal/terms' },
+  alternates: { canonical: '/legal/terms', types: { 'text/markdown': '/md/legal/terms' } },
 };
 
 const LAST_UPDATED = '2026-09-26';

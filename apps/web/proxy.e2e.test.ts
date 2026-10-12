@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 // Minimal HTTP-level smoke tests against the locally-running Next dev server.
 // They assert on real network behaviour (Link header, /well-known endpoints,
 // markdown negotiation, legacy-watershed redirect) which is the only place
-// the middleware effects are observable. They auto-skip when the server isn't
+// the proxy's effects are observable. They auto-skip when the server isn't
 // up so CI can run the rest of the suite in isolation.
 
 const BASE = process.env.DAM_TEST_BASE_URL ?? 'http://localhost:3030';
@@ -82,6 +82,9 @@ describe('agent affordances (live HTTP)', () => {
     const r = await fetch(BASE, { headers: { Accept: 'text/markdown' } });
     expect(r.status).toBe(200);
     expect(r.headers.get('content-type')).toMatch(/text\/markdown/);
+    // Cloudflare ignores Vary: Accept: a shared-cacheable answer here would be
+    // served to browsers asking for the HTML home page.
+    expect(r.headers.get('cache-control')).toMatch(/^private\b/);
     const body = await r.text();
     expect(body).toMatch(/Dam Data Japan/);
   });

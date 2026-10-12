@@ -18,30 +18,38 @@ const AI_BOTS = [
   'anthropic-ai',
   'Claude-Web',
   'ClaudeBot',
+  'Claude-SearchBot',
+  'Claude-User',
   'PerplexityBot',
+  'Perplexity-User',
   'Bytespider',
   'cohere-ai',
   'Applebot-Extended',
   'DuckAssistBot',
   'FacebookBot',
   'Amazonbot',
+  'MistralAI-User',
 ];
 
 export function GET(): Response {
   const aiBlocks = AI_BOTS.map(
-    (b) => `User-agent: ${b}\nAllow: /\nAllow: /api/docs\nDisallow: /api/\n`,
+    (b) =>
+      `User-agent: ${b}\nAllow: /\nAllow: /api/docs\nAllow: /api/v1/openapi.json\nDisallow: /api/\n`,
   ).join('\n');
 
   const body = `# Dam Data Japan — robots.txt
 # Public open data on Japanese reservoirs. Crawling is welcome including by
 # AI agents; the JSON API under /api/ is excluded so machines use the
 # documented endpoints (see /api/docs and /.well-known/api-catalog). The
-# human-readable docs page /api/docs stays crawlable: the longer Allow rule
-# wins over Disallow: /api/ for Google and other RFC 9309 crawlers.
+# human-readable docs page /api/docs and the OpenAPI document stay
+# crawlable: the longer Allow rule wins over Disallow: /api/ for Google and
+# other RFC 9309 crawlers. Markdown versions of the main pages live under
+# /md/ (listed in /llms.txt).
 
 User-agent: *
 Allow: /
 Allow: /api/docs
+Allow: /api/v1/openapi.json
 Disallow: /api/
 
 # Content Signals (RFC draft / IETF AI Preferences WG).

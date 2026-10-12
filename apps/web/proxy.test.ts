@@ -1,28 +1,8 @@
 import { describe, expect, test } from 'bun:test';
+import { markdownSibling, prefersMarkdown } from './proxy.ts';
 
-// The `prefersMarkdown` helper inside middleware.ts is the only piece worth
-// unit-testing in isolation — the redirect / rewrite paths are end-to-end
-// concerns covered by the dev-server smoke runs. We replicate the helper
-// here to lock the Accept-header parser.
-function prefersMarkdown(accept: string | null): boolean {
-  if (!accept) return false;
-  const items = accept.split(',').map((s) => s.trim());
-  let mdQ = 0;
-  let htmlQ = 0;
-  for (const item of items) {
-    const [media, ...params] = item.split(';').map((s) => s.trim());
-    const q = (() => {
-      for (const p of params) {
-        const m = p.match(/^q=(\d*\.?\d+)$/);
-        if (m) return Number(m[1]);
-      }
-      return 1;
-    })();
-    if (media === 'text/markdown') mdQ = Math.max(mdQ, q);
-    if (media === 'text/html' || media === '*/*') htmlQ = Math.max(htmlQ, q);
-  }
-  return mdQ > 0 && mdQ >= htmlQ;
-}
+// The redirect / rewrite paths are end-to-end concerns covered by
+// proxy.e2e.test.ts against a running server; these lock the pure helpers.
 
 describe('prefersMarkdown', () => {
   test('null Accept header → no', () => {
@@ -49,5 +29,22 @@ describe('prefersMarkdown', () => {
   });
   test('exact tie defaults to markdown (caller asked for it)', () => {
     expect(prefersMarkdown('text/markdown;q=1.0, text/html;q=1.0')).toBe(true);
+  });
+});
+
+describe('markdownSibling', () => {
+  test('home maps to /md/index', () => {
+    expect(markdownSibling('/')).toBe('/md/index');
+  });
+  test('a dam page maps to its /md twin, slug kept as sent', () => {
+    expect(markdownSibling('/dams/%E5%AE%AE%E3%83%B6%E7%80%AC')).toBe(
+      '/md/dams/%E5%AE%AE%E3%83%B6%E7%80%AC',
+    );
+  });
+  test('pages without a twin stay HTML', () => {
+    expect(markdownSibling('/dams')).toBeNull();
+    expect(markdownSibling('/dams/x/opengraph-image')).toBeNull();
+    expect(markdownSibling('/watersheds/x')).toBeNull();
+    expect(markdownSibling('/constructor')).toBeNull();
   });
 });
