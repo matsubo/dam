@@ -266,6 +266,7 @@ the file for detail.
 0020_quality_view.sql        quality_missing_24h view
 0131_source_universe_not_dam_reason.sql  source_universe.not_dam_reason (cited "not a master dam"; out of the backlog)
 0222_obs_daily_one_row_per_dam_day.sql  recompress chunks with overlapping batches, recompute split obs_daily groups, UNIQUE (dam_id, day) on its materialization hypertable (#115)
+0223_last_value_by_source_priority.sql  timestamp ties → higher source priority, then source_id: display_observation(), and obs_daily rebuilt (last volume ignores NULLs) with obs_monthly, swapped in one transaction
 ```
 
 ### Schemas

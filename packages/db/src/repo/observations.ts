@@ -192,18 +192,24 @@ async function findWatershedSeriesHourly(opts: FindWatershedSeriesOptions): Prom
                (sp.priority IS NULL),
                sp.priority DESC NULLS LAST
     ),
+    -- With allSources several sources can stamp the same hour: last() breaks a
+    -- timestamp tie by source priority, then source_id, as obs_daily and
+    -- display_observation() do (0223).
     bucketed AS (
       SELECT
         time_bucket_gapfill('1 hour', o.observed_at,
                             start => ${scanFrom}, finish => ${opts.to}) AS bucket,
         o.dam_id,
-        locf(last(o.storage_volume_m3, o.observed_at),
+        locf(last(o.storage_volume_m3,
+                  ROW(o.observed_at, COALESCE(CASE WHEN spr.active THEN spr.priority END, -1), o.source_id)),
              treat_null_as_missing => true) AS volume,
-        locf(last(o.storage_rate, o.observed_at),
+        locf(last(o.storage_rate,
+                  ROW(o.observed_at, COALESCE(CASE WHEN spr.active THEN spr.priority END, -1), o.source_id)),
              treat_null_as_missing => true)      AS rate
       FROM observations o
       JOIN ds ON ds.id = o.dam_id
       LEFT JOIN pref ON pref.dam_id = o.dam_id
+      LEFT JOIN source_priorities spr ON spr.source_id = o.source_id
       WHERE o.observed_at >= ${scanFrom}
         AND o.observed_at <  ${opts.to}
         AND (${allSources}::boolean OR o.source_id = pref.source_id)
