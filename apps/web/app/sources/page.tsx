@@ -109,14 +109,20 @@ async function loadAll() {
       FROM dams
       WHERE name ~ '[（(](?:再|元|新)[）)]'
     `,
+    // Distinct dams via a (source_id, dam_id) hash aggregate, not
+    // COUNT(DISTINCT), which sorted the whole 30-day window to disk (#108).
     sql<ObsBySourceRow[]>`
       SELECT
         source_id,
-        COUNT(*)::BIGINT                            AS rows_30d,
-        COUNT(DISTINCT dam_id)::BIGINT              AS distinct_dams_30d,
-        MAX(observed_at)                            AS latest_observed_at
-      FROM observations
-      WHERE observed_at > NOW() - INTERVAL '30 days'
+        SUM(n)::BIGINT                              AS rows_30d,
+        COUNT(*)::BIGINT                            AS distinct_dams_30d,
+        MAX(latest)                                 AS latest_observed_at
+      FROM (
+        SELECT source_id, dam_id, COUNT(*) AS n, MAX(observed_at) AS latest
+        FROM observations
+        WHERE observed_at > NOW() - INTERVAL '30 days'
+        GROUP BY source_id, dam_id
+      ) per_dam
       GROUP BY source_id
     `,
   ]);

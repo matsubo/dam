@@ -33,14 +33,20 @@ export async function GET() {
       FROM raw_snapshots WHERE source_id = sp.source_id
       ORDER BY fetched_at DESC LIMIT 1
     ) lf ON TRUE
+    -- Per dam first, then count the dams: COUNT(DISTINCT dam_id) sorted each
+    -- source's 30-day rows to disk (#108).
     LEFT JOIN LATERAL (
       SELECT
-        COUNT(*)::INT                AS rows_30d,
-        COUNT(DISTINCT dam_id)::INT  AS distinct_dams_30d,
-        MAX(observed_at)             AS latest_observed_at
-      FROM observations
-      WHERE source_id = sp.source_id
-        AND observed_at > NOW() - INTERVAL '30 days'
+        SUM(n)::INT                  AS rows_30d,
+        COUNT(*)::INT                AS distinct_dams_30d,
+        MAX(latest)                  AS latest_observed_at
+      FROM (
+        SELECT dam_id, COUNT(*) AS n, MAX(observed_at) AS latest
+        FROM observations
+        WHERE source_id = sp.source_id
+          AND observed_at > NOW() - INTERVAL '30 days'
+        GROUP BY dam_id
+      ) per_dam
     ) o ON TRUE
     ORDER BY sp.priority DESC
   `;

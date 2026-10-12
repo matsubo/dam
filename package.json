@@ -22,8 +22,8 @@
     "node": ">=24"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.13",
-    "@playwright/test": "^1.63.0",
+    "@biomejs/biome": "^2.5.15",
+    "@playwright/test": "^1.64.0",
     "@types/bun": "latest",
     "postgres": "^3.4.9",
     "typescript": "^7.0.2"

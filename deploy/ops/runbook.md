@@ -306,6 +306,15 @@ TimescaleDB caps that per transaction
   post-steps in the header.
 - Run it once, by hand, and make it idempotent: a second run finds nothing
   to change.
+- Rows a script inserts into a compressed chunk are compressed later as new
+  batches. On TimescaleDB before 2.27 they could overlap the chunk's existing
+  batches in observed_at, and the planner then reads the chunk out of order:
+  obs_daily stored split (dam_id, day) groups (#115). Production runs 2.30
+  since 2026-10-12. If a refresh ever fails on `obs_daily_dam_id_day_key`
+  (migration 0222), find such chunks with the first `DO` block of 0222 and
+  run `SELECT compress_chunk('<chunk>', recompress => true);` per chunk
+  (~0.5 s each; it locks out readers of that chunk for that time), then
+  `CALL refresh_continuous_aggregate('obs_daily', <chunk start>, <chunk end>, force => true);`.
 
 Run from the `db` container's terminal with the file copied into the working
 directory, always as `psql -U dam -d dam -v ON_ERROR_STOP=1 -f <file>`.

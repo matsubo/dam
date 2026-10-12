@@ -268,6 +268,8 @@ the file for detail.
 0018_watersheds_boundary_nullable.sql  ALTER … DROP NOT NULL on boundary
 0020_quality_view.sql        quality_missing_24h view
 0131_source_universe_not_dam_reason.sql  source_universe.not_dam_reason (cited "not a master dam"; out of the backlog)
+0222_obs_daily_one_row_per_dam_day.sql  recompress chunks with overlapping batches, recompute split obs_daily groups, UNIQUE (dam_id, day) on its materialization hypertable (#115)
+0223_last_value_by_source_priority.sql  timestamp ties → higher source priority, then source_id: display_observation(), and obs_daily rebuilt (last volume ignores NULLs) with obs_monthly, swapped in one transaction
 ```
 
 ### Schemas
@@ -297,6 +299,7 @@ the file for detail.
 | `src/repo/source_freshness.ts` | `staleSources` (threshold = 3 × cadence + publication lag; cadence = the longer of the cron gap and the 90th-percentile spacing of the last 20 stamps, lag = median `created_at − observed_at`), `FRESHNESS_OVERRIDE_HOURS` (explicit thresholds; `null` = silent by design). Feeds `stale_sources` in `/api/v1/admin/jobs` and `quality:freshness-check` |
 | `src/repo/observations.ts` | `upsertObservations`, `findSeries{Hourly,Daily,Monthly}` |
 | `src/repo/source_priorities.ts` | `preferredSource`, `priorityMap` |
+| `src/repo/newest_row.ts` | `sourceRankJoin` + `newestFirst`: the newest-row rule as SQL fragments (newest `observed_at`, then higher active `source_priorities.priority`, inactive/unlisted below, then greater `source_id`; same order as `display_observation()`/`obs_daily`, 0223). Every "latest reading" pick outside those uses it; prefer a per-dam `LATERAL … LIMIT 1` over `DISTINCT ON` (#122) |
 | `src/repo/backfill_progress.ts` | `nextPending`, `startRunning`, `complete`, `fail`, `enqueueAllDams` |
 | `src/repo/api_keys.ts` | `issueKey`, `lookupByPrefix`, `revoke`, `recordUsage`, `usageInLastMinute`, `usageToday`, `hashKey`, `touchLastUsed` |
 | `src/migrate.ts` | numbered-SQL runner, ENOENT-tolerant |

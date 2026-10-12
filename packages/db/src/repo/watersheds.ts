@@ -1,4 +1,5 @@
 import { sql } from '../client.ts';
+import { newestFirst, sourceRankJoin } from './newest_row.ts';
 
 export interface UpsertWatershedInput {
   code: string;
@@ -239,13 +240,19 @@ export async function watershedStorageChange(watershedId: bigint): Promise<Water
       SELECT id FROM dams
       WHERE watershed_id = ${watershedId} AND active_capacity_m3 IS NOT NULL
     ),
+    -- Each dam's newest volume, one index probe per dam. A dam without any
+    -- volume drops out here, so the lookbacks below skip it instead of
+    -- searching every chunk for it.
     latest_per_dam AS (
-      SELECT DISTINCT ON (o.dam_id)
-             o.dam_id, o.storage_volume_m3, o.observed_at
-      FROM observations o
-      JOIN ds ON ds.id = o.dam_id
-      WHERE o.storage_volume_m3 IS NOT NULL
-      ORDER BY o.dam_id, o.observed_at DESC
+      SELECT ds.id AS dam_id, x.observed_at
+      FROM ds
+      CROSS JOIN LATERAL (
+        SELECT o.observed_at
+        FROM observations o
+        WHERE o.dam_id = ds.id AND o.storage_volume_m3 IS NOT NULL
+        ORDER BY o.observed_at DESC
+        LIMIT 1
+      ) x
     ),
     -- "Now" for the watershed = max observed_at in the rate-able subset.
     -- We use the same anchor for every lookback so the windows align.
@@ -262,7 +269,9 @@ export async function watershedStorageChange(watershedId: bigint): Promise<Water
       SELECT 'd1825',  INTERVAL '1825 days'
     ),
     -- For each bucket, take each dam's most recent observation <= anchor − lookback,
-    -- then sum.
+    -- then sum. One LIMIT 1 probe per dam and bucket on (dam_id, observed_at):
+    -- a DISTINCT ON over the join read the dams' whole history nine times
+    -- (7.6 s for 石狩川, #118). Same-timestamp ties: newest-row rule (#122).
     per_bucket AS (
       SELECT
         b.bucket,
@@ -270,13 +279,17 @@ export async function watershedStorageChange(watershedId: bigint): Promise<Water
         MIN(picks.observed_at) AS picked_at
       FROM buckets b
       LEFT JOIN LATERAL (
-        SELECT DISTINCT ON (o.dam_id)
-               o.dam_id, o.storage_volume_m3, o.observed_at
-        FROM observations o
-        JOIN ds ON ds.id = o.dam_id
-        WHERE o.storage_volume_m3 IS NOT NULL
-          AND o.observed_at <= (SELECT t FROM anchor) - b.lookback
-        ORDER BY o.dam_id, o.observed_at DESC
+        SELECT p.storage_volume_m3, p.observed_at
+        FROM latest_per_dam l
+        CROSS JOIN LATERAL (
+          SELECT o.storage_volume_m3, o.observed_at
+          FROM observations o ${sourceRankJoin()}
+          WHERE o.dam_id = l.dam_id
+            AND o.storage_volume_m3 IS NOT NULL
+            AND o.observed_at <= (SELECT t FROM anchor) - b.lookback
+          ORDER BY ${newestFirst()}
+          LIMIT 1
+        ) p
       ) picks ON TRUE
       GROUP BY b.bucket
     )
@@ -338,7 +351,7 @@ export async function nationalStorageChange(): Promise<WatershedStorageChange> {
       JOIN ds ON ds.id = od.dam_id
     ),
     recent_obs AS (
-      SELECT o.dam_id, o.storage_volume_m3, o.observed_at
+      SELECT o.dam_id, o.storage_volume_m3, o.observed_at, o.source_id
       FROM observations o
       JOIN ds ON ds.id = o.dam_id
       WHERE o.storage_volume_m3 IS NOT NULL
@@ -346,7 +359,10 @@ export async function nationalStorageChange(): Promise<WatershedStorageChange> {
         AND o.observed_at <  ((SELECT d FROM anchor_day) + INTERVAL '2 days')
     ),
     anchor AS (SELECT MAX(observed_at) AS t FROM recent_obs),
-    -- Sub-day buckets: snap each dam's latest obs at-or-before (anchor - lookback).
+    -- Sub-day buckets: snap each dam's latest obs at-or-before (anchor - lookback),
+    -- same-timestamp ties by the newest-row rule (#122). Over this bounded
+    -- window the DISTINCT ON stays cheaper than per-dam probes, which lose
+    -- chunk exclusion on the anchor-derived bounds.
     sub_day AS (
       SELECT b.bucket, b.lookback, picks.dam_id, picks.storage_volume_m3, picks.observed_at
       FROM (VALUES
@@ -357,9 +373,9 @@ export async function nationalStorageChange(): Promise<WatershedStorageChange> {
       ) AS b(bucket, lookback)
       LEFT JOIN LATERAL (
         SELECT DISTINCT ON (o.dam_id) o.dam_id, o.storage_volume_m3, o.observed_at
-        FROM recent_obs o
+        FROM recent_obs o ${sourceRankJoin()}
         WHERE o.observed_at <= (SELECT t FROM anchor) - b.lookback
-        ORDER BY o.dam_id, o.observed_at DESC
+        ORDER BY o.dam_id, ${newestFirst()}
       ) picks ON TRUE
     ),
     sub_day_totals AS (
@@ -472,10 +488,14 @@ export async function aggregateWatershed(watershedId: bigint): Promise<Watershed
       (SELECT COUNT(*)::INT          FROM latest)                 AS "observedDamCount",
       (SELECT SUM(latest.active_capacity_m3)::TEXT FROM latest)   AS "observedActiveCapacityM3",
       (SELECT MAX(latest.observed_at)             FROM latest)    AS "observedAt",
-      (SELECT COUNT(DISTINCT o.dam_id)::INT
-         FROM observations o JOIN ds ON ds.id = o.dam_id
-         WHERE o.source_id <> 'synthetic'
-           AND o.observed_at > NOW() - INTERVAL '30 days')        AS "realDamCount"
+      -- One index probe per dam rather than COUNT(DISTINCT) over every
+      -- reading of the last 30 days (#108).
+      (SELECT COUNT(*)::INT FROM ds
+         WHERE EXISTS (
+           SELECT 1 FROM observations o
+           WHERE o.dam_id = ds.id
+             AND o.source_id <> 'synthetic'
+             AND o.observed_at > NOW() - INTERVAL '30 days'))  AS "realDamCount"
   `;
   return (
     rows[0] ?? {
@@ -572,15 +592,21 @@ export async function realDamCountsForWatersheds(
 ): Promise<Map<string, number>> {
   if (watershedIds.length === 0) return new Map();
   const ids = watershedIds.map((id) => id.toString());
+  // One index probe per dam (dam_id, observed_at) instead of COUNT(DISTINCT)
+  // over every reading of the last 30 days, which sorted ~1 M rows to disk
+  // on each /watersheds render (#108).
   const rows = await sql<{ watershedId: string; realDamCount: number }[]>`
     SELECT
       d.watershed_id::TEXT  AS "watershedId",
-      COUNT(DISTINCT o.dam_id)::INT AS "realDamCount"
+      COUNT(*)::INT         AS "realDamCount"
     FROM dams d
-    JOIN observations o ON o.dam_id = d.id
     WHERE d.watershed_id::TEXT = ANY(${ids}::TEXT[])
-      AND o.source_id <> 'synthetic'
-      AND o.observed_at > NOW() - INTERVAL '30 days'
+      AND EXISTS (
+        SELECT 1 FROM observations o
+        WHERE o.dam_id = d.id
+          AND o.source_id <> 'synthetic'
+          AND o.observed_at > NOW() - INTERVAL '30 days'
+      )
     GROUP BY d.watershed_id
   `;
   const m = new Map<string, number>();

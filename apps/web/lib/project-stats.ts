@@ -147,7 +147,7 @@ export const STACK: StackGroup[] = [
     title: '品質・運用',
     entries: [
       { name: 'bun test', version: '—', role: 'ユニット・結合テスト' },
-      { name: 'Playwright', version: '^1.63', role: 'E2E' },
+      { name: 'Playwright', version: '^1.64', role: 'E2E' },
       { name: 'Docker Compose', version: '—', role: 'ローカル基盤（db）' },
       {
         name: 'GitHub Actions',
