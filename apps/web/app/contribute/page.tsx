@@ -11,7 +11,6 @@ import {
   Database,
   GitBranch,
   HandHeart,
-  Heart,
   MessageCircle,
   Scale,
   Users,
@@ -134,26 +133,6 @@ export default async function ContributePage() {
             : ''}
           。 取得頻度の改善は後回しでよいので、まずは「まだ取れていないダム」を減らしたい。
         </p>
-        <div className="flex flex-wrap gap-3 mt-4">
-          <a
-            className="btn-primary text-sm"
-            href={DISCORD_INVITE}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <MessageCircle size={16} aria-hidden="true" />
-            Discord で声をかける
-          </a>
-          <a
-            className="btn-outline text-sm"
-            href={MAINTAINER.sponsorsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Heart size={16} aria-hidden="true" />
-            GitHub Sponsors で支援する
-          </a>
-        </div>
       </div>
 
       <Section id="history" eyebrow="History" title="このサイトの経緯">
@@ -282,7 +261,7 @@ export default async function ContributePage() {
             },
             {
               title: '公開されている実測データソースを探す',
-              body: 'コードを書かなくてもいい仕事です。「この県のこのページに貯水率が載っている」という報告そのものが価値になります。Discord に投げてもらえれば、実装は私がやります。',
+              body: 'コードを書かなくてもいい仕事です。「この県のこのページに貯水率が載っている」という報告そのものが価値になります。GitHub Issues に書いてもらえれば、実装は私がやります。',
             },
             {
               title: 'ダムの名寄せ精度を上げる',
@@ -467,8 +446,7 @@ export default async function ContributePage() {
           <p className="text-sm text-on-surface-variant leading-relaxed mb-4">
             経歴書は不要です。GitHub
             アカウントと、興味のある領域（上の「お願いしたいこと」のどれか）だけ
-            教えてもらえれば十分です。「やれるか分からないので先に話を聞きたい」「この県のデータ、
-            ここに落ちてますよ」という段階の連絡も歓迎します。
+            教えてもらえれば十分です。「やれるか分からないので先に話を聞きたい」という段階の相談も歓迎します。
           </p>
           <a
             className="btn-primary text-sm"

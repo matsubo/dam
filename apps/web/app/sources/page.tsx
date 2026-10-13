@@ -2,6 +2,7 @@ import { sql } from '@dam/db/client';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
+import { REPO_URL } from '../../lib/contributors.ts';
 import { fmtDate, fmtDateOnly } from '../../lib/format.ts';
 import { SOURCE_DETAILS } from '../../lib/source-details.ts';
 
@@ -165,12 +166,16 @@ export default async function SourcesPage() {
           外部公開データのみを利用し、独自の改変は最小限 (単位換算・名寄せ・正規化) です。
         </p>
         <p className="text-sm text-on-surface-variant max-w-3xl mt-3">
-          「このソースが抜けている」「この県はここに公開されている」という情報や、
-          アダプタの実装そのものを歓迎しています —{' '}
-          <Link href="/contribute" className="text-primary font-semibold hover:underline">
-            開発者募集
-          </Link>
-          。
+          「このソースが抜けている」「この県はここに公開されている」という情報は{' '}
+          <a
+            href={`${REPO_URL}/issues`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary font-semibold hover:underline"
+          >
+            GitHub Issues
+          </a>{' '}
+          へ。
         </p>
       </div>
 

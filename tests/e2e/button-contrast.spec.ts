@@ -17,5 +17,5 @@ test('home: primary CTA label is white on the primary fill', async ({ page }) =>
 
 test('contribute: Discord CTA label is white on the primary fill', async ({ page }) => {
   await page.goto('/contribute');
-  await expect(page.getByRole('link', { name: /Discord で声をかける/ })).toHaveCSS('color', WHITE);
+  await expect(page.getByRole('link', { name: /Discord に参加する/ })).toHaveCSS('color', WHITE);
 });
