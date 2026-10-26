@@ -221,7 +221,7 @@ export interface DamListFilters {
   /** When set, restrict to dams whose latest non-synthetic observation in
    * the last 30 days came from this source_id. Useful for /api/v1/dams?source=tokyo-waterworks. */
   source?: string | null;
-  /** When true, restrict to dams with at least one non-synthetic observation in last 30 days. */
+  /** When true, restrict to dams with a non-synthetic observation carrying a value in the last 30 days. */
   realDataOnly?: boolean;
 }
 
@@ -290,6 +290,7 @@ export async function listDams(
         WHERE o.dam_id = d.id
           AND o.source_id <> 'synthetic'
           AND o.observed_at > NOW() - INTERVAL '30 days'
+          AND observation_has_value(o)
       ))
       AND (${source}::text IS NULL OR EXISTS (
         SELECT 1 FROM observations o
@@ -312,8 +313,8 @@ export interface DamPagedFilters {
   search?: string | null;
   /**
    * When true, restrict to dams with at least one non-synthetic observation
-   * in the last 30 days. Used by the /dams?real=1 view and by the homepage
-   * "実測データ" stat link.
+   * carrying a value in the last 30 days. Used by the /dams?real=1 view and
+   * by the homepage "実測データ" stat link.
    */
   realDataOnly?: boolean;
   /** 1-based. Out-of-range values clamp to [1, totalPages]. */
@@ -349,6 +350,7 @@ export async function listDamsPaged(f: DamPagedFilters): Promise<{
         WHERE o.dam_id = d.id
           AND o.source_id <> 'synthetic'
           AND o.observed_at > NOW() - INTERVAL '30 days'
+          AND observation_has_value(o)
       ))
   `;
   const total = Number(totalRows[0]?.total ?? 0n);
@@ -374,6 +376,7 @@ export async function listDamsPaged(f: DamPagedFilters): Promise<{
         WHERE o.dam_id = d.id
           AND o.source_id <> 'synthetic'
           AND o.observed_at > NOW() - INTERVAL '30 days'
+          AND observation_has_value(o)
       ))
     ORDER BY d.id
     LIMIT ${pageSize} OFFSET ${offset}
@@ -783,7 +786,7 @@ export async function nearbyDams(
  */
 export interface LatestRateAndSource {
   rate: number | null;
-  /** source_id of the latest non-synthetic observation in the last 30 days, or null. */
+  /** source_id of the latest non-synthetic observation with a value in the last 30 days, or null. */
   realSourceId: string | null;
 }
 
@@ -822,6 +825,7 @@ export async function latestRateAndSourceByDam(
       WHERE o.dam_id = d.id
         AND o.source_id <> 'synthetic'
         AND o.observed_at > NOW() - INTERVAL '30 days'
+        AND observation_has_value(o)
       ORDER BY ${newestFirst()}
       LIMIT 1
     ) real_src ON TRUE

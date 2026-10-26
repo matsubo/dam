@@ -177,10 +177,11 @@ bun run apps/web/bin/seed_synthetic_observations.ts     --hourly-days 30 --years
    entries with no database.
    An unmatched row that is **not a master dam at all** (a 堰, a 調整池 not
    in the NDI master, a combined row like 呑吐・大川瀬, a station with no dam)
-   leaves the backlog (`coverageSummary().unmatchedStations`) once a
-   migration records a cited reason:
-   `UPDATE source_universe SET not_dam_reason = '<cited reason>' WHERE source_id = '<src>' AND source_external_id = '<key>' AND resolved_dam_id IS NULL;`
-   `recordUniverse` never writes the column, so it survives scans; a row that
+   leaves the backlog (`coverageSnapshot().summary.unmatchedStations`) once a
+   migration records a cited reason — an upsert, so it holds before the row
+   is first listed (see 0224):
+   `INSERT INTO source_universe (source_id, source_external_id, source_name, not_dam_reason) VALUES ('<src>', '<key>', '<name>', '<cited reason>') ON CONFLICT (source_id, source_external_id) DO UPDATE SET not_dam_reason = EXCLUDED.not_dam_reason WHERE source_universe.resolved_dam_id IS NULL;`
+   No scan writes the column, so it survives scans; a row that
    later resolves wins over the mark. The matching `match_review` item (open =
    `resolved_at IS NULL`; there is no admin action) closes the same way:
    `UPDATE match_review SET resolved_at = NOW(), resolved_dam_id = <id or NULL> WHERE source_id = '<src>' AND source_external_id = '<key>' AND resolved_at IS NULL;`

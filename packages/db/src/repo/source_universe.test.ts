@@ -1,14 +1,21 @@
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 import { sql } from '../client.ts';
+import { coverageSnapshot, triageDam, triageDams } from './coverage.ts';
 import { upsertDamByExternalId } from './dams.ts';
 import { upsertObservations } from './observations.ts';
-import {
-  classifyDamCoverage,
-  classifyOneDam,
-  coverageSummary,
-  recordUniverse,
-  recordUniverseHasData,
-} from './source_universe.ts';
+import { recordUniverse, recordUniverseHasData } from './source_universe.ts';
+
+const summary = async () => (await coverageSnapshot()).summary;
+
+/** Gate sources with no recorded scan yet. */
+async function unscannedGateSources(): Promise<{ source_id: string }[]> {
+  return [
+    ...(await sql<{ source_id: string }[]>`
+      SELECT g.source_id FROM coverage_gate_sources g
+      WHERE NOT EXISTS (SELECT 1 FROM source_universe_runs r WHERE r.source_id = g.source_id)
+    `),
+  ];
+}
 
 const SRC_A = 'universe-test-a';
 const SRC_B = 'universe-test-b';
@@ -78,7 +85,7 @@ describe('source universe coverage triage', () => {
       { externalId: 'a-1', name: 'univ-covered', resolvedDamId: covered },
       { externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale },
     ]);
-    const rows = await classifyDamCoverage();
+    const rows = await triageDams();
     expect(only(rows, absent)).toBe('unknown');
   });
 
@@ -92,20 +99,16 @@ describe('source universe coverage triage', () => {
     ]);
     // Still 未調査: the sources seeded by migrations (kasenbosai, suimon, …)
     // have not recorded a scan, so absence still proves nothing.
-    expect(only(await classifyDamCoverage(), absent)).toBe('unknown');
+    expect(only(await triageDams(), absent)).toBe('unknown');
 
     // Simulate the rollout finishing — every observation source scanned.
-    const remaining = await sql<{ source_id: string }[]>`
-      SELECT sp.source_id FROM source_priorities sp
-      WHERE sp.active AND sp.provides_observations
-        AND NOT EXISTS (SELECT 1 FROM source_universe_runs r WHERE r.source_id = sp.source_id)
-    `;
+    const remaining = await unscannedGateSources();
     for (const r of remaining)
       await recordUniverse(r.source_id, [
         { externalId: `stub-${r.source_id}`, name: 'stub', resolvedDamId: null },
       ]);
     try {
-      expect(only(await classifyDamCoverage(), absent)).toBe('not_published');
+      expect(only(await triageDams(), absent)).toBe('not_published');
     } finally {
       await sql`DELETE FROM source_universe_runs WHERE source_id IN ${sql(remaining.map((r) => r.source_id))}`;
     }
@@ -124,12 +127,7 @@ describe('source universe coverage triage', () => {
       { externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale },
     ]);
 
-    const remaining = await sql<{ source_id: string }[]>`
-      SELECT sp.source_id FROM source_priorities sp
-      WHERE sp.active AND sp.provides_observations AND sp.universe_enumerable
-        AND NOT sp.historical_only
-        AND NOT EXISTS (SELECT 1 FROM source_universe_runs r WHERE r.source_id = sp.source_id)
-    `;
+    const remaining = await unscannedGateSources();
     // SRC_B is historical-only, so it must not appear in the gate's backlog.
     expect(remaining.map((r) => r.source_id)).not.toContain(SRC_B);
 
@@ -139,7 +137,7 @@ describe('source universe coverage triage', () => {
       ]);
     try {
       // SRC_B still has no run, and the answer lands anyway.
-      expect(only(await classifyDamCoverage(), absent)).toBe('not_published');
+      expect(only(await triageDams(), absent)).toBe('not_published');
     } finally {
       await sql`DELETE FROM source_universe_runs WHERE source_id IN ${sql(remaining.map((r) => r.source_id))}`;
     }
@@ -155,19 +153,14 @@ describe('source universe coverage triage', () => {
       { externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale },
     ]);
 
-    const remaining = await sql<{ source_id: string }[]>`
-      SELECT sp.source_id FROM source_priorities sp
-      WHERE sp.active AND sp.provides_observations AND sp.universe_enumerable
-        AND NOT sp.historical_only
-        AND NOT EXISTS (SELECT 1 FROM source_universe_runs r WHERE r.source_id = sp.source_id)
-    `;
+    const remaining = await unscannedGateSources();
     for (const r of remaining)
       await recordUniverse(r.source_id, [
         { externalId: `stub-${r.source_id}`, name: 'stub', resolvedDamId: null },
       ]);
     try {
-      expect((await coverageSummary()).sourcesPendingScan).toBe(0);
-      expect(only(await classifyDamCoverage(), absent)).toBe('not_published');
+      expect((await summary()).sourcesPendingScan).toBe(0);
+      expect(only(await triageDams(), absent)).toBe('not_published');
     } finally {
       await sql`DELETE FROM source_universe_runs WHERE source_id IN ${sql(remaining.map((r) => r.source_id))}`;
     }
@@ -182,9 +175,9 @@ describe('source universe coverage triage', () => {
       { externalId: 'a-1', name: 'univ-covered', resolvedDamId: covered },
     ]);
     const pendingB = async () =>
-      (await coverageSummary()).pendingScanSources.find((p) => p.sourceId === SRC_B);
+      (await summary()).pendingScanSources.find((p) => p.sourceId === SRC_B);
 
-    const first = await coverageSummary();
+    const first = await summary();
     expect(first.pendingScanSources.map((p) => p.sourceId)).not.toContain(SRC_A);
     expect(first.sourcesPendingScan).toBe(first.pendingScanSources.length);
     expect((await pendingB())?.reason).toBe('no_recent_observations');
@@ -229,16 +222,16 @@ describe('source universe coverage triage', () => {
       { externalId: 'b-stale', name: 'univ-stale', resolvedDamId: stale },
       { externalId: 'b-unmatched', name: 'マスタ未登録', resolvedDamId: null },
     ]);
-    const before = await coverageSummary();
+    const before = await summary();
     await sql`UPDATE source_priorities SET active = FALSE WHERE source_id = ${SRC_B}`;
 
-    const row = (await classifyDamCoverage()).find((r) => r.damId === stale);
+    const row = (await triageDams()).find((r) => r.damId === stale);
     expect(row?.status).not.toBe('published_not_ingested');
     expect(row?.publishedBy).toEqual([]);
-    const one = await classifyOneDam(stale);
+    const one = await triageDam(stale);
     expect(one?.status).toBe(row?.status);
     expect(one?.publishedBy).toEqual([]);
-    expect((await coverageSummary()).unmatchedStations).toBe(before.unmatchedStations - 1);
+    expect((await summary()).unmatchedStations).toBe(before.unmatchedStations - 1);
   });
 
   test('separates "we have data" from "published but we are not ingesting it"', async () => {
@@ -247,7 +240,7 @@ describe('source universe coverage triage', () => {
       { externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale },
     ]);
     await recordUniverse(SRC_B, [{ externalId: 'b-stub', name: 'stub', resolvedDamId: null }]);
-    const rows = await classifyDamCoverage();
+    const rows = await triageDams();
     expect(only(rows, covered)).toBe('covered');
     // Published and matched, but no observation has landed — the actionable bug.
     expect(only(rows, stale)).toBe('published_not_ingested');
@@ -263,15 +256,15 @@ describe('source universe coverage triage', () => {
     ]);
     await recordUniverse(SRC_B, [{ externalId: 'b-stub', name: 'stub', resolvedDamId: null }]);
     await upsertObservations([{ observedAt: new Date(), damId: stale, sourceId: SRC_A }]);
-    expect(only(await classifyDamCoverage(), stale)).toBe('published_not_ingested');
-    expect((await classifyOneDam(stale))?.status).toBe('published_not_ingested');
+    expect(only(await triageDams(), stale)).toBe('published_not_ingested');
+    expect((await triageDam(stale))?.status).toBe('published_not_ingested');
 
     // Any one non-NULL quantity, rainfall included, is coverage.
     await upsertObservations([
       { observedAt: new Date(Date.now() - 3600_000), damId: stale, sourceId: SRC_A, rainfallMm: 0 },
     ]);
-    expect(only(await classifyDamCoverage(), stale)).toBe('covered');
-    expect((await classifyOneDam(stale))?.status).toBe('covered');
+    expect(only(await triageDams(), stale)).toBe('covered');
+    expect((await triageDam(stale))?.status).toBe('covered');
   });
 
   test('a dated provider whose newest value we hold is covered, however old', async () => {
@@ -282,8 +275,8 @@ describe('source universe coverage triage', () => {
       { observedAt: survey, damId: stale, sourceId: SRC_A, storageRate: 0.8 },
     ]);
     const status = async (): Promise<[string | undefined, string | undefined]> => [
-      only(await classifyDamCoverage(), stale),
-      (await classifyOneDam(stale))?.status,
+      only(await triageDams(), stale),
+      (await triageDam(stale))?.status,
     ];
 
     // No date told: the 30-day rule alone, so an ingestion gap.
@@ -317,8 +310,8 @@ describe('source universe coverage triage', () => {
     // each of its predicates must still hold on its own.
     const survey = new Date(Date.now() - 60 * 86_400_000);
     const status = async (): Promise<[string | undefined, string | undefined]> => [
-      only(await classifyDamCoverage(), stale),
-      (await classifyOneDam(stale))?.status,
+      only(await triageDams(), stale),
+      (await triageDam(stale))?.status,
     ];
     await recordUniverse(SRC_A, [
       { externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale, publishedAt: survey },
@@ -342,7 +335,7 @@ describe('source universe coverage triage', () => {
     ]);
     expect(await status()).toEqual(['covered', 'covered']);
     // The dated branch must not duplicate the dam in the result.
-    expect((await classifyDamCoverage()).filter((r) => r.damId === stale)).toHaveLength(1);
+    expect((await triageDams()).filter((r) => r.damId === stale)).toHaveLength(1);
   });
 
   test('a dam its publishers list with no value is 提供元に値なし, not an ingestion bug', async () => {
@@ -353,18 +346,18 @@ describe('source universe coverage triage', () => {
       { externalId: 'a-1', name: 'univ-covered', resolvedDamId: covered, hasData: false },
       { externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale, hasData: false },
     ]);
-    const before = await coverageSummary();
-    const rows = await classifyDamCoverage();
+    const before = await summary();
+    const rows = await triageDams();
     expect(only(rows, stale)).toBe('published_no_data');
     expect(rows.find((r) => r.damId === stale)?.publishedBy).toEqual([SRC_A]);
     // Data that does arrive (from anywhere) still wins.
     expect(only(rows, covered)).toBe('covered');
-    expect((await classifyOneDam(stale))?.status).toBe('published_no_data');
+    expect((await triageDam(stale))?.status).toBe('published_no_data');
 
     await recordUniverse(SRC_A, [
       { externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale, hasData: true },
     ]);
-    const after = await coverageSummary();
+    const after = await summary();
     expect(after.publishedNoData).toBe(before.publishedNoData - 1);
     expect(after.publishedNotIngested).toBe(before.publishedNotIngested + 1);
   });
@@ -376,8 +369,8 @@ describe('source universe coverage triage', () => {
       { externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale, hasData: false },
     ]);
     await recordUniverse(SRC_B, [{ externalId: 'b-2', name: 'univ-stale', resolvedDamId: stale }]);
-    expect(only(await classifyDamCoverage(), stale)).toBe('published_not_ingested');
-    expect((await classifyOneDam(stale))?.status).toBe('published_not_ingested');
+    expect(only(await triageDams(), stale)).toBe('published_not_ingested');
+    expect((await triageDam(stale))?.status).toBe('published_not_ingested');
   });
 
   test('a later unreadable row clears an earlier "no data"', async () => {
@@ -390,7 +383,7 @@ describe('source universe coverage triage', () => {
     await recordUniverse(SRC_A, [
       { externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale, hasData: null },
     ]);
-    expect(only(await classifyDamCoverage(), stale)).toBe('published_not_ingested');
+    expect(only(await triageDams(), stale)).toBe('published_not_ingested');
   });
 
   test('a value reader can say "no data" for rows the catalogue task listed', async () => {
@@ -402,7 +395,7 @@ describe('source universe coverage triage', () => {
       { externalId: 'a-2', hasData: false },
       { externalId: 'a-not-listed', hasData: false },
     ]);
-    expect(only(await classifyDamCoverage(), stale)).toBe('published_no_data');
+    expect(only(await triageDams(), stale)).toBe('published_no_data');
     // It only annotates the list; it never adds a station the sweep did not see.
     const [n] = await sql<{ n: number }[]>`
       SELECT COUNT(*)::INT AS n FROM source_universe WHERE source_id = ${SRC_A}
@@ -413,10 +406,10 @@ describe('source universe coverage triage', () => {
     await recordUniverse(SRC_A, [{ externalId: 'a-2', name: 'univ-stale', resolvedDamId: stale }], {
       keepHasData: true,
     });
-    expect(only(await classifyDamCoverage(), stale)).toBe('published_no_data');
+    expect(only(await triageDams(), stale)).toBe('published_no_data');
     // ...while the value reader's own later "unknown" still clears it.
     await recordUniverseHasData(SRC_A, [{ externalId: 'a-2', hasData: null }]);
-    expect(only(await classifyDamCoverage(), stale)).toBe('published_not_ingested');
+    expect(only(await triageDams(), stale)).toBe('published_not_ingested');
   });
 
   test('recordUniverse is idempotent and advances last_seen_at', async () => {
@@ -457,14 +450,14 @@ describe('source universe coverage triage', () => {
       { externalId: 'a-open', name: 'マスタ未登録', resolvedDamId: null },
     ];
     await recordUniverse(SRC_A, list);
-    const before = await coverageSummary();
+    const before = await summary();
 
     // The convention later migrations use (AGENTS.md gotcha 7).
     await sql`
       UPDATE source_universe SET not_dam_reason = '堰: NDI master has no such dam'
       WHERE source_id = ${SRC_A} AND source_external_id = 'a-weir' AND resolved_dam_id IS NULL
     `;
-    const marked = await coverageSummary();
+    const marked = await summary();
     expect(marked.unmatchedStations).toBe(before.unmatchedStations - 1);
     expect(marked.notDamStations).toBe(before.notDamStations + 1);
 
@@ -475,11 +468,11 @@ describe('source universe coverage triage', () => {
       WHERE source_id = ${SRC_A} AND source_external_id = 'a-weir'
     `;
     expect(rows[0]?.reason).toBe('堰: NDI master has no such dam');
-    expect((await coverageSummary()).unmatchedStations).toBe(marked.unmatchedStations);
+    expect((await summary()).unmatchedStations).toBe(marked.unmatchedStations);
 
     // A later match wins over the mark: the station is linked, not "not a dam".
     await recordUniverse(SRC_A, [{ externalId: 'a-weir', name: '〇〇堰', resolvedDamId: covered }]);
-    const resolved = await coverageSummary();
+    const resolved = await summary();
     expect(resolved.notDamStations).toBe(before.notDamStations);
     expect(resolved.unmatchedStations).toBe(marked.unmatchedStations);
   });

@@ -14,19 +14,16 @@ import { PREFECTURES } from '@dam/core/prefectures';
 import { sourceLabel } from '@dam/core/sources';
 import { sql } from '@dam/db/client';
 import {
+  COVERAGE_STATUS,
   coverageDamTotal,
-  coverageHeadline,
   coverageRiverDamCount,
+  coverageSnapshot,
+  type DamCoverageStatus,
   historicalCoveragePct,
+  type PendingScanReason,
   realtimeCoveragePct,
   storageRateCoveragePct,
 } from '@dam/db/repo/coverage';
-import {
-  classifyDamCoverage,
-  coverageSummary,
-  isUnobtainable,
-  type PendingScanReason,
-} from '@dam/db/repo/source_universe';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
@@ -49,15 +46,9 @@ interface SourceRow {
   lastObs: Date | null;
 }
 
-interface PrefRow {
-  prefCode: string;
-  damTotal: number;
-  damsCovered: number;
-}
-
 async function loadCoverage() {
-  const [headline, sources, triageRows] = await Promise.all([
-    coverageHeadline(),
+  const [snapshot, sources] = await Promise.all([
+    coverageSnapshot(),
     // Two levels on purpose (#108): COUNT(DISTINCT dam_id) per source sorted
     // all 5.9 M observations (external merge, ~460 MB of temp files and ~4 s
     // per render on prod). Grouping by (source_id, dam_id) first keeps ~2,400
@@ -82,19 +73,8 @@ async function loadCoverage() {
       GROUP BY source_id
       ORDER BY COUNT(*) DESC
     `,
-    classifyDamCoverage(),
   ]);
-  // Same definition as the headline: covered over the dams there is
-  // something to obtain for (提供元なし / 提供元に値なし are in no denominator).
-  const byPref = new Map<string, PrefRow>();
-  for (const r of triageRows) {
-    if (r.prefCode == null || isUnobtainable(r.status)) continue;
-    const p = byPref.get(r.prefCode) ?? { prefCode: r.prefCode, damTotal: 0, damsCovered: 0 };
-    p.damTotal += 1;
-    if (r.status === 'covered') p.damsCovered += 1;
-    byPref.set(r.prefCode, p);
-  }
-  return { headline, sources, prefs: [...byPref.values()] };
+  return { ...snapshot, sources };
 }
 
 function pct(n: number, d: number): number {
@@ -154,43 +134,43 @@ function HeadlineCard({
   );
 }
 
+const TRIAGE_TONE: Record<DamCoverageStatus, string> = {
+  covered: 'text-emerald-700',
+  published_not_ingested: 'text-orange-700',
+  published_no_data: 'text-red-700',
+  unknown: 'text-slate-500',
+  not_published: 'text-red-700',
+};
+
 function TriageCard({
-  label,
+  status,
   value,
   total,
-  tone,
-  note,
+  extra,
 }: {
-  label: string;
+  status: DamCoverageStatus;
   value: number;
   total: number;
-  tone: 'ok' | 'action' | 'pending' | 'none';
-  note: string;
+  extra?: string;
 }) {
-  const accent = {
-    ok: 'text-emerald-700',
-    action: 'text-orange-700',
-    pending: 'text-slate-500',
-    none: 'text-red-700',
-  }[tone];
   const share = total > 0 ? (100 * value) / total : 0;
   return (
     <div className="bg-white border border-outline-variant rounded-xl p-4">
-      <div className="text-xs text-on-surface-variant mb-1">{label}</div>
-      <div className={`text-2xl font-display font-semibold tabular-nums ${accent}`}>
+      <div className="text-xs text-on-surface-variant mb-1">{COVERAGE_STATUS[status].label}</div>
+      <div className={`text-2xl font-display font-semibold tabular-nums ${TRIAGE_TONE[status]}`}>
         {value.toLocaleString()}
       </div>
       <div className="text-xs text-on-surface-variant tabular-nums">{share.toFixed(1)}%</div>
-      <div className="text-xs text-on-surface-variant mt-2 leading-snug">{note}</div>
+      <div className="text-xs text-on-surface-variant mt-2 leading-snug">
+        {COVERAGE_STATUS[status].meaning}
+        {extra ? ` ${extra}` : ''}
+      </div>
     </div>
   );
 }
 
 export default async function CoveragePage() {
-  const [{ headline, sources, prefs }, triage] = await Promise.all([
-    loadCoverage(),
-    coverageSummary(),
-  ]);
+  const { headline, sources, prefectures: prefs, summary: triage } = await loadCoverage();
   const total = headline.damTotal;
   const denominator = coverageDamTotal(headline);
   const rtPct = realtimeCoveragePct(headline) ?? 0;
@@ -232,41 +212,24 @@ export default async function CoveragePage() {
           各データ提供元が公開しているダム一覧を記録し、マスタと突き合わせて判定しています。
         </p>
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          <TriageCard status="covered" value={triage.covered} total={Number(total)} />
           <TriageCard
-            label="取得済み"
-            value={triage.covered}
-            total={Number(total)}
-            tone="ok"
-            note="直近 30 日に観測値あり。月次・不定期の提供元は、公開中の最新値を取り込み済み"
-          />
-          <TriageCard
-            label="公開されているが未取得"
+            status="published_not_ingested"
             value={triage.publishedNotIngested}
             total={Number(total)}
-            tone="action"
-            note="提供元が公開済み・紐付けも済み。取り込み側の不具合"
           />
           <TriageCard
-            label="提供元に値なし"
+            status="published_no_data"
             value={triage.publishedNoData}
             total={Number(total)}
-            tone="none"
-            note="提供元の一覧には載っているが、調査対象外・欠測・落水などで値が出ていない"
           />
           <TriageCard
-            label="未調査"
+            status="unknown"
             value={triage.unknown}
             total={Number(total)}
-            tone="pending"
-            note={`公開一覧が未記録の提供元が ${triage.sourcesPendingScan} 件残っている`}
+            extra={`（公開一覧が未記録の提供元が ${triage.sourcesPendingScan} 件）`}
           />
-          <TriageCard
-            label="提供元なし"
-            value={triage.notPublished}
-            total={Number(total)}
-            tone="none"
-            note="全提供元の公開一覧に現れなかった"
-          />
+          <TriageCard status="not_published" value={triage.notPublished} total={Number(total)} />
         </div>
         {triage.sourcesPendingScan > 0 ? (
           <>

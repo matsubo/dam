@@ -4,8 +4,8 @@
 // page — specs, location, latest reading and its source — without the chart,
 // map and navigation an agent would otherwise have to strip.
 import { PREFECTURES } from '@dam/core/prefectures';
+import { providerAvailability, triageDam } from '@dam/db/repo/coverage';
 import { canonicalTwin, findDamBySlug, latestObservation } from '@dam/db/repo/dams';
-import { classifyOneDam, providerAvailability } from '@dam/db/repo/source_universe';
 import { damDisplayName } from '../../../../lib/dam-name.ts';
 import { fmtCapacityMcm, fmtDate, fmtN, fmtPct } from '../../../../lib/format.ts';
 import { markdownResponse } from '../../../../lib/markdown-response.ts';
@@ -37,7 +37,7 @@ export async function GET(
 
   const dn = damDisplayName(d.name);
   const pref = PREF_NAME.get(d.prefCode) ?? d.prefCode;
-  const [latest, triage] = await Promise.all([latestObservation(d.id), classifyOneDam(d.id)]);
+  const [latest, triage] = await Promise.all([latestObservation(d.id), triageDam(d.id)]);
   const twin = latest ? null : await canonicalTwin(d.id);
   const notPublished = providerAvailability(triage?.status ?? 'unknown') === 'none';
   const path = encodeURIComponent(slug);

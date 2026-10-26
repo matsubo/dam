@@ -5,7 +5,7 @@
 // figures live in lib/project-stats.ts with their regeneration commands.
 
 import { sql } from '@dam/db/client';
-import { coverageDamTotal, coverageHeadline, realtimeCoveragePct } from '@dam/db/repo/coverage';
+import { coverageDamTotal, coverageSnapshot, realtimeCoveragePct } from '@dam/db/repo/coverage';
 import {
   CircleDot,
   Database,
@@ -94,7 +94,10 @@ function Figure({ label, value, note }: { label: string; value: string; note?: s
 }
 
 export default async function ContributePage() {
-  const [live, headline] = await Promise.all([loadLive(), coverageHeadline()]);
+  const [live, headline] = await Promise.all([
+    loadLive(),
+    coverageSnapshot().then((c) => c.headline),
+  ]);
   // Same definition as /coverage: 提供元なし / 提供元に値なし dams are in no denominator.
   const denominator = coverageDamTotal(headline);
   const coverage = realtimeCoveragePct(headline) ?? 0;

@@ -1,5 +1,11 @@
 import { PREFECTURES } from '@dam/core/prefectures';
 import {
+  PROVIDER_AVAILABILITY_LABEL,
+  type ProviderAvailability,
+  providerAvailability,
+  triageDam,
+} from '@dam/db/repo/coverage';
+import {
   canonicalTwin,
   earliestObservationAt,
   findDamBySlug,
@@ -10,11 +16,6 @@ import {
   storageChange,
 } from '@dam/db/repo/dams';
 import { damSeasonalNorm } from '@dam/db/repo/seasonal';
-import {
-  classifyOneDam,
-  type ProviderAvailability,
-  providerAvailability,
-} from '@dam/db/repo/source_universe';
 import { aggregateWatershed, findWatershedBySlug } from '@dam/db/repo/watersheds';
 import { ExternalLink } from 'lucide-react';
 import type { Metadata } from 'next';
@@ -51,7 +52,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dam.teraren.com';
 const getDam = cache(findDamBySlug);
 const getLatest = cache(latestObservation);
 const getTwin = cache(canonicalTwin);
-const getTriage = cache(classifyOneDam);
+const getTriage = cache(triageDam);
 
 /**
  * Whether the page has a reading to show (latestObservation), and — only when
@@ -64,19 +65,10 @@ async function readingState(damId: bigint) {
 }
 
 /** Whether a data provider publishes this dam, stated on every dam page. */
-const PROVIDER_CHIP: Record<ProviderAvailability, { label: string; className: string }> = {
-  available: {
-    label: '提供元あり',
-    className: 'border-emerald-300 bg-emerald-50 text-emerald-800',
-  },
-  none: {
-    label: '提供元なし',
-    className: 'border-outline-variant bg-surface-container-low text-on-surface-variant',
-  },
-  unknown: {
-    label: '提供元: 未調査',
-    className: 'border-outline-variant bg-white text-on-surface-variant',
-  },
+const PROVIDER_CHIP_CLASS: Record<ProviderAvailability, string> = {
+  available: 'border-emerald-300 bg-emerald-50 text-emerald-800',
+  none: 'border-outline-variant bg-surface-container-low text-on-surface-variant',
+  unknown: 'border-outline-variant bg-white text-on-surface-variant',
 };
 
 interface PageProps {
@@ -299,9 +291,9 @@ export default async function DamDetail({ params }: PageProps) {
             href="/coverage"
             data-testid="provider-availability"
             data-provider={provider}
-            className={`text-xs font-medium rounded-full border px-2.5 py-0.5 hover:border-primary ${PROVIDER_CHIP[provider].className}`}
+            className={`text-xs font-medium rounded-full border px-2.5 py-0.5 hover:border-primary ${PROVIDER_CHIP_CLASS[provider]}`}
           >
-            {PROVIDER_CHIP[provider].label}
+            {PROVIDER_AVAILABILITY_LABEL[provider]}
           </Link>
         </h1>
       </div>

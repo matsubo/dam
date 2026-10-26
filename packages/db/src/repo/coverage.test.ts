@@ -1,14 +1,18 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { sql } from '../client.ts';
 import {
-  coverageHeadline,
+  type CoverageHeadline,
+  coverageSnapshot,
   historicalCoveragePct,
   realtimeCoveragePct,
   storageRateCoveragePct,
+  triageDams,
 } from './coverage.ts';
 import { upsertDamByExternalId } from './dams.ts';
 import { upsertObservations } from './observations.ts';
-import { classifyDamCoverage, recordUniverse } from './source_universe.ts';
+import { recordUniverse } from './source_universe.ts';
+
+const headline = async (): Promise<CoverageHeadline> => (await coverageSnapshot()).headline;
 
 // Two different questions get called "カバレッジ" on the site and they must
 // stay distinct:
@@ -34,7 +38,7 @@ let damRateSmall: bigint;
 let damSynthetic: bigint;
 let damStale: bigint;
 let damEmpty: bigint;
-let base: Awaited<ReturnType<typeof coverageHeadline>>;
+let base: CoverageHeadline;
 
 async function cleanup(): Promise<void> {
   const stale = await sql<{ id: bigint }[]>`
@@ -60,7 +64,7 @@ async function addDam(extId: string, slug: string, heightM: number): Promise<big
 
 beforeAll(async () => {
   await cleanup();
-  base = await coverageHeadline();
+  base = await headline();
 
   damLevelOnly = await addDam('COV-LEVEL-ONLY', 'cov-level-only', 40);
   damRateRiver = await addDam('COV-RATE-RIVER', 'cov-rate-river', 40);
@@ -109,15 +113,15 @@ beforeAll(async () => {
 
 afterAll(cleanup);
 
-describe('coverageHeadline', () => {
+describe('coverage headline', () => {
   test('realtime counts any non-synthetic observation, level-only included', async () => {
-    const c = await coverageHeadline();
+    const c = await headline();
     // level-only + rate-river + rate-small. Synthetic and 60-day-stale are out.
     expect(c.realtimeDamCount - base.realtimeDamCount).toBe(3);
   });
 
   test('synthetic observations never count as coverage', async () => {
-    const c = await coverageHeadline();
+    const c = await headline();
     const rows = await sql<{ n: bigint }[]>`
       SELECT COUNT(*)::BIGINT AS n FROM observations
       WHERE dam_id = ${damSynthetic} AND source_id = 'synthetic'
@@ -127,14 +131,14 @@ describe('coverageHeadline', () => {
   });
 
   test('historical includes dams whose only data is outside the window', async () => {
-    const c = await coverageHeadline();
+    const c = await headline();
     const gap = c.historicalDamCount - c.realtimeDamCount;
     const baseGap = base.historicalDamCount - base.realtimeDamCount;
     expect(gap - baseGap).toBe(1); // the 60-day-old dam
   });
 
   test('a row with every quantity NULL counts in neither metric', async () => {
-    const c = await coverageHeadline();
+    const c = await headline();
     const rows = await sql<{ n: bigint }[]>`
       SELECT COUNT(*)::BIGINT AS n FROM observations WHERE dam_id = ${damEmpty}
     `;
@@ -144,14 +148,14 @@ describe('coverageHeadline', () => {
   });
 
   test('the 貯水率 numerator needs a rate AND a river dam (height >= 15 m)', async () => {
-    const c = await coverageHeadline();
+    const c = await headline();
     // Only rate-river qualifies: level-only has no rate, rate-small is 10 m,
     // synthetic is excluded, stale is outside the 30-day window.
     expect(c.storageRateRiverDamCount - base.storageRateRiverDamCount).toBe(1);
   });
 
   test('the 貯水率 denominator is river dams, not every master row', async () => {
-    const c = await coverageHeadline();
+    const c = await headline();
     // 5 of the 6 fixtures are >= 15 m.
     expect(c.riverDamCount - base.riverDamCount).toBe(5);
     expect(c.damTotal - base.damTotal).toBe(6);
@@ -160,24 +164,22 @@ describe('coverageHeadline', () => {
 
   test('no dam is 提供元なし while the gate is open', async () => {
     // While a provider is unscanned no dam is 提供元なし, only 未調査.
-    const c = await coverageHeadline();
+    const c = await headline();
     expect(c.notPublishedDamCount).toBe(0);
   });
 
   test('提供元なし dams leave the denominators, and the historical numerator', async () => {
-    const open = await coverageHeadline();
+    const open = await headline();
     const remaining = await sql<{ source_id: string }[]>`
-      SELECT sp.source_id FROM source_priorities sp
-      WHERE sp.active AND sp.provides_observations AND sp.universe_enumerable
-        AND NOT sp.historical_only
-        AND NOT EXISTS (SELECT 1 FROM source_universe_runs r WHERE r.source_id = sp.source_id)
+      SELECT g.source_id FROM coverage_gate_sources g
+      WHERE NOT EXISTS (SELECT 1 FROM source_universe_runs r WHERE r.source_id = g.source_id)
     `;
     for (const r of remaining)
       await recordUniverse(r.source_id, [
         { externalId: `stub-${r.source_id}`, name: 'stub', resolvedDamId: null },
       ]);
     try {
-      const triage = await classifyDamCoverage();
+      const triage = await triageDams();
       const notPublished = triage.filter((r) => r.status === 'not_published');
       const ids = notPublished.map((r) => r.damId);
       // The 60-day-old dam has history but no provider lists it; the empty
@@ -185,7 +187,7 @@ describe('coverageHeadline', () => {
       expect(ids).toContain(damStale);
       expect(ids).toContain(damEmpty);
 
-      const closed = await coverageHeadline();
+      const closed = await headline();
       expect(closed.notPublishedDamCount).toBe(notPublished.length);
       const unobtainable = triage
         .filter((r) => r.status === 'not_published' || r.status === 'published_no_data')

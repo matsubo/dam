@@ -1,8 +1,8 @@
 import { sql } from '@dam/db/client';
 import {
   coverageDamTotal,
-  coverageHeadline,
   coverageRiverDamCount,
+  coverageSnapshot,
   realtimeCoveragePct,
   storageRateCoveragePct,
 } from '@dam/db/repo/coverage';
@@ -111,7 +111,7 @@ async function homeStats(): Promise<HomeStats> {
         (SELECT MIN(observed_at)      FROM observations)                                   AS "oldestObs"
     `,
     nationalStorageTotals(),
-    coverageHeadline(),
+    coverageSnapshot().then((c) => c.headline),
   ]);
   const row = rows[0];
   if (!row) throw new Error('homeStats query returned no row');

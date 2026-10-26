@@ -21,6 +21,7 @@ interface CoverageBody {
     pendingScanSources: PendingScanSource[];
   };
   items: { slug: string; status: string }[];
+  statusMeanings: Record<string, string>;
 }
 
 async function coverageApi(page: Page): Promise<CoverageBody> {
@@ -43,7 +44,8 @@ test('/coverage counts dams whose providers publish no value', async ({ page }) 
 
   await page.goto('/coverage');
   const card = triageSection(page).getByText('提供元に値なし', { exact: true }).locator('..');
-  await expect(card).toContainText('調査対象外・欠測・落水');
+  // The page and the API state each status in the same words.
+  await expect(card).toContainText(api.statusMeanings.published_no_data ?? '(missing)');
   const value = card.locator(':scope > div').nth(1);
   await expect(value).toHaveText(api.summary.publishedNoData.toLocaleString('ja-JP'));
 });

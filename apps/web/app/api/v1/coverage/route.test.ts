@@ -82,10 +82,9 @@ describe('GET /api/v1/coverage', () => {
     // the migration-seeded ones never record), leaving PENDING as the only
     // thing holding the gate open. Only the stamps inserted here are removed.
     const others = await sql<{ source_id: string }[]>`
-      SELECT sp.source_id FROM source_priorities sp
-      WHERE sp.active AND sp.provides_observations AND sp.universe_enumerable
-        AND NOT sp.historical_only AND sp.source_id <> ${PENDING}
-        AND NOT EXISTS (SELECT 1 FROM source_universe_runs r WHERE r.source_id = sp.source_id)
+      SELECT g.source_id FROM coverage_gate_sources g
+      WHERE g.source_id <> ${PENDING}
+        AND NOT EXISTS (SELECT 1 FROM source_universe_runs r WHERE r.source_id = g.source_id)
     `;
     const stubbed = others.map((r) => r.source_id);
     try {

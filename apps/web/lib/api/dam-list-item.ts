@@ -1,12 +1,12 @@
+import { providerAvailability, triageDams } from '@dam/db/repo/coverage';
 import type { DamListItem } from '@dam/db/repo/dams';
-import { classifyDamCoverage, providerAvailability } from '@dam/db/repo/source_universe';
 
 /**
  * The `DamListItem` shape every dam-list endpoint returns, `dataProvider`
  * included (/api/v1/dams/{slug} adds coverageStatus and publishedBy).
  */
 export async function damListItems(items: DamListItem[]) {
-  const triage = await classifyDamCoverage();
+  const triage = await triageDams(items.map((d) => d.id));
   const statusById = new Map(triage.map((t) => [t.damId, t.status]));
   return items.map((d) => ({
     id: d.id.toString(),

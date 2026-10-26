@@ -1,8 +1,13 @@
+import { COVERAGE_STATUS, COVERAGE_STATUSES, PROVIDER_AVAILABILITIES } from '@dam/db/repo/coverage';
 import { NextResponse } from 'next/server';
 import { APP_STAGE, APP_VERSION, STAGE_JA } from '../../../../lib/version.ts';
 
 export const dynamic = 'force-static';
 
+/** Each coverage status and its meaning, as the API states it in `statusMeanings`. */
+const COVERAGE_STATUS_DOC = COVERAGE_STATUSES.map(
+  (s) => `\`${s}\` ${COVERAGE_STATUS[s].label}: ${COVERAGE_STATUS[s].meaning}`,
+).join(' / ');
 // Reusable component pieces. Keeping them as JS objects (instead of inlined
 // in every endpoint) lets the schema stay consistent and tooling (Redoc,
 // codegen) generate decent client SDKs from $ref'd entities.
@@ -296,7 +301,7 @@ const components = {
           properties: {
             availability: {
               type: 'string',
-              enum: ['available', 'none', 'unknown'],
+              enum: [...PROVIDER_AVAILABILITIES],
               example: 'available',
             },
           },
@@ -421,18 +426,12 @@ const components = {
               properties: {
                 availability: {
                   type: 'string',
-                  enum: ['available', 'none', 'unknown'],
+                  enum: [...PROVIDER_AVAILABILITIES],
                   example: 'available',
                 },
                 coverageStatus: {
                   type: 'string',
-                  enum: [
-                    'covered',
-                    'published_not_ingested',
-                    'published_no_data',
-                    'unknown',
-                    'not_published',
-                  ],
+                  enum: [...COVERAGE_STATUSES],
                   example: 'covered',
                 },
                 publishedBy: {
@@ -551,15 +550,8 @@ const components = {
         prefCode: { type: 'string', nullable: true, example: '14' },
         status: {
           type: 'string',
-          enum: [
-            'covered',
-            'published_not_ingested',
-            'published_no_data',
-            'unknown',
-            'not_published',
-          ],
-          description:
-            '`covered` 取得済み (直近 30 日に観測値あり、または月次・不定期の提供元が公開している最新値を取り込み済み) / `published_not_ingested` 提供元は公開・紐付けも済みだが観測値が入っていない (取り込み側の不具合) / `published_no_data` 提供元の公開一覧には載っているが、掲載するすべての提供元が値を出していない (調査対象外・欠測・落水など) / `unknown` 未調査 / `not_published` 全提供元の公開一覧に現れなかった (提供元なし)',
+          enum: [...COVERAGE_STATUSES],
+          description: COVERAGE_STATUS_DOC,
           example: 'published_not_ingested',
         },
         publishedBy: {
@@ -968,13 +960,7 @@ const paths = {
           description: '判定でフィルタ。',
           schema: {
             type: 'string',
-            enum: [
-              'covered',
-              'published_not_ingested',
-              'published_no_data',
-              'unknown',
-              'not_published',
-            ],
+            enum: [...COVERAGE_STATUSES],
           },
         },
         { $ref: '#/components/parameters/PrefCode' },

@@ -1,10 +1,10 @@
+import { providerAvailability, triageDam } from '@dam/db/repo/coverage';
 import {
   findDamBySlug,
   latestObservation,
   latestRateAndSourceByDam,
   nearbyDams,
 } from '@dam/db/repo/dams';
-import { classifyOneDam, providerAvailability } from '@dam/db/repo/source_universe';
 import { authorize, makeUnauthorized, rateLimitHeaders } from '../../../../../lib/api/auth.ts';
 import { asProblem, HttpError } from '../../../../../lib/api/error.ts';
 import { hal } from '../../../../../lib/api/response.ts';
@@ -55,7 +55,7 @@ export async function GET(
       latestObservation(dam.id),
       nearbyDams(dam.id, 20_000, 10),
       latestRateAndSourceByDam([dam.id]),
-      classifyOneDam(dam.id),
+      triageDam(dam.id),
     ]);
     const coverageStatus = triage?.status ?? 'unknown';
     const ras = rateAndSource.get(dam.id.toString());

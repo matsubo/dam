@@ -84,6 +84,10 @@ an E2E smoke run. Nothing is pushed without the owner's go-ahead.
 - Coverage statuses and their meanings live with the triage; the JSON API, OpenAPI text and
   the dam page's provider chip take them from there.
 
+- Done (2026-10-27): `packages/db/src/repo/coverage.ts` holds the triage (`triageDams(ids?)`,
+  `coverageSnapshot()`) and the vocabulary; a value is `observation_has_value(o)` and the gate
+  is the view `coverage_gate_sources` (0225). On the dev DB the new triage gives the same status
+  for all 2,762 dams; one dam 10.7 ms (was 15.6), the /coverage page's queries 197 ms (was 211).
 ## 4. Reading and daily value — database (migrations)
 
 - One reading rule (ADR 0002): a fresh trusted source first, then the newest observation that

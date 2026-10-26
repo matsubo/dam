@@ -9,14 +9,14 @@
 // /api/v1/sources still advertised `synthetic` (active, priority 200, zero
 // observations) on 2026-09-18, and because that row counts as an active
 // observation-producing source with no recorded universe scan, it also held
-// `classifyDamCoverage`'s honesty gate open — no dam anywhere could reach
+// the coverage triage's gate open — no dam anywhere could reach
 // `not_published`.
 //
-// `master_upsert.sql.gz` was fixed at the generator (EXCLUDED_SOURCES in
-// master_upsert_sql.ts). `master.sql.gz` is a pg_dump taken by hand, so it has
-// no generator to fix — the restore path still carried the row until this
-// commit stripped it. Hence a test on the shipped artefacts rather than on the
-// code that writes one of them.
+// The upsert generator no longer writes source_priorities at all (the source
+// declarations own those rows, docs/adr/0001), but the shipped
+// `master_upsert.sql.gz` predates that, and `master.sql.gz` is a pg_dump
+// taken by hand with no generator. Hence a test on the shipped artefacts
+// rather than on the code that writes them.
 //
 // Cost: both files gunzip to ~100 MB of SQL text combined, so this reads them
 // once each rather than per retired id.
