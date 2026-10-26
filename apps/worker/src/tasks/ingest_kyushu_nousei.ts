@@ -65,7 +65,7 @@
 // Priority 279 — deliberately BELOW oita-nourin (282, #27): 石場・深見・日指・
 // 並石(大分) are published by both, and oita-nourin is the more specific
 // single-prefecture source (also the one 九州農政局 itself is presumably
-// rolling up), so it should keep winning preferredSourceForDam() for those 4
+// rolling up), so it should keep winning windowSource() (the chart) for those 4
 // dams. The other 8 target dams (久保白/伊佐ノ浦/教良木/東原調整池/竹山/西京/
 // 金峰/喜界地下) have no competing source at any priority, so this only
 // matters for the 大分 overlap.

@@ -30,10 +30,10 @@
 // clamped at 100.0 once the level passes 常時満水位.
 //
 // Priority 309 — one above kagoshima-bousai (308), which covers the same 3
-// dams but only during flood events. With equal priorities
-// preferredSourceForDam() (ORDER BY priority DESC LIMIT 1) has no tiebreak,
-// so the chart source would flip after every flood; the continuous, trusted
-// 利水 series should keep winning. Cron hourly at :52.
+// dams but only during flood events. With equal priorities the chart's
+// source (windowSource()) falls to the source_id tie-break, so it would not
+// be the continuous, trusted 利水 series; that series should keep winning.
+// Cron hourly at :52.
 
 import { type Cell, cell, cellState, numberIn } from '../ingest/cells.ts';
 import { ingestTask } from '../ingest/run.ts';

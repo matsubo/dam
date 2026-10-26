@@ -36,10 +36,11 @@
 // Priority 311, above kasenbosai (310). kasenbosai's 高遠 station (stamp
 // 2183100700009) has never carried a volume (0 of 3,199 prod rows) and its
 // last non-NULL value is 2026-07-03 05:50 UTC — 2,014 all-NULL rows since
-// 07-06 as of 2026-09-27 — yet it keeps writing hourly rows, and
-// preferredSourceForDam() picks the top-priority source with ANY row, so
-// below it 高遠's chart stays empty. 311 is shared only by tochigi-bodik /
-// hyogo-bodik, which never cover 長野. Alone on 菅平.
+// 07-06 as of 2026-09-27 — yet it keeps writing hourly rows, and the chart's
+// source pick then took the top-priority source with ANY row, so below it
+// 高遠's chart stayed empty (window_source() needs a value since 0226). 311
+// is shared only by tochigi-bodik / hyogo-bodik, which never cover 長野.
+// Alone on 菅平.
 //
 // Cron at :24 and :54. Four rows span 30 minutes, so one run an hour keeps
 // only four of the six rows. The :24 run sees :20/:10/:00/:50 (the :20

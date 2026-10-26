@@ -1,5 +1,4 @@
 import { sql } from '@dam/db/client';
-import { newestFirst, sourceRankJoin } from '@dam/db/repo/newest_row';
 import type { Metadata } from 'next';
 import { unstable_cache } from 'next/cache';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
@@ -18,10 +17,8 @@ export const metadata: Metadata = {
 };
 
 async function fetchPoints(): Promise<MapPoint[]> {
-  // Bring back capacity + the latest storage_rate per dam so the map can
-  // encode (size = capacity, color = storage_rate). The aggregate-source
-  // observations don't carry storage_rate so we fall back to volume / capacity.
-  // Same-timestamp ties follow the newest-row rule (#122).
+  // capacity (size) + each dam's reading (colour). The 貯水率 is the reading's
+  // volume over its effective capacity, as on the dam page (docs/adr/0002).
   return sql<MapPoint[]>`
     SELECT
       d.slug,
@@ -31,21 +28,10 @@ async function fetchPoints(): Promise<MapPoint[]> {
       -- size encoding: total capacity (every dam has it)
       d.total_capacity_m3::FLOAT8           AS "capacityM3",
       d.active_capacity_m3::FLOAT8          AS "activeCapacityM3",
-      -- colour encoding: rate computed against 有効貯水容量. Dams without
-      -- one (~51%) get a NULL rate which renders as a neutral grey marker.
-      CASE
-        WHEN d.active_capacity_m3 IS NOT NULL AND d.active_capacity_m3 > 0
-        THEN LEAST(1.0, l.storage_volume_m3::FLOAT8 / d.active_capacity_m3::FLOAT8)
-        ELSE NULL
-      END                                   AS "storageRate"
+      -- Dams without a denominator or a 30-day reading render grey.
+      LEAST(1.0, r.rate::FLOAT8)            AS "storageRate"
     FROM dams d
-    LEFT JOIN LATERAL (
-      SELECT o.storage_volume_m3, o.storage_rate
-      FROM observations o ${sourceRankJoin()}
-      WHERE o.dam_id = d.id AND o.observed_at > NOW() - INTERVAL '30 days'
-      ORDER BY ${newestFirst()}
-      LIMIT 1
-    ) l ON TRUE
+    LEFT JOIN LATERAL dam_reading(d.id, TRUE, INTERVAL '30 days') r ON TRUE
     ORDER BY d.total_capacity_m3 DESC NULLS LAST
   `;
 }
@@ -56,7 +42,7 @@ const cachedFetchPoints = unstable_cache(
   async (): Promise<MapPoint[]> => {
     return await fetchPoints();
   },
-  ['map-points-v1'],
+  ['map-points-v2'],
   { revalidate: 86400, tags: ['map'] },
 );
 

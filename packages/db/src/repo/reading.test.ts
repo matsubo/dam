@@ -1,5 +1,7 @@
-// Issue #32 — the displayed 貯水率 must not change basis with the clock.
+// The reading (dam_reading(), 0226; GLOSSARY "Reading", docs/adr/0002): the
+// one observation every view of a dam at a moment shows.
 //
+// Issue #32 — the displayed 貯水率 must not change basis with the clock.
 // 北海道開発局's 18 直轄ダム are written by two sources: `kasenbosai` at
 // :03 (hourly, trusted_rate_basis — publishes a 利水容量 rate) and
 // `hkd-mlit-dam` at :13 (10-minute values, NOT trusted — its own published
@@ -10,7 +12,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { sql } from '../client.ts';
 
-const SLUG = 'display-obs-32-test';
+const SLUG = 'reading-test';
 const TRUSTED = 'kasenbosai';
 const UNTRUSTED = 'hkd-mlit-dam';
 
@@ -37,10 +39,10 @@ async function assertSourcesAreReal(): Promise<void> {
   }
 }
 
-/** The row the public read path would display, via the 0049 SQL function. */
+/** The dam's reading. */
 async function displayed(): Promise<{ source_id: string; storage_rate: string | null } | null> {
   const rows = await sql<{ source_id: string; storage_rate: string | null }[]>`
-    SELECT source_id, storage_rate::TEXT FROM display_observation(${damId})
+    SELECT source_id, storage_rate::TEXT FROM dam_reading(${damId})
   `;
   return rows[0] ?? null;
 }
@@ -57,7 +59,7 @@ beforeAll(async () => {
   // 美利河's shape: 有効貯水容量 14,500 千m³ in master, 利水容量 2,159 千m³.
   const rows = await sql<{ id: bigint }[]>`
     INSERT INTO dams (slug, name, pref_code, location, external_ids, active_capacity_m3)
-    VALUES (${SLUG}, 'Display Observation Test', '01',
+    VALUES (${SLUG}, 'Reading Test', '01',
             ST_SetSRID(ST_MakePoint(140.1, 42.4), 4326)::geography, '{}'::jsonb, 14500000)
     RETURNING id
   `;
@@ -79,7 +81,7 @@ afterAll(async () => {
   await cleanup();
 });
 
-describe('display_observation (#32)', () => {
+describe('the reading (#32)', () => {
   test('prefers the trusted-basis row even when an untrusted row is newer', async () => {
     if (!dbAvailable) return;
 
@@ -141,7 +143,7 @@ describe('display_observation (#32)', () => {
   });
 });
 
-describe('display_observation — p_require_volume', () => {
+describe('the reading — p_need_volume', () => {
   test('a level-only dam still yields an observation when volume is not required', async () => {
     if (!dbAvailable) return;
 
@@ -155,8 +157,8 @@ describe('display_observation — p_require_volume', () => {
       ON CONFLICT (dam_id, observed_at, source_id) DO NOTHING
     `;
 
-    const [withVolume] = await sql`SELECT * FROM display_observation(${damId})`;
-    const [anyRow] = await sql`SELECT * FROM display_observation(${damId}, FALSE)`;
+    const [withVolume] = await sql`SELECT * FROM dam_reading(${damId})`;
+    const [anyRow] = await sql`SELECT * FROM dam_reading(${damId}, FALSE)`;
 
     expect(withVolume).toBeUndefined();
     expect(anyRow).toBeDefined();
@@ -184,13 +186,13 @@ describe('display_observation — p_require_volume', () => {
     `;
 
     const [row] = await sql<{ source_id: string }[]>`
-      SELECT source_id FROM display_observation(${damId}, FALSE)
+      SELECT source_id FROM dam_reading(${damId}, FALSE)
     `;
     expect(row?.source_id).toBe(TRUSTED);
   });
 });
 
-describe('display_observation — derived rates (#45)', () => {
+describe('the reading — derived rates (#45)', () => {
   test('the 0036 trigger marks a rate it derived with quality_flag bit 32', async () => {
     if (!dbAvailable) return;
 
@@ -267,7 +269,7 @@ describe('display_observation — derived rates (#45)', () => {
 
 // 0223: several sources stamp the same observed_at. The pick used to depend on
 // the plan; now the higher active source_priorities.priority wins, then the
-// greater source_id — in display_observation() and in obs_daily's last value.
+// greater source_id — in the reading and in obs_daily's daily value.
 describe('timestamp ties (0223)', () => {
   /** The source the rule picks among TRUSTED and UNTRUSTED, from their real rows. */
   async function expectedWinner(): Promise<string> {
@@ -280,7 +282,7 @@ describe('timestamp ties (0223)', () => {
     return rows[0]?.source_id as string;
   }
 
-  test('display_observation picks the higher-priority source on a tie', async () => {
+  test('the reading picks the higher-priority source on a tie', async () => {
     if (!dbAvailable) return;
 
     await sql`DELETE FROM observations WHERE dam_id = ${damId}`;
@@ -323,5 +325,106 @@ describe('timestamp ties (0223)', () => {
       await sql`DELETE FROM observations WHERE dam_id = ${damId}`;
       await sql.unsafe(refresh);
     }
+  });
+});
+
+// 0226: a row without a value, the rank of inactive/unlisted sources, a
+// reading at an earlier moment, and a window.
+describe('the reading — 0226', () => {
+  // A retired source the source sync keeps inactive, and the fixture source
+  // no declaration lists.
+  const INACTIVE = 'niigata-bousai';
+  const UNLISTED = 'test';
+
+  async function readingAt(
+    asOf: string | null,
+    window: string | null = null,
+  ): Promise<{ source_id: string; storage_volume_m3: string } | undefined> {
+    const [row] = await sql<{ source_id: string; storage_volume_m3: string }[]>`
+      SELECT source_id, storage_volume_m3::TEXT
+      FROM dam_reading(${damId}, TRUE, ${window}::INTERVAL, ${asOf}::TIMESTAMPTZ)
+    `;
+    return row;
+  }
+
+  async function seed(rows: [ago: string, source: string, volume: number | null][]) {
+    await sql`DELETE FROM observations WHERE dam_id = ${damId}`;
+    for (const [ago, source, volume] of rows) {
+      await sql`
+        INSERT INTO observations (dam_id, observed_at, source_id, storage_volume_m3, storage_rate)
+        VALUES (${damId}, date_trunc('hour', NOW()) - ${ago}::INTERVAL, ${source}, ${volume},
+                CASE WHEN ${volume}::NUMERIC IS NULL THEN NULL ELSE 0.5 END)
+      `;
+    }
+  }
+
+  test('a row that carries no value is never the reading', async () => {
+    if (!dbAvailable) return;
+    // An untrusted feed keeps writing empty rows after its last value.
+    await seed([
+      ['3 days', UNTRUSTED, 1660000],
+      ['1 hour', UNTRUSTED, null],
+    ]);
+    const [any] = await sql<{ observed_at: Date }[]>`
+      SELECT observed_at FROM dam_reading(${damId}, FALSE)
+    `;
+    expect(Date.now() - (any?.observed_at.getTime() ?? 0)).toBeGreaterThan(2 * 24 * 3600 * 1000);
+  });
+
+  test('an inactive source ranks below an active one, an unlisted one alike', async () => {
+    if (!dbAvailable) return;
+    const [inactive] = await sql<{ active: boolean }[]>`
+      SELECT active FROM source_priorities WHERE source_id = ${INACTIVE}
+    `;
+    expect(inactive?.active).toBe(false);
+
+    await seed([
+      ['3 days', INACTIVE, 1],
+      ['3 days', UNTRUSTED, 2],
+    ]);
+    expect((await readingAt(null))?.source_id).toBe(UNTRUSTED);
+    // Both rank -1, so the greater source_id decides.
+    await seed([
+      ['3 days', INACTIVE, 1],
+      ['3 days', UNLISTED, 2],
+    ]);
+    expect((await readingAt(null))?.source_id).toBe(UNLISTED);
+  });
+
+  test('as of an earlier moment, freshness is measured from that moment', async () => {
+    if (!dbAvailable) return;
+    // At T the trusted row is 2 h old and wins; now it is two days old.
+    await sql`DELETE FROM observations WHERE dam_id = ${damId}`;
+    await sql`
+      INSERT INTO observations (dam_id, observed_at, source_id, storage_volume_m3, storage_rate)
+      VALUES
+        (${damId}, date_trunc('hour', NOW()) - INTERVAL '50 hours', ${TRUSTED},   1800000, 0.836),
+        (${damId}, date_trunc('hour', NOW()) - INTERVAL '49 hours', ${UNTRUSTED}, 1660000, 0.114),
+        (${damId}, date_trunc('hour', NOW()) - INTERVAL '1 hour',   ${UNTRUSTED}, 1500000, 0.103)
+    `;
+    const t = await sql<
+      { t: string }[]
+    >`SELECT (date_trunc('hour', NOW()) - INTERVAL '48 hours')::TEXT AS t`;
+    const asOf = t[0]?.t as string;
+    expect((await readingAt(asOf))?.source_id).toBe(TRUSTED);
+    expect(Number((await readingAt(null))?.storage_volume_m3)).toBe(1500000);
+  });
+
+  test('as of a moment long after the last value, that value is still the reading', async () => {
+    if (!dbAvailable) return;
+    // The lower bound is the newest value before the moment, not moment − 24 h.
+    await seed([
+      ['30 days', UNTRUSTED, 1660000],
+      ['20 days', UNLISTED, 1500000],
+    ]);
+    const t = await sql<{ t: string }[]>`SELECT (NOW() - INTERVAL '5 days')::TEXT AS t`;
+    expect((await readingAt(t[0]?.t as string))?.source_id).toBe(UNLISTED);
+  });
+
+  test('a reading older than the window is absent, not replaced', async () => {
+    if (!dbAvailable) return;
+    await seed([['3 hours', UNTRUSTED, 1660000]]);
+    expect(await readingAt(null, '2 hours')).toBeUndefined();
+    expect((await readingAt(null, '4 hours'))?.source_id).toBe(UNTRUSTED);
   });
 });

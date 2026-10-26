@@ -282,6 +282,7 @@ the file for detail.
 0223_last_value_by_source_priority.sql  timestamp ties → higher source priority, then source_id: display_observation(), and obs_daily rebuilt (last volume ignores NULLs) with obs_monthly, swapped in one transaction
 0224_ingest_run_not_dam_rows_and_iwate_stamps.sql  not_dam_reason for the rows the ingest run newly lists that are not one master dam (weirs, gates, combined rows); iwate-kasen stamps moved from dam names to station numbers
 0225_value_and_coverage_gate.sql  observation_has_value(o) (GLOSSARY: Value; inlined by the planner) and the view coverage_gate_sources (the sources that must record their list before a dam can be 提供元なし)
+0226_reading.sql  dam_reading(dam, need_volume, window, as_of) — the reading (GLOSSARY, docs/adr/0002): trusted own rate within 24 h of the moment, else newest row with a value, ties by source_rank then source_id; returns effective_capacity_m3 and rate. window_source(dam, from, to, prefer_volume) — the chart's source. source_rank(sp). display_observation() dropped; obs_daily unchanged (its last value already is the daily value)
 ```
 
 ### Schemas
@@ -303,17 +304,19 @@ the file for detail.
 
 | File | Functions |
 |---|---|
-| `src/repo/dams.ts` | `upsertDamByExternalId`, `findDamBySlug`, `latestObservation`, `earliestObservationAt`, `canonicalTwin` + `sitemapDams` (one shared （元）/（再） twin rule), `nearbyDams`, `listDams` (orderBy: id\|capacity), `takenSlugs`, `appendExternalId`, `applyDamnetAttributes`, `findDamsForReconciliation` |
-| `src/repo/watersheds.ts` | `upsertWatershed`, `findWatershedBySlug`, `findWatershedContaining`, `findNearestWatershed`, `listWatersheds`, `aggregateWatershed` |
+| `src/repo/dams.ts` | `upsertDamByExternalId`, `findDamBySlug`, `latestObservation`, `earliestObservationAt`, `canonicalTwin` + `sitemapDams` (one shared （元）/（再） twin rule), `nearbyDams`, `listDams` (orderBy: id\|capacity), `takenSlugs`, `appendExternalId`, `applyDamnetAttributes`, `findDamsForReconciliation`. Every reading here (`latestObservation`, `storageChange`, `nearbyDams`, `latestRateByDam`, `latestRateAndSourceByDam`, `lowStorageDams`) is `dam_reading()` |
+| `src/repo/watersheds.ts` | `upsertWatershed`, `findWatershedBySlug`, `findWatershedContaining`, `findNearestWatershed`, `listWatersheds`, `aggregateWatershed`, `ratesForWatersheds`, `driestWatersheds` (fresh readings over effective capacity), `watershedStorageChange` / `nationalStorageChange` (readings as of anchor − N: anchor fetched first and bound, one LATERAL per window, so each prunes chunks at startup; national d1+ from obs_daily) |
+| `src/repo/storage_totals.ts` | 全国 / per-pref / per-水系 totals: readings within `freshDays` summed over their effective capacity (`effectiveCapacityM3`); home page and /stats |
+| `src/repo/seasonal.ts` | 平年比: the fresh reading against obs_daily's same-season daily values |
 | `src/repo/match_review.ts` | `enqueueMatchReview` (never touches a closed review: open = `resolved_at IS NULL`; a migration closes one with `SET resolved_at = NOW(), resolved_dam_id = <id or NULL = not a dam>`) |
 | `src/repo/source_universe.ts` | `recordUniverseOrThrow` (the ingest run's universe write, inside its transaction; never writes `not_dam_reason`; `publishedAt` = the provider's own date for the row's newest value, 0221), `recordUniverse` (the same with failures logged and swallowed: match:kasenbosai and the backfills), `recordUniverseHasData` |
 | `src/repo/coverage.ts` | Coverage triage, one module. `triageDams(ids?)` / `triageDam(id)`: the one definition of a dam's coverage status (`covered` = a value in 30 days OR a scan from the last 7 days whose `published_at` we hold a value at). `coverageSnapshot()`: one triage of every dam plus `headline` (`realtimeCoveragePct` etc.: `covered` ÷ dams minus 提供元なし and 提供元に値なし), `summary` (`unmatchedStations` = unresolved AND `not_dam_reason IS NULL`; `notDamStations`; `pendingScanSources`, each `no_recent_observations` / `ingesting_without_list`) and `prefectures`; one call per page. Vocabulary: `COVERAGE_STATUSES`, `COVERAGE_STATUS` (label + meaning, used by the pages, the API's `statusMeanings` and OpenAPI), `PROVIDER_AVAILABILITY_LABEL`, `providerAvailability`, `isUnobtainable` |
 | `src/repo/real_data.test.ts` | a dam whose recent observations carry no value is real data in no view (list filters, `realSourceId`, triage) |
 | `src/repo/source_freshness.ts` | `staleSources` (threshold = 3 × cadence + publication lag; cadence = the longer of the cron gap and the 90th-percentile spacing of the last 20 stamps, lag = median `created_at − observed_at`; a declared `freshnessOverrideHours` replaces it, `null` = silent by design). Feeds `stale_sources` in `/api/v1/admin/jobs` and `quality:freshness-check` |
 | `src/repo/observations.ts` | `upsertObservations`, `findSeries{Hourly,Daily,Monthly}` |
-| `src/repo/source_priorities.ts` | `syncSourcePriorities` (declared rows overwrite every column; undeclared rows left alone and reported), `preferredSource`, `priorityMap` |
+| `src/repo/source_priorities.ts` | `syncSourcePriorities` (declared rows overwrite every column; undeclared rows left alone and reported), `preferredSource`, `windowSource` (the hourly chart's source, `window_source()`), `priorityMap` |
 | `src/sources_cli.ts` | `bun run --filter @dam/db sources sync` (bootstrap, after migrations) / `kick` (enqueue every active ingest task) |
-| `src/repo/newest_row.ts` | `sourceRankJoin` + `newestFirst`: the newest-row rule as SQL fragments (newest `observed_at`, then higher active `source_priorities.priority`, inactive/unlisted below, then greater `source_id`; same order as `display_observation()`/`obs_daily`, 0223). Every "latest reading" pick outside those uses it; prefer a per-dam `LATERAL … LIMIT 1` over `DISTINCT ON` (#122) |
+| `src/repo/reading.test.ts` / `reading_views.test.ts` | the reading's rule (trust, value, rank, as-of, window); every view (dam page, list, drought list, change strips, 平年比, 水系/全国 totals) showing the same reading over its effective capacity |
 | `src/repo/backfill_progress.ts` | `nextPending`, `startRunning`, `complete`, `fail`, `enqueueAllDams` |
 | `src/repo/api_keys.ts` | `issueKey`, `lookupByPrefix`, `revoke`, `recordUsage`, `usageInLastMinute`, `usageToday`, `hashKey`, `touchLastUsed` |
 | `src/migrate.ts` | numbered-SQL runner, ENOENT-tolerant |

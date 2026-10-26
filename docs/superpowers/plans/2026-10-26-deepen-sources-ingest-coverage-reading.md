@@ -104,3 +104,16 @@ an E2E smoke run. Nothing is pushed without the owner's go-ahead.
 - Implemented as SQL in migrations, taking the time window so chunk exclusion survives.
   Callers move only after `EXPLAIN` on the full local database shows the same chunk exclusion
   and no worse plan for 全国 and 水系.
+
+- Done (2026-10-27), migration 0226: `dam_reading()`, `window_source()`, `source_rank()`;
+  `display_observation()` and `newest_row.ts` are gone.
+  - `obs_daily` was **not** rebuilt: its `last_storage_volume_m3` (0223) already is the daily
+    value (newest row with a volume, same tie-break, no trusted preference), so a rebuild would
+    change no row.
+  - Local DB (prod copy), steady state: 全国 totals 26 ms (was 51), 水系 change 335–407 ms
+    (was 517–531), national change 284 ms (was 309), 水系 rates within a few ms. The dam page
+    pays for exactness: `storageChange` 44 ms (was 16), `nearbyDams` 27 ms (was 19) — an
+    unwindowed reading plans the hypertable twice (the reading and its lower bound).
+  - 全国貯水率 on the local copy: 43.6 % → 49.7 % (effective capacity).
+  - The hourly chart source needs a value: 高遠 now charts `nagano-kigyo`, not kasenbosai's
+    empty rows.

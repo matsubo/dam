@@ -169,42 +169,29 @@ async function findWatershedSeriesHourly(opts: FindWatershedSeriesOptions): Prom
   const scanFrom = new Date(opts.from.valueOf() - HOURLY_LOOKBACK_MS);
   return sql<SeriesPoint[]>`
     WITH ds AS (SELECT id FROM dams WHERE watershed_id = ${opts.watershedId}),
-    -- One source per dam. A watershed's dams routinely report under different
-    -- feeds (MLIT, prefecture 防災, JWA), so the single global pick this used
-    -- to apply filtered out every dam not on the top-priority source — which
-    -- emptied the 1-week chart for most watersheds. Same fix as
-    -- preferredSourceForDam() at the dam level, just resolved per dam in SQL.
-    --
-    -- Best first: sources that carry a volume in this window (high-priority
-    -- feeds can have their volumes NULLed as phantoms), then source_priorities
-    -- rank. Unranked sources are kept as a last resort so a dam on an unlisted
-    -- feed still counts.
+    -- One source per dam: its window source (window_source(), 0226), with
+    -- volume-carrying sources first (high-priority feeds can have their
+    -- volumes NULLed as phantoms). A watershed's dams routinely report under
+    -- different feeds (MLIT, prefecture 防災, JWA), so the single global pick
+    -- this used to apply filtered out every dam not on the top-priority
+    -- source — which emptied the 1-week chart for most watersheds.
     pref AS (
-      SELECT DISTINCT ON (o.dam_id) o.dam_id, o.source_id
-      FROM observations o
-      JOIN ds ON ds.id = o.dam_id
-      LEFT JOIN source_priorities sp ON sp.source_id = o.source_id AND sp.active
-      WHERE o.observed_at >= ${scanFrom}
-        AND o.observed_at <  ${opts.to}
-        AND o.source_id <> 'synthetic'
-      ORDER BY o.dam_id,
-               (o.storage_volume_m3 IS NULL),
-               (sp.priority IS NULL),
-               sp.priority DESC NULLS LAST
+      SELECT ds.id AS dam_id, ws.source_id
+      FROM ds
+      CROSS JOIN LATERAL window_source(ds.id, ${scanFrom}, ${opts.to}, TRUE) ws
     ),
     -- With allSources several sources can stamp the same hour: last() breaks a
-    -- timestamp tie by source priority, then source_id, as obs_daily and
-    -- display_observation() do (0223).
+    -- timestamp tie by source_rank, then source_id, as the reading does.
     bucketed AS (
       SELECT
         time_bucket_gapfill('1 hour', o.observed_at,
                             start => ${scanFrom}, finish => ${opts.to}) AS bucket,
         o.dam_id,
         locf(last(o.storage_volume_m3,
-                  ROW(o.observed_at, COALESCE(CASE WHEN spr.active THEN spr.priority END, -1), o.source_id)),
+                  ROW(o.observed_at, source_rank(spr), o.source_id)),
              treat_null_as_missing => true) AS volume,
         locf(last(o.storage_rate,
-                  ROW(o.observed_at, COALESCE(CASE WHEN spr.active THEN spr.priority END, -1), o.source_id)),
+                  ROW(o.observed_at, source_rank(spr), o.source_id)),
              treat_null_as_missing => true)      AS rate
       FROM observations o
       JOIN ds ON ds.id = o.dam_id

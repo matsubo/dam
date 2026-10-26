@@ -110,14 +110,16 @@ describe('storageChange', () => {
     }
   });
 
-  test('plans observations once, not once per window', async () => {
-    // Each scalar subquery over the hypertable is planned over every chunk;
-    // 16 of them took ~450 MB per call on production (220 chunks), memory the
-    // backend keeps afterwards. The windows must share one lookup.
+  test('plans observations a fixed number of times, not once per window', async () => {
+    // Every reference to the hypertable is planned over every chunk; 16
+    // scalar subqueries took ~450 MB per call on production (220 chunks),
+    // memory the backend keeps afterwards. The windows share one LATERAL: the
+    // current reading and the look-back reading, two scans each (the reading
+    // and its lower bound), however many windows there are.
     const [row] = await sql<{ 'QUERY PLAN': unknown }[]>`
       EXPLAIN (FORMAT JSON) ${storageChangeQuery(damId)}
     `;
     const plan = JSON.stringify(row?.['QUERY PLAN']);
-    expect(plan.match(/"Subplan Name"/g) ?? []).toEqual([]);
+    expect((plan.match(/"Relation Name":"observations"/g) ?? []).length).toBeLessThanOrEqual(4);
   });
 });

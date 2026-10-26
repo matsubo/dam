@@ -66,7 +66,7 @@ beforeAll(async () => {
   }
   await cleanup();
 
-  // A real, non-synthetic source — display_observation ignores 'synthetic'.
+  // A real, non-synthetic source — the reading ignores 'synthetic'.
   const [known] = await sql<{ n: number }[]>`
     SELECT COUNT(*)::int AS n FROM source_priorities WHERE source_id = ${SOURCE}
   `;

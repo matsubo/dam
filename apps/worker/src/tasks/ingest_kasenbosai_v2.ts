@@ -212,8 +212,9 @@ export function parseKasenbosaiObsValue(ov: ApiObsValue): ParsedKasenbosaiObs | 
   const waterLevelM = validOrNull(ov.storLvl, ov.storLvlCcd);
   // A station whose every quantity is flagged invalid (高遠: Ccd 140/160 on
   // all six since 2026-07) still publishes an obsTime each hour. Stored, that
-  // empty row is the dam's newest observation and display_observation(dam,
-  // FALSE) shows it over other sources' real values — so it is no reading.
+  // empty row was the dam's newest observation and the reading showed it
+  // over other sources' real values; dam_reading() now skips rows without a
+  // value, and this keeps them out of storage too.
   if (
     storageVolumeM3 == null &&
     storageRate == null &&

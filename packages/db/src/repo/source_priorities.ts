@@ -54,36 +54,20 @@ export async function preferredSource(): Promise<string | null> {
 }
 
 /**
- * Pick the highest-priority active source that has at least one observation
- * for the given dam in [from, to). Returns null if no source has data in
- * the window — the caller should then leave the source filter unset so any
- * remaining rows still surface.
+ * The best source for a dam over [from, to) (window_source(), 0226): the
+ * highest-ranked source with a value in the window — the reading's tie-break
+ * (priority of an active source, then source_id), and a source writing only
+ * empty rows never wins. Null when no source has a value there: the caller
+ * then leaves the source filter unset so any remaining rows still surface.
  *
- * Used by the per-dam observations API so the hourly chart shows the best
- * available source for THAT dam, instead of a single global pick that may
- * not cover the dam at all (previous behaviour produced 0-point hourly
- * graphs whenever the dam's data lived under a non-top-priority source).
+ * Used by the per-dam observations API so the hourly chart shows one coherent
+ * series from the best source for THAT dam.
  */
-export async function preferredSourceForDam(
-  damId: bigint,
-  from: Date,
-  to: Date,
-): Promise<string | null> {
-  const rows = await sql<{ source_id: string }[]>`
-    SELECT sp.source_id
-    FROM source_priorities sp
-    WHERE sp.active
-      AND EXISTS (
-        SELECT 1 FROM observations o
-        WHERE o.dam_id = ${damId}
-          AND o.source_id = sp.source_id
-          AND o.observed_at >= ${from}
-          AND o.observed_at <  ${to}
-      )
-    ORDER BY sp.priority DESC
-    LIMIT 1
+export async function windowSource(damId: bigint, from: Date, to: Date): Promise<string | null> {
+  const [row] = await sql<{ source_id: string }[]>`
+    SELECT source_id FROM window_source(${damId}, ${from}, ${to})
   `;
-  return rows[0]?.source_id ?? null;
+  return row?.source_id ?? null;
 }
 
 export async function priorityMap(): Promise<Map<string, number>> {

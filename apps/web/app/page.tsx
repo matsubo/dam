@@ -62,12 +62,12 @@ interface MasterStats {
 }
 
 interface HomeStats extends MasterStats {
-  /** Latest storage summed across the observed cohort — pairs with observedActiveCapacityM3 for rate. */
+  /** Latest storage summed across the observed cohort — pairs with observedEffectiveCapacityM3 for rate. */
   rateableStorageM3: string | null;
   /** Rate-able dams with a fresh (7 d) observation. Rate numerator and denominator both come from this cohort. */
   observedDamCount: number;
-  /** Sum of each observed dam's own denominator — the 全国貯水率 denominator. */
-  observedActiveCapacityM3: string | null;
+  /** Sum of each observed dam's effective capacity — the 全国貯水率 denominator. */
+  observedEffectiveCapacityM3: string | null;
   /** Dams classified covered (a value in the last 30 days, or a dated provider's newest). */
   realDamCount: number;
   /** River dams (堤高 15 m 以上) minus 提供元なし / 提供元に値なし — the 貯水率 denominator. */
@@ -119,7 +119,7 @@ async function homeStats(): Promise<HomeStats> {
     ...row,
     rateableStorageM3: totals.storageM3,
     observedDamCount: totals.observedDamCount,
-    observedActiveCapacityM3: totals.activeCapacityM3,
+    observedEffectiveCapacityM3: totals.effectiveCapacityM3,
     realDamCount: coverage.realtimeDamCount,
     riverDamCount: coverageRiverDamCount(coverage),
     storageRateRiverDamCount: coverage.storageRateRiverDamCount,
@@ -157,7 +157,7 @@ const cachedHomeStats = unstable_cache(
       rateableStorageM3: s.rateableStorageM3,
       rateableDamCount: Number(s.rateableDamCount),
       observedDamCount: Number(s.observedDamCount),
-      observedActiveCapacityM3: s.observedActiveCapacityM3,
+      observedEffectiveCapacityM3: s.observedEffectiveCapacityM3,
       realDamCount: Number(s.realDamCount),
       riverDamCount: Number(s.riverDamCount),
       storageRateRiverDamCount: Number(s.storageRateRiverDamCount),
@@ -170,7 +170,7 @@ const cachedHomeStats = unstable_cache(
       oldestObsIso: s.oldestObs?.toISOString() ?? null,
     };
   },
-  ['home-stats'],
+  ['home-stats-v2'],
   HOME_CACHE_OPTS,
 );
 const cachedTopDams = unstable_cache(
@@ -241,7 +241,7 @@ export default async function Home() {
   const overallRate = storageRate({
     observedDamCount: s.observedDamCount,
     storageM3: s.rateableStorageM3,
-    activeCapacityM3: s.observedActiveCapacityM3,
+    effectiveCapacityM3: s.observedEffectiveCapacityM3,
   });
   const yearsCovered = s.oldestObs
     ? Math.max(1, Math.round((Date.now() - s.oldestObs.getTime()) / (365 * 24 * 3600 * 1000)))

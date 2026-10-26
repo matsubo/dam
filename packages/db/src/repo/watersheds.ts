@@ -1,5 +1,4 @@
 import { sql } from '../client.ts';
-import { newestFirst, sourceRankJoin } from './newest_row.ts';
 
 export interface UpsertWatershedInput {
   code: string;
@@ -177,11 +176,11 @@ export interface WatershedAggregate {
    */
   observedDamCount: number;
   /**
-   * Sum of each observed dam's own denominator — the rate denominator. Per
-   * dam this is the static active_capacity_m3, UNLESS that dam's latest
-   * observation came from a source_priorities.trusted_rate_basis source with
-   * its own storage_rate, in which case it's back-solved (volume/rate) from
-   * that trusted, season-aware rate instead. See issue #17.
+   * Sum of each observed dam's effective capacity (its reading's denominator,
+   * GLOSSARY) — the rate denominator. Per dam this is the static
+   * active_capacity_m3 unless the reading came from a trusted_rate_basis
+   * source with its own storage_rate; then it is back-solved (volume/rate)
+   * from that season-aware rate instead. See issue #17.
    */
   observedActiveCapacityM3: string | null;
   observedAt: Date | null;
@@ -216,92 +215,78 @@ export interface WatershedStorageChange {
   d1825AgeS: number | null;
 }
 
+type ChangeBucket = 'current' | 'h1' | 'h6' | 'h12' | 'd1' | 'd7' | 'd30' | 'd365' | 'd1825';
+type BucketTotal = { total: string | null; pickedAt: Date | null };
+
+const SUB_DAY: [ChangeBucket, string][] = [
+  ['current', '0 seconds'],
+  ['h1', '1 hour'],
+  ['h6', '6 hours'],
+  ['h12', '12 hours'],
+];
+const DAY_PLUS: [ChangeBucket, number][] = [
+  ['d1', 1],
+  ['d7', 7],
+  ['d30', 30],
+  ['d365', 365],
+  ['d1825', 1825],
+];
+
 /**
- * Watershed-level "latest minus N-window-ago" totals, computed only over the
- * dams in the watershed that have a capacity (= the same rate-able subset the
- * watershed gauge uses, so the change percentages are consistent with the
- * displayed rate).
- *
- * Approach: we union 8 lookback timestamps and, for each, take the latest
- * per-dam observation at-or-before that point and SUM. The latest value uses
- * a small grace window (each dam's observation must be within 7 days of the
- * watershed-level "now" to count) so a single stale dam doesn't poison the
- * total.
+ * Per bucket, the SUM of the dams' readings (dam_reading()) as of
+ * `anchor − lookback`, and the oldest reading picked. The anchor is a bound
+ * parameter and each bucket its own LATERAL with a constant offset, so every
+ * reading prunes chunks at executor startup: one LATERAL over a VALUES list
+ * of offsets re-ran exclusion per row, and an anchor computed in the same
+ * query (or passed as a sub-select, which also stops the function from being
+ * inlined) did the same — 0.8 s → 0.08 s for the national strip.
  */
-export async function watershedStorageChange(watershedId: bigint): Promise<WatershedStorageChange> {
-  const rows = await sql<
-    {
-      bucket: string;
-      total: string | null;
-      pickedAt: Date | null;
-    }[]
-  >`
-    WITH ds AS (
-      SELECT id FROM dams
-      WHERE watershed_id = ${watershedId} AND active_capacity_m3 IS NOT NULL
+async function readingTotalsAt(
+  damIds: bigint[],
+  anchor: Date,
+  buckets: [ChangeBucket, string][],
+  window: string | null,
+): Promise<Map<ChangeBucket, BucketTotal>> {
+  const win = window === null ? sql`NULL::INTERVAL` : sql`${window}::INTERVAL`;
+  const join = (parts: ReturnType<typeof sql>[], sep: ReturnType<typeof sql>) =>
+    parts.reduce((acc, p) => sql`${acc}${sep}${p}`);
+  const cols = join(
+    buckets.map(
+      ([b]) =>
+        sql`SUM(${sql(b)}.storage_volume_m3)::TEXT AS ${sql(`${b}_total`)}, MIN(${sql(b)}.observed_at) AS ${sql(`${b}_at`)}`,
     ),
-    -- Each dam's newest volume, one index probe per dam. A dam without any
-    -- volume drops out here, so the lookbacks below skip it instead of
-    -- searching every chunk for it.
-    latest_per_dam AS (
-      SELECT ds.id AS dam_id, x.observed_at
-      FROM ds
-      CROSS JOIN LATERAL (
-        SELECT o.observed_at
-        FROM observations o
-        WHERE o.dam_id = ds.id AND o.storage_volume_m3 IS NOT NULL
-        ORDER BY o.observed_at DESC
-        LIMIT 1
-      ) x
+    sql`, `,
+  );
+  const laterals = join(
+    buckets.map(
+      ([b, back]) =>
+        sql`LEFT JOIN LATERAL dam_reading(d.id, TRUE, ${win}, ${anchor}::TIMESTAMPTZ - ${back}::INTERVAL) ${sql(b)} ON TRUE`,
     ),
-    -- "Now" for the watershed = max observed_at in the rate-able subset.
-    -- We use the same anchor for every lookback so the windows align.
-    anchor AS (SELECT MAX(observed_at) AS t FROM latest_per_dam),
-    buckets AS (
-      SELECT 'current' AS bucket, INTERVAL '0 second' AS lookback UNION ALL
-      SELECT 'h1',     INTERVAL '1 hour'     UNION ALL
-      SELECT 'h6',     INTERVAL '6 hours'    UNION ALL
-      SELECT 'h12',    INTERVAL '12 hours'   UNION ALL
-      SELECT 'd1',     INTERVAL '1 day'      UNION ALL
-      SELECT 'd7',     INTERVAL '7 days'     UNION ALL
-      SELECT 'd30',    INTERVAL '30 days'    UNION ALL
-      SELECT 'd365',   INTERVAL '365 days'   UNION ALL
-      SELECT 'd1825',  INTERVAL '1825 days'
-    ),
-    -- For each bucket, take each dam's most recent observation <= anchor − lookback,
-    -- then sum. One LIMIT 1 probe per dam and bucket on (dam_id, observed_at):
-    -- a DISTINCT ON over the join read the dams' whole history nine times
-    -- (7.6 s for 石狩川, #118). Same-timestamp ties: newest-row rule (#122).
-    per_bucket AS (
-      SELECT
-        b.bucket,
-        SUM(picks.storage_volume_m3)::TEXT AS total,
-        MIN(picks.observed_at) AS picked_at
-      FROM buckets b
-      LEFT JOIN LATERAL (
-        SELECT p.storage_volume_m3, p.observed_at
-        FROM latest_per_dam l
-        CROSS JOIN LATERAL (
-          SELECT o.storage_volume_m3, o.observed_at
-          FROM observations o ${sourceRankJoin()}
-          WHERE o.dam_id = l.dam_id
-            AND o.storage_volume_m3 IS NOT NULL
-            AND o.observed_at <= (SELECT t FROM anchor) - b.lookback
-          ORDER BY ${newestFirst()}
-          LIMIT 1
-        ) p
-      ) picks ON TRUE
-      GROUP BY b.bucket
-    )
-    SELECT bucket, total, picked_at AS "pickedAt" FROM per_bucket
+    sql` `,
+  );
+  const ids = damIds.map(String);
+  const [row] = await sql<Record<string, string | Date | null>[]>`
+    SELECT ${cols} FROM dams d ${laterals} WHERE d.id = ANY(${ids}::BIGINT[])
   `;
-  const map = new Map<string, { total: string | null; pickedAt: Date | null }>();
-  for (const r of rows) map.set(r.bucket, { total: r.total, pickedAt: r.pickedAt });
-  const get = (k: string): string | null => map.get(k)?.total ?? null;
-  const at = (k: string): Date | null => map.get(k)?.pickedAt ?? null;
+  return new Map(
+    buckets.map(([b]) => [
+      b,
+      {
+        total: (row?.[`${b}_total`] as string | null) ?? null,
+        pickedAt: (row?.[`${b}_at`] as Date | null) ?? null,
+      },
+    ]),
+  );
+}
+
+function toChange(m: Map<ChangeBucket, BucketTotal>): WatershedStorageChange {
+  const get = (k: ChangeBucket): string | null => m.get(k)?.total ?? null;
+  const at = (k: ChangeBucket): Date | null => m.get(k)?.pickedAt ?? null;
   const currentAt = at('current');
-  const ageS = (a: Date | null, b: Date | null): number | null =>
-    a && b ? Math.round((a.getTime() - b.getTime()) / 1000) : null;
+  const ageS = (k: ChangeBucket): number | null => {
+    const b = at(k);
+    return currentAt && b ? Math.round((currentAt.getTime() - b.getTime()) / 1000) : null;
+  };
   return {
     current: get('current'),
     h1: get('h1'),
@@ -312,135 +297,104 @@ export async function watershedStorageChange(watershedId: bigint): Promise<Water
     d30: get('d30'),
     d365: get('d365'),
     d1825: get('d1825'),
-    h1AgeS: ageS(currentAt, at('h1')),
-    h6AgeS: ageS(currentAt, at('h6')),
-    h12AgeS: ageS(currentAt, at('h12')),
-    d1AgeS: ageS(currentAt, at('d1')),
-    d7AgeS: ageS(currentAt, at('d7')),
-    d30AgeS: ageS(currentAt, at('d30')),
-    d365AgeS: ageS(currentAt, at('d365')),
-    d1825AgeS: ageS(currentAt, at('d1825')),
+    h1AgeS: ageS('h1'),
+    h6AgeS: ageS('h6'),
+    h12AgeS: ageS('h12'),
+    d1AgeS: ageS('d1'),
+    d7AgeS: ageS('d7'),
+    d30AgeS: ageS('d30'),
+    d365AgeS: ageS('d365'),
+    d1825AgeS: ageS('d1825'),
   };
 }
 
 /**
- * National version of watershedStorageChange — same shape, but the rate-able
- * subset is "every dam in the country with active_capacity_m3". Used by the
- * home page change strip.
+ * Watershed-level "now minus N" totals over the dams that have a capacity
+ * (the rate-able subset the watershed gauge uses). "Now" is the watershed's
+ * newest volume; each bucket sums every dam's reading as of now − N.
+ */
+export async function watershedStorageChange(watershedId: bigint): Promise<WatershedStorageChange> {
+  // Each dam's newest volume, one index probe per dam. A dam without any
+  // volume drops out here, so the readings below skip it instead of
+  // searching every chunk for it.
+  const latest = await sql<{ damId: bigint; t: Date }[]>`
+    SELECT d.id AS "damId", x.observed_at AS t
+    FROM dams d
+    CROSS JOIN LATERAL (
+      SELECT o.observed_at FROM observations o
+      WHERE o.dam_id = d.id AND o.storage_volume_m3 IS NOT NULL AND o.source_id <> 'synthetic'
+      ORDER BY o.observed_at DESC
+      LIMIT 1
+    ) x
+    WHERE d.watershed_id = ${watershedId} AND d.active_capacity_m3 IS NOT NULL
+  `;
+  if (latest.length === 0) return toChange(new Map());
+  const anchor = new Date(Math.max(...latest.map((r) => r.t.getTime())));
+  const buckets: [ChangeBucket, string][] = [
+    ...SUB_DAY,
+    ...DAY_PLUS.map(([b, days]): [ChangeBucket, string] => [b, `${days} days`]),
+  ];
+  return toChange(
+    await readingTotalsAt(
+      latest.map((r) => r.damId),
+      anchor,
+      buckets,
+      null,
+    ),
+  );
+}
+
+/**
+ * National version of watershedStorageChange — same shape, over every dam in
+ * the country with active_capacity_m3. Used by the home page change strip.
+ *   • sub-day buckets (current, h1, h6, h12) — readings as of the anchor
+ *     minus the lookback, within 2 days of it.
+ *   • day+ buckets (d1 … d1825) — obs_daily's daily value on anchor day − N:
+ *     a reading per dam at five-year depth would cost a probe per dam each.
  */
 export async function nationalStorageChange(): Promise<WatershedStorageChange> {
-  // Original query did 9 LATERAL DISTINCT-ON scans across the whole observations
-  // hypertable (~9 s on 6.7 M synth rows). Rewrite:
-  //   • sub-day buckets (current, h1, h6, h12) — raw observations restricted to
-  //     the last 48 h, then DISTINCT ON per dam picks the latest obs at-or-
-  //     before each lookback. Cheap because the scan window is bounded.
-  //   • day+ buckets (d1, d7, d30, d365, d1825) — obs_daily continuous
-  //     aggregate. last_storage_volume_m3 per (dam_id, day) is the materialised
-  //     answer to "what was each dam's last storage on day X". Pin the day to
-  //     `anchor::date - lookback_days`.
-  const rows = await sql<{ bucket: string; total: string | null; pickedAt: Date | null }[]>`
-    WITH ds AS (
-      SELECT id FROM dams WHERE active_capacity_m3 IS NOT NULL
-    ),
-    -- Anchor day from obs_daily (one row per dam per day → cheap MAX). The
-    -- anchor timestamp itself comes from the small obs window covering that
-    -- day plus the day before, so all sub-day-bucket scans stay bounded.
-    anchor_day AS (
+  // Anchor day from obs_daily (one row per dam per day → cheap MAX); the
+  // anchor moment is the newest volume in a bounded window around it.
+  const [a] = await sql<{ day: Date | null; t: Date | null }[]>`
+    WITH anchor_day AS (
       SELECT MAX(od.day) AS d
       FROM obs_daily od
-      JOIN ds ON ds.id = od.dam_id
-    ),
-    recent_obs AS (
-      SELECT o.dam_id, o.storage_volume_m3, o.observed_at, o.source_id
-      FROM observations o
-      JOIN ds ON ds.id = o.dam_id
-      WHERE o.storage_volume_m3 IS NOT NULL
-        AND o.observed_at >= ((SELECT d FROM anchor_day) - INTERVAL '1 day')
-        AND o.observed_at <  ((SELECT d FROM anchor_day) + INTERVAL '2 days')
-    ),
-    anchor AS (SELECT MAX(observed_at) AS t FROM recent_obs),
-    -- Sub-day buckets: snap each dam's latest obs at-or-before (anchor - lookback),
-    -- same-timestamp ties by the newest-row rule (#122). Over this bounded
-    -- window the DISTINCT ON stays cheaper than per-dam probes, which lose
-    -- chunk exclusion on the anchor-derived bounds.
-    sub_day AS (
-      SELECT b.bucket, b.lookback, picks.dam_id, picks.storage_volume_m3, picks.observed_at
-      FROM (VALUES
-        ('current', INTERVAL '0 second'),
-        ('h1',      INTERVAL '1 hour'),
-        ('h6',      INTERVAL '6 hours'),
-        ('h12',     INTERVAL '12 hours')
-      ) AS b(bucket, lookback)
-      LEFT JOIN LATERAL (
-        SELECT DISTINCT ON (o.dam_id) o.dam_id, o.storage_volume_m3, o.observed_at
-        FROM recent_obs o ${sourceRankJoin()}
-        WHERE o.observed_at <= (SELECT t FROM anchor) - b.lookback
-        ORDER BY o.dam_id, ${newestFirst()}
-      ) picks ON TRUE
-    ),
-    sub_day_totals AS (
-      SELECT bucket,
-             SUM(storage_volume_m3)::TEXT AS total,
-             MIN(observed_at) AS picked_at
-      FROM sub_day
-      GROUP BY bucket
-    ),
-    -- Day+ buckets: obs_daily pinned to anchor_day - N. last_storage_volume_m3
-    -- is the materialised "last value of the bucket day".
-    day_plus AS (
-      SELECT b.bucket, picks.day::TIMESTAMPTZ AS picked_at, picks.last_storage_volume_m3
-      FROM (VALUES
-        ('d1',     1),
-        ('d7',     7),
-        ('d30',   30),
-        ('d365', 365),
-        ('d1825', 1825)
-      ) AS b(bucket, lookback_days)
-      LEFT JOIN LATERAL (
-        SELECT od.dam_id, od.day, od.last_storage_volume_m3
-        FROM obs_daily od
-        JOIN ds ON ds.id = od.dam_id
-        WHERE od.day = (SELECT d FROM anchor_day) - (b.lookback_days * INTERVAL '1 day')
-          AND od.last_storage_volume_m3 IS NOT NULL
-      ) picks ON TRUE
-    ),
-    day_plus_totals AS (
-      SELECT bucket,
-             SUM(last_storage_volume_m3)::TEXT AS total,
-             MIN(picked_at) AS picked_at
-      FROM day_plus
-      GROUP BY bucket
+      JOIN dams ds ON ds.id = od.dam_id
+      WHERE ds.active_capacity_m3 IS NOT NULL
     )
-    SELECT bucket, total, picked_at AS "pickedAt" FROM sub_day_totals
-    UNION ALL
-    SELECT bucket, total, picked_at AS "pickedAt" FROM day_plus_totals
+    SELECT (SELECT d FROM anchor_day) AS day, MAX(o.observed_at) AS t
+    FROM observations o
+    JOIN dams ds ON ds.id = o.dam_id
+    WHERE ds.active_capacity_m3 IS NOT NULL
+      AND o.storage_volume_m3 IS NOT NULL
+      AND o.source_id <> 'synthetic'
+      AND o.observed_at >= (SELECT d FROM anchor_day) - INTERVAL '1 day'
+      AND o.observed_at <  (SELECT d FROM anchor_day) + INTERVAL '2 days'
   `;
-  const map = new Map<string, { total: string | null; pickedAt: Date | null }>();
-  for (const r of rows) map.set(r.bucket, { total: r.total, pickedAt: r.pickedAt });
-  const get = (k: string): string | null => map.get(k)?.total ?? null;
-  const at = (k: string): Date | null => map.get(k)?.pickedAt ?? null;
-  const currentAt = at('current');
-  const ageS = (a: Date | null, b: Date | null): number | null =>
-    a && b ? Math.round((a.getTime() - b.getTime()) / 1000) : null;
-  return {
-    current: get('current'),
-    h1: get('h1'),
-    h6: get('h6'),
-    h12: get('h12'),
-    d1: get('d1'),
-    d7: get('d7'),
-    d30: get('d30'),
-    d365: get('d365'),
-    d1825: get('d1825'),
-    h1AgeS: ageS(currentAt, at('h1')),
-    h6AgeS: ageS(currentAt, at('h6')),
-    h12AgeS: ageS(currentAt, at('h12')),
-    d1AgeS: ageS(currentAt, at('d1')),
-    d7AgeS: ageS(currentAt, at('d7')),
-    d30AgeS: ageS(currentAt, at('d30')),
-    d365AgeS: ageS(currentAt, at('d365')),
-    d1825AgeS: ageS(currentAt, at('d1825')),
-  };
+  if (!a?.day || !a.t) return toChange(new Map());
+  const rateable = await sql<{ id: bigint }[]>`
+    SELECT id FROM dams WHERE active_capacity_m3 IS NOT NULL
+  `;
+  const [subDay, dayPlus] = await Promise.all([
+    readingTotalsAt(
+      rateable.map((r) => r.id),
+      a.t,
+      SUB_DAY,
+      '2 days',
+    ),
+    sql<{ bucket: ChangeBucket; total: string | null; pickedAt: Date | null }[]>`
+      SELECT b.bucket,
+             SUM(od.last_storage_volume_m3)::TEXT AS total,
+             MIN(od.day)::TIMESTAMPTZ             AS "pickedAt"
+      FROM (VALUES ${sql(DAY_PLUS)}) AS b(bucket, lookback_days)
+      JOIN obs_daily od ON od.day = ${a.day}::TIMESTAMPTZ - (b.lookback_days::INT * INTERVAL '1 day')
+      JOIN dams ds ON ds.id = od.dam_id AND ds.active_capacity_m3 IS NOT NULL
+      WHERE od.last_storage_volume_m3 IS NOT NULL
+      GROUP BY b.bucket
+    `,
+  ]);
+  for (const r of dayPlus) subDay.set(r.bucket, { total: r.total, pickedAt: r.pickedAt });
+  return toChange(subDay);
 }
 
 export async function aggregateWatershed(watershedId: bigint): Promise<WatershedAggregate> {
@@ -459,25 +413,16 @@ export async function aggregateWatershed(watershedId: bigint): Promise<Watershed
     ds_rateable AS (
       SELECT id, active_capacity_m3 FROM ds WHERE active_capacity_m3 IS NOT NULL
     ),
-    -- Same rule as the dam pages (#32/#45): pick by rate basis, not by clock.
-    -- A DISTINCT ON over observed_at let an untrusted 10-minute feed outrank the
-    -- hourly trusted one, so a 北海道 dam's contribution here flipped denominator
-    -- every hour while its own page no longer did. The freshness window is passed
-    -- into the function rather than filtered afterwards, or chunk exclusion is
-    -- lost — see 0049.
+    -- Each rate-able dam's reading (dam_reading(), docs/adr/0002) when it is
+    -- fresh; its effective capacity is the denominator. The window is passed
+    -- in, not filtered afterwards, or chunk exclusion is lost — see 0049.
     latest AS (
       SELECT ds_rateable.id AS dam_id, x.observed_at, x.storage_volume_m3,
-             effective_active_capacity_m3(
-               ds_rateable.active_capacity_m3, x.storage_volume_m3, x.storage_rate,
-               COALESCE(sp.trusted_rate_basis, false)
-             ) AS active_capacity_m3
+             x.effective_capacity_m3 AS active_capacity_m3
       FROM ds_rateable
-      JOIN LATERAL (
-        SELECT * FROM display_observation(
-          ds_rateable.id, TRUE, make_interval(days => ${RATE_FRESHNESS_DAYS})
-        )
+      JOIN LATERAL dam_reading(
+        ds_rateable.id, TRUE, make_interval(days => ${RATE_FRESHNESS_DAYS})
       ) x ON TRUE
-      LEFT JOIN source_priorities sp ON sp.source_id = x.source_id
     )
     SELECT
       (SELECT COUNT(*)::INT          FROM ds)                     AS "damCount",
@@ -495,7 +440,8 @@ export async function aggregateWatershed(watershedId: bigint): Promise<Watershed
            SELECT 1 FROM observations o
            WHERE o.dam_id = ds.id
              AND o.source_id <> 'synthetic'
-             AND o.observed_at > NOW() - INTERVAL '30 days'))  AS "realDamCount"
+             AND o.observed_at > NOW() - INTERVAL '30 days'
+             AND observation_has_value(o)))                    AS "realDamCount"
   `;
   return (
     rows[0] ?? {
@@ -530,52 +476,26 @@ export async function ratesForWatersheds(
   if (watershedIds.length === 0) return new Map();
   const ids = watershedIds.map((id) => id.toString());
   const rows = await sql<{ watershedId: string; rate: number | null }[]>`
-    WITH ds AS (
-      SELECT d.id, d.watershed_id, d.active_capacity_m3
+    -- Each rate-able dam's fresh reading (dam_reading(), docs/adr/0002) over
+    -- its effective capacity; a dam without one adds to neither sum. The
+    -- window is passed in, or chunk exclusion is lost — see 0049.
+    WITH per_dam AS (
+      SELECT d.watershed_id, x.storage_volume_m3, x.effective_capacity_m3
       FROM dams d
+      LEFT JOIN LATERAL dam_reading(
+        d.id, TRUE, make_interval(days => ${RATE_FRESHNESS_DAYS})
+      ) x ON TRUE
       WHERE d.watershed_id::TEXT = ANY(${ids}::TEXT[])
         AND d.active_capacity_m3 IS NOT NULL
-    ),
-    -- Same rule as the dam pages (#32/#45): pick by rate basis, not by clock.
-    -- A DISTINCT ON over observed_at let an untrusted 10-minute feed outrank the
-    -- hourly trusted one, so a 北海道 dam's contribution here flipped denominator
-    -- every hour while its own page no longer did. The freshness window is passed
-    -- into the function rather than filtered afterwards, or chunk exclusion is
-    -- lost — see 0049.
-    latest AS (
-      SELECT ds.id AS dam_id, x.storage_volume_m3, x.storage_rate, x.source_id
-      FROM ds
-      JOIN LATERAL (
-        SELECT * FROM display_observation(
-          ds.id, TRUE, make_interval(days => ${RATE_FRESHNESS_DAYS})
-        )
-      ) x ON TRUE
-    ),
-    per_dam AS (
-      SELECT
-        ds.watershed_id,
-        latest.dam_id,
-        latest.storage_volume_m3,
-        effective_active_capacity_m3(
-          ds.active_capacity_m3, latest.storage_volume_m3, latest.storage_rate,
-          COALESCE(sp.trusted_rate_basis, false)
-        ) AS eff_cap
-      FROM ds
-      LEFT JOIN latest ON latest.dam_id = ds.id
-      LEFT JOIN source_priorities sp ON sp.source_id = latest.source_id
     )
     SELECT
-      per_dam.watershed_id::TEXT AS "watershedId",
+      watershed_id::TEXT AS "watershedId",
       CASE
-        WHEN SUM(per_dam.eff_cap) FILTER (WHERE per_dam.dam_id IS NOT NULL) > 0
-        THEN LEAST(1.0,
-          SUM(per_dam.storage_volume_m3)::FLOAT8 /
-          SUM(per_dam.eff_cap) FILTER (WHERE per_dam.dam_id IS NOT NULL)::FLOAT8
-        )
-        ELSE NULL
+        WHEN SUM(effective_capacity_m3) > 0
+        THEN LEAST(1.0, SUM(storage_volume_m3)::FLOAT8 / SUM(effective_capacity_m3)::FLOAT8)
       END AS rate
     FROM per_dam
-    GROUP BY per_dam.watershed_id
+    GROUP BY watershed_id
   `;
   const m = new Map<string, number | null>();
   for (const r of rows) m.set(r.watershedId, r.rate);
@@ -606,6 +526,7 @@ export async function realDamCountsForWatersheds(
         WHERE o.dam_id = d.id
           AND o.source_id <> 'synthetic'
           AND o.observed_at > NOW() - INTERVAL '30 days'
+          AND observation_has_value(o)
       )
     GROUP BY d.watershed_id
   `;
@@ -636,47 +557,22 @@ export async function driestWatersheds(
   minObserved: number,
 ): Promise<DriestWatershed[]> {
   return sql<DriestWatershed[]>`
-    WITH ds AS (
-      SELECT d.id, d.watershed_id, d.active_capacity_m3
+    -- Same cohort as ratesForWatersheds: fresh readings over effective capacity.
+    WITH per_dam AS (
+      SELECT d.watershed_id, x.storage_volume_m3, x.effective_capacity_m3
       FROM dams d
+      LEFT JOIN LATERAL dam_reading(
+        d.id, TRUE, make_interval(days => ${RATE_FRESHNESS_DAYS})
+      ) x ON TRUE
       WHERE d.watershed_id IS NOT NULL
         AND d.active_capacity_m3 IS NOT NULL
-    ),
-    -- Same rule as the dam pages (#32/#45): pick by rate basis, not by clock.
-    -- A DISTINCT ON over observed_at let an untrusted 10-minute feed outrank the
-    -- hourly trusted one, so a 北海道 dam's contribution here flipped denominator
-    -- every hour while its own page no longer did. The freshness window is passed
-    -- into the function rather than filtered afterwards, or chunk exclusion is
-    -- lost — see 0049.
-    latest AS (
-      SELECT ds.id AS dam_id, x.storage_volume_m3, x.storage_rate, x.source_id
-      FROM ds
-      JOIN LATERAL (
-        SELECT * FROM display_observation(
-          ds.id, TRUE, make_interval(days => ${RATE_FRESHNESS_DAYS})
-        )
-      ) x ON TRUE
-    ),
-    per_dam AS (
-      SELECT
-        ds.watershed_id,
-        latest.dam_id,
-        latest.storage_volume_m3,
-        effective_active_capacity_m3(
-          ds.active_capacity_m3, latest.storage_volume_m3, latest.storage_rate,
-          COALESCE(sp.trusted_rate_basis, false)
-        ) AS eff_cap
-      FROM ds
-      LEFT JOIN latest ON latest.dam_id = ds.id
-      LEFT JOIN source_priorities sp ON sp.source_id = latest.source_id
     ),
     rated AS (
       SELECT
         watershed_id,
-        COUNT(dam_id)::INT AS observed_count,
+        COUNT(storage_volume_m3)::INT AS observed_count,
         LEAST(1.0,
-          SUM(storage_volume_m3)::FLOAT8 /
-          NULLIF(SUM(eff_cap) FILTER (WHERE dam_id IS NOT NULL), 0)::FLOAT8
+          SUM(storage_volume_m3)::FLOAT8 / NULLIF(SUM(effective_capacity_m3), 0)::FLOAT8
         ) AS rate
       FROM per_dam
       GROUP BY watershed_id

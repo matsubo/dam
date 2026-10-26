@@ -39,7 +39,7 @@
 //
 // Not trusted_rate_basis anyway: this feed has no 貯水量, so
 // effective_active_capacity_m3() has nothing to back-solve from it. And
-// display_observation() ranks any current trusted row with a native rate
+// dam_reading() ranks any current trusted row with a native rate
 // first, newest first — these volume-less 10-minute rows would then displace
 // kasenbosai's trusted rows (which carry the 貯水量) on the dam page and blank
 // its 貯水量 / 貯水率.
