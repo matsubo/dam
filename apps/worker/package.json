@@ -15,6 +15,6 @@
     "@dam/db": "workspace:*",
     "fflate": "^0.8.3",
     "graphile-worker": "^0.18.0",
-    "unpdf": "^1.8.1"
+    "unpdf": "^1.9.1"
   }
 }
