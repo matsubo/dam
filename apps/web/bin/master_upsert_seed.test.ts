@@ -1,7 +1,7 @@
 // apps/web/bin/master_upsert_seed.test.ts
 //
 // Guards the two seed files this repo ships in the web image
-// (`deploy/coolify/Dockerfile.web` COPYs them to /seed/).
+// (`deploy/Dockerfile.web` COPYs them to /seed/).
 //
 // Migration 0045 retired the `synthetic` source, but bootstrap.sh applies
 // migrations *before* the bundled seed, so a seed that still carries the row

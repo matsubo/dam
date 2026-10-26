@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   alternates: { canonical: '/legal/privacy', types: { 'text/markdown': '/md/legal/privacy' } },
 };
 
-const LAST_UPDATED = '2026-09-26';
+const LAST_UPDATED = '2026-10-26';
 
 export default function PrivacyPage() {
   return (
@@ -66,7 +66,7 @@ export default function PrivacyPage() {
         </p>
         <h3 className="text-sm font-semibold mt-4 mb-1">2.4 サーバーログ</h3>
         <p>
-          ホスティング (Coolify / Cloudflare 等)
+          ホスティング (Kubernetes / Cloudflare 等)
           のレイヤで標準的なアクセスログ・エラーログが一定期間保持されます。
           これらはサービス可用性確保および技術的トラブル解析のためのみ参照します。
         </p>

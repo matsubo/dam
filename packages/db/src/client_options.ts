@@ -1,6 +1,6 @@
 /**
  * Per-connection settings for the shared postgres pool. Only the web server
- * sets PG_STATEMENT_TIMEOUT_MS (deploy/coolify/bootstrap.sh, on `next start`
+ * sets PG_STATEMENT_TIMEOUT_MS (deploy/bootstrap.sh, on `next start`
  * alone): public endpoints must not hold a query forever, but the worker's
  * backfills and the migrations legitimately run long.
  */

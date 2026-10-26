@@ -1,5 +1,5 @@
 // Auth.js v5 (next-auth@5) — Google SSO only.
-// Required env vars (set in Coolify, NOT in the repo):
+// Required env vars (Secret dam-env on the cluster, NOT in the repo):
 //   AUTH_SECRET           random hex (e.g. `openssl rand -hex 32`)
 //   AUTH_GOOGLE_ID        OAuth client ID from Google Cloud Console
 //   AUTH_GOOGLE_SECRET    OAuth client secret

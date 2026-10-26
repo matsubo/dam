@@ -6,9 +6,8 @@
 # dam-env / ghcr-pull are cluster-side and live in matsubo/network-setting
 # (k8s/dam.yaml).
 #
-# Both pods read the same env (dam-env), like the two Coolify applications did.
-# Never add the one-shot BOOTSTRAP_* flags to it: bootstrap.sh runs on every web
-# start (see deploy/coolify/bootstrap.sh).
+# Both pods read the same env (dam-env). Never add the one-shot BOOTSTRAP_*
+# flags to it: bootstrap.sh runs on every web start (see deploy/bootstrap.sh).
 apiVersion: apps/v1
 kind: Deployment
 metadata:

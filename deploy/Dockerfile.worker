@@ -32,5 +32,5 @@ COPY apps/worker ./apps/worker
 
 ENV NODE_ENV=production
 
-# graphile-worker exits non-zero on fatal errors; Coolify/compose will restart.
+# graphile-worker exits non-zero on fatal errors; Kubernetes restarts the pod.
 CMD ["bun", "run", "apps/worker/src/index.ts"]

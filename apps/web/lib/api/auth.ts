@@ -33,7 +33,7 @@ function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
 }
 
 // Local dev and E2E only (both run `next dev`). Ignored in production so a
-// stray env var in Coolify cannot open every keyed route.
+// stray env var in the cluster's Secret cannot open every keyed route.
 const ADMIN_BYPASS = (): boolean =>
   process.env.API_AUTH_BYPASS === '1' && process.env.NODE_ENV !== 'production';
 

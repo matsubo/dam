@@ -195,7 +195,7 @@ this.
 - **Test**: bun:test (unit/integration), Playwright (E2E)
 - **Charts**: ECharts via `echarts-for-react`
 - **Maps**: Leaflet directly (no react-leaflet) on GSI tiles
-- **Build/deploy**: GitHub Actions → home k3s (`deploy/k8s.yaml`); the database
-  and its daily volume-snapshot backups are cluster-side (matsubo/network-setting
-  `k8s/dam.yaml`). The former Coolify setup is kept with auto-deploy off
+- **Build/deploy**: GitHub Actions → home k3s (`deploy/Dockerfile.{web,worker}`,
+  `deploy/k8s.yaml`); the database and its daily volume-snapshot backups are
+  cluster-side (matsubo/network-setting `k8s/dam.yaml`)
 - **CI**: GitHub Actions (lint → typecheck → migrate → unit → E2E)

@@ -64,7 +64,7 @@ describe('POST /api/v1/admin/jobs', () => {
 describe('GET /api/v1/admin/jobs — failing_jobs (#31)', () => {
   test('surfaces a retries-exhausted job that active_or_pending_jobs would hide', async () => {
     // #31 burned through 25 attempts of storageRate:recompute with the only
-    // evidence in the Coolify log: `active_or_pending_jobs` is
+    // evidence in the worker log: `active_or_pending_jobs` is
     // ORDER BY run_at LIMIT 20, so a job backing off into the future sorts off
     // the end of it. failing_jobs is keyed on the error, not the schedule.
     await POST(post({ task: 'aggregates:refresh' }));

@@ -157,27 +157,15 @@ Either bump the source that has data, or have the synth seeder run again
 Until you negotiate access (contact form on the site), keep using the
 synthetic seeder. Document any access agreement in `docs/superpowers/plans/`.
 
-## Backup / restore (production, Coolify)
+## Backup / restore (production)
 
-> **Not deployed (checked 2026-10-02).** Coolify has no backup schedule on
-> `dam-db`, and `deploy/backup/pgbackrest.conf` holds placeholders that no
-> container mounts. Until one of the two is set up there is no restore point.
-> The plan below is the intended configuration, not the running one.
-
-Intended configuration (`deploy/backup/pgbackrest.conf`):
-- full backup weekly (Sun 02:00 UTC)
-- diff hourly
-- retention: 4 fulls + 14 diffs
-- destination: external S3 with AES-256-CBC at rest
-
-Restore PITR:
-
-```sh
-# Stop the worker first; web can stay running but will return errors
-coolify worker stop dam
-pgbackrest restore --stanza=main --type=time --target="2026-05-02 03:00:00+09"
-coolify worker start dam
-```
+Cluster-side, in matsubo/network-setting `k8s/dam.yaml` ("Backups",
+"Restore"): ScheduledBackup `dam-pg18-daily` takes a CloudNativePG volume
+snapshot from the standby every day at 03:45 JST, the newest 14 are kept. No
+WAL archive, so no point-in-time recovery; RPO is up to one day if both
+instances are lost. Restore = a new Cluster bootstrapped from a
+VolumeSnapshot, then Service `dam-postgres-rw` pointed at it. Operator steps:
+`deploy/ops/runbook.md` §4.
 
 Verify with:
 
@@ -188,42 +176,25 @@ SELECT COUNT(*) FROM dams;
 
 ## Deploy
 
-Production is moving from Coolify to the home k3s cluster (namespace `dam`).
-`.github/workflows/deploy.yml` builds `ghcr.io/matsubo/dam-web` and
-`ghcr.io/matsubo/dam-worker` on every push to main and, while the repository
+Production runs on the home k3s cluster (namespace `dam`).
+`.github/workflows/deploy.yml` builds `ghcr.io/matsubo/dam-web`
+(`deploy/Dockerfile.web`) and `ghcr.io/matsubo/dam-worker`
+(`deploy/Dockerfile.worker`) on every push to main and, while the repository
 variable `DEPLOY_K3S` is `true`, applies `deploy/k8s.yaml` (web Deployment with
 two replicas spread over nodes plus its PodDisruptionBudget, Service, Ingress,
-worker Deployment) through Tailscale and then runs the CDN
-purge Job (`deploy/purge-cdn.yaml`). The database (CloudNativePG Cluster
-`dam-pg18`, PostgreSQL 18, two instances; the app connects through Service
-`dam-postgres-rw`, which selects the current Cluster's primary; the old
-PostgreSQL 16 Cluster `dam-pg` is hibernated for rollback), the
+worker Deployment) through Tailscale and then runs the CDN purge Job
+(`deploy/purge-cdn.yaml`). Set `DEPLOY_K3S` to false before moving or
+restoring the database. The database (CloudNativePG Cluster `dam-pg18`,
+PostgreSQL 18, two instances; the app connects through Service
+`dam-postgres-rw`, which selects the current Cluster's primary), the
 namespace, RBAC and the `dam-env` Secret are cluster-side, in
 matsubo/network-setting `k8s/dam.yaml`. `NEXT_PUBLIC_SITE_URL` and
 `NEXT_PUBLIC_GTM_ID` are build args in the workflow; runtime env is `dam-env`.
 
-Until the move is finished, the Coolify setup below still exists (auto-deploy
-off):
-
-Coolify pulls from main and builds two separate applications: `dam-web`
-(`deploy/coolify/Dockerfile.web`, rolling updates) and `dam-worker`
-(`deploy/coolify/Dockerfile.worker`). Postgres (`dam-db`) is its own Coolify
-resource and is not touched by a push. Layout and env vars:
-`deploy/coolify/README.md`. The former single
-compose stack is kept at `deploy/coolify/docker-compose.legacy.yaml`.
-
-Required Coolify secrets:
-
-```
-DATABASE_URL              postgres://dam:CHANGEME@<dam-db uuid>:5432/dam
-NEXT_PUBLIC_SITE_URL      https://your-public-host
-HTTP_CONTACT_EMAIL        ops@your-domain
-KASENBOSAI_BASE_URL       (leave unset until access granted)
-```
-
-After first deploy: run `just migrate` inside the web container, then
-`just import-ndi-watersheds` and `just import-ndi-dams` from a host with
-`data/nlni/...` available.
+Every web pod start runs `deploy/bootstrap.sh`: pending migrations, the
+bundled master seed when `dams` is empty, the idempotent master upsert, then
+Next.js. Migrations must stay additive (old and new pods serve side by side
+during a rollout).
 
 ## Long-running / cron tasks
 

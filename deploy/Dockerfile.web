@@ -63,11 +63,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends postgresql-clie
 WORKDIR /app/apps/web
 EXPOSE 3000
 
-# Healthcheck — Coolify will also do its own, but having one in the image
-# makes `docker compose` self-healing locally. The `oven/bun` image has no
-# curl/wget, so we use bun's built-in fetch.
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD bun -e "fetch('http://127.0.0.1:3000/api/v1/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+# No HEALTHCHECK: Kubernetes ignores it; deploy/k8s.yaml probes
+# /api/v1/healthz instead.
 
 # Bootstrap chain on every container start:
 #   1. Apply any pending migrations  (idempotent via _migrations ledger)
@@ -77,6 +74,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 #   3. If observations is empty AND dams is now populated, run the synthetic
 #      observation seeder so the chart endpoints have plausible data.
 #   4. Start Next.js.
-COPY deploy/coolify/bootstrap.sh /bootstrap.sh
+COPY deploy/bootstrap.sh /bootstrap.sh
 RUN chmod +x /bootstrap.sh
 CMD ["/bootstrap.sh"]

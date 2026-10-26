@@ -352,10 +352,11 @@ the file for detail.
 
 | Path | Purpose |
 |---|---|
-| `deploy/coolify/Dockerfile.web` | multi-stage Bun build for Next |
-| `deploy/coolify/Dockerfile.worker` | thin Bun image for graphile-worker |
-| `deploy/coolify/docker-compose.coolify.yml` | full stack with healthchecks |
-| `deploy/coolify/README.md` | first-time bring-up |
-| `deploy/backup/pgbackrest.conf` | full+diff schedule, S3 destination, AES-256 |
+| `deploy/Dockerfile.web` | multi-stage Bun build for Next; bundles `deploy/seed/` |
+| `deploy/Dockerfile.worker` | thin Bun image for graphile-worker |
+| `deploy/bootstrap.sh` | web pod start: migrations, master seed/upsert, then Next.js |
+| `deploy/k8s.yaml` | web/worker Deployments, web PDB, Service, Ingress (namespace `dam` on k3s) |
+| `deploy/purge-cdn.yaml` | Cloudflare purge Job run after each rollout |
+| `deploy/postgres/` | CloudNativePG operand image (PostgreSQL 18 + TimescaleDB + PostGIS) |
 | `deploy/ops/runbook.md` | operator runbook |
 | `deploy/ops/oneoff/*.sql` | dated one-off data fixes on compressed `observations` (never migrations); see runbook §9 |
