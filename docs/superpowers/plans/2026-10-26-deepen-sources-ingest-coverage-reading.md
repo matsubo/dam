@@ -62,6 +62,11 @@ an E2E smoke run. Nothing is pushed without the owner's go-ahead.
 - Tests, replace not layer: each migrated task gets fixture → universe entries tests without a
   DB; the run gets one suite on a scratch DB. Parser-only, `chooseMaster` and
   `globalThis.fetch`-patching tests go as their task moves.
+- Interface (Q31–Q36): `ingestTask(sourceId, scan)` in `apps/worker/src/ingest/`; a non-twin
+  tie leaves the entry unbound; a failed list fetch fails the job; each family's bindings are
+  compared against the stored `resolved_dam_id` before it moves; a `not_dam_reason` key binds
+  only by stamp; per-dam partial-failure alarms (kudamatsu, nagasaki_city, omura) are dropped.
+- Moved: okayama-bousai, tottori-bousai.
 
 ## 3. Coverage triage — `packages/db`
 

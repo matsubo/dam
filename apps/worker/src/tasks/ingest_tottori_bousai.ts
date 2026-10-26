@@ -28,17 +28,15 @@
 // and its level sits far below it. Stored as-is they were 423 prod rows of
 // plunges on the chart (cleaned by deploy/ops/oneoff/
 // 2026-09-28_tottori_bousai_placeholders.sql), so an item whose level is more
-// than MIN_LEVEL_MARGIN_M below its own 最低水位 is skipped whole — its rate
-// and flows are another dam's too.
+// than MIN_LEVEL_MARGIN_M below its own 最低水位 is unreadable whole — its
+// rate and flows are another dam's too. A list made only of such items reads
+// nothing, and the run fails the job so the next attempt fetches again.
 //
 // Cron: hourly at :33.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const BASE_URL = process.env.TOTTORI_BOUSAI_URL ?? 'https://www.bousai.pref.tottori.lg.jp';
 const PREF_CODE = '31';
@@ -67,17 +65,6 @@ interface TottoriBousaiItem {
   minWaterLevel: number | null;
 }
 
-export interface ParsedRow {
-  observatoryId: string;
-  observatoryName: string;
-  observedAt: Date;
-  waterLevelM: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
-  storageVolumeM3: number | null;
-  storageRate: number | null;
-}
-
 /** Parse 「YYYY-MM-DD HH:MM:SS」 (JST) → UTC Date. */
 export function parseTottoriTimestamp(s: string): Date | null {
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/);
@@ -94,202 +81,101 @@ export function parseTottoriTimestamp(s: string): Date | null {
   );
 }
 
-/** Strip ダム suffix and （再）/（元）annotations. */
-export function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .trim();
-}
-
-function gated(value: number | null, flg: string): number | null {
-  return flg === '0' && typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
 /** How far below its own 最低水位 a level may read before the item is taken
  *  for another dam's data. Every real prod reading since 2026-06-05 is above
  *  最低水位 (closest: 百谷 62.37 vs 60.4 m); the placeholders and copies sit
  *  97–353 m below it. */
 const MIN_LEVEL_MARGIN_M = 20;
 
-/** Convert feed items to observation rows, dropping all-null dams and items
- *  that carry another dam's (or placeholder) values (see header). */
-export function parseTottoriItems(items: TottoriBousaiItem[]): ParsedRow[] {
-  const out: ParsedRow[] = [];
-  for (const it of items) {
-    const observedAt = parseTottoriTimestamp(it.dataTimestamp ?? '');
-    if (!observedAt) continue;
-    if (
-      it.damQuantitiesLevel != null &&
-      it.minWaterLevel != null &&
-      it.damQuantitiesLevel < it.minWaterLevel - MIN_LEVEL_MARGIN_M
-    )
-      continue;
-
-    const level = gated(it.damQuantitiesLevel, it.damQuantitiesLevelFlg);
-    const inflow = gated(it.damInflowQuantities, it.damInflowQuantitiesFlg);
-    const outflow = gated(it.damTotalReleaseQuantities, it.damTotalReleaseQuantitiesFlg);
-    const storageThouM3 = gated(
-      it.damEffectiveStorageQuantities,
-      it.damEffectiveStorageQuantitiesFlg,
-    );
-    const storage = storageThouM3 != null ? storageThouM3 * 1000 : null;
-    // Prefer 利水容量貯水率: it is the rate the manager publishes, against the
-    // current-season 利水容量. 有効容量貯水率 divides by an annual capacity and
-    // understates flood-control dams — the inversion issue #19 found in
-    // kasenbosai. tottori-bousai is trusted_rate_basis (migration 0040), so the
-    // stored rate is also back-solved into the denominator the API reports.
-    // The 利水 column has been null/flg=2 for every dam since June 2026 (the
-    // site itself renders it as "-").
-    //
-    // Without it, only a dam 鳥取県 manages itself (managerCd "40" = 県) keeps
-    // the 有効 column: that is the manager's own figure, and kasenbosai stores
-    // the same value every hour. For 国's 菅沢 ("41") it is 鳥取県's
-    // republication, volume / 15,403 千m³ (2.9 % at 450 千m³) while the
-    // manager's feeds (cgr-mlit-dam, kasenbosai storPcntIrr) read ~39 %; stored
-    // as trusted it flipped the displayed rate every hour. Its rate stays NULL
-    // so the trigger derives it and flags it (bit 32, migration 0051).
-    const ratePct =
-      gated(it.storageRateWaterUseCapacity, it.storageRateWaterUseCapacityFlg) ??
-      (it.managerCd === PREF_MANAGER_CD
-        ? gated(it.storageRateEffectiveCapacity, it.storageRateEffectiveCapacityFlg)
-        : null);
-
-    if (level == null && inflow == null && outflow == null && storage == null && ratePct == null) {
-      continue;
-    }
-
-    out.push({
-      observatoryId: String(it.observatoryId),
-      observatoryName: it.name,
-      observedAt,
-      waterLevelM: level,
-      inflowM3s: inflow,
-      outflowM3s: outflow,
-      storageVolumeM3: storage,
-      storageRate: ratePct != null ? Math.max(0, Math.min(1, ratePct / 100)) : null,
-    });
+/** One item's reading; a Flg other than "0" is the site's own mark. */
+export function tottoriReading(it: TottoriBousaiItem): Reading {
+  if (
+    it.damQuantitiesLevel != null &&
+    it.minWaterLevel != null &&
+    it.damQuantitiesLevel < it.minWaterLevel - MIN_LEVEL_MARGIN_M
+  ) {
+    return {
+      state: 'unreadable',
+      why: `level ${it.damQuantitiesLevel} m is far below its 最低水位 ${it.minWaterLevel} m: another dam's values`,
+    };
   }
-  return out;
+  const field = (value: number | null, flg: string): Cell => cell(value, flg !== '0');
+  const level = field(it.damQuantitiesLevel, it.damQuantitiesLevelFlg);
+  const inflow = field(it.damInflowQuantities, it.damInflowQuantitiesFlg);
+  const outflow = field(it.damTotalReleaseQuantities, it.damTotalReleaseQuantitiesFlg);
+  const storageThou = field(it.damEffectiveStorageQuantities, it.damEffectiveStorageQuantitiesFlg);
+  const rateWaterUse = field(it.storageRateWaterUseCapacity, it.storageRateWaterUseCapacityFlg);
+  // Prefer 利水容量貯水率: it is the rate the manager publishes, against the
+  // current-season 利水容量. 有効容量貯水率 divides by an annual capacity and
+  // understates flood-control dams — the inversion issue #19 found in
+  // kasenbosai. tottori-bousai is trusted_rate_basis, so the stored rate is
+  // also back-solved into the denominator the API reports. The 利水 column
+  // has been null/flg=2 for every dam since June 2026 (the site itself
+  // renders it as "-").
+  //
+  // Without it, only a dam 鳥取県 manages itself (managerCd "40" = 県) keeps
+  // the 有効 column: that is the manager's own figure, and kasenbosai stores
+  // the same value every hour. For 国's 菅沢 ("41") it is 鳥取県's
+  // republication, volume / 15,403 千m³ (2.9 % at 450 千m³) while the
+  // manager's feeds (cgr-mlit-dam, kasenbosai storPcntIrr) read ~39 %; stored
+  // as trusted it flipped the displayed rate every hour. Its rate stays NULL
+  // so the trigger derives it and flags it (bit 32, migration 0051).
+  const prefManaged = it.managerCd === PREF_MANAGER_CD;
+  const rateEffective: Cell = prefManaged
+    ? field(it.storageRateEffectiveCapacity, it.storageRateEffectiveCapacityFlg)
+    : null;
+  const cells: Cell[] = [level, inflow, outflow, storageThou, rateWaterUse];
+  const state = cellState(prefManaged ? [...cells, rateEffective] : cells);
+  if (state === 'empty') return { state, mark: 'Flg ≠ 0 on every field' };
+  if (state === 'unreadable') return { state, why: 'no Flg-0 value' };
+  const observedAt = parseTottoriTimestamp(it.dataTimestamp ?? '');
+  if (!observedAt) return { state: 'unreadable', why: `dataTimestamp "${it.dataTimestamp}"` };
+  const thou = numberIn(storageThou);
+  const ratePct = numberIn(rateWaterUse) ?? numberIn(rateEffective);
+  return {
+    state: 'values',
+    observations: [
+      {
+        observedAt,
+        waterLevelM: numberIn(level),
+        inflowM3s: numberIn(inflow),
+        outflowM3s: numberIn(outflow),
+        storageVolumeM3: thou != null ? thou * 1000 : null,
+        storageRate: ratePct != null ? Math.max(0, Math.min(1, ratePct / 100)) : null,
+      },
+    ],
+  };
 }
 
-interface DamMatch {
-  observatoryId: string;
-  damId: bigint;
+/** Every listed dam: the feed's list is the universe. */
+export function tottoriEntries(items: TottoriBousaiItem[]): Entry[] {
+  return items.map((it) => ({
+    key: String(it.observatoryId),
+    name: it.name,
+    pref: PREF_CODE,
+    reading: tottoriReading(it),
+  }));
 }
 
-export function chooseMaster(
-  stem: string,
-  masters: BindableMaster[],
-  stationKey?: string,
-): bigint | null {
-  // A row already stamped with this observatory keeps it (#57).
-  const stamped = stationKey ? stampedMaster(masters, stationKey) : null;
-  if (stamped) return stamped.id;
-  let best: { m: BindableMaster; rank: number } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (mStem === stem) rank = 0;
-    else if (m.name === `${stem}ダム`) rank = 1;
-    else if (mStem.startsWith(stem)) rank = 2;
-    else if (mStem.includes(stem)) rank = 3;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-      best = { m, rank };
-    }
-  }
-  return best?.m.id ?? null;
-}
-
-async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const out: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  for (const r of rows) {
-    const stem = normalizeName(r.observatoryName);
-    if (!stem) continue;
-    const damId = chooseMaster(stem, masters, r.observatoryId);
-    universe.push({
-      externalId: r.observatoryId,
-      name: r.observatoryName,
-      prefCode: PREF_CODE,
-      resolvedDamId: damId,
-    });
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for ${r.observatoryName} (${r.observatoryId})`);
-      continue;
-    }
-    out.push({ observatoryId: r.observatoryId, damId });
-    await bindExternalId(damId, SOURCE_ID, r.observatoryId);
-  }
-  await recordUniverse(SOURCE_ID, universe);
-  return out;
-}
-
-async function fetchJson<T>(path: string, ua: string): Promise<T | null> {
+async function fetchJson<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { 'user-agent': ua },
+    headers: {
+      'user-agent':
+        process.env.HTTP_USER_AGENT ??
+        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
+    },
     signal: AbortSignal.timeout(15_000),
   });
-  if (res.status !== 200) return null;
+  if (res.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${res.status} for ${path}`);
   return (await res.json()) as T;
 }
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
-  const ua =
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
-
-  const pointer = await fetchJson<{ latestDateTimestamp: string }>('/data/dam/data.json', ua);
-  const latest = pointer?.latestDateTimestamp;
-  if (!latest) {
-    log(`${SOURCE_ID}: could not read latestDateTimestamp; abort`);
-    return;
-  }
-  const slug = latest.slice(0, 16).replace(/[ :]/g, '-');
-  const snapshot = await fetchJson<{ items: TottoriBousaiItem[] }>(
-    `/data/dam/list/${slug}.json`,
-    ua,
+export default ingestTask(SOURCE_ID, async (log) => {
+  const { latestDateTimestamp: latest } = await fetchJson<{ latestDateTimestamp: string }>(
+    '/data/dam/data.json',
   );
-  if (!snapshot?.items) {
-    log(`${SOURCE_ID}: snapshot ${slug} missing items; abort`);
-    return;
-  }
-
-  const parsed = parseTottoriItems(snapshot.items);
-  log(`${SOURCE_ID}: parsed ${parsed.length}/${snapshot.items.length} dams at ${latest}`);
-
-  const matches = await matchMaster(parsed, log);
-  const damByObs = new Map(matches.map((m) => [m.observatoryId, m.damId]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of parsed) {
-    const damId = damByObs.get(p.observatoryId);
-    if (!damId) continue;
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: p.storageRate,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${parsed.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+  const slug = latest.slice(0, 16).replace(/[ :]/g, '-');
+  const { items } = await fetchJson<{ items: TottoriBousaiItem[] }>(`/data/dam/list/${slug}.json`);
+  log(`${SOURCE_ID}: ${items.length} dams at ${latest}`);
+  return { entries: tottoriEntries(items) };
+});

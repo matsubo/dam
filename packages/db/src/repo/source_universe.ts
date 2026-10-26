@@ -1,4 +1,4 @@
-import { sql } from '../client.ts';
+import { type Db, sql } from '../client.ts';
 
 /**
  * One station as published by an upstream source, whether or not we managed
@@ -78,10 +78,16 @@ export interface RecordUniverseOptions {
   keepHasData?: boolean;
 }
 
-async function recordUniverseOrThrow(
+/**
+ * The same write without the safety net: a failure throws. The ingest run
+ * (apps/worker/src/ingest) calls it inside the transaction that also writes
+ * the observations, so a universe failure fails the job instead of hiding.
+ */
+export async function recordUniverseOrThrow(
   sourceId: string,
   rows: UniverseRow[],
-  keepHasData: boolean,
+  keepHasData = false,
+  db: Db = sql,
 ): Promise<number> {
   // De-duplicate on the primary key before building the multi-row INSERT.
   // postgres.js emits one statement, and Postgres rejects a duplicate target
@@ -109,8 +115,8 @@ async function recordUniverseOrThrow(
       has_data: r.hasData ?? null,
       published_at: r.publishedAt ?? null,
     }));
-    await sql`
-      INSERT INTO source_universe ${sql(values)}
+    await db`
+      INSERT INTO source_universe ${db(values)}
       ON CONFLICT (source_id, source_external_id) DO UPDATE SET
         source_name     = EXCLUDED.source_name,
         pref_code       = COALESCE(EXCLUDED.pref_code, source_universe.pref_code),
@@ -140,7 +146,7 @@ async function recordUniverseOrThrow(
   // and stamping a run for it would let a transient upstream outage close the
   // honesty gate and flip that provider's dams to 提供元なし.
   if (deduped.length === 0) return 0;
-  await sql`
+  await db`
     INSERT INTO source_universe_runs (source_id, last_full_scan_at, row_count)
     VALUES (${sourceId}, NOW(), ${deduped.length})
     ON CONFLICT (source_id) DO UPDATE SET

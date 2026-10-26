@@ -1,4 +1,4 @@
-import { sql } from '../client.ts';
+import { type Db, sql } from '../client.ts';
 
 export interface ObservationInput {
   observedAt: Date;
@@ -14,7 +14,7 @@ export interface ObservationInput {
   qualityFlag?: number;
 }
 
-export async function upsertObservations(rows: ObservationInput[]): Promise<number> {
+export async function upsertObservations(rows: ObservationInput[], db: Db = sql): Promise<number> {
   if (rows.length === 0) return 0;
   // Build a single multi-row INSERT for performance
   const values = rows.map((r) => ({
@@ -30,8 +30,8 @@ export async function upsertObservations(rows: ObservationInput[]): Promise<numb
     raw_snapshot_id: r.rawSnapshotId ?? null,
     quality_flag: r.qualityFlag ?? 0,
   }));
-  const result = await sql`
-    INSERT INTO observations ${sql(values)}
+  const result = await db`
+    INSERT INTO observations ${db(values)}
     ON CONFLICT (dam_id, observed_at, source_id) DO UPDATE SET
       storage_volume_m3 = EXCLUDED.storage_volume_m3,
       storage_rate      = EXCLUDED.storage_rate,

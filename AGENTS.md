@@ -152,12 +152,19 @@ bun run apps/web/bin/seed_synthetic_observations.ts     --hourly-days 30 --years
    `packages/core/src/source_registry.ts`: priority, description, flags,
    `ingestCron`, details) and register the task in
    `apps/worker/src/task_list.ts`; the crontab, cadence and `source_priorities`
-   row follow from the declaration. The task must call `recordUniverse(SOURCE_ID, rows)`
-   once per run with the provider's WHOLE published list — the unmatched rows
+   row follow from the declaration. Write the task on the ingest run
+   (`apps/worker/src/ingest/`): `export default ingestTask(SOURCE_ID, scan)`,
+   where `scan` returns one entry per row the provider lists, each with a
+   required state (`values` / provider-marked `empty` / `unreadable`). The run
+   binds, records the universe, stamps and writes in one transaction, so the
+   rules below hold by construction. `ingest_okayama.ts` and
+   `ingest_tottori_bousai.ts` are the reference implementations; tasks not yet
+   moved (docs/superpowers/plans/2026-10-26-…, §2) still call
+   `recordUniverse(SOURCE_ID, rows)` themselves, once per run with the
+   provider's WHOLE published list — the unmatched rows
    are the point, since they are what separates "they publish it, we failed to
    link it" from "nobody publishes it". Push into the array BEFORE the
-   `continue` that skips unmatched rows. `ingest_okayama.ts` (fetched list) and
-   `ingest_cgr_mlit.ts` (hardcoded array) are the reference implementations.
+   `continue` that skips unmatched rows (`ingest_cgr_mlit.ts`: hardcoded array).
    A task that genuinely cannot enumerate a list goes in the EXEMPT map in
    `universe_instrumentation.test.ts` with a reason. Where the parser can
    see that a listed row carries no value because the provider marks it empty

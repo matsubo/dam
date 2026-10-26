@@ -111,6 +111,11 @@ the file for detail.
 | `src/task_list.ts` | `TASK_LIST`: every task the worker runs, by name |
 | `src/task_list.test.ts` | every scheduled task is in `TASK_LIST`, and every `ingest:*` task belongs to a declared source |
 | `src/crontab.test.ts` | the schedule itself is `packages/core/src/crontab.ts`. Checks each ingest line's key and that its retries (default 25 attempts) outlast its longest gap between runs, so no dead job is left behind per tick, and that `INGEST_INTERVAL_HOURS` agrees with graphile-worker for every declared ingest task |
+| `src/ingest/run.ts` | `ingestTask(sourceId, scan)`: the ingest run. Contract check, one master query, binding, reading each entry outside any transaction (a throwing reading → unreadable), then universe → stamps → observations in one transaction; fails the job (`IngestRunError('nothing-read')`) after the commit when nothing could be read |
+| `src/ingest/types.ts` | `Scan`, `Entry` (key, name, pref scope, `bind`, `dontWrite`, `reading`), `Reading` (`values` / `empty` / `unreadable`), `Bind` (`{ndi}` pin, `{name?, exact?}`, `'never'`), `BoundDam`, `IngestRunError` |
+| `src/ingest/bind.ts` | `bindEntry`: pin → stamp in scope → exact name → stem → stem+ダム → prefix → contains; a non-twin tie leaves the entry unbound; a `not_dam_reason` key binds only by stamp. `stemOf` (NFKC, annotations, ダム, 槇→槙) |
+| `src/ingest/plan.ts` | `planWrites`: universe rows (has_data from state, published_at for dated scans), stamps (first entry per dam), observations (valueless dropped); duplicate keys merge values > empty > unreadable |
+| `src/ingest/cells.ts` | `cell` / `MARKED` / `cellState`: any value → values, every field provider-marked → empty, else unreadable |
 | `src/tasks/master_refresh_ndi.ts` | monthly NLNI reimport |
 | `src/tasks/master_refresh_damnet.ts` | monthly damnet attribute pass |
 | `src/tasks/master_match.ts` | `master:match`: placeholder, logs and returns (still on the nightly cron) |
@@ -204,7 +209,7 @@ the file for detail.
 | `src/tasks/ingest_nagasaki_kasen.ts` | `nagasaki-kasen`: 長崎県河川砂防情報 dam JSON, every 30 min (35 dams; 利水 rate); `has_data` FALSE for a dam printed 「-」 in every field |
 | `src/tasks/ingest_oita_bousai.ts` | `oita-bousai`: 大分県河川情報 防災Web ダム諸量現況表, hourly (10 県管理ダム) |
 | `src/tasks/ingest_oita_nourin.ts` | `oita-nourin`: 大分県 農業用ダム貯水率一覧 PDF (link discovered each run), daily (21 dams) |
-| `src/tasks/ingest_okayama.ts` | `okayama-bousai`: おかやま防災ポータル pointer → list JSON, hourly (21 dams listed); reference `recordUniverse` over a fetched list |
+| `src/tasks/ingest_okayama.ts` | `okayama-bousai`: おかやま防災ポータル pointer → list JSON, hourly (21 dams listed; all-flagged dams are provider-marked empty); on the ingest run |
 | `src/tasks/ingest_okinawa_eb.ts` | `okinawa-eb`: 沖縄県企業局 `dam-youryou.csv`, daily (倉敷 / 山城) |
 | `src/tasks/ingest_osaka.ts` | `osaka-bousai`: 大阪府河川防災情報 `choryuryo.json`, dams only (typeId 3), hourly (安威川 / 箕面川 / 狭山池) |
 | `src/tasks/ingest_qsr_ryumon.ts` | `qsr-ryumon-dam`: 九州地方整備局 竜門ダム key-value endpoints, hourly |
@@ -223,7 +228,7 @@ the file for detail.
 | `src/tasks/ingest_tokushima_bousai.ts` | `tokushima-bousai`: 徳島県 ダム諸量情報, hourly (7 dams; level + flows) |
 | `src/tasks/ingest_tokyo_waterworks.ts` | `tokyo-waterworks`: 東京都水道局 水源状況 daily table, polled twice a day (利根川 / 荒川 / 多摩川 dams) |
 | `src/tasks/ingest_tottori.ts` | `tottori-dam`: 鳥取県ダム諸量情報システム `data10all.php`, hourly (5 県管理ダム) |
-| `src/tasks/ingest_tottori_bousai.ts` | `tottori-bousai`: 鳥取県防災Web pointer → list JSON, hourly (6 dams; adds 菅沢) |
+| `src/tasks/ingest_tottori_bousai.ts` | `tottori-bousai`: 鳥取県防災Web pointer → list JSON, hourly (6 dams; adds 菅沢; another dam's placeholder values are unreadable); on the ingest run |
 | `src/tasks/ingest_toyama_bousai.ts` | `toyama-bousai`: 富山県 河川現況表 dam CSVs, hourly (16 県管理ダム) |
 | `src/tasks/ingest_wakayama_kasen.ts` | `wakayama-kasen`: 和歌山県河川／雨量防災情報 `dinfo.csv` (EUC-JP), hourly (19 dams) |
 | `src/tasks/ingest_yamagata_bousai.ts` | `yamagata-bousai`: 山形県河川・砂防情報 防災Web JSON, hourly (~17 dams: 13 県 + 4 国) |

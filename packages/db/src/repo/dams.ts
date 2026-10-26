@@ -1,4 +1,4 @@
-import { sql } from '../client.ts';
+import { type Db, sql } from '../client.ts';
 import { newestFirst, sourceRankJoin } from './newest_row.ts';
 
 export interface UpsertDamInput {
@@ -161,8 +161,13 @@ export async function appendExternalId(
  * any other row. Ingest tasks used to only add the stamp, so a station that
  * moved to a better row stayed stamped on the old one as well (#57).
  */
-export async function bindExternalId(damId: bigint, source: string, key: string): Promise<void> {
-  await sql.begin(async (tx) => {
+export async function bindExternalId(
+  damId: bigint,
+  source: string,
+  key: string,
+  db?: Db,
+): Promise<void> {
+  const run = async (tx: Db): Promise<void> => {
     await tx`
       UPDATE dams SET external_ids = external_ids - ${source}::text
       WHERE external_ids->>${source} = ${key} AND id <> ${damId}
@@ -172,7 +177,9 @@ export async function bindExternalId(damId: bigint, source: string, key: string)
       SET external_ids = COALESCE(external_ids, '{}'::jsonb) || jsonb_build_object(${source}::text, ${key}::text)
       WHERE id = ${damId} AND COALESCE(external_ids->>${source}, '') <> ${key}
     `;
-  });
+  };
+  if (db) await run(db);
+  else await sql.begin(run);
 }
 
 export async function applyDamnetAttributes(
