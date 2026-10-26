@@ -133,8 +133,11 @@ pattern instead of inventing a new one.
 - **Quality bits propagate**: `quality_flag` is a bitfield, not an enum.
   Multiple bits can be set on the same row. The nightly recompute task
   fans out per-bit.
-- **Source priorities are runtime config**, not code. Adjust by UPDATEing
-  `source_priorities` rather than committing constants.
+- **Per-source facts are code**: priority, description, status, gate flags,
+  trusted rate basis, schedule, freshness override and the /sources text are
+  declared once in `packages/core/src/source_registry.ts` and synced into
+  `source_priorities` after migrations (docs/adr/0001). Change the
+  declaration; never UPDATE those columns from a migration or a task.
 
 ## Naming things
 

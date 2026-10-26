@@ -21,7 +21,7 @@
 
 import { upsertObservations } from '@dam/db/repo/observations';
 import type { Task } from 'graphile-worker';
-import { ensureExternalIds, ensureSourcePriority, parseJwaJunpoHtml } from './ingest_jwa_junpo.ts';
+import { ensureExternalIds, parseJwaJunpoHtml } from './ingest_jwa_junpo.ts';
 
 const ARCHIVE_URL_BASE =
   process.env.JWA_JUNPO_ARCHIVE_BASE ?? 'https://www.water.go.jp/honsya/honsya/suigen/junpo/past';
@@ -72,7 +72,6 @@ const task: Task = async (rawPayload, helpers) => {
   const payload = (rawPayload ?? {}) as BackfillPayload;
   const months = Math.max(1, Math.min(60, payload.months ?? 12));
 
-  await ensureSourcePriority();
   const matches = await ensureExternalIds(log);
   log(`backfill:jwa-junpo: matched ${matches.length} master dams; months=${months}`);
 

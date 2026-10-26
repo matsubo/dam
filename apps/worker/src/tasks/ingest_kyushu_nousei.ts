@@ -490,25 +490,10 @@ export function masterFor(
 
 // --- DB helpers -------------------------------------------------------------
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active, trusted_rate_basis)
-    VALUES (${SOURCE_ID}, 279,
-            '九州農政局 管内の農業用ダムの貯水状況 — 59 基 (6県, 月1-2回, 貯水量+貯水率)',
-            true, true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority           = EXCLUDED.priority,
-          description        = EXCLUDED.description,
-          active             = EXCLUDED.active,
-          trusted_rate_basis = EXCLUDED.trusted_rate_basis
-  `;
-}
-
 // --- task -------------------------------------------------------------------
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const headers = {
     'user-agent':

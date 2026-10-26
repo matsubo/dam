@@ -288,24 +288,10 @@ export function chooseMaster(name: string, masters: BindableMaster[]): bigint | 
 
 // --- DB helpers -------------------------------------------------------------
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 286,
-            '宮城県 農政部 農業用水の状況 — 主要ダム 17 基 + ため池 9 か所, 月1-2回 (貯水量+貯水率)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 // --- task -------------------------------------------------------------------
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const headers = {
     'user-agent':

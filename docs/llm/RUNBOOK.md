@@ -198,8 +198,11 @@ during a rollout).
 
 ## Long-running / cron tasks
 
-The schedule lives in `CRONTAB` (`packages/core/src/crontab.ts`), registered
-by `apps/worker/src/index.ts`; `apps/worker/src/crontab.test.ts` checks it.
+The schedule is derived from the source declarations
+(`packages/core/src/source_registry.ts`) plus the maintenance lines in
+`packages/core/src/crontab.ts`; tasks are registered in
+`apps/worker/src/task_list.ts`, and `apps/worker/src/crontab.test.ts` /
+`task_list.test.ts` check them.
 Read it there rather than from a copy here. Tasks registered without a cron
 line (run on demand via `POST /api/v1/admin/jobs` or `add_job`) include
 `observations:rebind` and the `backfill:*` family.

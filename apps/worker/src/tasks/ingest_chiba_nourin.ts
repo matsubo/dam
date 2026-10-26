@@ -198,25 +198,10 @@ export function chooseMaster(feedName: string, masters: BindableMaster[]): bigin
 
 // --- DB helpers -------------------------------------------------------------
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active, trusted_rate_basis)
-    VALUES (${SOURCE_ID}, 284,
-            '千葉県 農林水産部 耕地課 県内農業用ダム貯水状況 — 農業用ダム 11 基 (貯水量+貯水率)',
-            true, true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority           = EXCLUDED.priority,
-          description        = EXCLUDED.description,
-          active             = EXCLUDED.active,
-          trusted_rate_basis = EXCLUDED.trusted_rate_basis
-  `;
-}
-
 // --- task -------------------------------------------------------------------
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const r = await fetch(PAGE_URL, {
     headers: {

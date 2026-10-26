@@ -132,19 +132,6 @@ export function parseIwatePage(html: string, iwateName: string): ParsedRow {
 
 // --- DB helpers -------------------------------------------------------------
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 308,
-            '岩手県河川情報システム — Gamen32Servlet, 10 dams, hourly',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 const KANJI_DIGIT: Record<string, string> = { 一: '1', 二: '2', 三: '3', 四: '4', 五: '5' };
 
 // The server writes 「遠野第二ダム」 where ダム便覧 has 「遠野第2」, so the
@@ -246,7 +233,6 @@ async function fetchStation(stn: StationCfg): Promise<ParsedRow | null> {
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const results = await Promise.all(STATIONS.map((stn) => fetchStation(stn)));
   const rows = results.filter((r): r is ParsedRow => r !== null);

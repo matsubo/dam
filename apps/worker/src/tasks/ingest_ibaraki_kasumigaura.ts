@@ -91,19 +91,6 @@ export function parseDejimaGraph(html: string): DejimaGraph | null {
   return { zeroTpM, readings };
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 308,
-            '茨城県河川情報 霞ヶ浦 出島 水位 — 霞ヶ浦開発の湖水位 (Y.P.換算, 毎時 24 時間分)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 async function findDamId(log: (s: string) => void): Promise<bigint | null> {
   const rows = await sql<(BindableMaster & { rank: number })[]>`
     SELECT id, name, completed_year AS "completedYear",
@@ -134,7 +121,6 @@ async function findDamId(log: (s: string) => void): Promise<bigint | null> {
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const ua =
     process.env.HTTP_USER_AGENT ??

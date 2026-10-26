@@ -149,19 +149,6 @@ export function chooseMaster(name: string, masters: BindableMaster[]): bigint | 
 
 // --- DB helpers -------------------------------------------------------------
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 293,
-            '下関市上下水道局 水源状況 — 湯の原ダム (貯水量+貯水率, 当日0時, 週数回更新)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 /** Records the whole published list; returns the dams to write, by 施設名. */
 async function matchMaster(
   rows: ParsedRow[],
@@ -197,7 +184,6 @@ async function matchMaster(
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const r = await fetch(PAGE_URL, {
     headers: {

@@ -201,24 +201,6 @@ async function downloadYearCsv(damsysId: number, year: number): Promise<CsvRow[]
   return parseMudamCsv(new TextDecoder('shift_jis').decode(body));
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active, historical_only)
-    VALUES ('mudam', 280,
-            'NILIM ダム諸量データベース (mudam.nilim.go.jp) — daily, ~600 dams, 1-2 year lag (confirmed historical)',
-            true, true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority        = EXCLUDED.priority,
-          description     = EXCLUDED.description,
-          active          = EXCLUDED.active,
-          -- Declared here as well as in migration 0058 so a fresh environment
-          -- does not recreate the row inside the source_universe gate: a dump
-          -- with no recurring scan would hold the gate open forever and no dam
-          -- could ever be classified 提供元なし.
-          historical_only = EXCLUDED.historical_only
-  `;
-}
-
 interface MatchResult {
   damId: bigint;
   distanceM: number;
@@ -324,8 +306,6 @@ const task: Task = async (rawPayload, helpers) => {
   const district = payload.district ?? 'kanto';
   const years = Math.max(1, Math.min(27, payload.years ?? 5));
   const districts = district === 'all' ? ALL_DISTRICTS : [district as DistrictKey];
-
-  await ensureSourcePriority();
 
   // Most recent year mudam publishes confirmed values for. The page lists up
   // to 令和6年 (2024) today; we walk N years ending there. Adjust as the

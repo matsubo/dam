@@ -179,19 +179,6 @@ export function chooseMaster(name: string, masters: BindableMaster[]): bigint | 
 
 // --- DB helpers -------------------------------------------------------------
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 301,
-            '電源開発 奈半利川ダム情報公開サイト — 魚梁瀬/久木/平鍋ダム (UTF-8 HTML, 30分値)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 async function matchMaster(log: (s: string) => void): Promise<Map<string, bigint>> {
   const masters = await sql<BindableMaster[]>`
     SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
@@ -217,7 +204,6 @@ async function matchMaster(log: (s: string) => void): Promise<Map<string, bigint
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
   const damByName = await matchMaster(log);
 
   const value = graphValue(new Date());

@@ -101,19 +101,6 @@ export function parseGifuPage(html: string): ParsedRow[] {
 
 // --- DB helpers -------------------------------------------------------------
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 308,
-            '岐阜県川の防災情報 ダム諸量 — 14 ダム (UTF-8 HTML, hourly)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 function normalizeName(s: string): string {
   return s
     .replace(/[（(][^）)]*[）)]/g, '')
@@ -197,7 +184,6 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const r = await fetch(DATA_URL, {
     headers: {

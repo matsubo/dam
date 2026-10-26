@@ -141,19 +141,6 @@ export function parseHiroshimaItems(items: HiroshimaItem[]): ParsedRow[] {
   return out;
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 310,
-            '広島県防災Web — hourly, 18ダム (JSON feed, 10分更新)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 interface DamMatch {
   observatoryId: string;
   damId: bigint;
@@ -229,7 +216,6 @@ async function fetchJson<T>(path: string, ua: string): Promise<T | null> {
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const ua =
     process.env.HTTP_USER_AGENT ??

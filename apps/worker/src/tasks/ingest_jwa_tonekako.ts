@@ -143,19 +143,6 @@ export function tonekakoHours(suiiSrc: string, ryuryoSrc: string): TonekakoHour[
 
 // --- DB helpers -------------------------------------------------------------
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 298,
-            '水資源機構 利根川河口堰管理所 利根河口堰 情報提供 — 堰上流水位(Y.P.)・堰流入量 hourly',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 async function bindWeir(log: (s: string) => void): Promise<bigint | null> {
   // （元） and （再） rank alike so chooseRanked binds the current twin.
   const candidates = await sql<(BindableMaster & { rank: number })[]>`
@@ -200,7 +187,6 @@ async function fetchText(file: string): Promise<string | null> {
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
   const damId = await bindWeir(log);
 
   const [suii, ryuryo] = await Promise.all([fetchText(SUII_FILE), fetchText(RYURYO_FILE)]);

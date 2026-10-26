@@ -83,19 +83,6 @@ export function parseSuibouStage(html: string): SuibouStage | null {
   return { station: station?.[1] ?? '', readings };
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 308,
-            '神奈川県雨量水位情報 — 飯泉取水堰 堰上水位 (15分値, 直近 6 時間を毎時取得)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 async function findDamId(log: (s: string) => void): Promise<bigint | null> {
   const rows = await sql<(BindableMaster & { rank: number })[]>`
     SELECT id, name, completed_year AS "completedYear",
@@ -123,7 +110,6 @@ async function findDamId(log: (s: string) => void): Promise<bigint | null> {
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const ua =
     process.env.HTTP_USER_AGENT ??

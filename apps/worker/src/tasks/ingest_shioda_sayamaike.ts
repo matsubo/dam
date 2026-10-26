@@ -103,22 +103,8 @@ export async function matchSayamaike(log: (s: string) => void): Promise<bigint |
   return master.id;
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 285,
-            '上田市塩田平土地改良区 沢山池の状況図 — 沢山池 (貯水位・貯水量・貯水率・流入量, 10 分毎)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const r = await fetch(CSV_URL, {
     headers: {

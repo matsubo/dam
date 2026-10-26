@@ -132,19 +132,6 @@ export function parseAichiYosuiPage(html: string): {
   return { observedAt, rows };
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 294,
-            '水資源機構 愛知用水総合管理所 水情報 — daily 0時, 3 施設 (牧尾/東郷調整池/前山池)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 async function ensureExternalIds(log: (s: string) => void): Promise<Map<string, bigint>> {
   const damByName = new Map<string, bigint>();
   // What this source publishes, matched or not — recorded so /coverage can
@@ -186,7 +173,6 @@ async function ensureExternalIds(log: (s: string) => void): Promise<Map<string, 
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
   const damByName = await ensureExternalIds(log);
   log(`${SOURCE_ID}: matched ${damByName.size}/${STATIONS.length} stations to master dams`);
 

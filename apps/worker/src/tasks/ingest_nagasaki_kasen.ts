@@ -154,19 +154,6 @@ export function parseAllDamsJson(raw: AllDamsJson, masters: Map<number, string>)
 
 // --- DB helpers -------------------------------------------------------------
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 308,
-            '長崎県河川砂防情報 ダム情報 — 35 ダム (JSON, 30分更新)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 function normalizeName(s: string): string {
   return s
     .replace(/[（(][^）)]*[）)]/g, '')
@@ -290,7 +277,6 @@ export function buildNagasakiUniverse(
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const headers = {
     'user-agent':

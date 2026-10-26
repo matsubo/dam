@@ -107,19 +107,6 @@ export function parseKudamatsuSuigen(html: string): ParsedDam[] {
 
 // --- DB helpers -------------------------------------------------------------
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 293,
-            '下松市上下水道局 水源情報 — 県営温見ダム (水位+貯水量+貯水率, 月次程度)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 /** The 山口 master for a heading: its stamp first, then exact stem, then prefix. */
 async function findDamId(name: string): Promise<bigint | null> {
   const stem = name.replace(/ダム$/, '');
@@ -139,7 +126,6 @@ async function findDamId(name: string): Promise<bigint | null> {
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const r = await fetch(PAGE_URL, {
     headers: {

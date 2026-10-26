@@ -5,11 +5,11 @@
 // master dam). Open means `resolved_at IS NULL`, so a review closed as
 // "not a dam" leaves the list too.
 
+import { sourceLabel as labelOf } from '@dam/core/sources';
 import { sql } from '@dam/db/client';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Breadcrumbs } from '../../../components/breadcrumbs.tsx';
-import { SOURCE_DETAILS } from '../../../lib/source-details.ts';
 
 export const dynamic = 'force-dynamic';
 
@@ -119,7 +119,7 @@ export default async function MatchReviewPage() {
           {unresolved.map((row) => {
             const cat = row.payload.catalogue ?? {};
             const cands = row.payload.candidates ?? [];
-            const sourceLabel = SOURCE_DETAILS[row.source_id]?.label ?? row.source_id;
+            const sourceLabel = labelOf(row.source_id);
             return (
               <article
                 key={String(row.id)}

@@ -172,19 +172,6 @@ export function parseToneDamJson(json: ToneDamJson): ParsedRow[] {
 
 // --- DB helpers --------------------------------------------------------------
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 303,
-            '国土交通省 関東地方整備局 利根川ダム統合管理事務所 — 9 国管理ダム hourly JSON',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 function normalizeName(s: string): string {
   return s
     .replace(/[（(][^）)]*[）)]/g, '')
@@ -260,7 +247,6 @@ async function matchMaster(log: (s: string) => void): Promise<DamMatch[]> {
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const r = await fetch(DATA_URL, {
     headers: {

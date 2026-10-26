@@ -85,19 +85,6 @@ export function parseSyowaikeHtml(html: string): SyowaikeReading | null {
   };
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 299,
-            '兵庫県 昭和池防災情報管理システム — 昭和池 (加東市, 10分更新 テレメータ HTML)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 async function findDamId(log: (s: string) => void): Promise<bigint | null> {
   const [dam] = await sql<{ id: bigint }[]>`
     SELECT id FROM dams
@@ -118,7 +105,6 @@ async function findDamId(log: (s: string) => void): Promise<bigint | null> {
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const ua =
     process.env.HTTP_USER_AGENT ??

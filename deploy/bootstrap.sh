@@ -156,6 +156,16 @@ if [ -f /seed/master_upsert.sql.gz ]; then
   fi
 fi
 
+# Write every declared source's source_priorities row (docs/adr/0001). After
+# the seed restore and upsert, which both carry rows of their own, so the
+# declarations have the last word.
+if ! sources_log=$(bun run --filter @dam/db sources sync 2>&1); then
+  log "[bootstrap] source sync FAILED (non-fatal):"
+fi
+echo "${sources_log}" | head -10 | while IFS= read -r line; do
+  log "  ${line}"
+done
+
 obs=$(count_or_empty "SELECT COUNT(*) FROM observations")
 log "[bootstrap] observations.count = '${obs}'"
 
@@ -255,20 +265,13 @@ if [ "${kick}" = "1" ]; then
   run_kick_step "drop_stuck_jobs" \
     "DELETE FROM graphile_worker._private_jobs WHERE attempts >= 3;"
 
-  # 3. Enqueue the cheap live-ingest jobs so prod gets fresh observation
-  # data without waiting for the next cron tick. These are small (one HTTP
-  # fetch each) and finish in seconds. Keyed like their cron line, so the
-  # next tick replaces a kick that is still retrying (see packages/core/src/crontab.ts).
-  for task in \
-    ingest:tokyo-waterworks ingest:jwa-junpo ingest:aitoyo \
-    ingest:jwa-chikugo ingest:kanagawa-dam ingest:shiga-bousai ingest:tottori-dam \
-    ingest:aomori-dam ingest:hkd-mlit-dam ingest:cgr-mlit-dam ingest:ktr-kinu-dam \
-    ingest:hrr-mlit-dam ingest:kasenbosai-v2 ingest:chiba-suisei ingest:okayama-bousai \
-    ingest:hyogo-bodik ingest:tochigi-bodik ingest:hiroshima-bousai ingest:osaka-bousai \
-    ingest:tottori-bousai ingest:fukuoka-bodik ingest:shimane-bousai ingest:jwa-toneara \
-    ingest:jwa-chubu ingest:jwa-toyokawa ingest:jwa-yoshino ingest:jwa-kiso-rt; do
-    run_kick_step "enqueue_${task}" \
-      "SELECT graphile_worker.add_job('${task}', '{}'::json, job_key := '${task}');"
+  # 3. Enqueue every active source's ingest task so prod gets fresh
+  # observation data without waiting for the next cron tick.
+  if ! kick_log=$(bun run --filter @dam/db sources kick 2>&1); then
+    log "[bootstrap] kick.enqueue_ingest FAILED:"
+  fi
+  echo "${kick_log}" | head -10 | while IFS= read -r line; do
+    log "  ${line}"
   done
 
   # 一回限り: 川の防災情報 (kasenbosai) ダムカタログを scrape して

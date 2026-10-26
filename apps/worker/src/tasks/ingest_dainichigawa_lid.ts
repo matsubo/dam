@@ -124,19 +124,6 @@ export function chooseMaster(masters: DainichigawaMaster[]): bigint | null {
 
 // --- DB helpers -------------------------------------------------------------
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 278,
-            '大日川土地改良区 大日川ダム情報 — 大日川ダム (日別 PDF, 午前9時)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 async function resolveDam(log: (s: string) => void): Promise<bigint | null> {
   const masters = await sql<DainichigawaMaster[]>`
     SELECT id, name, completed_year AS "completedYear",
@@ -164,7 +151,6 @@ async function resolveDam(log: (s: string) => void): Promise<bigint | null> {
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
   // Before the fetch: the district publishes the dam whether or not this
   // run's page loads, and the universe must say so.
   const damId = await resolveDam(log);

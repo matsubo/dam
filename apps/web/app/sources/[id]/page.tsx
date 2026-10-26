@@ -1,11 +1,11 @@
 import { PREFECTURES } from '@dam/core/prefectures';
+import { sourceById } from '@dam/core/sources';
 import { sql } from '@dam/db/client';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Breadcrumbs } from '../../../components/breadcrumbs.tsx';
 import { fmtDate, fmtPct } from '../../../lib/format.ts';
-import { SOURCE_DETAILS } from '../../../lib/source-details.ts';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 300;
@@ -40,7 +40,7 @@ interface DamRow {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id: raw } = await params;
   const id = decodeURIComponent(raw);
-  const detail = SOURCE_DETAILS[id];
+  const detail = sourceById(id)?.details;
   return {
     title: `データソース: ${detail?.label ?? id}`,
     description: detail?.what ?? `${id} ソースが提供するダム観測値の最新状態。`,
@@ -51,7 +51,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function SourceDetailPage({ params }: PageProps) {
   const { id: raw } = await params;
   const id = decodeURIComponent(raw);
-  const detail = SOURCE_DETAILS[id];
+  const detail = sourceById(id)?.details;
 
   const sourceRows = await sql<SourceRow[]>`
     SELECT
@@ -138,7 +138,7 @@ export default async function SourceDetailPage({ params }: PageProps) {
       {detail ? (
         <dl className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-8">
           <Field label="提供元">{detail.upstream}</Field>
-          <Field label="ライセンス">{detail.license}</Field>
+          <Field label="ライセンス">{detail.license ?? '未確認'}</Field>
           <Field label="取得頻度">{detail.cadence}</Field>
           <Field label="最新観測">
             {source.latest_observed_at ? fmtDate(source.latest_observed_at) : '—'}

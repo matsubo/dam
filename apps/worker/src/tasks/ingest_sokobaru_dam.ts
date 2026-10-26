@@ -232,24 +232,10 @@ export function chooseMaster(
 
 // --- DB helpers -------------------------------------------------------------
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 291,
-            '底原ダム管理システム — 石垣島 底原/真栄里/石垣ダム (時次 HTML, 直近 13 時間)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 // --- task -------------------------------------------------------------------
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const get = async (path: string): Promise<string | null> => {
     const r = await fetch(new URL(path, BASE_URL), {

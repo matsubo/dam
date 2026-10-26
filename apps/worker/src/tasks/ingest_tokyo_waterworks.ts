@@ -157,19 +157,6 @@ interface DamMatch {
   damId: bigint;
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES ('tokyo-waterworks', 300,
-            '東京都水道局 / 水源情報 (real, daily, official open data)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 /**
  * Master row for a listing: match by (prefCode IN list) AND name LIKE
  * '%<masterName>%' to tolerate the「ダム」/「貯水池」suffix variation. A row
@@ -231,7 +218,6 @@ export async function ensureExternalIds(log: (s: string) => void): Promise<DamMa
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
   const matches = await ensureExternalIds(log);
   log(`tokyo-waterworks: matched ${matches.length}/${NAME_MAP.length} master dams`);
 

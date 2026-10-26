@@ -267,19 +267,6 @@ export function kasenbosaiHasData(payload: ApiResponse): boolean | null {
   return codes.length > 0 && allFlagged ? false : null;
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 310,
-            '国土交通省 川の防災情報 (MLIT SCC) — 全国 800+ ダム / 10-min cadence per-dam JSON',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 async function loadTargets(): Promise<DamTarget[]> {
   const rows = await sql<{ id: bigint; obs_fcd: string; effective_capacity_m3: string | null }[]>`
     SELECT id, external_ids->>'kasenbosai' AS obs_fcd,
@@ -340,7 +327,6 @@ async function fetchOne(
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
   const targets = await loadTargets();
   if (targets.length === 0) {
     log(`${SOURCE_ID}: no targets (run match:kasenbosai first)`);

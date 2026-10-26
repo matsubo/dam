@@ -64,7 +64,7 @@ beforeAll(async () => {
   damId = rows[0]?.id as bigint;
 
   // Both sources must exist and carry the trust flags the real ones do. They
-  // are seeded by their adapters' ensureSourcePriority(), so on a bare test DB
+  // are written by the source sync at boot, so on a bare test DB
   // insert them — but only after confirming the ids are the real ones.
   await sql`
     INSERT INTO source_priorities (source_id, priority, trusted_rate_basis)

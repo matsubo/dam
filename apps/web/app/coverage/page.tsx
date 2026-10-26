@@ -11,6 +11,7 @@
 // so visitors get a 404. The public-facing roadmap is /roadmap.
 
 import { PREFECTURES } from '@dam/core/prefectures';
+import { sourceLabel } from '@dam/core/sources';
 import { sql } from '@dam/db/client';
 import {
   coverageDamTotal,
@@ -29,7 +30,6 @@ import {
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
-import { sourceLabel } from '../../lib/source-details.ts';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 900;

@@ -129,19 +129,6 @@ export function parseKkrJson(raw: unknown): ParsedRow[] {
 
 // --- DB helpers -------------------------------------------------------------
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 302,
-            '国土交通省 近畿地方整備局 — 12 国管理ダム 貯水率 (JSON, 日次, 土日祝除く)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 function normalizeName(s: string): string {
   return s
     .replace(/[（(][^）)]*[）)]/g, '')
@@ -221,7 +208,6 @@ async function matchMaster(log: (s: string) => void): Promise<DamMatch[]> {
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const r = await fetch(DATA_URL, {
     headers: {

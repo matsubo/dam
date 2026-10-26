@@ -104,23 +104,6 @@ export function parseOsakaItems(res: OsakaResponse): ParsedRow[] {
   return out;
 }
 
-// 308, one below kasenbosai (310): 川の防災情報 publishes all three dams
-// with 貯水位/流入量/放流量 on top of the volume this feed carries, so it
-// should win the chart. At an equal 310 the chart source for 安威川/箕面川/
-// 狭山池 was whichever row the planner returned first.
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 308,
-            '大阪府河川防災情報 — hourly, 3 県管理ダム (JSON feed, 1分更新)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 interface DamMatch {
   facilityId: string;
   damId: bigint;
@@ -196,7 +179,6 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const ua =
     process.env.HTTP_USER_AGENT ??

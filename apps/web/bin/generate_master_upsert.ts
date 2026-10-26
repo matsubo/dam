@@ -3,7 +3,7 @@
  * Generate a non-destructive UPSERT seed file for production.
  *
  * Output (`deploy/seed/master_upsert.sql.gz`) is a single transaction that:
- *   1. Loads watersheds + dams + source_priorities into TEMP tables
+ *   1. Loads watersheds + dams into TEMP tables
  *   2. UPSERTs into the live tables, matching watersheds by `code`
  *      and dams by `external_ids->>'ndi'`
  *   3. Adds missing external ids and blank elevation / image on existing
@@ -17,12 +17,7 @@
 import { writeFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { sql } from '@dam/db/client';
-import {
-  buildMasterUpsertSql,
-  type SeedDam,
-  type SeedSource,
-  type SeedWatershed,
-} from './master_upsert_sql.ts';
+import { buildMasterUpsertSql, type SeedDam, type SeedWatershed } from './master_upsert_sql.ts';
 
 async function main(): Promise<void> {
   const watersheds = await sql<SeedWatershed[]>`
@@ -49,11 +44,7 @@ async function main(): Promise<void> {
     FROM dams
     ORDER BY id
   `;
-  const sources = await sql<SeedSource[]>`
-    SELECT source_id, description, priority, active FROM source_priorities ORDER BY priority DESC
-  `;
-
-  const sqlText = buildMasterUpsertSql({ sources, watersheds, dams });
+  const sqlText = buildMasterUpsertSql({ watersheds, dams });
   const gz = gzipSync(Buffer.from(sqlText, 'utf8'));
   const out = `${process.cwd()}/deploy/seed/master_upsert.sql.gz`;
   writeFileSync(out, gz);
@@ -64,7 +55,6 @@ async function main(): Promise<void> {
       bytes_gzipped: gz.length,
       watersheds: watersheds.length,
       dams: dams.length,
-      sources: sources.length,
     }),
   );
 }

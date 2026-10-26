@@ -89,19 +89,6 @@ export function parseHrrLine(line: string): ParsedRow | null {
   };
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 302,
-            '国土交通省 北陸地方整備局 ダム防災情報 — hourly, 7 dams (大川/大石/横川/三国川/大町/宇奈月/手取川)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 async function matchMaster(log: (s: string) => void): Promise<Map<string, bigint>> {
   const result = new Map<string, bigint>();
   for (const [pageName, c] of Object.entries(DAMS)) {
@@ -135,7 +122,6 @@ async function matchMaster(log: (s: string) => void): Promise<Map<string, bigint
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
   const matches = await matchMaster(log);
   log(`${SOURCE_ID}: matched ${matches.size}/${Object.keys(DAMS).length} master dams`);
 

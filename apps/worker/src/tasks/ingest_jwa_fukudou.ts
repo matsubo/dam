@@ -124,19 +124,6 @@ export function chooseMaster(masters: BindableMaster[]): bigint | null {
 
 // --- DB helpers -------------------------------------------------------------
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 297,
-            '水資源機構 筑後川局 福岡導水管理室 — 山口調整池 日次 0時 (貯水位・総貯水量)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 async function matchMaster(
   log: (s: string) => void,
 ): Promise<{ damId: bigint; capacity: MasterCapacity } | null> {
@@ -165,7 +152,6 @@ async function matchMaster(
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   // Resolved before the fetch so a dead page still leaves a scan on record.
   const match = await matchMaster(log);

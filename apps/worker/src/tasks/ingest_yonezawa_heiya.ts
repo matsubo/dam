@@ -114,19 +114,6 @@ export function chooseMaster(name: string, masters: BindableMaster[]): bigint | 
 
 // --- DB helpers -------------------------------------------------------------
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 278,
-            '米沢平野土地改良区 用水状況 — 水窪ダム貯水量 (週次 HTML)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 async function fetchHtml(url: string): Promise<string | null> {
   const r = await fetch(url, {
     headers: { 'user-agent': USER_AGENT },
@@ -139,7 +126,6 @@ async function fetchHtml(url: string): Promise<string | null> {
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const html = await fetchHtml(PAGE_URL);
   if (html === null) {

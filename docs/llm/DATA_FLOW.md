@@ -110,7 +110,7 @@ When a real upstream lands (川の防災情報 as the example):
 
 ```
 apps/worker/src/tasks/ingest_kasenbosai_v2.ts (cron @ :03, ingest:kasenbosai-v2)
-  ├─ ensureSourcePriority() — upsert source_priorities.kasenbosai = 310
+  ├─ (its source_priorities row is the kasenbosai declaration, synced at boot)
   ├─ loadTargets() — dams with a 13-digit external_ids.kasenbosai
   │    (seeded weekly by match:kasenbosai)
   ├─ for each target, in small concurrent batches:

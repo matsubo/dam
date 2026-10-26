@@ -107,8 +107,10 @@ the file for detail.
 
 | File | Purpose |
 |---|---|
-| `src/index.ts` | graphile-worker entry; registers tasks + crontab |
-| `src/crontab.test.ts` | the schedule itself is `packages/core/src/crontab.ts`. Checks each ingest line's key and that its retries (default 25 attempts) outlast its longest gap between runs, so no dead job is left behind per tick, and that `INGEST_INTERVAL_HOURS` agrees with graphile-worker for every ingest line |
+| `src/index.ts` | graphile-worker entry; runs `TASK_LIST` on `CRONTAB` |
+| `src/task_list.ts` | `TASK_LIST`: every task the worker runs, by name |
+| `src/task_list.test.ts` | every scheduled task is in `TASK_LIST`, and every `ingest:*` task belongs to a declared source |
+| `src/crontab.test.ts` | the schedule itself is `packages/core/src/crontab.ts`. Checks each ingest line's key and that its retries (default 25 attempts) outlast its longest gap between runs, so no dead job is left behind per tick, and that `INGEST_INTERVAL_HOURS` agrees with graphile-worker for every declared ingest task |
 | `src/tasks/master_refresh_ndi.ts` | monthly NLNI reimport |
 | `src/tasks/master_refresh_damnet.ts` | monthly damnet attribute pass |
 | `src/tasks/master_match.ts` | `master:match`: placeholder, logs and returns (still on the nightly cron) |
@@ -246,7 +248,10 @@ the file for detail.
 | `src/hateoas.ts` | `buildLinks`, `Link`, `LinksInput` |
 | `src/similarity.ts` | `trigramSimilarity`, `normalizeJaName` |
 | `src/dam_binding.ts` | `BindableMaster`, `twinOf`, `preferMaster`, `stampedMaster`, `chooseRanked` (station → master: a stamped row keeps it, then lowest SQL rank, （元）/（再） tie-break) |
-| `src/crontab.ts` | `CRONTAB`, the worker schedule (colon-separated task names, UTC); every `ingest:*` line carries `?jobKey=<task>` so a tick replaces its pending retry. `INGEST_INTERVAL_HOURS`: each ingest source's longest gap between runs (the web app reads it; it can't load graphile-worker) |
+| `src/sources.ts` | `SOURCES`, `sourceById`, `sourceLabel`, `defineSource`, `FRESHNESS_OVERRIDE_HOURS`; types `SourceDeclaration`, `SourceDetails` (docs/adr/0001) |
+| `src/source_registry.ts` | `SOURCES`: one `defineSource` per source (priority, description, status, gate flags, trusted rate basis, `ingestCron` / `jobs`, freshness override, /sources details; `license: null` = 未確認). The comment above each entry explains its schedule |
+| `src/source_declaration.ts` | the declaration shape and `defineSource` (defaults: active, provides observations, enumerable, not trusted) |
+| `src/crontab.ts` | `CRONTAB`: the maintenance lines plus one line per declared source job (colon-separated task names, UTC); every `ingest:*` line carries `?jobKey=<task>` so a tick replaces its pending retry. `INGEST_INTERVAL_HOURS`: each source's longest gap between ingest runs, keyed by source id (the web app reads it; it can't load graphile-worker) |
 
 ## packages/db
 
@@ -296,9 +301,10 @@ the file for detail.
 | `src/repo/match_review.ts` | `enqueueMatchReview` (never touches a closed review: open = `resolved_at IS NULL`; a migration closes one with `SET resolved_at = NOW(), resolved_dam_id = <id or NULL = not a dam>`) |
 | `src/repo/source_universe.ts` | `recordUniverse` (never writes `not_dam_reason`; `publishedAt` = the provider's own date for the row's newest value, 0221), `classifyDamCoverage`, `classifyOneDam` (`covered` = a value in 30 days OR a scan from the last 7 days whose `published_at` we hold an observation at), `providerAvailability` (`available` / `none` = 提供元なし / `unknown`), `isUnobtainable` (提供元なし or 提供元に値なし), `coverageSummary` (`unmatchedStations` = unresolved AND `not_dam_reason IS NULL`; `notDamStations` = unresolved with a reason; `pendingScanSources` = the gate-holding sources, each `no_recent_observations` / `ingesting_without_list` (30-day window), `sourcesPendingScan` its length). Mark a non-dam from a migration: `UPDATE source_universe SET not_dam_reason = '<cited reason>' WHERE source_id = '<src>' AND source_external_id = '<key>' AND resolved_dam_id IS NULL;` |
 | `src/repo/coverage.ts` | `coverageHeadline` + `realtimeCoveragePct` (the home headline: `covered` ÷ dams minus 提供元なし and 提供元に値なし), `storageRateCoveragePct`, `historicalCoveragePct`; shared by `/`, `/coverage`, `/contribute` |
-| `src/repo/source_freshness.ts` | `staleSources` (threshold = 3 × cadence + publication lag; cadence = the longer of the cron gap and the 90th-percentile spacing of the last 20 stamps, lag = median `created_at − observed_at`), `FRESHNESS_OVERRIDE_HOURS` (explicit thresholds; `null` = silent by design). Feeds `stale_sources` in `/api/v1/admin/jobs` and `quality:freshness-check` |
+| `src/repo/source_freshness.ts` | `staleSources` (threshold = 3 × cadence + publication lag; cadence = the longer of the cron gap and the 90th-percentile spacing of the last 20 stamps, lag = median `created_at − observed_at`; a declared `freshnessOverrideHours` replaces it, `null` = silent by design). Feeds `stale_sources` in `/api/v1/admin/jobs` and `quality:freshness-check` |
 | `src/repo/observations.ts` | `upsertObservations`, `findSeries{Hourly,Daily,Monthly}` |
-| `src/repo/source_priorities.ts` | `preferredSource`, `priorityMap` |
+| `src/repo/source_priorities.ts` | `syncSourcePriorities` (declared rows overwrite every column; undeclared rows left alone and reported), `preferredSource`, `priorityMap` |
+| `src/sources_cli.ts` | `bun run --filter @dam/db sources sync` (bootstrap, after migrations) / `kick` (enqueue every active ingest task) |
 | `src/repo/newest_row.ts` | `sourceRankJoin` + `newestFirst`: the newest-row rule as SQL fragments (newest `observed_at`, then higher active `source_priorities.priority`, inactive/unlisted below, then greater `source_id`; same order as `display_observation()`/`obs_daily`, 0223). Every "latest reading" pick outside those uses it; prefer a per-dam `LATERAL … LIMIT 1` over `DISTINCT ON` (#122) |
 | `src/repo/backfill_progress.ts` | `nextPending`, `startRunning`, `complete`, `fail`, `enqueueAllDams` |
 | `src/repo/api_keys.ts` | `issueKey`, `lookupByPrefix`, `revoke`, `recordUsage`, `usageInLastMinute`, `usageToday`, `hashKey`, `touchLastUsed` |

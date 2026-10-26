@@ -80,19 +80,6 @@ export function parseBiwakoDamInfo(text: string): ParsedRow[] {
   return out;
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 297,
-            '水資源機構 琵琶湖総合管理所 堰諸量 — 琵琶湖 水位 (B.S.L.→T.P.)・総流入量・総流出量, hourly',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 async function matchMaster(log: (s: string) => void): Promise<bigint | null> {
   const rows = await sql<(BindableMaster & { rank: number })[]>`
     SELECT id, name, completed_year AS "completedYear",
@@ -119,7 +106,6 @@ async function matchMaster(log: (s: string) => void): Promise<bigint | null> {
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
   const damId = await matchMaster(log);
 
   const r = await fetch(DATA_URL, {

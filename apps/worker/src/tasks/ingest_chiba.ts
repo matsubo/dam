@@ -96,19 +96,6 @@ export function parseChibaPage(html: string): ParsedRow[] {
   return out;
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 290,
-            '千葉県 県内ダムの貯水状況 — weekly 09:00 JST survey (23 ダム; 水道用+工業用水)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 interface DamMatch {
   pageName: string;
   damId: bigint;
@@ -156,7 +143,6 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const ua =
     process.env.HTTP_USER_AGENT ??

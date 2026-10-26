@@ -82,19 +82,6 @@ export function parseAshidaSekiHtml(html: string): AshidaReading | null {
   };
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 303,
-            '国土交通省 中国地方整備局 福山河川国道事務所 — 芦田川河口堰 (芦田川水系, 10分更新 HTML)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 async function findDamId(log: (s: string) => void): Promise<bigint | null> {
   const rows = await sql<(BindableMaster & { rank: number })[]>`
     SELECT id, name, completed_year AS "completedYear",
@@ -122,7 +109,6 @@ async function findDamId(log: (s: string) => void): Promise<bigint | null> {
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const ua =
     process.env.HTTP_USER_AGENT ??

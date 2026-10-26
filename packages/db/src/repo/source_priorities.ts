@@ -1,4 +1,50 @@
+import { SOURCES, type SourceDeclaration } from '@dam/core/sources';
 import { sql } from '../client.ts';
+
+export interface SourceSyncResult {
+  synced: number;
+  /** Rows with no declaration: left untouched, reported so they get one. */
+  undeclared: string[];
+}
+
+/**
+ * Write every declared source's row (docs/adr/0001): the declaration is the
+ * only owner of these columns. Rows nobody declares are left alone.
+ */
+export async function syncSourcePriorities(
+  declarations: readonly SourceDeclaration[] = SOURCES,
+): Promise<SourceSyncResult> {
+  const rows = declarations.map((s) => ({
+    source_id: s.id,
+    priority: s.priority,
+    description: s.description,
+    active: s.status !== 'retired',
+    provides_observations: s.providesObservations,
+    universe_enumerable: s.universeEnumerable,
+    historical_only: s.status === 'historical',
+    trusted_rate_basis: s.trustedRateBasis,
+  }));
+  if (rows.length > 0) {
+    await sql`
+      INSERT INTO source_priorities ${sql(rows)}
+      ON CONFLICT (source_id) DO UPDATE SET
+        priority              = EXCLUDED.priority,
+        description           = EXCLUDED.description,
+        active                = EXCLUDED.active,
+        provides_observations = EXCLUDED.provides_observations,
+        universe_enumerable   = EXCLUDED.universe_enumerable,
+        historical_only       = EXCLUDED.historical_only,
+        trusted_rate_basis    = EXCLUDED.trusted_rate_basis
+    `;
+  }
+  const declared = declarations.map((s) => s.id);
+  const undeclared = await sql<{ source_id: string }[]>`
+    SELECT source_id FROM source_priorities
+    WHERE source_id <> ALL(${declared}::TEXT[])
+    ORDER BY source_id
+  `;
+  return { synced: rows.length, undeclared: undeclared.map((r) => r.source_id) };
+}
 
 export async function preferredSource(): Promise<string | null> {
   const rows = await sql<{ source_id: string }[]>`

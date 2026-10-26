@@ -170,19 +170,6 @@ export function parseTottoriAllPage(html: string, knownNames: Set<string>): Pars
   return out;
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES ('tottori-dam', 307,
-            '鳥取県ダム諸量情報システム — hourly, 5 dams (賀祥/朝鍋/佐治川/東郷/百谷)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 interface DamMatch {
   tottoriName: string;
   damId: bigint;
@@ -229,7 +216,6 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
   const matches = await ensureExternalIds(log);
   log(`tottori-dam: matched ${matches.length}/${DAMS.length} master dams`);
 

@@ -105,19 +105,6 @@ export function parseShimokuboJson(json: ShimokuboJson): ParsedReading {
 
 // --- DB helpers -------------------------------------------------------------
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 297,
-            '水資源機構 利根川上流総合管理所 下久保ダム 実時計 (10分間隔)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 async function resolveDamId(log: (s: string) => void): Promise<bigint | null> {
   // Twins of a redeveloped dam tie on rank, so chooseRanked picks the current
   // one; a row already stamped with the station keeps it (#79).
@@ -149,7 +136,6 @@ async function resolveDamId(log: (s: string) => void): Promise<bigint | null> {
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
   const damId = await resolveDamId(log);
   // What this source publishes, matched or not — recorded so /coverage can
   // say "they publish it, we failed to link it" instead of guessing.

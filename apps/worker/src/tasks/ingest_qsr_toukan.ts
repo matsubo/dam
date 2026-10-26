@@ -122,19 +122,6 @@ export function parseToukantable(html: string, tableIdx: number): ParsedRow | nu
 
 // --- DB helpers -------------------------------------------------------------
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 303,
-            '国土交通省 九州地方整備局 筑後川ダム統合管理事務所 — 2 dams: 松原/下筌 (筑後川水系, Oita)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 function normalizeName(s: string): string {
   return s
     .replace(/[（(][^）)]*[）)]/g, '')
@@ -197,7 +184,6 @@ async function matchMaster(log: (s: string) => void): Promise<Map<string, bigint
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   // Resolved before the fetch so a bad page still leaves a scan on record.
   const damByPage = await matchMaster(log);

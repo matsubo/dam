@@ -147,23 +147,6 @@ export function extractYearFromResourceName(name: string): number | null {
 
 // --- DB helpers -------------------------------------------------------------
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active, historical_only)
-    VALUES (${SOURCE_ID}, 296,
-            '鹿児島県 BODIK ダム諸量 — 3 dams (大和/川辺/西之谷), 10-min, 2008+, CC-BY',
-            true, true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority        = EXCLUDED.priority,
-          description     = EXCLUDED.description,
-          active          = EXCLUDED.active,
-          -- Backfill-only: this task has no crontab entry, so it never records
-          -- a recurring scan. Same reasoning as migration 0058 — kept here so a
-          -- fresh environment cannot recreate the row inside the gate.
-          historical_only = EXCLUDED.historical_only
-  `;
-}
-
 function normalizeName(s: string): string {
   return s
     .replace(/[（(][^）)]*[）)]/g, '')
@@ -245,8 +228,6 @@ const BATCH_SIZE = 1_000;
 const task: Task = async (payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
   const { fromYear } = (payload ?? {}) as BackfillPayload;
-
-  await ensureSourcePriority();
 
   const resources = await fetchResourceList();
   log(`${SOURCE_ID}: found ${resources.length} ZIP resources`);

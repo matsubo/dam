@@ -31,6 +31,8 @@ jobs:
       - run: bun run lint
       - run: bun run typecheck
       - run: bun run --filter @dam/db migrate
+      # bootstrap.sh writes the declared source rows right after migrations.
+      - run: bun run --filter @dam/db sources sync
       # graphile-worker installs its own schema on first worker start (migration
       # 0010 is only a placeholder); the admin jobs route tests need it present.
       - run: bunx graphile-worker --schema-only

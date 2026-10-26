@@ -143,19 +143,6 @@ export function parseHkdDamPage(html: string): ParsedDam | null {
   };
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 305,
-            '国土交通省 北海道開発局 ダムリアルタイム情報 — hourly, 18 dams',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 interface DamMatch {
   cfg: DamCfg;
   damId: bigint;
@@ -204,7 +191,6 @@ async function matchMaster(log: (s: string) => void): Promise<DamMatch[]> {
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
   const matches = await matchMaster(log);
   log(`${SOURCE_ID}: matched ${matches.length}/${DAMS.length} master dams`);
 

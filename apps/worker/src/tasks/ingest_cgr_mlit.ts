@@ -92,19 +92,6 @@ export function parseCgrTimestamp(raw: string): Date | null {
   );
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 304,
-            '国土交通省 中国地方整備局 ダム防災情報システム — hourly, 11 dams (苫田/土師/弥栄/八田原/温井/灰塚/島地川/菅沢/殿/志津見/尾原)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 interface DamMatch {
   cfg: DamCfg;
   damId: bigint;
@@ -153,7 +140,6 @@ async function matchMaster(log: (s: string) => void): Promise<DamMatch[]> {
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
   const matches = await matchMaster(log);
   log(`${SOURCE_ID}: matched ${matches.length}/${DAMS.length} master dams`);
 

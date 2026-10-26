@@ -103,19 +103,6 @@ export function parseJwaChibaHtml(html: string): ParsedRow[] {
 
 // --- DB helpers -------------------------------------------------------------
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 302,
-            '水資源機構 千葉用水総合管理所 — 長柄・東金ダム日次 (EL水位+貯水率)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 /**
  * Pick the best master dam for a published name: an exact page-name hit beats
  * 「<stem>ダム」 beats the bare stem beats a prefix hit beats a substring hit,
@@ -181,7 +168,6 @@ async function matchMaster(
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const ua =
     process.env.HTTP_USER_AGENT ??

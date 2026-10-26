@@ -16,69 +16,13 @@
 //   lag      = the median delay between a recent stamp and the first time we
 //              stored it (created_at survives the upsert), e.g. ~12 h for a
 //              00:00 JST daily value fetched at noon.
-// FRESHNESS_OVERRIDE_HOURS replaces the threshold where the provider's rhythm
-// is known better than the last 20 stamps can show.
+// A source's freshnessOverrideHours (packages/core/src/source_registry.ts)
+// replaces the threshold where the provider's rhythm is known better than the
+// last 20 stamps can show.
 
 import { INGEST_INTERVAL_HOURS } from '@dam/core/crontab';
+import { FRESHNESS_OVERRIDE_HOURS } from '@dam/core/sources';
 import { sql } from '../client.ts';
-
-/**
- * Explicit thresholds in hours, replacing the derived one. `null` means the
- * source is silent by design and never stale.
- */
-export const FRESHNESS_OVERRIDE_HOURS: Readonly<Record<string, number | null>> = {
-  // Hourly real-time sources — flag if older than 3 h.
-  'shiga-bousai': 3,
-  'tottori-dam': 3,
-  'aomori-dam': 3,
-  'hkd-mlit-dam': 3,
-  'cgr-mlit-dam': 3,
-  'ktr-kinu-dam': 3,
-  'jwa-tonekako': 3,
-  // Daily sources — flag if older than 30 h (allows late publish day).
-  // 30-day daily window stamped at 24:00 JST, rolled over at ~01:00 JST and
-  // polled every 3 h; the derived 3 × 24 h + lag would wait three days.
-  'kanagawa-dam': 30,
-  // Business-day page stamped with its own date (0時, 小河内 7時). A holiday
-  // weekend ages it ~4.5 days; 年末年始 (closed 12/29–1/3) up to 10.5 when
-  // 12/26 is the last business day and 1/5 the first. The derived 3 × p90
-  // gap (~93 h) misses both: 20 stamps hold too few weekend gaps.
-  'tokyo-waterworks': 11 * 24,
-  // Not jwa-chikugo: stamped by its business-day edition, it goes 72 h over a
-  // weekend and up to 7 days over 年末年始, which the derived threshold
-  // (3 × the p90 stamp gap, a weekend, + lag ≈ 230 h) already clears.
-  // 10-day cadence — flag if older than 14 days.
-  'jwa-junpo': 14 * 24,
-  // Business-day page: Friday's shows Thursday 24:00, the next is Monday's
-  // (Sunday 24:00, often after 11:00 JST) — ~85 h; a Monday holiday adds a
-  // day. The derived threshold (3 × the ~72 h weekend gap) would be ~10 d.
-  aitoyo: 5 * 24,
-  // Weekly survey that can skip a week (9/14 was still the latest on 9/27),
-  // plus a day or two before the page's 更新日.
-  'chiba-suisei': 17 * 24,
-  // Weekly 「M月D日現在」 page, same slack as chiba-suisei: a skipped week plus
-  // a day or two of publication lag after the survey date that is stamped.
-  'hyogo-kigyo': 17 * 24,
-  // Survey-date source: 福島県 publishes 隔週 in かんがい期 but only monthly
-  // Oct–Mar, so the window has to clear a full winter gap plus publish lag.
-  'fukushima-nourin': 45 * 24,
-  // Hand-edited about monthly; the index shows gaps up to 62 days (2026/3/26
-  // → 5/27), and the 現在 date runs ~5 days behind the edit.
-  'awaji-suido': 70 * 24,
-  // Re-issued about every ten days (R8.9.14 → 9.24), stamped with its own
-  // date; a skipped edition plus a few days of lag. With one stamp the
-  // derived threshold falls back to 3 × the daily poll and flags it at once.
-  'hirado-suido': 21 * 24,
-  // Re-issued about monthly (更新日 2026-09-01 carries the 8月 figures) and
-  // stamped with that 更新日; a late month plus lag. One stamp alone would get
-  // 3 × the daily poll.
-  'sue-suido': 45 * 24,
-  // The portal lists dams only during a flood or disaster; empty otherwise.
-  'kagoshima-bousai': null,
-  // The 水源状況 page is a 渇水 notice, taken down when the drought ends
-  // (HTTP 404 on 2026-09-28; see migration 0151).
-  'shimonoseki-suido': null,
-};
 
 /** How many polls (or publications) in a row may bring nothing new. */
 const MISSED_RUNS = 3;

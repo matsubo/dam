@@ -12,7 +12,8 @@
     "./similarity": "./src/similarity.ts",
     "./source_adapter": "./src/source_adapter.ts",
     "./dam_binding": "./src/dam_binding.ts",
-    "./crontab": "./src/crontab.ts"
+    "./crontab": "./src/crontab.ts",
+    "./sources": "./src/sources.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

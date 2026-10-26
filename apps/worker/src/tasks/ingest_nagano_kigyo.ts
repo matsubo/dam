@@ -148,19 +148,6 @@ export function parseNaganoKigyoTable(json: string, cfg: DamCfg, lastModified: D
 
 // --- DB helpers -------------------------------------------------------------
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 311,
-            '長野県企業局 ダム情報 10分諸量 — 高遠・菅平 (貯水位・全流入量・全放流量, 菅平は貯水率)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 interface DamMatch {
   cfg: DamCfg;
   damId: bigint;
@@ -206,7 +193,6 @@ async function matchMaster(log: (s: string) => void): Promise<DamMatch[]> {
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
   const matches = await matchMaster(log);
 
   const inputs = [] as Parameters<typeof upsertObservations>[0];

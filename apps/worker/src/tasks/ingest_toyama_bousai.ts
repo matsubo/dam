@@ -163,19 +163,6 @@ export function parseToyamaDamData(csv: string, stations: ToyamaStation[]): Pars
 
 // --- DB helpers -------------------------------------------------------------
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 308,
-            '富山県 河川現況表 ダム貯水位表 — 16 ダム (kawa.pref.toyama.jp CSV, 10分更新, 貯水率 利水容量)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 function normalizeName(s: string): string {
   return (
     s
@@ -280,7 +267,6 @@ async function fetchCsv(file: string, log: (s: string) => void): Promise<string 
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const namesCsv = await fetchCsv('damname_data.csv', log);
   if (namesCsv === null) return;

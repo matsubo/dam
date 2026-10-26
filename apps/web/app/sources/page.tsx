@@ -1,10 +1,10 @@
+import { sourceById } from '@dam/core/sources';
 import { sql } from '@dam/db/client';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
 import { REPO_URL } from '../../lib/contributors.ts';
 import { fmtDate, fmtDateOnly } from '../../lib/format.ts';
-import { SOURCE_DETAILS } from '../../lib/source-details.ts';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 300;
@@ -140,10 +140,6 @@ async function loadAll() {
   };
 }
 
-// SOURCE_DETAILS moved to apps/web/lib/source-details.ts so /sources/[id]
-// and components/source-badge.tsx can share the editorial metadata.
-const SOURCE_DETAIL = SOURCE_DETAILS;
-
 function pct(part: bigint | number, total: bigint | number): string {
   const p = Number(part);
   const t = Number(total);
@@ -205,7 +201,7 @@ export default async function SourcesPage() {
             </thead>
             <tbody>
               {data.sources.map((s) => {
-                const detail = SOURCE_DETAIL[s.source_id];
+                const detail = sourceById(s.source_id)?.details;
                 const obs = data.obsBySource.get(s.source_id);
                 return (
                   <tr key={s.source_id}>
@@ -224,7 +220,7 @@ export default async function SourcesPage() {
                     </td>
                     <td className="text-xs max-w-md">{detail?.what ?? s.description ?? '—'}</td>
                     <td className="text-xs">{detail?.cadence ?? '—'}</td>
-                    <td className="text-xs">{detail?.license ?? '—'}</td>
+                    <td className="text-xs">{detail ? (detail.license ?? '未確認') : '—'}</td>
                     <td className="text-right tabular-nums">{s.priority}</td>
                     <td className="text-right text-xs tabular-nums">
                       {obs ? (
@@ -249,22 +245,6 @@ export default async function SourcesPage() {
                   </tr>
                 );
               })}
-              {Object.entries(SOURCE_DETAIL)
-                .filter(([id]) => !data.sources.some((s) => s.source_id === id))
-                .map(([id, d]) => (
-                  <tr key={id} className="opacity-60">
-                    <td>
-                      <div className="font-semibold">{id}</div>
-                      <div className="text-xs text-on-surface-variant max-w-xs">{d.upstream}</div>
-                    </td>
-                    <td className="text-xs max-w-md">{d.what}</td>
-                    <td className="text-xs">{d.cadence}</td>
-                    <td className="text-xs">{d.license}</td>
-                    <td className="text-right tabular-nums text-on-surface-variant">—</td>
-                    <td className="text-right text-xs text-on-surface-variant">—</td>
-                    <td className="text-xs text-on-surface-variant">未取得</td>
-                  </tr>
-                ))}
             </tbody>
           </table>
         </div>

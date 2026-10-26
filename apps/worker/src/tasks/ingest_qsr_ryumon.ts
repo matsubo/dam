@@ -61,19 +61,6 @@ async function fetchKey(key: string, ua: string): Promise<string> {
 
 // --- DB helpers -------------------------------------------------------------
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 303,
-            '国土交通省 九州地方整備局 竜門ダム管理所 — 竜門ダム (佐田川水系, Fukuoka)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 async function findDamId(log: (s: string) => void): Promise<bigint | null> {
   // Twins of a redeveloped dam tie on rank, so chooseRanked picks the current
   // one; a row already stamped with the station keeps it (#79).
@@ -116,7 +103,6 @@ async function findDamId(log: (s: string) => void): Promise<bigint | null> {
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const ua =
     process.env.HTTP_USER_AGENT ??

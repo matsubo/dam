@@ -31,7 +31,6 @@
 // 打上調整池 / 加佐登調整池 / 木曽川大堰. 宮川調整池 and 長良川河口堰 have no
 // other source.
 
-import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
@@ -102,22 +101,8 @@ export function matchKiso(facilities: RealtimeFacility[], log: (s: string) => vo
   return matchFacilities(SOURCE_ID, facilities, PREF_BY_NAME, log);
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 297,
-            '水資源機構 中部支社 木曽川水系 実時計 — hourly, 12 facilities (5 dams, 三重用水 中里 + 調整池, 長良川河口堰, 木曽川大堰)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const r = await fetch(PAGE_URL, {
     headers: {

@@ -142,19 +142,6 @@ interface DamMatch {
   damId: bigint;
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES ('jwa-yoshino', 297,
-            '水資源機構 吉野川上流総管 — hourly, 5 dams (池田/早明浦/新宮/富郷/柳瀬)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
   const matches: DamMatch[] = [];
   // What this source publishes, matched or not — recorded so /coverage can
@@ -201,7 +188,6 @@ async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> 
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
   const matches = await ensureExternalIds(log);
   log(`jwa-yoshino: matched ${matches.length}/${NAME_MAP.length} master dams`);
 

@@ -38,7 +38,6 @@
 // publish daily / every 10 days; below kasenbosai (310) there. The 調整池 and
 // 大野頭首工 have no other source.
 
-import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
@@ -100,22 +99,8 @@ export function matchToyokawa(facilities: RealtimeFacility[], log: (s: string) =
   return matchFacilities(SOURCE_ID, facilities, PREF_BY_NAME, log);
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 298,
-            '水資源機構 中部支社 豊川水系 — real-time (~10 min), 14 facilities (宇連/大島 + 豊川用水 調整池・頭首工)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const r = await fetch(PAGE_URL, {
     headers: {

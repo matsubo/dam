@@ -114,19 +114,6 @@ export function chooseMaster(
   return best?.m.id ?? null;
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 311,
-            '兵庫県 ダム諸量 BODIK オープンデータ (CC-BY 4.0, 10分更新, 22観測所)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 interface DamMatch {
   hyogoName: string;
   damId: bigint;
@@ -166,7 +153,6 @@ async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const ua =
     process.env.HTTP_USER_AGENT ??

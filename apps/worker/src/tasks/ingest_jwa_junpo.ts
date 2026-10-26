@@ -172,19 +172,6 @@ export interface DamMatch {
   damId: bigint;
 }
 
-export async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES ('jwa-junpo', 290,
-            '水資源機構 旬報 (real, 10-day cadence, statutory open data)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 /**
  * Idempotent: bind each listed station to one master dam and stamp
  * external_ids->>'jwa-junpo' there (and nowhere else). Match by (prefCode IN
@@ -238,7 +225,6 @@ export async function ensureExternalIds(log: (s: string) => void): Promise<DamMa
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
   const matches = await ensureExternalIds(log);
   log(`jwa-junpo: matched ${matches.length}/${NAME_MAP.length} master dams`);
 

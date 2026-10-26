@@ -140,19 +140,6 @@ export function parseAomoriDamGraph(html: string): AomoriRow[] {
   return out;
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES ('aomori-dam', 306,
-            '青森県河川砂防情報提供システム ダム諸量グラフ — hourly, ダム諸量現況表の全ダム (11: 下湯/久吉/浅瀬石川/世増/浅虫/遠部/津軽/飯詰/小泊/清水目/川内)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 interface DamMatch {
   cfg: DamCfg;
   damId: bigint;
@@ -208,7 +195,6 @@ const headers = {
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const list = await fetch(LIST_URL, { headers, signal: AbortSignal.timeout(15_000) });
   if (list.status !== 200) {

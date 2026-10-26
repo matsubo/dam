@@ -1,7 +1,7 @@
 // apps/worker/src/tasks/ingest_okayama.test.ts
 //
 // Pure-function tests for the おかやま防災ポータル JSON parser. The
-// DB-touching parts (ensureSourcePriority, matching, the upsert) are out
+// DB-touching parts (matching, the upsert) are out
 // of scope here — they're exercised end-to-end by the worker integration
 // suite.
 //

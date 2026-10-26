@@ -121,19 +121,6 @@ async function fetchShiftJis(url: string): Promise<string | null> {
   return new TextDecoder('shift_jis').decode(await r.arrayBuffer());
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 308,
-            '滋賀県土木防災情報システム (mobile) — hourly, 8 dams (青土/日野川/永源寺/野洲川/蔵王/宇曽川/姉川/石田川)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 async function matchMasters(
   stations: Station[],
   log: (s: string) => void,
@@ -182,7 +169,6 @@ async function matchMasters(
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
 
   const listHtml = await fetchShiftJis(`${BASE_URL}/mobile/dam/dam_select.php`);
   if (listHtml === null) {

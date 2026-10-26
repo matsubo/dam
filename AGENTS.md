@@ -56,6 +56,7 @@ canonical product/architecture spec. It precedes any LLM-written doc.
 | `observations` PK is `(dam_id, observed_at, source_id)` | Multiple sources for same time are intentional |
 | Test cleanups must be **scoped to fixture IDs**, never use a blanket source/external_id filter | Past test wiped prod twice |
 | `source_priorities.priority DESC` decides which source the chart shows | Multiple sources can cover one dam; the top-priority one wins |
+| Every per-source fact (priority, status, gate flags, trusted basis, schedule, freshness, /sources text) is declared once in `packages/core/src/source_registry.ts`; migrations and tasks never write `source_priorities` | `bootstrap.sh` syncs the declarations after migrations; two writers drifted and could re-activate a retired source (docs/adr/0001) |
 | Every observation-ingesting task calls `recordUniverse()` | `/coverage` can only say "no provider publishes this dam" once every provider has recorded its published list; a task that skips it leaves its dams stuck in 未調査. Enforced by `apps/worker/src/tasks/universe_instrumentation.test.ts` |
 | `External API responses use HAL+JSON with `_links`` | HATEOAS Level 3 is required by `~/.claude/rules/api-design.md` |
 | `Page components decode params with `decodeURIComponent(rawSlug)`` | Next 15 leaves URL-encoded kanji in dynamic params (route handlers decode automatically; pages do not) |
@@ -79,12 +80,13 @@ cd apps/web && API_AUTH_BYPASS=1 \
 # DB gives phantom failures. The admin jobs tests need graphile-worker's schema.
 UNIT_DB=$(bun run bin/test_db.ts "$DATABASE_URL" "$PWD")
 DATABASE_URL=$UNIT_DB bun run --filter @dam/db migrate
+DATABASE_URL=$UNIT_DB bun run --filter @dam/db sources sync
 (cd apps/worker && bunx graphile-worker --schema-only -c "$UNIT_DB")
 DATABASE_URL=$UNIT_DB bun run test
 # E2E runs on what CI builds: a migrated scratch DB plus the fixture seed,
 # which writes rows it never removes — never seed the shared `dam` DB.
 export DATABASE_URL=$(bun run bin/test_db.ts "$DATABASE_URL" "$PWD/e2e")
-bun run --filter @dam/db migrate && bun run tests/e2e/fixtures/seed.ts
+bun run --filter @dam/db migrate && bun run --filter @dam/db sources sync && bun run tests/e2e/fixtures/seed.ts
 # The home page's unstable_cache is not keyed on the DB: clear it after
 # switching databases or reseeding, or coverage-consistency sees stale numbers.
 rm -rf apps/web/.next/dev/cache
@@ -146,7 +148,11 @@ bun run apps/web/bin/seed_synthetic_observations.ts     --hourly-days 30 --years
    for any direct API access. ~90 other upstreams now feed the realtime
    pipeline instead (see `/coverage`).
 
-7. **Adding a new ingest task**: it must call `recordUniverse(SOURCE_ID, rows)`
+7. **Adding a new ingest task**: declare its source first (`defineSource` in
+   `packages/core/src/source_registry.ts`: priority, description, flags,
+   `ingestCron`, details) and register the task in
+   `apps/worker/src/task_list.ts`; the crontab, cadence and `source_priorities`
+   row follow from the declaration. The task must call `recordUniverse(SOURCE_ID, rows)`
    once per run with the provider's WHOLE published list — the unmatched rows
    are the point, since they are what separates "they publish it, we failed to
    link it" from "nobody publishes it". Push into the array BEFORE the
