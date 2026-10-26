@@ -34,12 +34,9 @@
 //
 // Priority 280. Cron hourly at :36.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { cell, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const STATUS_URL =
   process.env.YAMANASHI_DAM_URL ??
@@ -50,8 +47,9 @@ const SOURCE_ID = 'yamanashi-dam';
 
 // --- dam config (code → display name) --------------------------------------
 
-// The site's station codes (P3). ダム状況表 rows carry only the name, and
-// only these dams are ingested, as when each was fetched by code.
+// The site's station codes (P3). ダム状況表 rows carry only the name; the
+// code is the universe key and the stamp, as when each dam was fetched by
+// code. The catalogue is the universe even when the page fails.
 const DAMS: { code: string; name: string }[] = [
   { code: '5002', name: '大門ダム' },
   { code: '5001', name: '塩川ダム' },
@@ -91,19 +89,21 @@ export function parseYamanashiTimestamp(s: string): Date | null {
 
 function parseNum(s: string): number | null {
   const m = s.trim().match(/-?\d+(?:\.\d+)?/);
-  if (!m) return null;
-  const n = Number(m[0]);
-  return Number.isFinite(n) ? n : null;
+  return m ? numberIn(cell(Number(m[0]), false)) : null;
 }
 
 /**
- * Every dam row of the ダム状況表 (dam005.asp), stamped with the page's "現在" time.
- * If the 貯水量 column stops saying [千 m3], volumes are dropped (and `warn` is
- * called) rather than stored at the wrong scale; the other fields are kept.
+ * Every dam row of the ダム状況表 (dam005.asp), stamped with the page's "現在"
+ * time; null when the page carries no timestamp. If the 貯水量 column stops
+ * saying [千 m3], volumes are dropped (and `warn` is called) rather than stored
+ * at the wrong scale; the other fields are kept.
  */
-export function parseYamanashiStatusHtml(html: string, warn: (s: string) => void): ParsedRow[] {
+export function parseYamanashiStatusHtml(
+  html: string,
+  warn: (s: string) => void,
+): ParsedRow[] | null {
   const observedAt = parseYamanashiTimestamp(html);
-  if (!observedAt) return [];
+  if (!observedAt) return null;
   const volumeInThousands = /貯水量\s*(?:<br>)?\s*\[千\s*m3\]/i.test(html);
 
   const rows: ParsedRow[] = [];
@@ -119,26 +119,14 @@ export function parseYamanashiStatusHtml(html: string, warn: (s: string) => void
     const name = cells[0];
     if (cells.length < 8 || !name) continue;
 
-    const waterLevelM = parseNum(cells[1] ?? '');
     const volumeThousandM3 = volumeInThousands ? parseNum(cells[2] ?? '') : null;
-    const inflowM3s = parseNum(cells[4] ?? '');
-    const outflowM3s = parseNum(cells[5] ?? '');
-    if (
-      waterLevelM === null &&
-      volumeThousandM3 === null &&
-      inflowM3s === null &&
-      outflowM3s === null
-    ) {
-      continue;
-    }
-
     rows.push({
       yamanashiName: name,
       observedAt,
-      waterLevelM,
+      waterLevelM: parseNum(cells[1] ?? ''),
       storageVolumeM3: volumeThousandM3 === null ? null : Math.round(volumeThousandM3 * 1000),
-      inflowM3s,
-      outflowM3s,
+      inflowM3s: parseNum(cells[4] ?? ''),
+      outflowM3s: parseNum(cells[5] ?? ''),
       rainfallMm: parseNum(cells[6] ?? ''),
     });
   }
@@ -149,141 +137,73 @@ export function parseYamanashiStatusHtml(html: string, warn: (s: string) => void
   return rows;
 }
 
-// --- DB helpers -------------------------------------------------------------
-
-function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/貯水池$/, '')
-    .trim();
-}
-
-interface DamMatch {
-  yamanashiName: string;
-  damId: bigint;
-}
-
-/** Best master dam for a dam name, or null when nothing ranks. */
-export function chooseMaster(
-  name: string,
-  masters: BindableMaster[],
-  stationKey?: string,
-): bigint | null {
-  // A row already stamped with this station keeps it; names alone cannot
-  // separate same-name dams (#57).
-  const stamped = stationKey ? stampedMaster(masters, stationKey) : null;
-  if (stamped) return stamped.id;
-
-  const stem = normalizeName(name);
-  if (!stem) return null;
-
-  let best: { m: BindableMaster; rank: number } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (m.name === name) rank = 0;
-    else if (mStem === stem) rank = 1;
-    else if (m.name === `${stem}ダム`) rank = 2;
-    else if (mStem.startsWith(stem)) rank = 3;
-    else if (mStem.includes(stem)) rank = 4;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-      best = { m, rank };
-    }
+export function yamanashiReading(r: ParsedRow): Reading {
+  const { yamanashiName: _, ...observed } = r;
+  // The page shows no mark of its own: a row without a number is unreadable.
+  if (
+    [r.waterLevelM, r.storageVolumeM3, r.inflowM3s, r.outflowM3s, r.rainfallMm].every(
+      (v) => v === null,
+    )
+  ) {
+    return { state: 'unreadable', why: 'no number in the row' };
   }
-  return best?.m.id ?? null;
+  return { state: 'values', observations: [observed] };
 }
 
-async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const out: DamMatch[] = [];
+function catalogue(reading: (name: string) => Reading): Entry[] {
+  return DAMS.map((d) => ({
+    key: d.code,
+    name: d.name,
+    pref: PREF_CODE,
+    reading: reading(d.name),
+  }));
+}
 
-  // What this source publishes, matched or not — taken from the dam catalogue
-  // rather than this run's parsed rows, so a dam missing from the page still
-  // counts as published instead of reading as 提供元なし. The station code is
-  // the stamp, as it is the universe's external id.
-  const universe: UniverseRow[] = [];
-  for (const d of DAMS) {
-    const damId = chooseMaster(d.name, masters, d.code);
-    universe.push({
-      externalId: d.code,
-      name: d.name,
-      prefCode: PREF_CODE,
-      resolvedDamId: damId,
-    });
-    if (!rows.some((r) => r.yamanashiName === d.name)) continue;
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${d.name}"`);
-      continue;
-    }
-    out.push({ yamanashiName: d.name, damId });
-    await bindExternalId(damId, SOURCE_ID, d.code);
-  }
-  await recordUniverse(SOURCE_ID, universe);
-
-  return out;
+/**
+ * The catalogue, read from the page — a dam missing from it is unreadable —
+ * plus any row the catalogue lacks, keyed by its printed name.
+ */
+export function yamanashiEntries(html: string, warn: (s: string) => void): Entry[] {
+  const rows = parseYamanashiStatusHtml(html, warn);
+  if (!rows) return catalogue(() => ({ state: 'unreadable', why: 'no 現在 timestamp' }));
+  const byName = new Map(rows.map((r) => [r.yamanashiName, r]));
+  const known = catalogue((name) => {
+    const r = byName.get(name);
+    return r ? yamanashiReading(r) : { state: 'unreadable', why: 'not on the page' };
+  });
+  const extra = rows
+    .filter((r) => !DAMS.some((d) => d.name === r.yamanashiName))
+    .map(
+      (r): Entry => ({
+        key: r.yamanashiName,
+        name: r.yamanashiName,
+        pref: PREF_CODE,
+        reading: yamanashiReading(r),
+      }),
+    );
+  return [...known, ...extra];
 }
 
 // --- task -------------------------------------------------------------------
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
+export default ingestTask(SOURCE_ID, async (log) => {
   const ua =
     process.env.HTTP_USER_AGENT ??
     'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
 
-  let html: string | null = null;
+  let html: string;
   try {
     const r = await fetch(STATUS_URL, {
       headers: { 'user-agent': ua },
       signal: AbortSignal.timeout(20_000),
     });
-    if (r.status === 200) html = new TextDecoder('shift_jis').decode(await r.arrayBuffer());
-    else log(`${SOURCE_ID}: HTTP ${r.status}`);
+    if (r.status !== 200) throw new Error(`HTTP ${r.status}`);
+    html = new TextDecoder('shift_jis').decode(await r.arrayBuffer());
   } catch (e) {
-    // The universe is still recorded below, as it was when per-dam fetches failed.
-    log(`${SOURCE_ID}: fetch failed: ${e instanceof Error ? e.message : String(e)}`);
+    // The catalogue is still recorded, as it was when per-dam fetches failed.
+    const why = e instanceof Error ? e.message : String(e);
+    log(`${SOURCE_ID}: fetch failed: ${why}`);
+    return { entries: catalogue(() => ({ state: 'unreadable', why })) };
   }
-
-  const rows: ParsedRow[] = [];
-  for (const r of html === null
-    ? []
-    : parseYamanashiStatusHtml(html, (s) => helpers.logger.warn(s))) {
-    if (DAMS.some((d) => d.name === r.yamanashiName)) rows.push(r);
-    else log(`${SOURCE_ID}: "${r.yamanashiName}" is not in the dam catalogue; skipped`);
-  }
-
-  log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
-
-  const matches = await matchMaster(rows, log);
-  const damByName = new Map(matches.map((m) => [m.yamanashiName, m.damId]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = damByName.get(p.yamanashiName);
-    if (!damId) continue;
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: null,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: p.rainfallMm,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+  return { entries: yamanashiEntries(html, log) };
+});

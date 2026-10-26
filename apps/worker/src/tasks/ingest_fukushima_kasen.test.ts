@@ -1,9 +1,23 @@
+// apps/worker/src/tasks/ingest_fukushima_kasen.test.ts
+//
+// Feed → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
+
 import { describe, expect, test } from 'bun:test';
+import type { Entry, Observed } from '../ingest/types.ts';
 import {
   buildFukushimaUrl,
-  parseFukushimaJson,
+  fukushimaEntries,
   parseFukushimaTimestamp,
 } from './ingest_fukushima_kasen.ts';
+
+function observed(e: Entry | undefined): Observed | undefined {
+  const r = e?.reading;
+  if (!r || typeof r === 'function' || r.state !== 'values') throw new Error('no values');
+  return r.observations[0];
+}
+const state = (e: Entry | undefined) =>
+  e && typeof e.reading !== 'function' ? e.reading.state : undefined;
 
 describe('parseFukushimaTimestamp', () => {
   test('parses "YYYY-MM-DD-HH-mm" (JST) → UTC', () => {
@@ -48,7 +62,7 @@ describe('buildFukushimaUrl', () => {
   });
 });
 
-// Sample JSON — 3 dam stations + 1 excluded lake.
+// Sample JSON — 3 dam stations + 1 non-dam station.
 const SAMPLE_JSON = {
   observationTime: '2026-06-05-20-00',
   updateTime: '2026-06-05-20-27',
@@ -87,7 +101,7 @@ const SAMPLE_JSON = {
       },
     ],
   },
-  // 桧原湖: natural lake — excluded (not in STATION_MAP)
+  // 十六橋水門: 猪苗代湖's outlet gate — listed, never bound
   '1799_7_3': {
     data60: [
       {
@@ -100,23 +114,43 @@ const SAMPLE_JSON = {
   },
 };
 
-describe('parseFukushimaJson', () => {
-  test('parses 3 dam rows (桧原湖 excluded)', () => {
-    const rows = parseFukushimaJson(SAMPLE_JSON);
-    expect(rows).toHaveLength(3);
-    expect(rows.map((r) => r.fukushimaName)).toEqual(['小玉ダム', '高柴ダム', '四時ダム']);
+describe('fukushimaEntries', () => {
+  const entries = fukushimaEntries(SAMPLE_JSON);
+  const named = (n: string) => entries.find((e) => e.name === n);
+
+  test('the whole catalogue: 11 dams and 4 non-dam stations, keyed by station id', () => {
+    expect(entries).toHaveLength(15);
+    expect(named('小玉ダム')?.key).toBe('1795_7_3');
+    expect(named('小玉ダム')?.pref).toBe('07');
+    expect(named('小玉ダム')?.bind).toBeUndefined();
+    expect(entries.filter((e) => e.bind === 'never').map((e) => [e.key, e.name, state(e)])).toEqual(
+      [
+        ['1799_7_21', '桧原湖', 'unreadable'],
+        ['1799_7_22', '小野川湖', 'unreadable'],
+        ['1799_7_23', '秋元湖', 'unreadable'],
+        ['1799_7_3', '十六橋水門', 'values'],
+      ],
+    );
+  });
+
+  test('a station absent from the feed is unreadable, never dropped', () => {
+    expect(state(named('こまちダム'))).toBe('unreadable');
+    expect(entries.filter((e) => state(e) === 'values').map((e) => e.name)).toEqual([
+      '小玉ダム',
+      '高柴ダム',
+      '四時ダム',
+      '十六橋水門',
+    ]);
   });
 
   test('all rows share the same observedAt (2026-06-05T11:00Z)', () => {
-    const rows = parseFukushimaJson(SAMPLE_JSON);
-    for (const r of rows) {
-      expect(r.observedAt.toISOString()).toBe('2026-06-05T11:00:00.000Z');
+    for (const n of ['小玉ダム', '高柴ダム', '四時ダム']) {
+      expect(observed(named(n))?.observedAt.toISOString()).toBe('2026-06-05T11:00:00.000Z');
     }
   });
 
   test('小玉ダム: all fields including rainfall parsed correctly', () => {
-    const r = parseFukushimaJson(SAMPLE_JSON).find((x) => x.fukushimaName === '小玉ダム');
-    expect(r).toBeDefined();
+    const r = observed(named('小玉ダム'));
     expect(r?.waterLevelM).toBeCloseTo(184.46);
     expect(r?.inflowM3s).toBeCloseTo(1.31);
     expect(r?.outflowM3s).toBeCloseTo(1.13);
@@ -124,26 +158,38 @@ describe('parseFukushimaJson', () => {
   });
 
   test('四時ダム: missing rainfall → null', () => {
-    const r = parseFukushimaJson(SAMPLE_JSON).find((x) => x.fukushimaName === '四時ダム');
-    expect(r).toBeDefined();
+    const r = observed(named('四時ダム'));
     expect(r?.waterLevelM).toBeCloseTo(102.48);
     expect(r?.rainfallMm).toBeNull();
   });
 
   test('高柴ダム: "**" inflow/outflow → null; waterLevel still included', () => {
-    const r = parseFukushimaJson(SAMPLE_JSON).find((x) => x.fukushimaName === '高柴ダム');
-    expect(r).toBeDefined();
+    const r = observed(named('高柴ダム'));
     expect(r?.waterLevelM).toBeCloseTo(53.47);
     expect(r?.inflowM3s).toBeNull();
     expect(r?.outflowM3s).toBeNull();
   });
 
-  test('桧原湖 excluded (not in STATION_MAP)', () => {
-    const rows = parseFukushimaJson(SAMPLE_JSON);
-    expect(rows.find((r) => r.fukushimaName.includes('桧原'))).toBeUndefined();
+  test('"*" on every item is provider-marked empty', () => {
+    const json = {
+      '1795_7_3': {
+        data60: [
+          {
+            time: '2026-06-05-20-00',
+            item_10: { val: '*' },
+            item_50: { val: '*' },
+            item_70: { val: '--' },
+            item_1_70: { val: '**' },
+          },
+        ],
+      },
+    };
+    expect(state(fukushimaEntries(json).find((e) => e.key === '1795_7_3'))).toBe('empty');
   });
 
-  test('returns empty array for empty JSON', () => {
-    expect(parseFukushimaJson({ observationTime: '2026-06-05-20-00' })).toHaveLength(0);
+  test('a feed that could not be fetched leaves every station unreadable', () => {
+    const list = fukushimaEntries(null, 'HTTP 404');
+    expect(list).toHaveLength(15);
+    expect(new Set(list.map(state))).toEqual(new Set(['unreadable']));
   });
 });

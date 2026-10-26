@@ -26,12 +26,8 @@
 // kitakyushu-suido (300), above kyushu-nousei (279).
 // Cron daily 06:13 UTC (15:13 JST).
 
-import { type BindableMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const PAGE_URL = process.env.KANDA_SUIDO_URL ?? 'https://www.town.kanda.lg.jp/page/2021.html';
 
@@ -109,54 +105,37 @@ export function parseKandaSuigen(html: string): ParsedPage {
   return { observedAt, rows };
 }
 
-// --- matching ---------------------------------------------------------------
-
-export interface KandaMaster extends BindableMaster {
-  ndi: string | null;
-}
-
-/** The NDI pin, else the stamped row, else the one master row named like the page's ダム. */
-export function chooseMaster(name: string, masters: KandaMaster[]): bigint | null {
-  const pin = NDI_PINS[name];
-  if (pin) return masters.find((m) => m.ndi === pin)?.id ?? null;
-  const stamped = stampedMaster(masters, name);
-  if (stamped) return stamped.id;
-  const stem = name.replace(/ダム$/, '');
-  const hits = masters.filter((m) => m.name.normalize('NFKC') === stem);
-  return hits.length === 1 ? (hits[0]?.id ?? null) : null;
-}
-
-export interface KandaPlan {
-  universe: UniverseRow[];
-  writes: { damId: bigint; row: ParsedRow }[];
-}
-
-/** The whole list for the universe; readings for every matched row that has one. */
-export function planKanda(rows: ParsedRow[], masters: KandaMaster[]): KandaPlan {
-  const universe: UniverseRow[] = [];
-  const writes: KandaPlan['writes'] = [];
-  for (const row of rows) {
-    const damId = chooseMaster(row.name, masters);
-    const hasValue = row.storageVolumeM3 !== null || row.storageRate !== null;
-    universe.push({
-      externalId: row.name,
-      name: row.name,
-      prefCode: PREF_CODE,
-      resolvedDamId: damId,
-      hasData: hasValue ? true : null,
-    });
-    if (damId && hasValue) writes.push({ damId, row });
+/** A row's reading: a volume or a rate is a value; blank cells we leave unread. */
+export function kandaReading(observedAt: Date, row: ParsedRow): Reading {
+  if (row.storageVolumeM3 === null && row.storageRate === null) {
+    return { state: 'unreadable', why: 'no 貯水量 or 貯水率' };
   }
-  return { universe, writes };
+  return {
+    state: 'values',
+    observations: [
+      { observedAt, storageVolumeM3: row.storageVolumeM3, storageRate: row.storageRate },
+    ],
+  };
 }
 
-// --- DB helpers -------------------------------------------------------------
+/**
+ * Every 表1 row. 山口ダム binds by its NDI pin; the rest by exact name only
+ * (the page's 貯水池 is the master name plus ダム), so 井ノ口池 stays unresolved.
+ */
+export function kandaEntries(observedAt: Date, rows: ParsedRow[]): Entry[] {
+  return rows.map((row): Entry => {
+    const pin = NDI_PINS[row.name];
+    return {
+      key: row.name,
+      name: row.name,
+      pref: PREF_CODE,
+      bind: pin ? { ndi: pin } : { exact: true },
+      reading: kandaReading(observedAt, row),
+    };
+  });
+}
 
-// --- task -------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
+export default ingestTask(SOURCE_ID, async (log) => {
   const r = await fetch(PAGE_URL, {
     headers: {
       'user-agent':
@@ -165,10 +144,7 @@ const task: Task = async (_payload, helpers) => {
     },
     signal: AbortSignal.timeout(20_000),
   });
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
-  }
+  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status} from ${PAGE_URL}`);
 
   const { observedAt, rows } = parseKandaSuigen(await r.text());
   log(`${SOURCE_ID}: parsed ${rows.length} rows, 現在 ${observedAt?.toISOString() ?? 'missing'}`);
@@ -177,39 +153,5 @@ const task: Task = async (_payload, helpers) => {
       `${SOURCE_ID}: ${rows.length} rows / date ${observedAt ? 'found' : 'missing'} on ${PAGE_URL} — layout change?`,
     );
   }
-
-  const masters = await sql<KandaMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>'ndi' AS ndi,
-           external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const plan = planKanda(rows, masters);
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  await recordUniverse(SOURCE_ID, plan.universe);
-  for (const u of plan.universe) {
-    if (!u.resolvedDamId) log(`${SOURCE_ID}: no master match for "${u.name}"`);
-  }
-  for (const w of plan.writes) await bindExternalId(w.damId, SOURCE_ID, w.row.name);
-
-  const written = await upsertObservations(
-    plan.writes.map(({ damId, row }) => ({
-      observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: row.storageVolumeM3,
-      storageRate: row.storageRate,
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: null,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    })),
-  );
-  log(
-    `${SOURCE_ID} done: parsed=${rows.length} matched=${plan.universe.filter((u) => u.resolvedDamId).length} written=${written}`,
-  );
-};
-
-export default task;
+  return { entries: kandaEntries(observedAt, rows) };
+});

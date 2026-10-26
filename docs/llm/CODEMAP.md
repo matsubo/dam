@@ -164,7 +164,7 @@ the file for detail.
 | `src/tasks/ingest_aichi_kasen.ts` | `aichi-kasen`: 愛知県 川の防災情報 ダム表, hourly (雨山 / 木瀬) |
 | `src/tasks/ingest_aitoyo.ts` | `aitoyo`: 愛知・豊川用水振興協会 daily 利水容量・貯水量・貯水率 table (7 dams in 木曽川 / 豊川 / 矢作川) |
 | `src/tasks/ingest_akita_kasen.ts` | `akita-kasen`: 秋田県河川砂防情報システム 防災Web table, hourly (18 県管理ダム; no volume) |
-| `src/tasks/ingest_cgr_mlit.ts` | `cgr-mlit-dam`: 中国地方整備局 dam dashboard JSON, hourly (11 国管理ダム); reference `recordUniverse` over a hardcoded array |
+| `src/tasks/ingest_cgr_mlit.ts` | `cgr-mlit-dam`: 中国地方整備局 dam dashboard JSON, hourly (11 国管理ダム); reference ingest-run task over a catalogue known in advance (a failed fetch records every dam unreadable) |
 | `src/tasks/ingest_chiba.ts` | `chiba-suisei`: 千葉県水政課 県内ダムの貯水状況, weekly table polled daily (~23 水道 / 工業用水 dams; dated from the table heading) |
 | `src/tasks/ingest_chiba_nourin.ts` | `chiba-nourin`: 千葉県耕地課 農業用ダム貯水状況, daily (11 dams) |
 | `src/tasks/ingest_ehime_bousai.ts` | `ehime-bousai`: 愛媛県 河川・砂防情報システム ダム諸量経過表, hourly (12 dams, 24 h table each) |
@@ -189,7 +189,7 @@ the file for detail.
 | `src/tasks/ingest_jwa_kiso_rt.ts` | `jwa-kiso-rt`: JWA 中部支社 木曽川水系 realtime page, hourly (12 facilities: 5 dams, 三重用水 調整池, 長良川河口堰, 木曽川大堰) |
 | `src/tasks/ingest_jwa_toneara.ts` | `jwa-toneara`: JWA 関東支社 利根川 / 荒川 daily 0時 table, polled hourly (13 facilities) |
 | `src/tasks/ingest_jwa_toyokawa.ts` | `jwa-toyokawa`: JWA 中部支社 豊川水系 realtime page, hourly (14 facilities: 宇連 / 大島, 豊川用水 調整池 and 頭首工) |
-| `src/tasks/jwa_chubu_realtime.ts` | Parser and name/prefecture binding shared by `jwa-kiso-rt` and `jwa-toyokawa` (中部支社 realtime overview maps) |
+| `src/tasks/jwa_chubu_realtime.ts` | Pure parser and `facilityEntries` shared by `jwa-kiso-rt` and `jwa-toyokawa` (中部支社 realtime overview maps) |
 | `src/tasks/ingest_jwa_yoshino.ts` | `jwa-yoshino`: JWA 吉野川上流総合管理所 realtime page, hourly (5 dams; rate for 早明浦 only) |
 | `src/tasks/ingest_kagawa_bousai.ts` | `kagawa-bousai`: かがわ防災Webポータル `dam_station.json`, hourly (18 dams) |
 | `src/tasks/ingest_kagoshima_bousai.ts` | `kagoshima-bousai`: 鹿児島県防災ポータル `dam_station.json`, hourly; items only during flood events |
@@ -280,6 +280,7 @@ the file for detail.
 0131_source_universe_not_dam_reason.sql  source_universe.not_dam_reason (cited "not a master dam"; out of the backlog)
 0222_obs_daily_one_row_per_dam_day.sql  recompress chunks with overlapping batches, recompute split obs_daily groups, UNIQUE (dam_id, day) on its materialization hypertable (#115)
 0223_last_value_by_source_priority.sql  timestamp ties → higher source priority, then source_id: display_observation(), and obs_daily rebuilt (last volume ignores NULLs) with obs_monthly, swapped in one transaction
+0224_ingest_run_not_dam_rows_and_iwate_stamps.sql  not_dam_reason for the rows the ingest run newly lists that are not one master dam (weirs, gates, combined rows); iwate-kasen stamps moved from dam names to station numbers
 ```
 
 ### Schemas
@@ -304,7 +305,7 @@ the file for detail.
 | `src/repo/dams.ts` | `upsertDamByExternalId`, `findDamBySlug`, `latestObservation`, `earliestObservationAt`, `canonicalTwin` + `sitemapDams` (one shared （元）/（再） twin rule), `nearbyDams`, `listDams` (orderBy: id\|capacity), `takenSlugs`, `appendExternalId`, `applyDamnetAttributes`, `findDamsForReconciliation` |
 | `src/repo/watersheds.ts` | `upsertWatershed`, `findWatershedBySlug`, `findWatershedContaining`, `findNearestWatershed`, `listWatersheds`, `aggregateWatershed` |
 | `src/repo/match_review.ts` | `enqueueMatchReview` (never touches a closed review: open = `resolved_at IS NULL`; a migration closes one with `SET resolved_at = NOW(), resolved_dam_id = <id or NULL = not a dam>`) |
-| `src/repo/source_universe.ts` | `recordUniverse` (never writes `not_dam_reason`; `publishedAt` = the provider's own date for the row's newest value, 0221), `classifyDamCoverage`, `classifyOneDam` (`covered` = a value in 30 days OR a scan from the last 7 days whose `published_at` we hold an observation at), `providerAvailability` (`available` / `none` = 提供元なし / `unknown`), `isUnobtainable` (提供元なし or 提供元に値なし), `coverageSummary` (`unmatchedStations` = unresolved AND `not_dam_reason IS NULL`; `notDamStations` = unresolved with a reason; `pendingScanSources` = the gate-holding sources, each `no_recent_observations` / `ingesting_without_list` (30-day window), `sourcesPendingScan` its length). Mark a non-dam from a migration: `UPDATE source_universe SET not_dam_reason = '<cited reason>' WHERE source_id = '<src>' AND source_external_id = '<key>' AND resolved_dam_id IS NULL;` |
+| `src/repo/source_universe.ts` | `recordUniverseOrThrow` (the ingest run's universe write, inside its transaction; never writes `not_dam_reason`; `publishedAt` = the provider's own date for the row's newest value, 0221), `recordUniverse` (the same with failures logged and swallowed: match:kasenbosai and the backfills), `classifyDamCoverage`, `classifyOneDam` (`covered` = a value in 30 days OR a scan from the last 7 days whose `published_at` we hold an observation at), `providerAvailability` (`available` / `none` = 提供元なし / `unknown`), `isUnobtainable` (提供元なし or 提供元に値なし), `coverageSummary` (`unmatchedStations` = unresolved AND `not_dam_reason IS NULL`; `notDamStations` = unresolved with a reason; `pendingScanSources` = the gate-holding sources, each `no_recent_observations` / `ingesting_without_list` (30-day window), `sourcesPendingScan` its length). Mark a non-dam from a migration with an upsert, so it holds before the row is first listed: `INSERT INTO source_universe (source_id, source_external_id, source_name, not_dam_reason) VALUES (…) ON CONFLICT (source_id, source_external_id) DO UPDATE SET not_dam_reason = EXCLUDED.not_dam_reason WHERE source_universe.resolved_dam_id IS NULL;` (0224) |
 | `src/repo/coverage.ts` | `coverageHeadline` + `realtimeCoveragePct` (the home headline: `covered` ÷ dams minus 提供元なし and 提供元に値なし), `storageRateCoveragePct`, `historicalCoveragePct`; shared by `/`, `/coverage`, `/contribute` |
 | `src/repo/source_freshness.ts` | `staleSources` (threshold = 3 × cadence + publication lag; cadence = the longer of the cron gap and the 90th-percentile spacing of the last 20 stamps, lag = median `created_at − observed_at`; a declared `freshnessOverrideHours` replaces it, `null` = silent by design). Feeds `stale_sources` in `/api/v1/admin/jobs` and `quality:freshness-check` |
 | `src/repo/observations.ts` | `upsertObservations`, `findSeries{Hourly,Daily,Monthly}` |

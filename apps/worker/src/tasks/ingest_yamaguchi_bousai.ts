@@ -26,15 +26,15 @@
 //   No storageVolumeM3 available in this system.
 //
 // Every run writes all 24 hourly rows of the window, so an outage shorter
-// than a day heals on the next successful run.
+// than a day heals on the next successful run. The station list is the
+// universe: a page that fails to load is unreadable, one whose every hourly
+// row is ****/blank is provider-marked empty.
 //
 // Priority 308. Cron hourly at :46.
 
-import { type BindableMaster, preferMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Observed, Reading } from '../ingest/types.ts';
 
 const BASE_URL =
   process.env.YAMAGUCHI_BOUSAI_URL ??
@@ -42,6 +42,9 @@ const BASE_URL =
 
 const PREF_CODE = '35';
 const SOURCE_ID = 'yamaguchi-bousai';
+// 小瀬川ダム sits on the prefectural boundary and is registered under
+// pref_code='34' (広島) in the master, so its lookup includes Hiroshima.
+const KOZEGAWA_SCOPE: readonly string[] = ['34', PREF_CODE];
 
 // Station map from sp/map/spWideMap.aspx (damCntHid=23)
 const STATIONS: ReadonlyArray<{ code: string; name: string }> = [
@@ -70,17 +73,6 @@ const STATIONS: ReadonlyArray<{ code: string; name: string }> = [
   { code: '023', name: '平瀬ダム' },
 ];
 
-// --- types ------------------------------------------------------------------
-
-export interface ParsedRow {
-  yamaguchiName: string;
-  observedAt: Date;
-  waterLevelM: number | null;
-  storageRate: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
-}
-
 // --- parsing ----------------------------------------------------------------
 
 /** "YYYY/MM/DD HH:MM" (JST) → UTC. */
@@ -92,22 +84,26 @@ export function parseYamaguchiTimestamp(s: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function parseVal(s: string): number | null {
+/** "****" (欠測), blank (未観測) and dashes are the site's own marks. */
+function parseVal(s: string): Cell {
   const t = s.replace(/<[^>]+>/g, '').trim();
-  if (!t || t === '-' || t === '---') return null;
-  const n = Number(t.replace(/,/g, ''));
-  return Number.isFinite(n) ? n : null;
+  if (!t || t === '-' || t === '---' || t === '****') return cell(null, true);
+  return cell(Number(t.replace(/,/g, '')), false);
 }
 
 /**
- * Every on-the-hour row of a dam's 24-hour データ table, oldest first.
+ * A dam's reading from its 24-hour データ table: every on-the-hour row with a
+ * value, oldest first.
  *
  * The page never closes its data <tr>s, so a row runs up to the next <tr> or
  * the end of the table body. Matching up to </tr> instead swallowed the whole
  * table into its first row and stored the reading from 24 hours earlier.
  */
-export function parseYamaguchiHtml(html: string, name: string): ParsedRow[] {
-  const out: ParsedRow[] = [];
+export function yamaguchiReading(html: string): Reading {
+  const observations: Observed[] = [];
+  let hourly = 0;
+  let marked = 0;
+  let outage = 0;
   for (const row of html.matchAll(
     /<tr\s+class="hour_\w+\s*">([\s\S]*?)(?=<tr[\s>]|<\/tbody>|<\/table>)/gi,
   )) {
@@ -121,157 +117,81 @@ export function parseYamaguchiHtml(html: string, name: string): ParsedRow[] {
     const observedAt = parseYamaguchiTimestamp(tsRaw);
     // hour_HHb opens the window at HH:40 or so; only HH:00 is an hourly reading.
     if (observedAt?.getUTCMinutes() !== 0) continue;
+    hourly += 1;
 
-    const waterLevelM = parseVal(cells[1] ?? '');
+    const level = parseVal(cells[1] ?? '');
     // No reservoir here sits at EL 0 m (the lowest, 見島, holds ~19 m). The
     // page prints outages as 0.00 with every other column 0 (see deploy/ops/
     // oneoff/2026-09-28_yamaguchi_bousai_outage_zeros.sql), so the whole row
     // is a placeholder.
-    if (waterLevelM === 0) continue;
-    const storageRatePct = parseVal(cells[2] ?? '');
-    const storageRate = storageRatePct !== null ? storageRatePct / 100 : null;
-    const inflowM3s = parseVal(cells[3] ?? '');
-    const outflowM3s = parseVal(cells[4] ?? '');
-
-    if (waterLevelM === null && inflowM3s === null && outflowM3s === null) continue;
-
-    out.push({ yamaguchiName: name, observedAt, waterLevelM, storageRate, inflowM3s, outflowM3s });
-  }
-  return out;
-}
-
-// --- DB helpers -------------------------------------------------------------
-
-function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/貯水池$/, '')
-    .trim();
-}
-
-interface DamMatch {
-  yamaguchiName: string;
-  damId: bigint;
-}
-
-/**
- * Best master dam for a station name, or null when nothing ranks. Equal ranks
- * go to preferMaster: 木屋川 has a （元） and a （再） row, and the （元） stays
- * the live structure until the （再） has a completion year (#79).
- */
-export function chooseMaster(name: string, masters: BindableMaster[]): bigint | null {
-  const stem = normalizeName(name);
-  if (!stem) return null;
-
-  let best: { m: BindableMaster; rank: number } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (m.name === name) rank = 0;
-    else if (mStem === stem) rank = 1;
-    else if (m.name === `${stem}ダム`) rank = 2;
-    else if (mStem.startsWith(stem)) rank = 3;
-    else if (mStem.includes(stem)) rank = 4;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-      best = { m, rank };
-    }
-  }
-  return best?.m.id ?? null;
-}
-
-async function matchMaster(names: string[], log: (s: string) => void): Promise<DamMatch[]> {
-  // Include Hiroshima (34) alongside Yamaguchi (35): 小瀬川ダム sits on the
-  // prefectural boundary and is registered under pref_code='34' in the master.
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear"
-    FROM dams WHERE pref_code = ANY(ARRAY['34', '35']) ORDER BY id
-  `;
-  const out: DamMatch[] = [];
-
-  for (const name of names) {
-    const damId = chooseMaster(name, masters);
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${name}"`);
+    if (level === 0) {
+      outage += 1;
       continue;
     }
-    out.push({ yamaguchiName: name, damId });
-  }
+    const rate = parseVal(cells[2] ?? '');
+    const inflow = parseVal(cells[3] ?? '');
+    const outflow = parseVal(cells[4] ?? '');
+    const state = cellState([level, rate, inflow, outflow]);
+    if (state === 'empty') marked += 1;
+    if (state !== 'values') continue;
 
-  // What this source publishes, matched or not — taken from the station
-  // catalogue rather than this run's parsed rows, so a station whose page
-  // failed to load still counts as published instead of reading as 提供元なし.
-  const universe: UniverseRow[] = [];
-  for (const s of STATIONS) {
-    const damId = chooseMaster(s.name, masters);
-    universe.push({
-      externalId: s.code,
-      name: s.name,
-      prefCode: PREF_CODE,
-      resolvedDamId: damId,
+    const ratePct = numberIn(rate);
+    observations.push({
+      observedAt,
+      waterLevelM: numberIn(level),
+      storageRate: ratePct !== null ? ratePct / 100 : null,
+      inflowM3s: numberIn(inflow),
+      outflowM3s: numberIn(outflow),
     });
   }
-  await recordUniverse(SOURCE_ID, universe);
+  if (observations.length > 0) return { state: 'values', observations };
+  if (hourly === 0) return { state: 'unreadable', why: 'no hourly row in the データ table' };
+  if (marked === hourly) return { state: 'empty', mark: '**** or blank in every hourly row' };
+  if (outage > 0) return { state: 'unreadable', why: 'outage placeholder rows (貯水位 0.00)' };
+  return { state: 'unreadable', why: 'no numeric cell' };
+}
 
-  return out;
+/** One entry per catalogued station; `readings` holds each station's reading by code. */
+export function yamaguchiEntries(readings: ReadonlyMap<string, Reading>): Entry[] {
+  return STATIONS.map(({ code, name }) => ({
+    key: code,
+    name,
+    pref: name === '小瀬川ダム' ? KOZEGAWA_SCOPE : PREF_CODE,
+    reading: readings.get(code) ?? { state: 'unreadable', why: 'not fetched' },
+  }));
 }
 
 // --- task -------------------------------------------------------------------
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
+export default ingestTask(SOURCE_ID, async (log) => {
   const ua =
     process.env.HTTP_USER_AGENT ??
     'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
 
-  // Fetch all stations in parallel
-  const results = await Promise.allSettled(
-    STATIONS.map(async ({ code, name }) => {
-      const r = await fetch(`${BASE_URL}?stncd=${code}`, {
-        headers: { 'user-agent': ua },
-        signal: AbortSignal.timeout(20_000),
-        redirect: 'follow',
-      });
-      if (r.status !== 200) {
-        log(`${SOURCE_ID}: stncd=${code} HTTP ${r.status}`);
-        return [];
-      }
-      const html = await r.text();
-      return parseYamaguchiHtml(html, name);
-    }),
+  // Fetch all stations in parallel; a page that fails is that station's
+  // unreadable reading, never a dropped entry.
+  const readings = new Map<string, Reading>(
+    await Promise.all(
+      STATIONS.map(async ({ code }): Promise<[string, Reading]> => {
+        try {
+          const r = await fetch(`${BASE_URL}?stncd=${code}`, {
+            headers: { 'user-agent': ua },
+            signal: AbortSignal.timeout(20_000),
+            redirect: 'follow',
+          });
+          if (r.status !== 200) {
+            log(`${SOURCE_ID}: stncd=${code} HTTP ${r.status}`);
+            return [code, { state: 'unreadable', why: `HTTP ${r.status}` }];
+          }
+          return [code, yamaguchiReading(await r.text())];
+        } catch (err) {
+          return [
+            code,
+            { state: 'unreadable', why: err instanceof Error ? err.message : String(err) },
+          ];
+        }
+      }),
+    ),
   );
-
-  const rows: ParsedRow[] = results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
-  const names = [...new Set(rows.map((r) => r.yamaguchiName))];
-
-  log(`${SOURCE_ID}: parsed ${rows.length} hourly rows from ${names.length} dams`);
-
-  const matches = await matchMaster(names, log);
-  const damByName = new Map(matches.map((m) => [m.yamaguchiName, m.damId]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = damByName.get(p.yamaguchiName);
-    if (!damId) continue;
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: null,
-      storageRate: p.storageRate,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+  return { entries: yamaguchiEntries(readings) };
+});

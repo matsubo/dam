@@ -21,14 +21,15 @@
 //   [8] 流域時間雨量[mm]
 //   [9] 流域累加雨量[mm]
 //
+// 欠測 or a dash in the three stored columns is the office's own mark. The two
+// dams are known in advance, so a failed fetch leaves both unreadable rather
+// than unlisted.
+//
 // Priority 303 (MLIT-managed dams). Cron hourly at :26.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const DATA_URL = process.env.QSR_TOUKAN_URL ?? 'https://www.qsr.mlit.go.jp/toukan/bousaijouhou.php';
 
@@ -38,25 +39,14 @@ const SOURCE_ID = 'qsr-toukan-dam';
 
 interface DamCfg {
   pageName: string;
-  masterName: string;
   prefCode: string;
 }
 
-// Table index 0-based (among the two data tables, table[1] and table[2] in the page)
+// In page order: the two data tables are table[1] and table[2] of the page.
 const DAMS: DamCfg[] = [
-  { pageName: '松原ダム', masterName: '松原', prefCode: '44' },
-  { pageName: '下筌ダム', masterName: '下筌', prefCode: '44' },
+  { pageName: '松原ダム', prefCode: '44' },
+  { pageName: '下筌ダム', prefCode: '44' },
 ];
-
-// --- types ------------------------------------------------------------------
-
-export interface ParsedRow {
-  observedAt: Date;
-  waterLevelM: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
-  rainfallMm: number | null;
-}
 
 // --- parsing ----------------------------------------------------------------
 
@@ -68,8 +58,10 @@ function stripTags(raw: string): string {
     .trim();
 }
 
-function parseNum(s: string): number | null {
-  const m = (s ?? '').match(/-?\d+(?:\.\d+)?/);
+function parseCell(s: string): Cell {
+  const t = (s ?? '').trim();
+  if (/^(?:欠測|[-－―ー−]+)$/.test(t)) return MARKED;
+  const m = t.match(/-?\d+(?:\.\d+)?/);
   if (!m) return null;
   const n = Number(m[0]);
   return Number.isFinite(n) ? n : null;
@@ -100,141 +92,66 @@ function extractTable(html: string, tableIdx: number): string[][] {
   return rows;
 }
 
-/** Parse data from a two-header-row table: row[0]=header1, row[1]=header2, row[2]=data. */
-export function parseToukantable(html: string, tableIdx: number): ParsedRow | null {
+/** Read a two-header-row table: row[0]=header1, row[1]=header2, row[2]=data. */
+export function toukanReading(html: string, tableIdx: number): Reading {
   const rows = extractTable(html, tableIdx);
   // rows[0] and rows[1] are headers; rows[2] is the first (latest) data row
   const data = rows[2];
-  if (!data || data.length < 6) return null;
+  if (!data || data.length < 6)
+    return { state: 'unreadable', why: `no data row in table ${tableIdx}` };
 
   const observedAt = parseToukantimestamp(data[0] ?? '');
-  if (!observedAt) return null;
+  if (!observedAt) return { state: 'unreadable', why: `観測時刻 "${data[0]}"` };
 
-  const waterLevelM = parseNum(data[1] ?? '');
-  const inflowM3s = parseNum(data[2] ?? '');
-  const outflowM3s = parseNum(data[5] ?? ''); // 全放流量 = gate + power discharge
-  const rainfallMm = parseNum(data[6] ?? '');
+  const level = parseCell(data[1] ?? '');
+  const inflow = parseCell(data[2] ?? '');
+  const outflow = parseCell(data[5] ?? ''); // 全放流量 = gate + power discharge
+  const rain = parseCell(data[6] ?? '');
 
-  if (waterLevelM === null && inflowM3s === null && outflowM3s === null) return null;
-
-  return { observedAt, waterLevelM, inflowM3s, outflowM3s, rainfallMm };
+  const state = cellState([level, inflow, outflow]);
+  if (state === 'empty') return { state, mark: '欠測 in every stored column' };
+  if (state === 'unreadable') return { state, why: 'no numeric column' };
+  return {
+    state: 'values',
+    observations: [
+      {
+        observedAt,
+        waterLevelM: numberIn(level),
+        inflowM3s: numberIn(inflow),
+        outflowM3s: numberIn(outflow),
+        rainfallMm: numberIn(rain),
+      },
+    ],
+  };
 }
 
-// --- DB helpers -------------------------------------------------------------
-
-function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/貯水池$/, '')
-    .trim();
-}
-
-async function findDamId(cfg: DamCfg, log: (s: string) => void): Promise<bigint | null> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${cfg.prefCode} ORDER BY id
-  `;
-  const stem = cfg.masterName;
-  // A row already stamped with this page keeps it (#57).
-  const stamped = stampedMaster(masters, cfg.pageName);
-  let best: { m: BindableMaster; rank: number } | null = stamped ? { m: stamped, rank: -1 } : null;
-  for (const m of stamped ? [] : masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (m.name === cfg.pageName) rank = 0;
-    else if (mStem === stem) rank = 1;
-    else if (m.name === `${stem}ダム`) rank = 2;
-    else if (mStem.startsWith(stem)) rank = 3;
-    else if (mStem.includes(stem)) rank = 4;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-      best = { m, rank };
-    }
-  }
-  if (!best) {
-    log(`${SOURCE_ID}: no master match for "${cfg.pageName}" in pref ${cfg.prefCode}`);
-    return null;
-  }
-  await bindExternalId(best.m.id, SOURCE_ID, cfg.pageName);
-  return best.m.id;
-}
-
-/** Resolve every dam the page publishes, keyed by its page name. */
-async function matchMaster(log: (s: string) => void): Promise<Map<string, bigint>> {
-  const matches = new Map<string, bigint>();
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  for (const cfg of DAMS) {
-    const damId = await findDamId(cfg, log);
-    universe.push({
-      externalId: cfg.pageName,
-      name: cfg.pageName,
-      prefCode: cfg.prefCode,
-      resolvedDamId: damId,
-    });
-    if (damId) matches.set(cfg.pageName, damId);
-  }
-  await recordUniverse(SOURCE_ID, universe);
-  return matches;
-}
-
-// --- task -------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
-  // Resolved before the fetch so a bad page still leaves a scan on record.
-  const damByPage = await matchMaster(log);
-
-  const ua =
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
-
-  const r = await fetch(DATA_URL, {
-    headers: { 'user-agent': ua },
-    signal: AbortSignal.timeout(20_000),
-  });
-
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
-  }
-
-  const html = await r.text();
-  const inputs: Parameters<typeof upsertObservations>[0] = [];
-
+/** Both dams; with no page (a failed fetch) each is unreadable with the reason. */
+export function toukanEntries(page: { html: string } | { error: string }): Entry[] {
   // Tables in the page: index 0 is a decorative header table; indices 1 and 2 are dam data
-  for (let i = 0; i < DAMS.length; i++) {
-    const cfg = DAMS[i] as DamCfg;
-    const row = parseToukantable(html, i + 1);
-    if (!row) {
-      log(`${SOURCE_ID}: no data row for ${cfg.pageName}`);
-      continue;
-    }
-    log(`${SOURCE_ID}: ${cfg.pageName} at ${row.observedAt.toISOString()}`);
+  return DAMS.map((cfg, i) => ({
+    key: cfg.pageName,
+    name: cfg.pageName,
+    pref: cfg.prefCode,
+    reading:
+      'html' in page ? toukanReading(page.html, i + 1) : { state: 'unreadable', why: page.error },
+  }));
+}
 
-    const damId = damByPage.get(cfg.pageName);
-    if (!damId) continue;
-
-    inputs.push({
-      observedAt: row.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: null,
-      storageRate: null,
-      inflowM3s: row.inflowM3s,
-      outflowM3s: row.outflowM3s,
-      waterLevelM: row.waterLevelM,
-      rainfallMm: row.rainfallMm,
-      rawSnapshotId: null,
-      qualityFlag: 0,
+async function fetchPage(): Promise<{ html: string } | { error: string }> {
+  try {
+    const r = await fetch(DATA_URL, {
+      headers: {
+        'user-agent':
+          process.env.HTTP_USER_AGENT ??
+          'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
+      },
+      signal: AbortSignal.timeout(20_000),
     });
+    if (r.status !== 200) return { error: `HTTP ${r.status}` };
+    return { html: await r.text() };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
   }
+}
 
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: written=${written}`);
-};
-
-export default task;
+export default ingestTask(SOURCE_ID, async () => ({ entries: toukanEntries(await fetchPage()) }));

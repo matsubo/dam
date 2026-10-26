@@ -15,27 +15,14 @@
 // 千m³ — multiply by 1000 for m³. Seven prefectural dams in this feed
 // (寺山/塩原/西荒川/東荒川/三河沢/中禅寺/松田川). Cron hourly at :27.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const CSV_URL =
   process.env.TOCHIGI_DAM_CSV ??
   'https://data.bodik.jp/dataset/a66bea6a-bb25-404f-a16d-dc839c75e007/resource/2e94dd9c-7157-498b-88c7-cbc0c85c6297/download/tochigi_dampref.csv';
 const PREF_CODE = '09';
 const SOURCE_ID = 'tochigi-bodik';
-
-export interface ParsedRow {
-  tochigiName: string;
-  observedAt: Date;
-  waterLevelM: number | null;
-  storageVolumeM3: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
-}
 
 /**
  * Minimal RFC-4180 CSV-line splitter: handles double-quoted fields with
@@ -89,157 +76,59 @@ function parseNum(s: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/** The feed carries no per-field flag: a row with no number is unreadable. */
+function rowReading(c: string[]): Reading {
+  const stampStr = (c[3] ?? '').trim();
+  const observedAt = new Date(stampStr);
+  if (!stampStr || Number.isNaN(observedAt.valueOf())) {
+    return { state: 'unreadable', why: `dateObserved "${stampStr}"` };
+  }
+  const volThou = parseNum(c[14] ?? '');
+  return {
+    state: 'values',
+    observations: [
+      {
+        observedAt,
+        waterLevelM: parseNum(c[13] ?? ''),
+        storageVolumeM3: volThou != null ? volThou * 1_000 : null,
+        inflowM3s: parseNum(c[4] ?? ''),
+        outflowM3s: parseNum(c[8] ?? ''),
+      },
+    ],
+  };
+}
+
 /**
- * Parse the NGSI-v2 dam CSV. Skips the header and any row that lacks a
- * parseable observation time or dam name.
+ * Parse the NGSI-v2 dam CSV: one entry per dam row, keyed by pointName (the
+ * stamp this source has always used). Skips the header and nameless rows.
  */
-export function parseTochigiCsv(csv: string): ParsedRow[] {
+export function tochigiEntries(csv: string): Entry[] {
   const lines = csv.replace(/^﻿/, '').split(/\r?\n/);
-  const out: ParsedRow[] = [];
+  const out: Entry[] = [];
   for (const line of lines) {
     if (!line.trim()) continue;
     const c = splitCsvLine(line);
     if (c.length < 15) continue;
     if (c[0] === 'id') continue; // header
     const name = (c[9] ?? '').trim();
-    const stampStr = (c[3] ?? '').trim();
-    if (!name || !stampStr) continue;
-    const observedAt = new Date(stampStr);
-    if (Number.isNaN(observedAt.valueOf())) continue;
-    const volThou = parseNum(c[14] ?? '');
-    out.push({
-      tochigiName: name,
-      observedAt,
-      waterLevelM: parseNum(c[13] ?? ''),
-      storageVolumeM3: volThou != null ? volThou * 1_000 : null,
-      inflowM3s: parseNum(c[4] ?? ''),
-      outflowM3s: parseNum(c[8] ?? ''),
-    });
+    if (!name) continue;
+    out.push({ key: name, name, pref: PREF_CODE, reading: rowReading(c) });
   }
   return out;
 }
 
-/** Strip ダム + （...）annotations for master matching. */
-export function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .trim();
-}
-
-/**
- * Best master dam for a feed stem; a row already stamped with the station
- * keeps it (#57), otherwise exact stem match beats substring.
- */
-export function chooseMaster(
-  stem: string,
-  masters: BindableMaster[],
-  stationKey?: string,
-): bigint | null {
-  const stamped = stationKey ? stampedMaster(masters, stationKey) : null;
-  if (stamped) return stamped.id;
-  let best: { m: BindableMaster; rank: number } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (mStem === stem) rank = 0;
-    else if (m.name === `${stem}ダム`) rank = 1;
-    else if (mStem.startsWith(stem)) rank = 2;
-    else if (mStem.includes(stem)) rank = 3;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-      best = { m, rank };
-    }
-  }
-  return best?.m.id ?? null;
-}
-
-interface DamMatch {
-  tochigiName: string;
-  damId: bigint;
-}
-
-async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const out: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  for (const r of rows) {
-    const stem = normalizeName(r.tochigiName);
-    if (!stem) continue;
-    const damId = chooseMaster(stem, masters, r.tochigiName);
-    universe.push({
-      externalId: r.tochigiName,
-      name: r.tochigiName,
-      prefCode: PREF_CODE,
-      resolvedDamId: damId,
-    });
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for ${r.tochigiName}`);
-      continue;
-    }
-    out.push({ tochigiName: r.tochigiName, damId });
-    await bindExternalId(damId, SOURCE_ID, r.tochigiName);
-  }
-  await recordUniverse(SOURCE_ID, universe);
-  return out;
-}
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
-  const ua =
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
-
+export default ingestTask(SOURCE_ID, async (log) => {
   const res = await fetch(CSV_URL, {
-    headers: { 'user-agent': ua },
+    headers: {
+      'user-agent':
+        process.env.HTTP_USER_AGENT ??
+        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
+    },
     signal: AbortSignal.timeout(15_000),
     redirect: 'follow',
   });
-  if (res.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${res.status}; abort`);
-    return;
-  }
-  const csv = await res.text();
-  const parsed = parseTochigiCsv(csv);
-  log(`${SOURCE_ID}: parsed ${parsed.length} dam rows`);
-
-  const matches = await matchMaster(parsed, log);
-  const damByName = new Map(matches.map((m) => [m.tochigiName, m.damId]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of parsed) {
-    const damId = damByName.get(p.tochigiName);
-    if (!damId) continue;
-    if (
-      p.waterLevelM == null &&
-      p.storageVolumeM3 == null &&
-      p.inflowM3s == null &&
-      p.outflowM3s == null
-    ) {
-      continue;
-    }
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: null,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${parsed.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+  if (res.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${res.status}`);
+  const entries = tochigiEntries(await res.text());
+  log(`${SOURCE_ID}: ${entries.length} dams`);
+  return { entries };
+});

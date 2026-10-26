@@ -27,12 +27,8 @@
 // License: 水資源機構 利用ルール (water.go.jp/honsya/honsya/policy/copyright/)
 // — 出典を記載すれば複製・公衆送信・加工・商用利用可; 数値データは著作権の対象外.
 
-import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask, type Log } from '../ingest/run.ts';
+import type { Entry } from '../ingest/types.ts';
 
 const PAGE_URL =
   process.env.JWA_FUKUDOU_URL ?? 'https://www.water.go.jp/chikugo/fukudou/html/info02.html';
@@ -106,57 +102,37 @@ export function usableVolumeM3(
   return Math.max(0, r.grossVolumeM3 - (total - active));
 }
 
-// --- matching ---------------------------------------------------------------
-
 /**
- * The master named 山口調整池 (or the row already stamped with it). No
- * prefix/substring fallback: 福岡県 also has an unrelated 山口 dam.
+ * The page's only reservoir. No prefix/substring fallback: 福岡県 also has an
+ * unrelated 山口 dam.
  */
-export function chooseMaster(masters: BindableMaster[]): bigint | null {
-  const candidates = masters
-    .filter(
-      (m) =>
-        m.stamp === STATION || m.name.normalize('NFKC').replace(/\((?:元|再)\)$/, '') === STATION,
-    )
-    .map((m) => ({ ...m, rank: 0 }));
-  return chooseRanked(candidates, STATION)?.id ?? null;
+const POND = { key: STATION, name: STATION, pref: PREF_CODE, bind: { exact: true } } as const;
+
+/** The pond read from its page: level always, 有効 storage only while it ties to the master. */
+export function fukudouEntry(html: string, log: Log = () => {}): Entry {
+  const page = parseFukudouPage(html);
+  return {
+    ...POND,
+    reading: (dam) => {
+      if (!page) return { state: 'unreadable', why: `no ${STATION} reading on the page` };
+      const volume = dam ? usableVolumeM3(page, dam) : null;
+      if (dam && volume === null) {
+        log(
+          `${SOURCE_ID}: volume not stored: 総貯水量 ${page.grossVolumeM3} m³ at ${page.ratePct} % ` +
+            `does not tie to master total=${dam.totalCapacityM3 ?? 'null'} active=${dam.activeCapacityM3 ?? 'null'}`,
+        );
+      }
+      return {
+        state: 'values',
+        observations: [
+          { observedAt: page.observedAt, waterLevelM: page.waterLevelM, storageVolumeM3: volume },
+        ],
+      };
+    },
+  };
 }
 
-// --- DB helpers -------------------------------------------------------------
-
-async function matchMaster(
-  log: (s: string) => void,
-): Promise<{ damId: bigint; capacity: MasterCapacity } | null> {
-  const masters = await sql<(BindableMaster & MasterCapacity)[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp,
-           total_capacity_m3::float8 AS "totalCapacityM3",
-           active_capacity_m3::float8 AS "activeCapacityM3"
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const damId = chooseMaster(masters);
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  await recordUniverse(SOURCE_ID, [
-    { externalId: STATION, name: STATION, prefCode: PREF_CODE, resolvedDamId: damId },
-  ]);
-  const master = masters.find((m) => m.id === damId);
-  if (!damId || !master) {
-    log(`${SOURCE_ID}: no master match for "${STATION}"`);
-    return null;
-  }
-  await bindExternalId(damId, SOURCE_ID, STATION);
-  return { damId, capacity: master };
-}
-
-// --- task -------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
-  // Resolved before the fetch so a dead page still leaves a scan on record.
-  const match = await matchMaster(log);
-  if (!match) return;
-
+async function fetchPage(): Promise<string> {
   const r = await fetch(PAGE_URL, {
     headers: {
       'user-agent':
@@ -165,44 +141,19 @@ const task: Task = async (_payload, helpers) => {
     },
     signal: AbortSignal.timeout(20_000),
   });
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
+  if (r.status !== 200) throw new Error(`HTTP ${r.status} for ${PAGE_URL}`);
+  return new TextDecoder('shift_jis').decode(await r.arrayBuffer());
+}
+
+export default ingestTask(SOURCE_ID, async (log) => {
+  let html: string;
+  try {
+    html = await fetchPage();
+  } catch (err) {
+    // The pond is known in advance: a dead page leaves it unreadable, and the
+    // run fails the job so it is retried.
+    const why = err instanceof Error ? err.message : String(err);
+    return { entries: [{ ...POND, reading: { state: 'unreadable', why } }] };
   }
-
-  const reading = parseFukudouPage(new TextDecoder('shift_jis').decode(await r.arrayBuffer()));
-  if (!reading) {
-    log(`${SOURCE_ID}: no ${STATION} reading on the page; aborting`);
-    return;
-  }
-
-  const volume = usableVolumeM3(reading, match.capacity);
-  if (volume === null) {
-    const { totalCapacityM3: total, activeCapacityM3: active } = match.capacity;
-    log(
-      `${SOURCE_ID}: volume not stored: 総貯水量 ${reading.grossVolumeM3} m³ at ${reading.ratePct} % ` +
-        `does not tie to master total=${total ?? 'null'} active=${active ?? 'null'}`,
-    );
-  }
-
-  const written = await upsertObservations([
-    {
-      observedAt: reading.observedAt,
-      damId: match.damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: volume,
-      storageRate: null,
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: reading.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    },
-  ]);
-  log(
-    `${SOURCE_ID} done: parsed=1 matched=1 written=${written} at ${reading.observedAt.toISOString()}`,
-  );
-};
-
-export default task;
+  return { entries: [fukudouEntry(html, log)] };
+});

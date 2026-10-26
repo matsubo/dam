@@ -54,13 +54,12 @@ export async function recordUniverse(
   rows: UniverseRow[],
   opts: RecordUniverseOptions = {},
 ): Promise<number> {
-  // Fail-safe by design. Every one of the ~70 ingest tasks awaits this BEFORE
-  // upsertObservations, so anything thrown here costs that run its
-  // observations — the actual product — to protect coverage metadata, which
-  // is only ever an explanation of the observations. That trade is never
-  // worth making, so a failure is logged and swallowed. The known crash
-  // (duplicate ON CONFLICT target) is fixed below; this guards the unknown
-  // ones, and the next successful run re-records the same list anyway.
+  // Fail-safe by design, for the callers outside the ingest run
+  // (match:kasenbosai, the backfills), which await this BEFORE writing
+  // observations: anything thrown here would cost that run its observations
+  // to protect coverage metadata. A failure is logged and swallowed; the next
+  // successful run re-records the same list. The ingest run uses
+  // recordUniverseOrThrow inside its transaction instead.
   try {
     return await recordUniverseOrThrow(sourceId, rows, opts.keepHasData ?? false);
   } catch (err) {
@@ -92,16 +91,9 @@ export async function recordUniverseOrThrow(
   // De-duplicate on the primary key before building the multi-row INSERT.
   // postgres.js emits one statement, and Postgres rejects a duplicate target
   // with `21000: ON CONFLICT DO UPDATE command cannot affect row a second
-  // time`. Several providers legitimately repeat a station — the same dam
-  // under both 水道用 and 工業用水 tables, or the same names in every monthly
-  // ZIP — and callers run this BEFORE upsertObservations, so an exception
-  // here would take the observation write down with it.
-  //
-  // LAST ENTRY WINS, and that is load-bearing: shimane and saitama seed the
-  // full station list with `resolvedDamId: null` and then push the resolved
-  // rows after it, so a station missing from today's snapshot still counts
-  // as published while a matched one keeps its id. Changing this to
-  // first-wins would silently null out those sources' matches.
+  // time`. Several providers legitimately repeat a station (the same names in
+  // every monthly ZIP of a backfill). The last entry wins; the ingest run
+  // merges duplicate keys itself before calling this.
   const deduped = [...new Map(rows.map((r) => [r.externalId, r])).values()];
   if (deduped.length > 0) {
     const values = deduped.map((r) => ({

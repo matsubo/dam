@@ -7,12 +7,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import {
-  chooseMaster,
-  type MieMaster,
-  observationValues,
-  parseMieKigyoSuigen,
-} from './ingest_mie_kigyo.ts';
+import { mieEntries, observationValues, parseMieKigyoSuigen } from './ingest_mie_kigyo.ts';
 
 const FIXTURE = join(
   import.meta.dir,
@@ -121,36 +116,59 @@ describe('observationValues', () => {
   });
 });
 
-describe('chooseMaster', () => {
-  // Real prod rows (三重 24, plus 岐阜 21 for 岩屋 and a same-named decoy).
-  const masters: MieMaster[] = [
-    { id: 9867n, name: '岩屋', prefCode: '21', completedYear: 1976 },
-    { id: 10016n, name: '中里', prefCode: '24', completedYear: 1976 },
-    { id: 10020n, name: '菰野調整池', prefCode: '24', completedYear: 1989 },
-    { id: 10025n, name: '山村', prefCode: '24', completedYear: 1973 },
-    { id: 10026n, name: '伊坂', prefCode: '24', completedYear: 1966 },
-    { id: 10034n, name: '君ヶ野', prefCode: '24', completedYear: 1971 },
-    { id: 10043n, name: '蓮', prefCode: '24', completedYear: 1991 },
-    { id: 1n, name: '伊坂', prefCode: '21', completedYear: 2000 },
-  ];
-
-  test('binds each name to the master of the same stem in its prefecture', () => {
-    expect(chooseMaster('伊坂ダム', masters)).toBe(10026n);
-    expect(chooseMaster('山村ダム', masters)).toBe(10025n);
-    expect(chooseMaster('菰野調整池', masters)).toBe(10020n);
-    expect(chooseMaster('蓮ダム', masters)).toBe(10043n);
+describe('mieEntries', () => {
+  if (!observedAt) throw new Error('no date');
+  const entries = mieEntries(observedAt, rows);
+  const capacity = (activeCapacityM3: number | null) => ({
+    id: 1n,
+    name: 'x',
+    totalCapacityM3: null,
+    activeCapacityM3,
   });
 
-  test('looks for 岩屋 in 岐阜, where the dam is', () => {
-    expect(chooseMaster('岩屋ダム', masters)).toBe(9867n);
+  test('binds by exact stem in the dam prefecture: 岩屋 in 岐阜, the rest in 三重', () => {
+    expect(entries.map((e) => [e.key, e.pref, e.bind])).toEqual([
+      ['岩屋ダム', '21', { exact: true }],
+      ['伊坂ダム', '24', { exact: true }],
+      ['山村ダム', '24', { exact: true }],
+      ['中里ダム', '24', { exact: true }],
+      ['菰野調整池', '24', { exact: true }],
+      ['君ヶ野ダム', '24', { exact: true }],
+      ['蓮ダム', '24', { exact: true }],
+    ]);
   });
 
-  test('keeps an existing stamp over a name match', () => {
-    const stamped = masters.map((m) => (m.id === 1n ? { ...m, stamp: '伊坂ダム' } : m));
-    expect(chooseMaster('伊坂ダム', stamped)).toBe(1n);
+  test('records the four dams with 10-minute feeds without writing them', () => {
+    expect(entries.filter((e) => e.dontWrite).map((e) => e.key)).toEqual([
+      '岩屋ダム',
+      '中里ダム',
+      '君ヶ野ダム',
+      '蓮ダム',
+    ]);
   });
 
-  test('binds nothing for an unknown name', () => {
-    expect(chooseMaster('新設ダム', masters)).toBeNull();
+  test('reads the rate only on the master basis, at the 現在 date', async () => {
+    const read = async (name: string, active: number | null) => {
+      const r = entries.find((e) => e.key === name)?.reading;
+      if (typeof r !== 'function') throw new Error(`${name}: not a reading function`);
+      return r(capacity(active));
+    };
+    expect(await read('伊坂ダム', 3_715_000)).toEqual({
+      state: 'values',
+      observations: [{ observedAt, storageVolumeM3: 3_254_000, storageRate: 0.875 }],
+    });
+    expect(await read('山村ダム', 2_183_000)).toEqual({
+      state: 'values',
+      observations: [{ observedAt, storageVolumeM3: 1_757_000, storageRate: null }],
+    });
+  });
+
+  test('a dam with nothing to keep is unreadable', async () => {
+    const blank = mieEntries(observedAt, [
+      { name: '山村ダム', capacityM3: 1_964_000, storageVolumeM3: null, storageRate: 0.9 },
+    ]);
+    const r = blank[0]?.reading;
+    if (typeof r !== 'function') throw new Error('not a reading function');
+    expect(await r(capacity(2_183_000))).toMatchObject({ state: 'unreadable' });
   });
 });

@@ -11,14 +11,14 @@
 //     年/月/日 時:分 | 貯水位(m) | 全流入量(m³/s) | 全放流量(m³/s) | ...
 //
 // We pick the LATEST row of the hourly table (storing 10-min freshness)
-// plus the summary 貯水量/貯水率 for that same timestamp.
+// plus the summary 貯水量/貯水率 for that same timestamp. 「*表記は、該当する
+// 数値が無いこと意味しています」: a "*" cell (and 欠測 / "-") is the bureau's
+// own mark, so a dam whose every stored field carries one is provider-marked
+// empty. A page per dam: one that fails to load leaves that dam unreadable.
 
-import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const BASE_URL = process.env.HKD_MLIT_DAM_BASE ?? 'https://info-dam.hdb.hkd.mlit.go.jp/dam';
 
@@ -26,50 +26,37 @@ interface DamCfg {
   slug: string;
   /** Name as it appears in the page's <title> (with か, etc., as-is). */
   pageName: string;
-  /** Substring used to LIKE-match against the master `dams.name`. */
-  masterName: string;
 }
 
 const DAMS: DamCfg[] = [
-  { slug: 'biratori_dam', pageName: '平取ダム', masterName: '平取' },
-  { slug: 'chubetsu', pageName: '忠別ダム', masterName: '忠別' },
-  { slug: 'houheikyou', pageName: '豊平峡ダム', masterName: '豊平峡' },
-  { slug: 'iwaonai', pageName: '岩尾内ダム', masterName: '岩尾内' },
-  { slug: 'izarigawa', pageName: '漁川ダム', masterName: '漁川' },
-  { slug: 'jyouzankei', pageName: '定山渓ダム', masterName: '定山渓' },
-  { slug: 'kanayama', pageName: '金山ダム', masterName: '金山' },
-  { slug: 'kanoko', pageName: '鹿ノ子ダム', masterName: '鹿ノ子' },
-  { slug: 'katsurazawa', pageName: '新桂沢ダム', masterName: '新桂沢' },
-  { slug: 'nibutani', pageName: '二風谷ダム', masterName: '二風谷' },
-  { slug: 'pirika', pageName: '美利河ダム', masterName: '美利河' },
-  { slug: 'rumoi', pageName: '留萌ダム', masterName: '留萌' },
-  { slug: 'sanru', pageName: 'サンルダム', masterName: 'サンル' },
-  { slug: 'satsunaigawa', pageName: '札内川ダム', masterName: '札内川' },
-  { slug: 'taisetsu', pageName: '大雪ダム', masterName: '大雪' },
-  { slug: 'takisato', pageName: '滝里ダム', masterName: '滝里' },
-  { slug: 'tokachi', pageName: '十勝ダム', masterName: '十勝' },
-  { slug: 'yuubari', pageName: '夕張シューパロダム', masterName: '夕張シューパロ' },
+  { slug: 'biratori_dam', pageName: '平取ダム' },
+  { slug: 'chubetsu', pageName: '忠別ダム' },
+  { slug: 'houheikyou', pageName: '豊平峡ダム' },
+  { slug: 'iwaonai', pageName: '岩尾内ダム' },
+  { slug: 'izarigawa', pageName: '漁川ダム' },
+  { slug: 'jyouzankei', pageName: '定山渓ダム' },
+  { slug: 'kanayama', pageName: '金山ダム' },
+  { slug: 'kanoko', pageName: '鹿ノ子ダム' },
+  { slug: 'katsurazawa', pageName: '新桂沢ダム' },
+  { slug: 'nibutani', pageName: '二風谷ダム' },
+  { slug: 'pirika', pageName: '美利河ダム' },
+  { slug: 'rumoi', pageName: '留萌ダム' },
+  { slug: 'sanru', pageName: 'サンルダム' },
+  { slug: 'satsunaigawa', pageName: '札内川ダム' },
+  { slug: 'taisetsu', pageName: '大雪ダム' },
+  { slug: 'takisato', pageName: '滝里ダム' },
+  { slug: 'tokachi', pageName: '十勝ダム' },
+  { slug: 'yuubari', pageName: '夕張シューパロダム' },
 ];
 
 const PREF_CODE = '01';
 const SOURCE_ID = 'hkd-mlit-dam';
 
-interface ParsedDam {
-  /** Latest reading timestamp (JST → UTC). */
-  observedAt: Date;
-  waterLevelM: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
-  /** Summary storage in千 m³, converted to m³. */
-  storageVolumeM3: number | null;
-  /** Summary 貯水率 as fraction [0,1]. */
-  storageRate: number | null;
-  rainfallMm: number | null;
-}
-
-function parseNum(s: string): number | null {
-  const t = s.replace(/[,\s　]/g, '').replace(/\*/g, '');
-  if (!t || t === '欠測' || t === '-' || t === '―') return null;
+function parseCell(s: string | undefined): Cell {
+  const raw = (s ?? '').replace(/<[^>]+>/g, '').replace(/[,\s　]/g, '');
+  if (/^(?:\*+|欠測|-|―)$/.test(raw)) return MARKED;
+  const t = raw.replace(/\*/g, '');
+  if (!t) return null;
   const n = Number(t);
   return Number.isFinite(n) ? n : null;
 }
@@ -86,155 +73,81 @@ export function parseHkdTimestamp(raw: string): Date | null {
   );
 }
 
-/** Parse a single dam page (already UTF-8 decoded). */
-export function parseHkdDamPage(html: string): ParsedDam | null {
+/** Read a single dam page (already UTF-8 decoded). */
+export function hkdReading(html: string): Reading {
   // The hourly table has rows of 7 columns:
   //   [年/月/日 時:分, 貯水位, 全流入量, 全放流量, ゲート, 発電, 利水]
   // We want the last row (most recent timestamp).
-  const tdRe = /<td[^>]*>([\s\S]*?)<\/td>/g;
-  const cells: string[] = [];
-  let tdMatch: RegExpExecArray | null = tdRe.exec(html);
-  while (tdMatch !== null) {
-    cells.push(tdMatch[1] ?? '');
-    tdMatch = tdRe.exec(html);
-  }
-  // The 18 most-recent table cells are the last full data row (we filter by
-  // whether the cell matches the timestamp pattern to find row starts).
-  let lastObservedAt: Date | null = null;
-  let lastLevel: number | null = null;
-  let lastInflow: number | null = null;
-  let lastOutflow: number | null = null;
-  // Walk forward to find last timestamp-shaped cell.
+  const cells = [...html.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((m) => m[1] ?? '');
+  let observedAt: Date | null = null;
+  let level: Cell = null;
+  let inflow: Cell = null;
+  let outflow: Cell = null;
+  // Walk forward to the last timestamp-shaped cell.
   for (let i = 0; i < cells.length; i++) {
-    const c = cells[i] ?? '';
-    const ts = parseHkdTimestamp(c);
+    const ts = parseHkdTimestamp(cells[i] ?? '');
     if (ts && cells.length >= i + 4) {
-      lastObservedAt = ts;
-      lastLevel = parseNum(cells[i + 1] ?? '');
-      lastInflow = parseNum(cells[i + 2] ?? '');
-      lastOutflow = parseNum(cells[i + 3] ?? '');
+      observedAt = ts;
+      level = parseCell(cells[i + 1]);
+      inflow = parseCell(cells[i + 2]);
+      outflow = parseCell(cells[i + 3]);
     }
   }
-  if (!lastObservedAt) return null;
+  if (!observedAt) return { state: 'unreadable', why: 'no timestamped row' };
 
   // Summary fields (top of page). Storage values:
   //   貯水量　96501千m<sup>3</sup>
   //   貯水率　74.2%
   //   雨量　0.0mm/h
-  const storageMatch = html.match(/貯水量[\s　]*([\d,.-]+)千m/);
-  const rateMatch = html.match(/貯水率[\s　]*([\d.-]+)%/);
-  const rainMatch = html.match(/雨量[\s　]*([\d.-]+)mm\/h/);
-  const storageVolumeM3 = storageMatch?.[1]
-    ? (parseNum(storageMatch[1]) ?? null) !== null
-      ? (parseNum(storageMatch[1]) as number) * 1000
-      : null
-    : null;
-  const rateNum = rateMatch?.[1] ? parseNum(rateMatch[1]) : null;
-  const storageRate = rateNum != null ? rateNum / 100 : null;
+  const storageMatch = html.match(/貯水量[\s　]*([\d,.*-]+|欠測|―)千m/);
+  const rateMatch = html.match(/貯水率[\s　]*([\d.*-]+|欠測|―)%/);
+  const rainMatch = html.match(/雨量[\s　]*([\d.*-]+|欠測|―)mm\/h/);
+  const storageThou = storageMatch ? parseCell(storageMatch[1]) : null;
+  const ratePct = rateMatch ? parseCell(rateMatch[1]) : null;
+  const rain = rainMatch ? parseCell(rainMatch[1]) : null;
 
+  const state = cellState([level, inflow, outflow, storageThou, ratePct, rain]);
+  if (state === 'empty') return { state, mark: '* in every field' };
+  if (state === 'unreadable') return { state, why: 'no numeric field' };
+  const thou = numberIn(storageThou);
+  const pct = numberIn(ratePct);
   return {
-    observedAt: lastObservedAt,
-    waterLevelM: lastLevel,
-    inflowM3s: lastInflow,
-    outflowM3s: lastOutflow,
-    storageVolumeM3,
-    storageRate,
-    rainfallMm: rainMatch?.[1] ? parseNum(rainMatch[1]) : null,
+    state: 'values',
+    observations: [
+      {
+        observedAt,
+        waterLevelM: numberIn(level),
+        inflowM3s: numberIn(inflow),
+        outflowM3s: numberIn(outflow),
+        storageVolumeM3: thou != null ? thou * 1000 : null,
+        storageRate: pct != null ? pct / 100 : null,
+        rainfallMm: numberIn(rain),
+      },
+    ],
   };
 }
 
-interface DamMatch {
-  cfg: DamCfg;
-  damId: bigint;
+/** The 18 dams, each read from its own page once the run reaches it. */
+export function hkdEntries(fetchPage: (url: string) => Promise<string>): Entry[] {
+  return DAMS.map((c) => ({
+    key: c.slug,
+    name: c.pageName,
+    pref: PREF_CODE,
+    reading: async () => hkdReading(await fetchPage(`${BASE_URL}/dam_${c.slug}.htm`)),
+  }));
 }
 
-async function matchMaster(log: (s: string) => void): Promise<DamMatch[]> {
-  const matches: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  for (const c of DAMS) {
-    // All candidates, ranked by name; chooseRanked keeps a row already
-    // stamped with this station, and lets a （元）/（再） pair tie so the
-    // current structure wins.
-    const rows = await sql<(BindableMaster & { rank: number })[]>`
-      SELECT id, name, completed_year AS "completedYear",
-             external_ids->>${SOURCE_ID} AS stamp,
-             CASE
-               WHEN name = ${c.masterName} THEN 0
-               WHEN name = ${`${c.masterName}ダム`} THEN 1
-               WHEN name LIKE ${`${c.masterName}（再）%`}
-                 OR name LIKE ${`${c.masterName}（元）%`} THEN 2
-               ELSE 5
-             END AS rank
-      FROM dams
-      WHERE pref_code = ${PREF_CODE}
-        AND name LIKE ${`%${c.masterName}%`}
-    `;
-    const r = chooseRanked(rows, c.slug);
-    universe.push({
-      externalId: c.slug,
-      name: c.pageName,
-      prefCode: PREF_CODE,
-      resolvedDamId: r?.id ?? null,
-    });
-    if (!r) {
-      log(`${SOURCE_ID}: no master match for ${c.pageName}`);
-      continue;
-    }
-    matches.push({ cfg: c, damId: r.id });
-    await bindExternalId(r.id, SOURCE_ID, c.slug);
-  }
-  await recordUniverse(SOURCE_ID, universe);
-  return matches;
+async function fetchPage(url: string): Promise<string> {
+  const r = await fetch(url, {
+    headers: {
+      'user-agent':
+        process.env.HTTP_USER_AGENT ??
+        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
+    },
+    signal: AbortSignal.timeout(12_000),
+  });
+  if (r.status !== 200) throw new Error(`HTTP ${r.status}`);
+  return r.text();
 }
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  const matches = await matchMaster(log);
-  log(`${SOURCE_ID}: matched ${matches.length}/${DAMS.length} master dams`);
-
-  const userAgent =
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const m of matches) {
-    const url = `${BASE_URL}/dam_${m.cfg.slug}.htm`;
-    try {
-      const r = await fetch(url, {
-        headers: { 'user-agent': userAgent },
-        signal: AbortSignal.timeout(12_000),
-      });
-      if (r.status !== 200) {
-        log(`${SOURCE_ID}: ${m.cfg.slug} HTTP ${r.status}; skip`);
-        continue;
-      }
-      const html = await r.text();
-      const parsed = parseHkdDamPage(html);
-      if (!parsed) {
-        log(`${SOURCE_ID}: ${m.cfg.slug} no parseable row; skip`);
-        continue;
-      }
-      inputs.push({
-        observedAt: parsed.observedAt,
-        damId: m.damId,
-        sourceId: SOURCE_ID,
-        storageVolumeM3: parsed.storageVolumeM3,
-        storageRate: parsed.storageRate,
-        inflowM3s: parsed.inflowM3s,
-        outflowM3s: parsed.outflowM3s,
-        waterLevelM: parsed.waterLevelM,
-        rainfallMm: parsed.rainfallMm,
-        rawSnapshotId: null,
-        qualityFlag: 0,
-      });
-    } catch (err) {
-      log(`${SOURCE_ID}: ${m.cfg.slug} fetch error: ${(err as Error).message}`);
-    }
-  }
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: matched=${matches.length} parsed=${inputs.length} written=${written}`);
-};
-
-export default task;
+export default ingestTask(SOURCE_ID, async () => ({ entries: hkdEntries(fetchPage) }));

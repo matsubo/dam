@@ -8,11 +8,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import {
-  chooseMaster,
-  type NagasakiMaster,
-  parseNagasakiDamList,
-} from './ingest_nagasaki_city_suido.ts';
+import { nagasakiCityEntries, parseNagasakiDamList } from './ingest_nagasaki_city_suido.ts';
 
 const FIXTURE = join(
   import.meta.dir,
@@ -86,31 +82,35 @@ describe('parseNagasakiDamList', () => {
   });
 });
 
-describe('chooseMaster', () => {
-  // Real prod rows (長崎 42), 2026-09-28.
-  const masters: NagasakiMaster[] = [
-    { id: 11176n, name: '小ヶ倉', completedYear: 1975, ndi: '2592' }, // 諌早市小ヶ倉町
-    { id: 11185n, name: '浦上（再）', completedYear: null, ndi: '2601' },
-    { id: 11186n, name: '西山（再）', completedYear: 1999, ndi: '2608' },
-    { id: 11190n, name: '小ヶ倉', completedYear: 1987, ndi: '2609' }, // 長崎市上戸町
-    { id: 11192n, name: '落矢', completedYear: 1973, ndi: '2611' },
-    { id: 11236n, name: '西山（元）', completedYear: 1903, ndi: '2607' },
-    { id: 11237n, name: '浦上（元）', completedYear: 1945, ndi: '2602' },
-  ];
+describe('nagasakiCityEntries', () => {
+  const observedAt = page.observedAt;
+  if (!observedAt) throw new Error('no date');
+  const entries = nagasakiCityEntries(observedAt, page.rows);
+  const by = (key: string) => entries.find((e) => e.key === key);
 
-  test('pins 浦上 to the in-service （元） even once the （再） carries a completion year', () => {
-    expect(chooseMaster('浦上', masters)).toBe(11237n);
-    const finished = masters.map((m) => (m.ndi === '2601' ? { ...m, completedYear: 2020 } : m));
-    expect(chooseMaster('浦上', finished)).toBe(11237n);
+  test('pins 浦上 to the in-service （元） and 小ケ倉 to the 長崎市 dam, not the 諌早市 namesake', () => {
+    expect(by('浦上')?.bind).toEqual({ ndi: '2602' });
+    expect(by('小ケ倉')?.bind).toEqual({ ndi: '2609' });
+    expect(by('西山')?.bind).toEqual({ exact: true });
   });
 
-  test('pins 小ケ倉 to the 長崎市 dam, not the 諌早市 namesake', () => {
-    expect(chooseMaster('小ケ倉', masters)).toBe(11190n);
+  test('writes 浦上 only; the other twelve are recorded', () => {
+    expect(entries).toHaveLength(13);
+    expect(entries.filter((e) => !e.dontWrite).map((e) => e.key)).toEqual(['浦上']);
+    expect(by('浦上')?.reading).toEqual({
+      state: 'values',
+      observations: [{ observedAt, storageVolumeM3: 1_812_000, storageRate: 0.953 }],
+    });
   });
 
-  test('matches other rows by name, taking the completed （再） twin', () => {
-    expect(chooseMaster('西山', masters)).toBe(11186n);
-    expect(chooseMaster('落矢', masters)).toBe(11192n);
-    expect(chooseMaster('鳴見', masters)).toBeNull();
+  test('落矢 休止中 is provider-marked empty', () => {
+    expect(by('落矢')?.reading).toEqual({ state: 'empty', mark: '休止中' });
+  });
+
+  test('浦上 off the 水道有効量 its pin assumes is recorded, not written', () => {
+    const moved = page.rows.map((r) => (r.name === '浦上' ? { ...r, capacityM3: 1_200_000 } : r));
+    const [urakami] = nagasakiCityEntries(observedAt, moved);
+    expect(urakami?.dontWrite).toContain('re-check NDI_PINS');
+    expect(urakami?.reading).toMatchObject({ state: 'values' });
   });
 });

@@ -1,7 +1,19 @@
 // apps/worker/src/tasks/ingest_gifu_kasen.test.ts
+//
+// Page → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
 
 import { describe, expect, test } from 'bun:test';
-import { chooseMaster, parseGifuDatetime, parseGifuPage } from './ingest_gifu_kasen.ts';
+import type { Entry, Observed } from '../ingest/types.ts';
+import { gifuEntries, parseGifuDatetime } from './ingest_gifu_kasen.ts';
+
+function observed(e: Entry | undefined): Observed | undefined {
+  const r = e?.reading;
+  if (!r || typeof r === 'function' || r.state !== 'values') throw new Error('no values');
+  return r.observations[0];
+}
+const states = (entries: Entry[]) =>
+  entries.map((e) => [e.name, typeof e.reading === 'function' ? 'fn' : e.reading.state]);
 
 describe('parseGifuDatetime', () => {
   test('parses "YYYY/MM/DD HH:MM現在" JST → UTC', () => {
@@ -66,95 +78,78 @@ const SAMPLE_PAGE = `<Html><Head><Title>ダム諸量</Title></Head><Body>
 </pre>
 </Body></Html>`;
 
-describe('parseGifuPage', () => {
-  test('parses all valid dam sections', () => {
-    const rows = parseGifuPage(SAMPLE_PAGE);
-    // 大ヶ洞 (all ***) and 牧尾 (all ---) are both skipped
-    expect(rows).toHaveLength(3);
-    expect(rows.map((r) => r.gifuName)).toEqual(['阿多岐ダム', '岩村ダム', '徳山ダム']);
+describe('gifuEntries', () => {
+  const entries = gifuEntries(SAMPLE_PAGE);
+  const named = (n: string) => entries.find((e) => e.name === n);
+
+  test('every dam section is an entry, keyed by name; *** and --- everywhere are marked empty', () => {
+    expect(states(entries)).toEqual([
+      ['阿多岐ダム', 'values'],
+      ['大ヶ洞ダム', 'empty'], // all *** (欠測)
+      ['岩村ダム', 'values'],
+      ['徳山ダム', 'values'],
+      ['牧尾ダム', 'empty'], // all --- (無効)
+    ]);
+    expect(entries.map((e) => e.key)).toEqual(entries.map((e) => e.name));
   });
 
   test('all rows share the same observedAt timestamp', () => {
-    const rows = parseGifuPage(SAMPLE_PAGE);
-    const ts = '2026-06-05T07:40:00.000Z';
-    for (const r of rows) {
-      expect(r.observedAt.toISOString()).toBe(ts);
+    for (const n of ['阿多岐ダム', '岩村ダム', '徳山ダム']) {
+      expect(observed(named(n))?.observedAt.toISOString()).toBe('2026-06-05T07:40:00.000Z');
     }
   });
 
   test('converts 貯水量 千m³ → m³ (× 1000)', () => {
-    const rows = parseGifuPage(SAMPLE_PAGE);
-    const atagi = rows.find((r) => r.gifuName === '阿多岐ダム');
-    expect(atagi?.storageVolumeM3).toBe(499_000);
+    expect(observed(named('阿多岐ダム'))?.storageVolumeM3).toBe(499_000);
   });
 
   test('parses fractional values correctly', () => {
-    const rows = parseGifuPage(SAMPLE_PAGE);
-    const iwamura = rows.find((r) => r.gifuName === '岩村ダム');
+    const iwamura = observed(named('岩村ダム'));
     expect(iwamura?.storageVolumeM3).toBe(79_500);
     expect(iwamura?.outflowM3s).toBeCloseTo(0.068);
     expect(iwamura?.inflowM3s).toBeCloseTo(0.069);
   });
 
   test('徳山ダム large storage value', () => {
-    const rows = parseGifuPage(SAMPLE_PAGE);
-    const tokuyama = rows.find((r) => r.gifuName === '徳山ダム');
+    const tokuyama = observed(named('徳山ダム'));
     expect(tokuyama?.storageVolumeM3).toBe(268_028_000);
     expect(tokuyama?.outflowM3s).toBeCloseTo(37.23);
     expect(tokuyama?.inflowM3s).toBeCloseTo(13.74);
   });
 
-  test('skips dams with all *** (欠測) values', () => {
-    const rows = parseGifuPage(SAMPLE_PAGE);
-    expect(rows.find((r) => r.gifuName === '大ヶ洞ダム')).toBeUndefined();
-  });
-
-  test('skips dams with all --- (無効) values', () => {
-    const rows = parseGifuPage(SAMPLE_PAGE);
-    expect(rows.find((r) => r.gifuName === '牧尾ダム')).toBeUndefined();
-  });
-
   test('does not match the [更新] link bracket', () => {
-    const rows = parseGifuPage(SAMPLE_PAGE);
-    expect(rows.find((r) => r.gifuName.includes('更新'))).toBeUndefined();
+    expect(entries.find((e) => e.name.includes('更新'))).toBeUndefined();
   });
 
-  test('returns empty array for page with no timestamp', () => {
-    expect(parseGifuPage('<html><body>no data</body></html>')).toHaveLength(0);
+  test('a page without its timestamp lists the dams but reads none', () => {
+    const undated = SAMPLE_PAGE.replace('2026/06/05 16:40現在', '');
+    expect(states(gifuEntries(undated)).map(([, s]) => s)).toEqual([
+      'unreadable',
+      'empty',
+      'unreadable',
+      'unreadable',
+      'empty',
+    ]);
   });
 
-  test('returns empty array for empty string', () => {
-    expect(parseGifuPage('')).toHaveLength(0);
+  test('lists nothing for a page with no dam section', () => {
+    expect(gifuEntries('<html><body>no data</body></html>')).toHaveLength(0);
+    expect(gifuEntries('')).toHaveLength(0);
   });
 });
 
-describe('chooseMaster (#79)', () => {
-  // Real master rows (prod, 2026-09-27). ダム便覧 has two 岩村: NDI 97 in
-  // 北海道 and NDI 925, the 富田川 dam this page reports, in 岐阜.
-  const iwamuraHokkaido = { id: 8962n, name: '岩村', completedYear: 1973, prefCode: '01' };
-  const iwamuraGifu = { id: 9851n, name: '岩村', completedYear: 1997, prefCode: '21' };
-
-  test('binds 岩村ダム to 岐阜 岩村, not the lower-id 北海道 岩村', () => {
-    expect(chooseMaster('岩村ダム', [iwamuraHokkaido, iwamuraGifu])).toBe(9851n);
-  });
-
-  // The page also carries upper-Kiso and Yahagi dams outside 岐阜
-  // (/h/Dam.html, 2026-09-27); ダム便覧 files them under 長野 and 愛知.
-  test('binds 牧尾ダム to the completed 長野 牧尾（再）', () => {
-    const masters = [
-      { id: 9777n, name: '牧尾（再）', completedYear: 2006, prefCode: '20' },
-      { id: 9781n, name: '牧尾（元）', completedYear: 1961, prefCode: '20' },
-    ];
-    expect(chooseMaster('牧尾ダム', masters)).toBe(9777n);
-  });
-
-  test('binds 味噌川ダム in 長野 and 矢作ダム in 愛知', () => {
-    const masters = [
-      { id: 9774n, name: '味噌川', completedYear: 1996, prefCode: '20' },
-      { id: 9982n, name: '矢作', completedYear: 1970, prefCode: '23' },
-      { id: 10014n, name: '矢作第二', completedYear: 1970, prefCode: '23' },
-    ];
-    expect(chooseMaster('味噌川ダム', masters)).toBe(9774n);
-    expect(chooseMaster('矢作ダム', masters)).toBe(9982n);
+describe('gifuEntries prefecture (#79)', () => {
+  // ダム便覧 has two 岩村: NDI 97 in 北海道 and NDI 925, the 富田川 dam this
+  // page reports, in 岐阜. The page also carries upper-Kiso and Yahagi dams
+  // outside 岐阜 (/h/Dam.html, 2026-09-27); ダム便覧 files them under 長野
+  // and 愛知.
+  test('岩村ダム is searched in 岐阜; 牧尾 and 味噌川 in 長野, 矢作 in 愛知', () => {
+    const page = (name: string) =>
+      `2026/06/05 16:40現在\n[${name}]\n<pre>\n 貯水量    1 千m3\n 放流量    1 m3/s\n 全流入量  1 m3/s\n</pre>`;
+    const pref = (name: string) => gifuEntries(page(name))[0]?.pref;
+    expect(pref('岩村ダム')).toBe('21');
+    expect(pref('牧尾ダム')).toBe('20');
+    expect(pref('味噌川ダム')).toBe('20');
+    expect(pref('矢作ダム')).toBe('23');
   });
 });

@@ -18,7 +18,8 @@
 //   菅平   v_reservoirlevel13 (EL.m) · v_totalinflow11 · v_totaldischarge11
 //          · v_chor 貯水率 (%)
 // v_reservoirlevel1 / v_reservoirlevel7 are gauge heights (9.26 / 15.31 m)
-// and are not read. Cells are strings; "欠測" / "未実装" → null.
+// and are not read. Cells are strings; "欠測" / "未実装" are the 企業局's own
+// marks (null; a dam marked on every cell is provider-marked empty).
 //
 // Rows carry "HH:MM" only. The date comes from the file's Last-Modified
 // header, which the server sets when it rewrites the file (12:40:33 GMT for
@@ -27,7 +28,7 @@
 // midnight when its clock time is not earlier than the row before it. A file
 // that stops being rewritten keeps its old Last-Modified, so a stale feed
 // re-upserts the same old rows instead of stamping them with today's date.
-// No Last-Modified → the dam is skipped.
+// No Last-Modified → the dam is unreadable.
 //
 // Rate: 菅平's v_chor is stored as a fraction but NOT trusted — the feed
 // publishes no 貯水量, so the denominator cannot be back-solved per 0048.
@@ -46,12 +47,9 @@
 // :50/:40/:30/:20. Together they cover every 10-minute row; :20 and :50 are
 // read twice, and the upsert rewrites them with the same values.
 
-import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const BASE_URL = process.env.NAGANO_KIGYO_JSON_BASE ?? 'https://naganoken-kigyokyoku.jp/json';
 
@@ -63,7 +61,6 @@ export interface DamCfg {
   key: string;
   /** Name as the 企業局 page prints it. */
   name: string;
-  masterName: string;
   level: string;
   /** Current key first, then the older name the page falls back to. */
   inflow: readonly string[];
@@ -75,7 +72,6 @@ export const DAMS: readonly DamCfg[] = [
   {
     key: 'takato',
     name: '高遠ダム',
-    masterName: '高遠',
     level: 'v_reservoirlevel10',
     inflow: ['v_totalinflow1', 'v_totalinflow11'],
     outflow: 'v_totaldischarge11',
@@ -84,7 +80,6 @@ export const DAMS: readonly DamCfg[] = [
   {
     key: 'sugadaira',
     name: '菅平ダム',
-    masterName: '菅平',
     level: 'v_reservoirlevel13',
     inflow: ['v_totalinflow11'],
     outflow: 'v_totaldischarge11',
@@ -96,15 +91,22 @@ export const DAMS: readonly DamCfg[] = [
 
 export interface ParsedRow {
   observedAt: Date;
-  waterLevelM: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
-  /** 貯水率 as a 0..1 fraction. */
-  storageRate: number | null;
+  waterLevelM: Cell;
+  inflowM3s: Cell;
+  outflowM3s: Cell;
+  /** 貯水率 in percent; absent for a dam that publishes none. */
+  ratePct?: Cell;
 }
 
 const JST_MS = 9 * 3_600_000;
 const DAY_MS = 86_400_000;
+
+/** A string cell: a number, the 企業局's 欠測 / 未実装 mark, or unreadable. */
+function field(v: string | null | undefined): Cell {
+  const t = v?.trim() ?? '';
+  const n = t === '' ? null : Number(t);
+  return cell(n, t === '欠測' || t === '未実装');
+}
 
 /**
  * The table's rows with dates reconstructed from `lastModified` (see header).
@@ -112,11 +114,6 @@ const DAY_MS = 86_400_000;
  */
 export function parseNaganoKigyoTable(json: string, cfg: DamCfg, lastModified: Date): ParsedRow[] {
   const table = (JSON.parse(json) as { table?: Record<string, string | null>[] }).table ?? [];
-  const num = (v: string | null | undefined): number | null => {
-    if (v == null || v.trim() === '') return null;
-    const n = Number(v);
-    return Number.isFinite(n) ? n : null;
-  };
 
   const rows: ParsedRow[] = [];
   // The newest row may sit exactly at Last-Modified; each older row must be
@@ -134,116 +131,78 @@ export function parseNaganoKigyoTable(json: string, cfg: DamCfg, lastModified: D
     inclusive = false;
 
     const inflowKey = cfg.inflow.find((k) => r[k] !== undefined);
-    const rate = cfg.rate === null ? null : num(r[cfg.rate]);
     rows.push({
       observedAt: new Date(at),
-      waterLevelM: num(r[cfg.level]),
-      inflowM3s: inflowKey === undefined ? null : num(r[inflowKey]),
-      outflowM3s: num(r[cfg.outflow]),
-      storageRate: rate === null ? null : rate / 100,
+      waterLevelM: field(r[cfg.level]),
+      inflowM3s: inflowKey === undefined ? null : field(r[inflowKey]),
+      outflowM3s: field(r[cfg.outflow]),
+      ...(cfg.rate === null ? {} : { ratePct: field(r[cfg.rate]) }),
     });
   }
   return rows;
 }
 
-// --- DB helpers -------------------------------------------------------------
-
-interface DamMatch {
-  cfg: DamCfg;
-  damId: bigint;
+/** One dam's file: its rows, or the 企業局's marks on every cell. */
+export function naganoReading(json: string, cfg: DamCfg, lastModified: Date): Reading {
+  const rows = parseNaganoKigyoTable(json, cfg, lastModified);
+  const cells: Cell[] = [];
+  for (const r of rows) {
+    cells.push(r.waterLevelM, r.inflowM3s, r.outflowM3s);
+    if (r.ratePct !== undefined) cells.push(r.ratePct);
+  }
+  const state = cellState(cells);
+  if (state === 'empty') return { state, mark: '欠測 / 未実装 on every cell' };
+  if (state === 'unreadable') return { state, why: `no value in ${rows.length} rows` };
+  return {
+    state,
+    observations: rows.map((r) => {
+      const pct = r.ratePct === undefined ? null : numberIn(r.ratePct);
+      return {
+        observedAt: r.observedAt,
+        waterLevelM: numberIn(r.waterLevelM),
+        inflowM3s: numberIn(r.inflowM3s),
+        outflowM3s: numberIn(r.outflowM3s),
+        storageRate: pct === null ? null : pct / 100,
+      };
+    }),
+  };
 }
 
-async function matchMaster(log: (s: string) => void): Promise<DamMatch[]> {
-  const matches: DamMatch[] = [];
-  const universe: UniverseRow[] = [];
-  for (const c of DAMS) {
-    const candidates = await sql<(BindableMaster & { rank: number })[]>`
-      SELECT id, name, completed_year AS "completedYear",
-             external_ids->>${SOURCE_ID} AS stamp,
-             CASE
-               WHEN name = ${c.masterName} THEN 0
-               WHEN name LIKE ${`${c.masterName}（再）%`}
-                 OR name LIKE ${`${c.masterName}（元）%`} THEN 0
-               ELSE 5
-             END AS rank
-      FROM dams
-      WHERE pref_code = ${PREF_CODE}
-        AND (name = ${c.masterName} OR name LIKE ${`${c.masterName}（%`}
-             OR external_ids->>${SOURCE_ID} = ${c.key})
-    `;
-    const m = chooseRanked(candidates, c.key);
-    universe.push({
-      externalId: c.key,
-      name: c.name,
-      prefCode: PREF_CODE,
-      resolvedDamId: m?.id ?? null,
-    });
-    if (!m) {
-      log(`${SOURCE_ID}: no master match for ${c.name}`);
-      continue;
-    }
-    matches.push({ cfg: c, damId: m.id });
-    await bindExternalId(m.id, SOURCE_ID, c.key);
-  }
-  await recordUniverse(SOURCE_ID, universe);
-  return matches;
+// --- entries ----------------------------------------------------------------
+
+/** A dam's file as served: its body and Last-Modified header. */
+export type FetchFile = (url: string) => Promise<{ body: string; lastModified: string | null }>;
+
+/**
+ * Both dams, known in advance; each reads its own file. Binds only the master
+ * of the same name (the live twin of a （元）/（再） pair).
+ */
+export function naganoKigyoEntries(fetchFile: FetchFile): Entry[] {
+  return DAMS.map((cfg) => ({
+    key: cfg.key,
+    name: cfg.name,
+    pref: PREF_CODE,
+    bind: { exact: true },
+    reading: async () => {
+      const { body, lastModified } = await fetchFile(`${BASE_URL}/${cfg.key}_new.json`);
+      const at = new Date(lastModified ?? '');
+      if (Number.isNaN(at.getTime())) throw new Error('no Last-Modified; cannot date its rows');
+      return naganoReading(body, cfg, at);
+    },
+  }));
 }
 
-// --- task -------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  const matches = await matchMaster(log);
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  let parsed = 0;
-  for (const { cfg, damId } of matches) {
-    const r = await fetch(`${BASE_URL}/${cfg.key}_new.json`, {
-      headers: {
-        'user-agent':
-          process.env.HTTP_USER_AGENT ??
-          'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-      },
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (r.status !== 200) {
-      log(`${SOURCE_ID}: ${cfg.name} HTTP ${r.status}; skipping`);
-      continue;
-    }
-    const lastModified = new Date(r.headers.get('last-modified') ?? '');
-    if (Number.isNaN(lastModified.getTime())) {
-      log(`${SOURCE_ID}: ${cfg.name} has no Last-Modified; cannot date its rows, skipping`);
-      continue;
-    }
-    let rows: ParsedRow[];
-    try {
-      rows = parseNaganoKigyoTable(await r.text(), cfg, lastModified);
-    } catch (e) {
-      log(`${SOURCE_ID}: ${cfg.name} JSON parse failed: ${String(e)}`);
-      continue;
-    }
-    parsed += rows.length;
-    for (const p of rows) {
-      inputs.push({
-        observedAt: p.observedAt,
-        damId,
-        sourceId: SOURCE_ID,
-        storageVolumeM3: null,
-        storageRate: p.storageRate,
-        inflowM3s: p.inflowM3s,
-        outflowM3s: p.outflowM3s,
-        waterLevelM: p.waterLevelM,
-        rainfallMm: null,
-        rawSnapshotId: null,
-        qualityFlag: 0,
-      });
-    }
-  }
-
-  const written = await upsertObservations(inputs);
-  log(
-    `${SOURCE_ID} done: dams=${DAMS.length} matched=${matches.length} rows=${parsed} written=${written}`,
-  );
+const fetchFile: FetchFile = async (url) => {
+  const r = await fetch(url, {
+    headers: {
+      'user-agent':
+        process.env.HTTP_USER_AGENT ??
+        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
+    },
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (r.status !== 200) throw new Error(`HTTP ${r.status} for ${url}`);
+  return { body: await r.text(), lastModified: r.headers.get('last-modified') };
 };
 
-export default task;
+export default ingestTask(SOURCE_ID, async () => ({ entries: naganoKigyoEntries(fetchFile) }));

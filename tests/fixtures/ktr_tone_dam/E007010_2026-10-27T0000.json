@@ -1,0 +1,1606 @@
+﻿{
+  "menuSelect": {
+    "observationCD": "99",
+    "url": "E007010.html",
+    "observationName": "ダム位置図"
+  },
+  "menuList": [
+    {
+      "observationCD": "212891",
+      "url": "E007020.html#damdate212891",
+      "observationName": "矢木沢ダム"
+    },
+    {
+      "observationCD": "212892",
+      "url": "E007020.html#damdate212892",
+      "observationName": "奈良俣ダム"
+    },
+    {
+      "observationCD": "212893",
+      "url": "E007020.html#damdate212893",
+      "observationName": "藤原ダム"
+    },
+    {
+      "observationCD": "212894",
+      "url": "E007020.html#damdate212894",
+      "observationName": "相俣ダム"
+    },
+    {
+      "observationCD": "212895",
+      "url": "E007020.html#damdate212895",
+      "observationName": "薗原ダム"
+    },
+    {
+      "observationCD": "212898",
+      "url": "E007020.html#damdate212898",
+      "observationName": "５ダム"
+    },
+    {
+      "observationCD": "2128927",
+      "url": "E007020.html#damdate2128927",
+      "observationName": "八ッ場ダム"
+    },
+    {
+      "observationCD": "212896",
+      "url": "E007020.html#damdate212896",
+      "observationName": "下久保ダム"
+    },
+    {
+      "observationCD": "212897",
+      "url": "E007020.html#damdate212897",
+      "observationName": "草木ダム"
+    },
+    {
+      "observationCD": "212591",
+      "url": "E007020.html#damdate212591",
+      "observationName": "渡良瀬貯水池"
+    },
+    {
+      "observationCD": "2128929",
+      "url": "E007020.html#damdate2128929",
+      "observationName": "９ダム"
+    }
+  ],
+  "damDataList": [
+    {
+      "officeCD": "21289",
+      "observationCD": "1",
+      "observationName": "矢木沢ダム",
+      "discharge": "false",
+      "dataList": [
+        {
+          "observationTime": "2026/10/27 00:00:00",
+          "waterCapacity": "108,274",
+          "waterRate": "93.7",
+          "inflow": "8.77",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "-8.77"
+        },
+        {
+          "observationTime": "2026/10/26 23:00:00",
+          "waterCapacity": "108,241",
+          "waterRate": "93.7",
+          "inflow": "11.91",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "-11.91"
+        },
+        {
+          "observationTime": "2026/10/26 22:00:00",
+          "waterCapacity": "108,231",
+          "waterRate": "93.7",
+          "inflow": "13.16",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "-13.16"
+        },
+        {
+          "observationTime": "2026/10/26 21:00:00",
+          "waterCapacity": "108,210",
+          "waterRate": "93.7",
+          "inflow": "14.70",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "-14.70"
+        },
+        {
+          "observationTime": "2026/10/26 20:00:00",
+          "waterCapacity": "108,189",
+          "waterRate": "93.7",
+          "inflow": "19.01",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "-19.01"
+        },
+        {
+          "observationTime": "2026/10/26 19:00:00",
+          "waterCapacity": "108,141",
+          "waterRate": "93.6",
+          "inflow": "19.21",
+          "powerDischarge": "37.05",
+          "damDischarge": "0.00",
+          "totalDischarge": "37.05",
+          "adjustmentCapacity": "17.84"
+        },
+        {
+          "observationTime": "2026/10/26 18:00:00",
+          "waterCapacity": "108,078",
+          "waterRate": "93.6",
+          "inflow": "21.77",
+          "powerDischarge": "37.43",
+          "damDischarge": "0.00",
+          "totalDischarge": "37.43",
+          "adjustmentCapacity": "15.66"
+        },
+        {
+          "observationTime": "2026/10/26 17:00:00",
+          "waterCapacity": "107,992",
+          "waterRate": "93.5",
+          "inflow": "17.76",
+          "powerDischarge": "36.96",
+          "damDischarge": "0.00",
+          "totalDischarge": "36.96",
+          "adjustmentCapacity": "19.20"
+        },
+        {
+          "observationTime": "2026/10/26 16:00:00",
+          "waterCapacity": "107,963",
+          "waterRate": "93.5",
+          "inflow": "15.28",
+          "powerDischarge": "37.13",
+          "damDischarge": "0.00",
+          "totalDischarge": "37.13",
+          "adjustmentCapacity": "21.85"
+        },
+        {
+          "observationTime": "2026/10/26 15:00:00",
+          "waterCapacity": "107,939",
+          "waterRate": "93.5",
+          "inflow": "18.17",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "-18.17"
+        },
+        {
+          "observationTime": "2026/10/26 14:00:00",
+          "waterCapacity": "107,918",
+          "waterRate": "93.4",
+          "inflow": "13.78",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "-13.78"
+        },
+        {
+          "observationTime": "2026/10/26 13:00:00",
+          "waterCapacity": "107,851",
+          "waterRate": "93.4",
+          "inflow": "12.53",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "-12.53"
+        }
+      ],
+      "statusChart": {
+        "inflowPerSec": "8.77",
+        "inflowPerSecBefore1hour": "11.91",
+        "waterCapacityPerSec": "108,274",
+        "waterCapacityBefore1hour": "33",
+        "waterRatePerSec": "93.7",
+        "waterRatePerSecBefore1hour": "0.0",
+        "dischargePerSec": "0.00",
+        "dischargePerSecBefore1hour": "0.00",
+        "adjustmentCapacityPerSec": "-8.77",
+        "waterCapacityUpOrDown": "0"
+      }
+    },
+    {
+      "officeCD": "21289",
+      "observationCD": "2",
+      "observationName": "奈良俣ダム",
+      "discharge": "false",
+      "dataList": [
+        {
+          "observationTime": "2026/10/27 00:00:00",
+          "waterCapacity": "74,230",
+          "waterRate": "87.3",
+          "inflow": "4.31",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "-4.31"
+        },
+        {
+          "observationTime": "2026/10/26 23:00:00",
+          "waterCapacity": "74,212",
+          "waterRate": "87.3",
+          "inflow": "4.57",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "-4.57"
+        },
+        {
+          "observationTime": "2026/10/26 22:00:00",
+          "waterCapacity": "74,194",
+          "waterRate": "87.3",
+          "inflow": "5.61",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "-5.61"
+        },
+        {
+          "observationTime": "2026/10/26 21:00:00",
+          "waterCapacity": "74,176",
+          "waterRate": "87.3",
+          "inflow": "5.04",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "-5.04"
+        },
+        {
+          "observationTime": "2026/10/26 20:00:00",
+          "waterCapacity": "74,158",
+          "waterRate": "87.2",
+          "inflow": "5.51",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "-5.51"
+        },
+        {
+          "observationTime": "2026/10/26 19:00:00",
+          "waterCapacity": "74,140",
+          "waterRate": "87.2",
+          "inflow": "6.91",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "-6.91"
+        },
+        {
+          "observationTime": "2026/10/26 18:00:00",
+          "waterCapacity": "74,105",
+          "waterRate": "87.2",
+          "inflow": "7.08",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "-7.08"
+        },
+        {
+          "observationTime": "2026/10/26 17:00:00",
+          "waterCapacity": "74,087",
+          "waterRate": "87.2",
+          "inflow": "7.43",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "-7.43"
+        },
+        {
+          "observationTime": "2026/10/26 16:00:00",
+          "waterCapacity": "74,069",
+          "waterRate": "87.1",
+          "inflow": "6.07",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "-6.07"
+        },
+        {
+          "observationTime": "2026/10/26 15:00:00",
+          "waterCapacity": "74,033",
+          "waterRate": "87.1",
+          "inflow": "5.83",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "-5.83"
+        },
+        {
+          "observationTime": "2026/10/26 14:00:00",
+          "waterCapacity": "74,016",
+          "waterRate": "87.1",
+          "inflow": "6.61",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "-6.61"
+        },
+        {
+          "observationTime": "2026/10/26 13:00:00",
+          "waterCapacity": "73,998",
+          "waterRate": "87.1",
+          "inflow": "4.96",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "-4.96"
+        }
+      ],
+      "statusChart": {
+        "inflowPerSec": "4.31",
+        "inflowPerSecBefore1hour": "4.57",
+        "waterCapacityPerSec": "74,230",
+        "waterCapacityBefore1hour": "18",
+        "waterRatePerSec": "87.3",
+        "waterRatePerSecBefore1hour": "0.0",
+        "dischargePerSec": "0.00",
+        "dischargePerSecBefore1hour": "0.00",
+        "adjustmentCapacityPerSec": "-4.31",
+        "waterCapacityUpOrDown": "0"
+      }
+    },
+    {
+      "officeCD": "21289",
+      "observationCD": "3",
+      "observationName": "藤原ダム",
+      "discharge": "false",
+      "dataList": [
+        {
+          "observationTime": "2026/10/27 00:00:00",
+          "waterCapacity": "20,198",
+          "waterRate": "65.1",
+          "inflow": "0.68",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "-21.67"
+        },
+        {
+          "observationTime": "2026/10/26 23:00:00",
+          "waterCapacity": "20,174",
+          "waterRate": "65.1",
+          "inflow": "6.81",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "0.00"
+        },
+        {
+          "observationTime": "2026/10/26 22:00:00",
+          "waterCapacity": "20,161",
+          "waterRate": "65.0",
+          "inflow": "3.41",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "-20.00"
+        },
+        {
+          "observationTime": "2026/10/26 21:00:00",
+          "waterCapacity": "20,137",
+          "waterRate": "64.9",
+          "inflow": "5.45",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "-20.00"
+        },
+        {
+          "observationTime": "2026/10/26 20:00:00",
+          "waterCapacity": "20,112",
+          "waterRate": "64.9",
+          "inflow": "6.81",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "0.00"
+        },
+        {
+          "observationTime": "2026/10/26 19:00:00",
+          "waterCapacity": "20,073",
+          "waterRate": "64.7",
+          "inflow": "8.87",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "-61.67"
+        },
+        {
+          "observationTime": "2026/10/26 18:00:00",
+          "waterCapacity": "20,062",
+          "waterRate": "64.7",
+          "inflow": "11.94",
+          "powerDischarge": "10.04",
+          "damDischarge": "0.00",
+          "totalDischarge": "10.04",
+          "adjustmentCapacity": "-40.00"
+        },
+        {
+          "observationTime": "2026/10/26 17:00:00",
+          "waterCapacity": "20,035",
+          "waterRate": "64.6",
+          "inflow": "11.43",
+          "powerDischarge": "4.45",
+          "damDischarge": "0.00",
+          "totalDischarge": "4.45",
+          "adjustmentCapacity": "-61.67"
+        },
+        {
+          "observationTime": "2026/10/26 16:00:00",
+          "waterCapacity": "19,982",
+          "waterRate": "64.4",
+          "inflow": "11.12",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "-61.67"
+        },
+        {
+          "observationTime": "2026/10/26 15:00:00",
+          "waterCapacity": "19,933",
+          "waterRate": "64.3",
+          "inflow": "8.31",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "-40.00"
+        },
+        {
+          "observationTime": "2026/10/26 14:00:00",
+          "waterCapacity": "19,914",
+          "waterRate": "64.2",
+          "inflow": "6.81",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "0.00"
+        },
+        {
+          "observationTime": "2026/10/26 13:00:00",
+          "waterCapacity": "19,889",
+          "waterRate": "64.1",
+          "inflow": "6.81",
+          "powerDischarge": "0.00",
+          "damDischarge": "0.00",
+          "totalDischarge": "0.00",
+          "adjustmentCapacity": "0.00"
+        }
+      ],
+      "statusChart": {
+        "inflowPerSec": "0.68",
+        "inflowPerSecBefore1hour": "6.81",
+        "waterCapacityPerSec": "20,198",
+        "waterCapacityBefore1hour": "24",
+        "waterRatePerSec": "65.1",
+        "waterRatePerSecBefore1hour": "0.0",
+        "dischargePerSec": "0.00",
+        "dischargePerSecBefore1hour": "0.00",
+        "adjustmentCapacityPerSec": "-21.67",
+        "waterCapacityUpOrDown": "0"
+      }
+    },
+    {
+      "officeCD": "21289",
+      "observationCD": "4",
+      "observationName": "相俣ダム",
+      "discharge": "false",
+      "dataList": [
+        {
+          "observationTime": "2026/10/27 00:00:00",
+          "waterCapacity": "9,317",
+          "waterRate": "46.5",
+          "inflow": "4.45",
+          "powerDischarge": "4.45",
+          "damDischarge": "0.00",
+          "totalDischarge": "4.45",
+          "adjustmentCapacity": "0.00"
+        },
+        {
+          "observationTime": "2026/10/26 23:00:00",
+          "waterCapacity": "9,317",
+          "waterRate": "46.5",
+          "inflow": "6.34",
+          "powerDischarge": "4.46",
+          "damDischarge": "0.00",
+          "totalDischarge": "4.46",
+          "adjustmentCapacity": "-1.94"
+        },
+        {
+          "observationTime": "2026/10/26 22:00:00",
+          "waterCapacity": "9,310",
+          "waterRate": "46.5",
+          "inflow": "8.22",
+          "powerDischarge": "4.44",
+          "damDischarge": "0.00",
+          "totalDischarge": "4.44",
+          "adjustmentCapacity": "-3.89"
+        },
+        {
+          "observationTime": "2026/10/26 21:00:00",
+          "waterCapacity": "9,296",
+          "waterRate": "46.4",
+          "inflow": "6.33",
+          "powerDischarge": "4.44",
+          "damDischarge": "0.00",
+          "totalDischarge": "4.44",
+          "adjustmentCapacity": "-1.67"
+        },
+        {
+          "observationTime": "2026/10/26 20:00:00",
+          "waterCapacity": "9,290",
+          "waterRate": "46.4",
+          "inflow": "6.33",
+          "powerDischarge": "4.44",
+          "damDischarge": "0.00",
+          "totalDischarge": "4.44",
+          "adjustmentCapacity": "-1.94"
+        },
+        {
+          "observationTime": "2026/10/26 19:00:00",
+          "waterCapacity": "9,283",
+          "waterRate": "46.4",
+          "inflow": "6.33",
+          "powerDischarge": "4.44",
+          "damDischarge": "0.00",
+          "totalDischarge": "4.44",
+          "adjustmentCapacity": "-1.94"
+        },
+        {
+          "observationTime": "2026/10/26 18:00:00",
+          "waterCapacity": "9,276",
+          "waterRate": "46.3",
+          "inflow": "8.22",
+          "powerDischarge": "4.46",
+          "damDischarge": "0.00",
+          "totalDischarge": "4.46",
+          "adjustmentCapacity": "-3.89"
+        },
+        {
+          "observationTime": "2026/10/26 17:00:00",
+          "waterCapacity": "9,262",
+          "waterRate": "46.3",
+          "inflow": "6.33",
+          "powerDischarge": "4.45",
+          "damDischarge": "0.00",
+          "totalDischarge": "4.45",
+          "adjustmentCapacity": "-1.67"
+        },
+        {
+          "observationTime": "2026/10/26 16:00:00",
+          "waterCapacity": "9,256",
+          "waterRate": "46.2",
+          "inflow": "6.33",
+          "powerDischarge": "4.45",
+          "damDischarge": "0.00",
+          "totalDischarge": "4.45",
+          "adjustmentCapacity": "-1.94"
+        },
+        {
+          "observationTime": "2026/10/26 15:00:00",
+          "waterCapacity": "9,249",
+          "waterRate": "46.2",
+          "inflow": "4.44",
+          "powerDischarge": "4.44",
+          "damDischarge": "0.00",
+          "totalDischarge": "4.44",
+          "adjustmentCapacity": "0.00"
+        },
+        {
+          "observationTime": "2026/10/26 14:00:00",
+          "waterCapacity": "9,249",
+          "waterRate": "46.2",
+          "inflow": "4.44",
+          "powerDischarge": "4.44",
+          "damDischarge": "0.00",
+          "totalDischarge": "4.44",
+          "adjustmentCapacity": "0.00"
+        },
+        {
+          "observationTime": "2026/10/26 13:00:00",
+          "waterCapacity": "9,249",
+          "waterRate": "46.2",
+          "inflow": "4.44",
+          "powerDischarge": "4.44",
+          "damDischarge": "0.00",
+          "totalDischarge": "4.44",
+          "adjustmentCapacity": "0.00"
+        }
+      ],
+      "statusChart": {
+        "inflowPerSec": "4.45",
+        "inflowPerSecBefore1hour": "6.34",
+        "waterCapacityPerSec": "9,317",
+        "waterCapacityBefore1hour": "0",
+        "waterRatePerSec": "46.5",
+        "waterRatePerSecBefore1hour": "0.0",
+        "dischargePerSec": "4.45",
+        "dischargePerSecBefore1hour": "4.46",
+        "adjustmentCapacityPerSec": "+0.00",
+        "waterCapacityUpOrDown": "0"
+      }
+    },
+    {
+      "officeCD": "21289",
+      "observationCD": "5",
+      "observationName": "薗原ダム",
+      "discharge": "true",
+      "dataList": [
+        {
+          "observationTime": "2026/10/27 00:00:00",
+          "waterCapacity": "8,008",
+          "waterRate": "60.6",
+          "inflow": "13.47",
+          "powerDischarge": "0.00",
+          "damDischarge": "13.47",
+          "totalDischarge": "13.47",
+          "adjustmentCapacity": "0.00"
+        },
+        {
+          "observationTime": "2026/10/26 23:00:00",
+          "waterCapacity": "8,008",
+          "waterRate": "60.6",
+          "inflow": "11.25",
+          "powerDischarge": "0.00",
+          "damDischarge": "13.47",
+          "totalDischarge": "13.47",
+          "adjustmentCapacity": "2.22"
+        },
+        {
+          "observationTime": "2026/10/26 22:00:00",
+          "waterCapacity": "8,016",
+          "waterRate": "60.6",
+          "inflow": "13.47",
+          "powerDischarge": "0.00",
+          "damDischarge": "13.47",
+          "totalDischarge": "13.47",
+          "adjustmentCapacity": "0.00"
+        },
+        {
+          "observationTime": "2026/10/26 21:00:00",
+          "waterCapacity": "8,016",
+          "waterRate": "60.6",
+          "inflow": "13.47",
+          "powerDischarge": "0.00",
+          "damDischarge": "13.47",
+          "totalDischarge": "13.47",
+          "adjustmentCapacity": "0.00"
+        },
+        {
+          "observationTime": "2026/10/26 20:00:00",
+          "waterCapacity": "8,016",
+          "waterRate": "60.6",
+          "inflow": "13.47",
+          "powerDischarge": "0.00",
+          "damDischarge": "13.47",
+          "totalDischarge": "13.47",
+          "adjustmentCapacity": "0.00"
+        },
+        {
+          "observationTime": "2026/10/26 19:00:00",
+          "waterCapacity": "8,016",
+          "waterRate": "60.6",
+          "inflow": "11.53",
+          "powerDischarge": "0.00",
+          "damDischarge": "13.47",
+          "totalDischarge": "13.47",
+          "adjustmentCapacity": "1.94"
+        },
+        {
+          "observationTime": "2026/10/26 18:00:00",
+          "waterCapacity": "8,023",
+          "waterRate": "60.7",
+          "inflow": "11.25",
+          "powerDischarge": "0.00",
+          "damDischarge": "13.47",
+          "totalDischarge": "13.47",
+          "adjustmentCapacity": "2.22"
+        },
+        {
+          "observationTime": "2026/10/26 17:00:00",
+          "waterCapacity": "8,031",
+          "waterRate": "60.8",
+          "inflow": "13.48",
+          "powerDischarge": "0.00",
+          "damDischarge": "13.48",
+          "totalDischarge": "13.48",
+          "adjustmentCapacity": "0.00"
+        },
+        {
+          "observationTime": "2026/10/26 16:00:00",
+          "waterCapacity": "8,031",
+          "waterRate": "60.8",
+          "inflow": "11.54",
+          "powerDischarge": "0.00",
+          "damDischarge": "13.48",
+          "totalDischarge": "13.48",
+          "adjustmentCapacity": "1.94"
+        },
+        {
+          "observationTime": "2026/10/26 15:00:00",
+          "waterCapacity": "8,038",
+          "waterRate": "60.8",
+          "inflow": "9.31",
+          "powerDischarge": "0.00",
+          "damDischarge": "13.48",
+          "totalDischarge": "13.48",
+          "adjustmentCapacity": "4.17"
+        },
+        {
+          "observationTime": "2026/10/26 14:00:00",
+          "waterCapacity": "8,053",
+          "waterRate": "60.9",
+          "inflow": "11.26",
+          "powerDischarge": "0.00",
+          "damDischarge": "13.48",
+          "totalDischarge": "13.48",
+          "adjustmentCapacity": "2.22"
+        },
+        {
+          "observationTime": "2026/10/26 13:00:00",
+          "waterCapacity": "8,061",
+          "waterRate": "61.0",
+          "inflow": "9.31",
+          "powerDischarge": "0.00",
+          "damDischarge": "13.48",
+          "totalDischarge": "13.48",
+          "adjustmentCapacity": "4.17"
+        }
+      ],
+      "statusChart": {
+        "inflowPerSec": "13.47",
+        "inflowPerSecBefore1hour": "11.25",
+        "waterCapacityPerSec": "8,008",
+        "waterCapacityBefore1hour": "0",
+        "waterRatePerSec": "60.6",
+        "waterRatePerSecBefore1hour": "0.0",
+        "dischargePerSec": "13.47",
+        "dischargePerSecBefore1hour": "13.47",
+        "adjustmentCapacityPerSec": "+0.00",
+        "waterCapacityUpOrDown": "0"
+      }
+    },
+    {
+      "officeCD": "21289",
+      "observationCD": "8",
+      "observationName": "５ダム",
+      "discharge": "true",
+      "dataList": [
+        {
+          "observationTime": "2026/10/27 00:00:00",
+          "waterCapacity": "220,027",
+          "waterRate": "83.1",
+          "inflow": "46.92",
+          "powerDischarge": "13.70",
+          "damDischarge": "13.47",
+          "totalDischarge": "27.17",
+          "adjustmentCapacity": "-20.83"
+        },
+        {
+          "observationTime": "2026/10/26 23:00:00",
+          "waterCapacity": "219,952",
+          "waterRate": "83.1",
+          "inflow": "26.93",
+          "powerDischarge": "13.71",
+          "damDischarge": "13.47",
+          "totalDischarge": "27.18",
+          "adjustmentCapacity": "-11.11"
+        },
+        {
+          "observationTime": "2026/10/26 22:00:00",
+          "waterCapacity": "219,912",
+          "waterRate": "83.1",
+          "inflow": "56.38",
+          "powerDischarge": "13.69",
+          "damDischarge": "13.47",
+          "totalDischarge": "27.16",
+          "adjustmentCapacity": "-21.39"
+        },
+        {
+          "observationTime": "2026/10/26 21:00:00",
+          "waterCapacity": "219,835",
+          "waterRate": "83.0",
+          "inflow": "55.73",
+          "powerDischarge": "13.69",
+          "damDischarge": "13.47",
+          "totalDischarge": "27.16",
+          "adjustmentCapacity": "-19.44"
+        },
+        {
+          "observationTime": "2026/10/26 20:00:00",
+          "waterCapacity": "219,765",
+          "waterRate": "83.0",
+          "inflow": "44.40",
+          "powerDischarge": "13.69",
+          "damDischarge": "13.47",
+          "totalDischarge": "27.16",
+          "adjustmentCapacity": "-31.11"
+        },
+        {
+          "observationTime": "2026/10/26 19:00:00",
+          "waterCapacity": "219,653",
+          "waterRate": "83.0",
+          "inflow": "39.24",
+          "powerDischarge": "13.69",
+          "damDischarge": "13.47",
+          "totalDischarge": "27.16",
+          "adjustmentCapacity": "-30.28"
+        },
+        {
+          "observationTime": "2026/10/26 18:00:00",
+          "waterCapacity": "219,544",
+          "waterRate": "82.9",
+          "inflow": "97.68",
+          "powerDischarge": "23.75",
+          "damDischarge": "13.47",
+          "totalDischarge": "37.22",
+          "adjustmentCapacity": "-38.06"
+        },
+        {
+          "observationTime": "2026/10/26 17:00:00",
+          "waterCapacity": "219,407",
+          "waterRate": "82.9",
+          "inflow": "56.46",
+          "powerDischarge": "18.15",
+          "damDischarge": "13.48",
+          "totalDischarge": "31.63",
+          "adjustmentCapacity": "-29.44"
+        },
+        {
+          "observationTime": "2026/10/26 16:00:00",
+          "waterCapacity": "219,301",
+          "waterRate": "82.8",
+          "inflow": "24.87",
+          "powerDischarge": "13.62",
+          "damDischarge": "13.48",
+          "totalDischarge": "27.10",
+          "adjustmentCapacity": "-30.28"
+        },
+        {
+          "observationTime": "2026/10/26 15:00:00",
+          "waterCapacity": "219,192",
+          "waterRate": "82.8",
+          "inflow": "52.20",
+          "powerDischarge": "13.61",
+          "damDischarge": "13.48",
+          "totalDischarge": "27.09",
+          "adjustmentCapacity": "-11.67"
+        },
+        {
+          "observationTime": "2026/10/26 14:00:00",
+          "waterCapacity": "219,150",
+          "waterRate": "82.8",
+          "inflow": "52.52",
+          "powerDischarge": "13.93",
+          "damDischarge": "13.48",
+          "totalDischarge": "27.41",
+          "adjustmentCapacity": "-28.33"
+        },
+        {
+          "observationTime": "2026/10/26 13:00:00",
+          "waterCapacity": "219,048",
+          "waterRate": "82.7",
+          "inflow": "45.21",
+          "powerDischarge": "13.69",
+          "damDischarge": "13.48",
+          "totalDischarge": "27.17",
+          "adjustmentCapacity": "-11.39"
+        }
+      ],
+      "statusChart": {
+        "inflowPerSec": null,
+        "inflowPerSecBefore1hour": "",
+        "waterCapacityPerSec": "",
+        "waterCapacityBefore1hour": "",
+        "waterRatePerSec": "",
+        "waterRatePerSecBefore1hour": "",
+        "dischargePerSec": "",
+        "dischargePerSecBefore1hour": "",
+        "adjustmentCapacityPerSec": "-",
+        "waterCapacityUpOrDown": ""
+      }
+    },
+    {
+      "officeCD": "21289",
+      "observationCD": "27",
+      "observationName": "八ッ場ダム",
+      "discharge": "false",
+      "dataList": [
+        {
+          "observationTime": "2026/10/27 00:00:00",
+          "waterCapacity": "50,902",
+          "waterRate": "56.6",
+          "inflow": "32.51",
+          "powerDischarge": "2.44",
+          "damDischarge": "0.00",
+          "totalDischarge": "2.44",
+          "adjustmentCapacity": "-30.07"
+        },
+        {
+          "observationTime": "2026/10/26 23:00:00",
+          "waterCapacity": "50,787",
+          "waterRate": "56.4",
+          "inflow": "31.95",
+          "powerDischarge": "2.43",
+          "damDischarge": "0.00",
+          "totalDischarge": "2.43",
+          "adjustmentCapacity": "-29.52"
+        },
+        {
+          "observationTime": "2026/10/26 22:00:00",
+          "waterCapacity": "50,674",
+          "waterRate": "56.3",
+          "inflow": "30.72",
+          "powerDischarge": "2.47",
+          "damDischarge": "0.00",
+          "totalDischarge": "2.47",
+          "adjustmentCapacity": "-28.25"
+        },
+        {
+          "observationTime": "2026/10/26 21:00:00",
+          "waterCapacity": "50,584",
+          "waterRate": "56.2",
+          "inflow": "30.72",
+          "powerDischarge": "2.47",
+          "damDischarge": "0.00",
+          "totalDischarge": "2.47",
+          "adjustmentCapacity": "-28.25"
+        },
+        {
+          "observationTime": "2026/10/26 20:00:00",
+          "waterCapacity": "50,471",
+          "waterRate": "56.1",
+          "inflow": "31.97",
+          "powerDischarge": "2.47",
+          "damDischarge": "0.00",
+          "totalDischarge": "2.47",
+          "adjustmentCapacity": "-29.50"
+        },
+        {
+          "observationTime": "2026/10/26 19:00:00",
+          "waterCapacity": "50,380",
+          "waterRate": "56.0",
+          "inflow": "34.48",
+          "powerDischarge": "2.47",
+          "damDischarge": "0.00",
+          "totalDischarge": "2.47",
+          "adjustmentCapacity": "-32.01"
+        },
+        {
+          "observationTime": "2026/10/26 18:00:00",
+          "waterCapacity": "50,267",
+          "waterRate": "55.9",
+          "inflow": "33.22",
+          "powerDischarge": "2.47",
+          "damDischarge": "0.00",
+          "totalDischarge": "2.47",
+          "adjustmentCapacity": "-30.75"
+        },
+        {
+          "observationTime": "2026/10/26 17:00:00",
+          "waterCapacity": "50,154",
+          "waterRate": "55.7",
+          "inflow": "35.73",
+          "powerDischarge": "2.47",
+          "damDischarge": "0.00",
+          "totalDischarge": "2.47",
+          "adjustmentCapacity": "-33.26"
+        },
+        {
+          "observationTime": "2026/10/26 16:00:00",
+          "waterCapacity": "50,019",
+          "waterRate": "55.6",
+          "inflow": "33.85",
+          "powerDischarge": "2.47",
+          "damDischarge": "0.00",
+          "totalDischarge": "2.47",
+          "adjustmentCapacity": "-31.38"
+        },
+        {
+          "observationTime": "2026/10/26 15:00:00",
+          "waterCapacity": "49,906",
+          "waterRate": "55.5",
+          "inflow": "35.73",
+          "powerDischarge": "2.48",
+          "damDischarge": "0.00",
+          "totalDischarge": "2.48",
+          "adjustmentCapacity": "-33.25"
+        },
+        {
+          "observationTime": "2026/10/26 14:00:00",
+          "waterCapacity": "49,793",
+          "waterRate": "55.3",
+          "inflow": "31.34",
+          "powerDischarge": "2.48",
+          "damDischarge": "0.00",
+          "totalDischarge": "2.48",
+          "adjustmentCapacity": "-28.86"
+        },
+        {
+          "observationTime": "2026/10/26 13:00:00",
+          "waterCapacity": "49,703",
+          "waterRate": "55.2",
+          "inflow": "30.08",
+          "powerDischarge": "2.47",
+          "damDischarge": "0.00",
+          "totalDischarge": "2.47",
+          "adjustmentCapacity": "-27.61"
+        }
+      ],
+      "statusChart": {
+        "inflowPerSec": "32.51",
+        "inflowPerSecBefore1hour": "31.95",
+        "waterCapacityPerSec": "50,902",
+        "waterCapacityBefore1hour": "115",
+        "waterRatePerSec": "56.6",
+        "waterRatePerSecBefore1hour": "0.2",
+        "dischargePerSec": "2.44",
+        "dischargePerSecBefore1hour": "2.43",
+        "adjustmentCapacityPerSec": "-30.07",
+        "waterCapacityUpOrDown": "0"
+      }
+    },
+    {
+      "officeCD": "21289",
+      "observationCD": "6",
+      "observationName": "下久保ダム",
+      "discharge": "false",
+      "dataList": [
+        {
+          "observationTime": "2026/10/27 00:00:00",
+          "waterCapacity": "78,288",
+          "waterRate": "65.2",
+          "inflow": "9.88",
+          "powerDischarge": "11.79",
+          "damDischarge": "0.00",
+          "totalDischarge": "11.79",
+          "adjustmentCapacity": "0.00"
+        },
+        {
+          "observationTime": "2026/10/26 23:00:00",
+          "waterCapacity": "78,288",
+          "waterRate": "65.2",
+          "inflow": "7.32",
+          "powerDischarge": "11.79",
+          "damDischarge": "0.00",
+          "totalDischarge": "11.79",
+          "adjustmentCapacity": "6.39"
+        },
+        {
+          "observationTime": "2026/10/26 22:00:00",
+          "waterCapacity": "78,311",
+          "waterRate": "65.3",
+          "inflow": "5.41",
+          "powerDischarge": "11.78",
+          "damDischarge": "0.00",
+          "totalDischarge": "11.78",
+          "adjustmentCapacity": "6.39"
+        },
+        {
+          "observationTime": "2026/10/26 21:00:00",
+          "waterCapacity": "78,334",
+          "waterRate": "65.3",
+          "inflow": "5.41",
+          "powerDischarge": "11.78",
+          "damDischarge": "0.00",
+          "totalDischarge": "11.78",
+          "adjustmentCapacity": "6.39"
+        },
+        {
+          "observationTime": "2026/10/26 20:00:00",
+          "waterCapacity": "78,357",
+          "waterRate": "65.3",
+          "inflow": "5.41",
+          "powerDischarge": "11.78",
+          "damDischarge": "0.00",
+          "totalDischarge": "11.78",
+          "adjustmentCapacity": "6.39"
+        },
+        {
+          "observationTime": "2026/10/26 19:00:00",
+          "waterCapacity": "78,380",
+          "waterRate": "65.3",
+          "inflow": "9.23",
+          "powerDischarge": "11.78",
+          "damDischarge": "0.00",
+          "totalDischarge": "11.78",
+          "adjustmentCapacity": "0.00"
+        },
+        {
+          "observationTime": "2026/10/26 18:00:00",
+          "waterCapacity": "78,380",
+          "waterRate": "65.3",
+          "inflow": "7.96",
+          "powerDischarge": "11.78",
+          "damDischarge": "0.00",
+          "totalDischarge": "11.78",
+          "adjustmentCapacity": "6.39"
+        },
+        {
+          "observationTime": "2026/10/26 17:00:00",
+          "waterCapacity": "78,403",
+          "waterRate": "65.3",
+          "inflow": "5.41",
+          "powerDischarge": "11.78",
+          "damDischarge": "0.00",
+          "totalDischarge": "11.78",
+          "adjustmentCapacity": "6.39"
+        },
+        {
+          "observationTime": "2026/10/26 16:00:00",
+          "waterCapacity": "78,426",
+          "waterRate": "65.4",
+          "inflow": "5.41",
+          "powerDischarge": "11.78",
+          "damDischarge": "0.00",
+          "totalDischarge": "11.78",
+          "adjustmentCapacity": "6.39"
+        },
+        {
+          "observationTime": "2026/10/26 15:00:00",
+          "waterCapacity": "78,449",
+          "waterRate": "65.4",
+          "inflow": "5.41",
+          "powerDischarge": "11.78",
+          "damDischarge": "0.00",
+          "totalDischarge": "11.78",
+          "adjustmentCapacity": "6.39"
+        },
+        {
+          "observationTime": "2026/10/26 14:00:00",
+          "waterCapacity": "78,472",
+          "waterRate": "65.4",
+          "inflow": "5.41",
+          "powerDischarge": "11.78",
+          "damDischarge": "0.00",
+          "totalDischarge": "11.78",
+          "adjustmentCapacity": "6.39"
+        },
+        {
+          "observationTime": "2026/10/26 13:00:00",
+          "waterCapacity": "78,495",
+          "waterRate": "65.4",
+          "inflow": "7.96",
+          "powerDischarge": "11.78",
+          "damDischarge": "0.00",
+          "totalDischarge": "11.78",
+          "adjustmentCapacity": "6.39"
+        }
+      ],
+      "statusChart": {
+        "inflowPerSec": "9.88",
+        "inflowPerSecBefore1hour": "7.32",
+        "waterCapacityPerSec": "78,288",
+        "waterCapacityBefore1hour": "0",
+        "waterRatePerSec": "65.2",
+        "waterRatePerSecBefore1hour": "0.0",
+        "dischargePerSec": "11.79",
+        "dischargePerSecBefore1hour": "11.79",
+        "adjustmentCapacityPerSec": "+0.00",
+        "waterCapacityUpOrDown": "0"
+      }
+    },
+    {
+      "officeCD": "21289",
+      "observationCD": "7",
+      "observationName": "草木ダム",
+      "discharge": "true",
+      "dataList": [
+        {
+          "observationTime": "2026/10/27 00:00:00",
+          "waterCapacity": "49,635",
+          "waterRate": "98.3",
+          "inflow": "8.86",
+          "powerDischarge": "0.33",
+          "damDischarge": "10.84",
+          "totalDischarge": "11.17",
+          "adjustmentCapacity": "2.31"
+        },
+        {
+          "observationTime": "2026/10/26 23:00:00",
+          "waterCapacity": "49,635",
+          "waterRate": "98.3",
+          "inflow": "4.24",
+          "powerDischarge": "0.33",
+          "damDischarge": "10.84",
+          "totalDischarge": "11.17",
+          "adjustmentCapacity": "6.93"
+        },
+        {
+          "observationTime": "2026/10/26 22:00:00",
+          "waterCapacity": "49,669",
+          "waterRate": "98.4",
+          "inflow": "15.37",
+          "powerDischarge": "0.33",
+          "damDischarge": "10.84",
+          "totalDischarge": "11.17",
+          "adjustmentCapacity": "-4.20"
+        },
+        {
+          "observationTime": "2026/10/26 21:00:00",
+          "waterCapacity": "49,652",
+          "waterRate": "98.3",
+          "inflow": "17.17",
+          "powerDischarge": "0.33",
+          "damDischarge": "7.60",
+          "totalDischarge": "7.93",
+          "adjustmentCapacity": "-9.24"
+        },
+        {
+          "observationTime": "2026/10/26 20:00:00",
+          "waterCapacity": "49,619",
+          "waterRate": "98.3",
+          "inflow": "17.17",
+          "powerDischarge": "0.33",
+          "damDischarge": "7.60",
+          "totalDischarge": "7.93",
+          "adjustmentCapacity": "-9.24"
+        },
+        {
+          "observationTime": "2026/10/26 19:00:00",
+          "waterCapacity": "49,585",
+          "waterRate": "98.2",
+          "inflow": "17.17",
+          "powerDischarge": "0.33",
+          "damDischarge": "7.60",
+          "totalDischarge": "7.93",
+          "adjustmentCapacity": "-9.24"
+        },
+        {
+          "observationTime": "2026/10/26 18:00:00",
+          "waterCapacity": "49,552",
+          "waterRate": "98.1",
+          "inflow": "17.16",
+          "powerDischarge": "0.33",
+          "damDischarge": "7.59",
+          "totalDischarge": "7.92",
+          "adjustmentCapacity": "-9.24"
+        },
+        {
+          "observationTime": "2026/10/26 17:00:00",
+          "waterCapacity": "49,519",
+          "waterRate": "98.1",
+          "inflow": "17.32",
+          "powerDischarge": "0.33",
+          "damDischarge": "7.59",
+          "totalDischarge": "7.92",
+          "adjustmentCapacity": "-9.40"
+        },
+        {
+          "observationTime": "2026/10/26 16:00:00",
+          "waterCapacity": "49,486",
+          "waterRate": "98.0",
+          "inflow": "15.17",
+          "powerDischarge": "0.33",
+          "damDischarge": "9.76",
+          "totalDischarge": "10.09",
+          "adjustmentCapacity": "-5.08"
+        },
+        {
+          "observationTime": "2026/10/26 15:00:00",
+          "waterCapacity": "49,469",
+          "waterRate": "98.0",
+          "inflow": "18.87",
+          "powerDischarge": "0.33",
+          "damDischarge": "9.76",
+          "totalDischarge": "10.09",
+          "adjustmentCapacity": "-8.78"
+        },
+        {
+          "observationTime": "2026/10/26 14:00:00",
+          "waterCapacity": "49,436",
+          "waterRate": "97.9",
+          "inflow": "10.00",
+          "powerDischarge": "0.33",
+          "damDischarge": "9.75",
+          "totalDischarge": "10.08",
+          "adjustmentCapacity": "0.08"
+        },
+        {
+          "observationTime": "2026/10/26 13:00:00",
+          "waterCapacity": "49,436",
+          "waterRate": "97.9",
+          "inflow": "9.00",
+          "powerDischarge": "0.33",
+          "damDischarge": "8.67",
+          "totalDischarge": "9.00",
+          "adjustmentCapacity": "0.00"
+        }
+      ],
+      "statusChart": {
+        "inflowPerSec": "8.86",
+        "inflowPerSecBefore1hour": "4.24",
+        "waterCapacityPerSec": "49,635",
+        "waterCapacityBefore1hour": "0",
+        "waterRatePerSec": "98.3",
+        "waterRatePerSecBefore1hour": "0.0",
+        "dischargePerSec": "11.17",
+        "dischargePerSecBefore1hour": "11.17",
+        "adjustmentCapacityPerSec": "+2.31",
+        "waterCapacityUpOrDown": "0"
+      }
+    },
+    {
+      "officeCD": "21259",
+      "observationCD": "1",
+      "observationName": "渡良瀬貯水池",
+      "discharge": "false",
+      "dataList": [
+        {
+          "observationTime": "2026/10/27 00:00:00",
+          "waterCapacity": "26,400",
+          "waterRate": "100.0",
+          "inflow": "休止中",
+          "powerDischarge": "-",
+          "damDischarge": "-",
+          "totalDischarge": "休止中",
+          "adjustmentCapacity": "0.00"
+        },
+        {
+          "observationTime": "2026/10/26 23:00:00",
+          "waterCapacity": "26,400",
+          "waterRate": "100.0",
+          "inflow": "休止中",
+          "powerDischarge": "-",
+          "damDischarge": "-",
+          "totalDischarge": "休止中",
+          "adjustmentCapacity": "0.00"
+        },
+        {
+          "observationTime": "2026/10/26 22:00:00",
+          "waterCapacity": "26,400",
+          "waterRate": "100.0",
+          "inflow": "休止中",
+          "powerDischarge": "-",
+          "damDischarge": "-",
+          "totalDischarge": "休止中",
+          "adjustmentCapacity": "0.00"
+        },
+        {
+          "observationTime": "2026/10/26 21:00:00",
+          "waterCapacity": "26,400",
+          "waterRate": "100.0",
+          "inflow": "休止中",
+          "powerDischarge": "-",
+          "damDischarge": "-",
+          "totalDischarge": "休止中",
+          "adjustmentCapacity": "0.00"
+        },
+        {
+          "observationTime": "2026/10/26 20:00:00",
+          "waterCapacity": "26,400",
+          "waterRate": "100.0",
+          "inflow": "休止中",
+          "powerDischarge": "-",
+          "damDischarge": "-",
+          "totalDischarge": "休止中",
+          "adjustmentCapacity": "0.00"
+        },
+        {
+          "observationTime": "2026/10/26 19:00:00",
+          "waterCapacity": "26,400",
+          "waterRate": "100.0",
+          "inflow": "休止中",
+          "powerDischarge": "-",
+          "damDischarge": "-",
+          "totalDischarge": "休止中",
+          "adjustmentCapacity": "0.00"
+        },
+        {
+          "observationTime": "2026/10/26 18:00:00",
+          "waterCapacity": "26,400",
+          "waterRate": "100.0",
+          "inflow": "休止中",
+          "powerDischarge": "-",
+          "damDischarge": "-",
+          "totalDischarge": "休止中",
+          "adjustmentCapacity": "0.00"
+        },
+        {
+          "observationTime": "2026/10/26 17:00:00",
+          "waterCapacity": "26,400",
+          "waterRate": "100.0",
+          "inflow": "休止中",
+          "powerDischarge": "-",
+          "damDischarge": "-",
+          "totalDischarge": "休止中",
+          "adjustmentCapacity": "0.00"
+        },
+        {
+          "observationTime": "2026/10/26 16:00:00",
+          "waterCapacity": "26,400",
+          "waterRate": "100.0",
+          "inflow": "休止中",
+          "powerDischarge": "-",
+          "damDischarge": "-",
+          "totalDischarge": "休止中",
+          "adjustmentCapacity": "0.00"
+        },
+        {
+          "observationTime": "2026/10/26 15:00:00",
+          "waterCapacity": "26,400",
+          "waterRate": "100.0",
+          "inflow": "休止中",
+          "powerDischarge": "-",
+          "damDischarge": "-",
+          "totalDischarge": "休止中",
+          "adjustmentCapacity": "0.00"
+        },
+        {
+          "observationTime": "2026/10/26 14:00:00",
+          "waterCapacity": "26,400",
+          "waterRate": "100.0",
+          "inflow": "休止中",
+          "powerDischarge": "-",
+          "damDischarge": "-",
+          "totalDischarge": "休止中",
+          "adjustmentCapacity": "0.00"
+        },
+        {
+          "observationTime": "2026/10/26 13:00:00",
+          "waterCapacity": "26,400",
+          "waterRate": "100.0",
+          "inflow": "休止中",
+          "powerDischarge": "-",
+          "damDischarge": "-",
+          "totalDischarge": "休止中",
+          "adjustmentCapacity": "0.00"
+        }
+      ],
+      "statusChart": {
+        "inflowPerSec": "休止中",
+        "inflowPerSecBefore1hour": "休止中",
+        "waterCapacityPerSec": "26,400",
+        "waterCapacityBefore1hour": "0",
+        "waterRatePerSec": "100.0",
+        "waterRatePerSecBefore1hour": "0.0",
+        "dischargePerSec": "休止中",
+        "dischargePerSecBefore1hour": "休止中",
+        "adjustmentCapacityPerSec": "+0.00",
+        "waterCapacityUpOrDown": "0"
+      }
+    },
+    {
+      "officeCD": "21289",
+      "observationCD": "29",
+      "observationName": "９ダム",
+      "discharge": "true",
+      "dataList": [
+        {
+          "observationTime": "2026/10/27 00:00:00",
+          "waterCapacity": "425,252",
+          "waterRate": "77.1",
+          "inflow": "98.17",
+          "powerDischarge": "28.26",
+          "damDischarge": "24.31",
+          "totalDischarge": "52.57",
+          "adjustmentCapacity": "-52.78"
+        },
+        {
+          "observationTime": "2026/10/26 23:00:00",
+          "waterCapacity": "425,062",
+          "waterRate": "77.1",
+          "inflow": "70.44",
+          "powerDischarge": "28.26",
+          "damDischarge": "24.31",
+          "totalDischarge": "52.57",
+          "adjustmentCapacity": "-26.67"
+        },
+        {
+          "observationTime": "2026/10/26 22:00:00",
+          "waterCapacity": "424,966",
+          "waterRate": "77.0",
+          "inflow": "107.88",
+          "powerDischarge": "28.27",
+          "damDischarge": "24.31",
+          "totalDischarge": "52.58",
+          "adjustmentCapacity": "-44.72"
+        },
+        {
+          "observationTime": "2026/10/26 21:00:00",
+          "waterCapacity": "424,805",
+          "waterRate": "77.0",
+          "inflow": "109.03",
+          "powerDischarge": "28.27",
+          "damDischarge": "21.07",
+          "totalDischarge": "49.34",
+          "adjustmentCapacity": "-53.61"
+        },
+        {
+          "observationTime": "2026/10/26 20:00:00",
+          "waterCapacity": "424,612",
+          "waterRate": "77.0",
+          "inflow": "98.95",
+          "powerDischarge": "28.27",
+          "damDischarge": "21.07",
+          "totalDischarge": "49.34",
+          "adjustmentCapacity": "-59.44"
+        },
+        {
+          "observationTime": "2026/10/26 19:00:00",
+          "waterCapacity": "424,398",
+          "waterRate": "76.9",
+          "inflow": "100.12",
+          "powerDischarge": "28.27",
+          "damDischarge": "21.07",
+          "totalDischarge": "49.34",
+          "adjustmentCapacity": "-70.83"
+        },
+        {
+          "observationTime": "2026/10/26 18:00:00",
+          "waterCapacity": "424,143",
+          "waterRate": "76.9",
+          "inflow": "156.02",
+          "powerDischarge": "38.33",
+          "damDischarge": "21.06",
+          "totalDischarge": "59.39",
+          "adjustmentCapacity": "-72.22"
+        },
+        {
+          "observationTime": "2026/10/26 17:00:00",
+          "waterCapacity": "423,883",
+          "waterRate": "76.8",
+          "inflow": "114.92",
+          "powerDischarge": "32.73",
+          "damDischarge": "21.07",
+          "totalDischarge": "53.80",
+          "adjustmentCapacity": "-69.72"
+        },
+        {
+          "observationTime": "2026/10/26 16:00:00",
+          "waterCapacity": "423,632",
+          "waterRate": "76.8",
+          "inflow": "79.30",
+          "powerDischarge": "28.20",
+          "damDischarge": "23.24",
+          "totalDischarge": "51.44",
+          "adjustmentCapacity": "-60.00"
+        },
+        {
+          "observationTime": "2026/10/26 15:00:00",
+          "waterCapacity": "423,416",
+          "waterRate": "76.8",
+          "inflow": "112.21",
+          "powerDischarge": "28.20",
+          "damDischarge": "23.24",
+          "totalDischarge": "51.44",
+          "adjustmentCapacity": "-45.83"
+        },
+        {
+          "observationTime": "2026/10/26 14:00:00",
+          "waterCapacity": "423,251",
+          "waterRate": "76.7",
+          "inflow": "99.27",
+          "powerDischarge": "28.52",
+          "damDischarge": "23.23",
+          "totalDischarge": "51.75",
+          "adjustmentCapacity": "-46.94"
+        },
+        {
+          "observationTime": "2026/10/26 13:00:00",
+          "waterCapacity": "423,082",
+          "waterRate": "76.7",
+          "inflow": "92.25",
+          "powerDischarge": "28.27",
+          "damDischarge": "22.15",
+          "totalDischarge": "50.42",
+          "adjustmentCapacity": "-36.39"
+        }
+      ],
+      "statusChart": {
+        "inflowPerSec": null,
+        "inflowPerSecBefore1hour": "",
+        "waterCapacityPerSec": "",
+        "waterCapacityBefore1hour": "",
+        "waterRatePerSec": "",
+        "waterRatePerSecBefore1hour": "",
+        "dischargePerSec": "",
+        "dischargePerSecBefore1hour": "",
+        "adjustmentCapacityPerSec": "-",
+        "waterCapacityUpOrDown": ""
+      }
+    }
+  ]
+}

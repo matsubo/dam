@@ -40,14 +40,14 @@
 // 洪水 30) and reads full on every flood. 貯水容量 − 堆砂 does not tie either:
 // the table's 149 at 常時満水位 is 2 千m³ over 堆砂 + 利水 = 147, so its zero is
 // not the master's. 大門's volume stays null.
+//
+// The table's station number is not used, so the published name is the key.
+// A row blank (未入力) or marked in every value cell is provider-marked empty.
 // Priority 308.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, numberIn } from '../ingest/cells.ts';
+import { ingestTask, type Log } from '../ingest/run.ts';
+import type { BoundDam, Entry, Reading } from '../ingest/types.ts';
 
 const DATA_URL =
   process.env.NARA_KASEN_DAM_URL ??
@@ -68,6 +68,8 @@ export interface ParsedRow {
   emptyVolumeM3: number | null;
   inflowM3s: number | null;
   outflowM3s: number | null;
+  /** Every value cell is a legend mark (***, ---, ###) or blank (未入力). */
+  allMarked: boolean;
 }
 
 /**
@@ -94,10 +96,14 @@ function cleanCell(raw: string): string {
     .trim();
 }
 
-/** A cleaned value cell as a number; the ***, ---, ### markers and blank → null. */
+/** A cleaned value cell; the legend's ***=欠測, ---=無効, ###=データ異常, blank=未入力 are marks. */
+function parseCell(s: string): Cell {
+  if (/^-?\d+(?:\.\d+)?$/.test(s)) return Number(s);
+  return cell(null, s === '' || s === '***' || s === '---' || s === '###');
+}
+
 function parseNum(s: string): number | null {
-  if (!/^-?\d+(?:\.\d+)?$/.test(s)) return null;
-  return Number(s);
+  return numberIn(parseCell(s));
 }
 
 /** "YYYY MM/DD HH:MM" (JST) → UTC. */
@@ -135,15 +141,8 @@ export function parseNaraTable(html: string): ParsedRow[] {
       emptyVolumeM3: thousandM3(cells[7] ?? ''),
       inflowM3s: parseNum(cells[8] ?? ''),
       outflowM3s: parseNum(cells[9] ?? ''),
+      allMarked: cellState(cells.slice(5).map(parseCell)) === 'empty',
     };
-    if (
-      row.waterLevelM === null &&
-      row.storedVolumeM3 === null &&
-      row.inflowM3s === null &&
-      row.outflowM3s === null
-    ) {
-      continue;
-    }
     rows.push(row);
   }
   return rows;
@@ -171,91 +170,65 @@ export function usableVolumeM3(
   return Math.max(0, activeCapacityM3 - empty);
 }
 
-// --- DB helpers -------------------------------------------------------------
-
-function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/貯水池$/, '')
-    .trim();
-}
-
-/** Best master dam for a feed stem; the exact published name ranks first. */
-export function chooseMaster(
-  stem: string,
-  masters: BindableMaster[],
-  naraName: string,
-): bigint | null {
-  // A row already stamped with this station keeps it; names alone cannot
-  // separate same-name dams (#57).
-  const stamped = stampedMaster(masters, naraName);
-  if (stamped) return stamped.id;
-  let best: { m: BindableMaster; rank: number } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (m.name === naraName) rank = 0;
-    else if (mStem === stem) rank = 1;
-    else if (m.name === `${stem}ダム`) rank = 2;
-    else if (mStem.startsWith(stem)) rank = 3;
-    else if (mStem.includes(stem)) rank = 4;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-      best = { m, rank };
-    }
+/**
+ * One row's reading once its dam is known: the volume needs the master's
+ * 有効貯水容量, and a printed volume that no longer adds up is logged.
+ */
+export function naraReading(p: ParsedRow, dam: BoundDam | null, log: Log): Reading {
+  if (p.allMarked) return { state: 'empty', mark: '***/---/###/blank in every value cell' };
+  if (
+    p.waterLevelM === null &&
+    p.storedVolumeM3 === null &&
+    p.inflowM3s === null &&
+    p.outflowM3s === null
+  ) {
+    return { state: 'unreadable', why: 'no value cell parsed' };
   }
-  return best?.m.id ?? null;
-}
-
-interface DamMatch {
-  naraName: string;
-  damId: bigint;
-  activeCapacityM3: number | null;
-}
-
-async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<(BindableMaster & { activeCapacityM3: number | null })[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp,
-           active_capacity_m3::float8 AS "activeCapacityM3"
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const out: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing. The
-  // table's station number is not used, so the published name keyed by
-  // prefecture stays the stable identity.
-  const universe: UniverseRow[] = [];
-
-  for (const r of rows) {
-    const stem = normalizeName(r.naraName);
-    if (!stem) continue;
-
-    const damId = chooseMaster(stem, masters, r.naraName);
-    universe.push({
-      externalId: r.naraName,
-      name: r.naraName,
-      prefCode: PREF_CODE,
-      resolvedDamId: damId,
-    });
-    const master = masters.find((m) => m.id === damId);
-    if (!damId || !master) {
-      log(`${SOURCE_ID}: no master match for "${r.naraName}"`);
-      continue;
-    }
-    out.push({ naraName: r.naraName, damId, activeCapacityM3: master.activeCapacityM3 });
-    await bindExternalId(damId, SOURCE_ID, r.naraName);
+  const activeCapacityM3 = dam?.activeCapacityM3 ?? null;
+  const volume = usableVolumeM3(p, activeCapacityM3);
+  const top = SURCHARGE_TOTAL_M3[p.naraName];
+  if (
+    dam &&
+    volume === null &&
+    top !== undefined &&
+    p.storedVolumeM3 !== null &&
+    p.emptyVolumeM3 !== null
+  ) {
+    // A printed volume was dropped: the table stopped adding up to the
+    // station's 総貯水容量, or the master lost 有効貯水容量.
+    log(
+      `${SOURCE_ID}: volume not stored for "${p.naraName}": ` +
+        `貯水容量+空容量=${p.storedVolumeM3 + p.emptyVolumeM3} m³ (expected ${top}), ` +
+        `master active=${activeCapacityM3 ?? 'null'}`,
+    );
   }
+  return {
+    state: 'values',
+    observations: [
+      {
+        observedAt: p.observedAt,
+        storageVolumeM3: volume,
+        inflowM3s: p.inflowM3s,
+        outflowM3s: p.outflowM3s,
+        waterLevelM: p.waterLevelM,
+      },
+    ],
+  };
+}
 
-  await recordUniverse(SOURCE_ID, universe);
-  return out;
+/** Every dam row of the table. */
+export function naraEntries(rows: ParsedRow[], log: Log): Entry[] {
+  return rows.map((p) => ({
+    key: p.naraName,
+    name: p.naraName,
+    pref: PREF_CODE,
+    reading: (dam: BoundDam | null) => naraReading(p, dam, log),
+  }));
 }
 
 // --- task -------------------------------------------------------------------
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
+export default ingestTask(SOURCE_ID, async (log) => {
   const r = await fetch(DATA_URL, {
     headers: {
       'user-agent':
@@ -264,57 +237,10 @@ const task: Task = async (_payload, helpers) => {
     },
     signal: AbortSignal.timeout(20_000),
   });
+  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status}`);
 
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
-  }
-
-  const raw = await r.arrayBuffer();
-  const html = new TextDecoder('shift_jis').decode(raw);
+  const html = new TextDecoder('shift_jis').decode(await r.arrayBuffer());
   const rows = parseNaraTable(html);
   log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
-
-  const matches = await matchMaster(rows, log);
-  const matchByName = new Map(matches.map((m) => [m.naraName, m]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const match = matchByName.get(p.naraName);
-    if (!match) continue;
-    const volume = usableVolumeM3(p, match.activeCapacityM3);
-    const top = SURCHARGE_TOTAL_M3[p.naraName];
-    if (
-      volume === null &&
-      top !== undefined &&
-      p.storedVolumeM3 !== null &&
-      p.emptyVolumeM3 !== null
-    ) {
-      // A printed volume was dropped: the table stopped adding up to the
-      // station's 総貯水容量, or the master lost 有効貯水容量.
-      log(
-        `${SOURCE_ID}: volume not stored for "${p.naraName}": ` +
-          `貯水容量+空容量=${p.storedVolumeM3 + p.emptyVolumeM3} m³ (expected ${top}), ` +
-          `master active=${match.activeCapacityM3 ?? 'null'}`,
-      );
-    }
-    inputs.push({
-      observedAt: p.observedAt,
-      damId: match.damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: volume,
-      storageRate: null,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+  return { entries: naraEntries(rows, log) };
+});

@@ -1,5 +1,8 @@
 // apps/worker/src/tasks/ingest_yonezawa_heiya.test.ts
 //
+// Fixture → universe entry, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
+//
 // Fixtures are UTF-8 captures of 米沢平野土地改良区「用水状況」 taken
 // 2026-09-28 (a Monday, the page's update day): pages/150 (the current
 // 水窪ダム用水状況 slider, 2026.9.28) and pages/169 (the 令和８年度 archive,
@@ -9,12 +12,11 @@
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { BindableMaster } from '@dam/core/dam_binding';
 import {
-  chooseMaster,
   findArchiveUrl,
   parseDamName,
   parseYonezawaReadings,
+  yonezawaEntry,
 } from './ingest_yonezawa_heiya.ts';
 
 const DIR = join(import.meta.dir, '..', '..', '..', '..', 'tests/fixtures/yonezawa_heiya');
@@ -66,21 +68,33 @@ describe('findArchiveUrl', () => {
   });
 });
 
-describe('chooseMaster', () => {
-  // Real prod rows: 山形 (06) has one 水窪; 静岡 (22) has J-POWER's 水窪 (9955),
-  // which the task never sees because it loads pref 06 only.
-  const masters: BindableMaster[] = [
-    { id: 9135n, name: '水窪', completedYear: 1975 },
-    { id: 9136n, name: '綱木川', completedYear: 1999 },
-  ];
-
-  test('strips ダム and binds the master of the same name', () => {
-    expect(chooseMaster('水窪ダム', masters)).toBe(9135n);
+describe('yonezawaEntry', () => {
+  test('one dam in 山形, bound by its exact name (静岡 has another 水窪)', () => {
+    const e = yonezawaEntry(current, archive);
+    expect(e).toMatchObject({
+      key: '水窪ダム',
+      name: '水窪ダム',
+      pref: '06',
+      bind: { exact: true },
+    });
   });
 
-  test('keeps an existing stamp over the name', () => {
-    expect(
-      chooseMaster('水窪ダム', [...masters, { id: 1n, name: '別名', stamp: '水窪ダム' }]),
-    ).toBe(1n);
+  test('merges the current page and the archive, one reading per date', () => {
+    const r = yonezawaEntry(current, archive).reading;
+    if (typeof r === 'function' || r.state !== 'values') throw new Error('no values');
+    // 2026.9.28 is on both pages.
+    expect(r.observations).toHaveLength(26);
+  });
+
+  test('an archive that could not be read still leaves the current value', () => {
+    const r = yonezawaEntry(current, null).reading;
+    if (typeof r === 'function' || r.state !== 'values') throw new Error('no values');
+    expect(r.observations).toHaveLength(1);
+  });
+
+  test('no caption is unreadable; no heading fails the scan', () => {
+    const r = yonezawaEntry(current.replace(/現在、貯水量は/g, ''), null).reading;
+    expect(typeof r !== 'function' && r.state).toBe('unreadable');
+    expect(() => yonezawaEntry('<p>準備中</p>', null)).toThrow('heading');
   });
 });

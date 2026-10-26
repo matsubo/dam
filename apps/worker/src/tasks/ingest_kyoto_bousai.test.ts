@@ -1,5 +1,19 @@
+// apps/worker/src/tasks/ingest_kyoto_bousai.test.ts
+//
+// Sample HTML → universe entries, no database: binding and writing belong to
+// the ingest run (apps/worker/src/ingest/run.test.ts).
+
 import { describe, expect, test } from 'bun:test';
-import { parseKyotoTable, parseKyotoTimestamp } from './ingest_kyoto_bousai.ts';
+import type { Entry, Observed } from '../ingest/types.ts';
+import { kyotoEntries, parseKyotoTable, parseKyotoTimestamp } from './ingest_kyoto_bousai.ts';
+
+function observation(e: Entry | undefined): Observed | undefined {
+  const r = e?.reading;
+  if (!r || typeof r === 'function' || r.state !== 'values') throw new Error('no values');
+  return r.observations[0];
+}
+
+const entries = (html: string) => kyotoEntries(parseKyotoTable(html));
 
 describe('parseKyotoTimestamp', () => {
   test('parses "YYYY MM/DD HH:MM" (JST) → UTC', () => {
@@ -95,45 +109,57 @@ const SAMPLE_HTML = `
 </table>
 `;
 
-describe('parseKyotoTable', () => {
-  test('parses all rows with any measurement data (瀬田洗堰1 included, unmatched at DB stage)', () => {
-    // 瀬田洗堰1 has non-null inflow/outflow so it passes the all-null filter.
-    // It will fail master matching (not a dam) and be silently skipped then.
-    const rows = parseKyotoTable(SAMPLE_HTML);
-    expect(rows).toHaveLength(4);
-    expect(rows.map((r) => r.kyotoName)).toEqual([
-      '畑川ダム',
-      '天ヶ瀬ダム',
-      '瀬田洗堰1',
-      '大野ダム',
+describe('kyotoEntries', () => {
+  test('lists every row: 瀬田洗堰1 never bound, 天ヶ瀬 pinned to 天ヶ瀬（再）', () => {
+    const list = entries(SAMPLE_HTML);
+    // 天ヶ瀬's stem ties 天ヶ瀬（再）, 天ヶ瀬（元） and a bare 天ヶ瀬 row (no NDI).
+    expect(list.map((e) => [e.key, e.bind])).toEqual([
+      ['畑川ダム', undefined],
+      ['天ヶ瀬ダム', { ndi: '1495' }],
+      ['瀬田洗堰1', 'never'],
+      ['大野ダム', undefined],
     ]);
+    // 布目ダム sits in Nara (29) but appears in this feed.
+    for (const e of list) expect(e.pref).toEqual(['26', '29']);
   });
 
   test('畑川ダム: all fields parsed correctly', () => {
-    const r = parseKyotoTable(SAMPLE_HTML).find((x) => x.kyotoName === '畑川ダム');
-    expect(r).toBeDefined();
-    expect(r?.observedAt.toISOString()).toBe('2026-06-05T12:20:00.000Z');
-    expect(r?.waterLevelM).toBeCloseTo(158.28);
-    expect(r?.storageVolumeM3).toBeCloseTo(844_000);
-    expect(r?.inflowM3s).toBeCloseTo(0.43);
-    expect(r?.outflowM3s).toBeCloseTo(0.43);
+    const o = observation(entries(SAMPLE_HTML).find((x) => x.key === '畑川ダム'));
+    expect(o?.observedAt.toISOString()).toBe('2026-06-05T12:20:00.000Z');
+    expect(o?.waterLevelM).toBeCloseTo(158.28);
+    expect(o?.storageVolumeM3).toBeCloseTo(844_000);
+    expect(o?.inflowM3s).toBeCloseTo(0.43);
+    expect(o?.outflowM3s).toBeCloseTo(0.43);
   });
 
   test('storageVolumeM3 = ×10³m³ × 1000 (天ヶ瀬ダム: 15196×1000)', () => {
-    const r = parseKyotoTable(SAMPLE_HTML).find((x) => x.kyotoName === '天ヶ瀬ダム');
-    expect(r?.storageVolumeM3).toBeCloseTo(15_196_000);
-    expect(r?.inflowM3s).toBeCloseTo(696.52);
-    expect(r?.outflowM3s).toBeCloseTo(726.26);
+    const o = observation(entries(SAMPLE_HTML).find((x) => x.key === '天ヶ瀬ダム'));
+    expect(o?.storageVolumeM3).toBeCloseTo(15_196_000);
+    expect(o?.inflowM3s).toBeCloseTo(696.52);
+    expect(o?.outflowM3s).toBeCloseTo(726.26);
   });
 
   test('大野ダム: timestamps with JST→UTC', () => {
-    const r = parseKyotoTable(SAMPLE_HTML).find((x) => x.kyotoName === '大野ダム');
-    expect(r?.observedAt.toISOString()).toBe('2026-06-05T12:20:00.000Z');
-    expect(r?.waterLevelM).toBeCloseTo(155.43);
+    const o = observation(entries(SAMPLE_HTML).find((x) => x.key === '大野ダム'));
+    expect(o?.observedAt.toISOString()).toBe('2026-06-05T12:20:00.000Z');
+    expect(o?.waterLevelM).toBeCloseTo(155.43);
   });
 
-  test('returns empty array for empty HTML', () => {
-    expect(parseKyotoTable('')).toHaveLength(0);
-    expect(parseKyotoTable('<table></table>')).toHaveLength(0);
+  test('a row without a time, or with blank level and flows, is listed unreadable', () => {
+    const html = SAMPLE_HTML.replace('2026&nbsp;06/05&nbsp;21:10', '&nbsp;')
+      .replace('&rarr;&nbsp;&nbsp;&nbsp;&nbsp;218.29', '&nbsp;')
+      .replace('&rarr;&nbsp;&nbsp;&nbsp;&nbsp;716.10', '&nbsp;');
+    const states = entries(html).map((e) => (typeof e.reading === 'function' ? '' : e.reading));
+    expect(states).toEqual([
+      expect.objectContaining({ state: 'values' }),
+      { state: 'unreadable', why: 'no 最新観測時刻' },
+      { state: 'unreadable', why: 'no 貯水位 or flow' },
+      expect.objectContaining({ state: 'values' }),
+    ]);
+  });
+
+  test('returns nothing for empty HTML', () => {
+    expect(entries('')).toHaveLength(0);
+    expect(entries('<table></table>')).toHaveLength(0);
   });
 });

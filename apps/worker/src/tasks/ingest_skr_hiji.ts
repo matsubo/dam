@@ -19,13 +19,16 @@
 //   [5] outflow m³/s
 //   [6] storage rate % (→ / 100 = ratio)
 //
+// The newest row carrying a storage or flow value is the reading; a table
+// whose every dated row is marked (欠測, 閉局…) in those columns is
+// provider-marked empty. A page pair per dam: one that fails to load leaves
+// that dam unreadable.
+//
 // Priority 303 (MLIT-managed dam). Cron hourly at :23.
 
-import { type BindableMaster, preferMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const BASE_URL =
   process.env.WWW1_RIVER_DAM_BASE ?? 'http://www1.river.go.jp/cgi-bin/DspDamData.exe';
@@ -45,18 +48,6 @@ const DAM_CONFIG: DamCfg[] = [
   { obsId: '1368080255010', name: '鹿野川ダム', prefCode: '38' },
 ];
 
-// --- types -------------------------------------------------------------------
-
-export interface ParsedRow {
-  obsId: string;
-  observedAt: Date;
-  rainfallMm: number | null;
-  storageVolumeM3: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
-  storageRate: number | null;
-}
-
 // --- parsing -----------------------------------------------------------------
 
 function stripTags(raw: string): string {
@@ -67,8 +58,11 @@ function stripTags(raw: string): string {
     .trim();
 }
 
-function parseNum(s: string): number | null {
-  const m = s.match(/-?\d+(?:\.\d+)?/);
+/** 欠測 / 閉局 / 未受信 / a dash run are the table's own "no value" marks. */
+function parseCell(s: string): Cell {
+  const t = s.trim();
+  if (/^(?:欠測|閉局|未受信|調整中|[-－―ー−*＊]+)$/.test(t)) return MARKED;
+  const m = t.match(/-?\d+(?:\.\d+)?/);
   if (!m) return null;
   const n = Number(m[0]);
   return Number.isFinite(n) ? n : null;
@@ -93,178 +87,81 @@ export function parseHijiTimestamp(date: string, time: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-export function parseHijiIframeHtml(obsId: string, html: string): ParsedRow | null {
-  const trMatches = Array.from(html.matchAll(/<TR[^>]*>([\s\S]*?)<\/TR>/gi));
-
-  for (const tr of trMatches) {
+/** The first (most recent) row carrying a stored value; rows run newest first. */
+export function hijiReading(html: string): Reading {
+  let marked = false;
+  for (const tr of html.matchAll(/<TR[^>]*>([\s\S]*?)<\/TR>/gi)) {
     const tds = Array.from((tr[1] ?? '').matchAll(/<TD[^>]*>([\s\S]*?)<\/TD>/gi)).map((m) =>
       stripTags(m[1] ?? ''),
     );
-
     if (tds.length < 7) continue;
 
     const observedAt = parseHijiTimestamp(tds[0] ?? '', tds[1] ?? '');
     if (!observedAt) continue;
 
-    const rainfallMm = parseNum(tds[2] ?? '');
-    const storageThousandM3 = parseNum(tds[3] ?? '');
-    const storageVolumeM3 = storageThousandM3 !== null ? storageThousandM3 * 1000 : null;
-    const inflowM3s = parseNum(tds[4] ?? '');
-    const outflowM3s = parseNum(tds[5] ?? '');
-    const ratePct = parseNum(tds[6] ?? '');
-    const storageRate = ratePct !== null ? Math.max(0, Math.min(1, ratePct / 100)) : null;
+    const rain = parseCell(tds[2] ?? '');
+    const storageThou = parseCell(tds[3] ?? '');
+    const inflow = parseCell(tds[4] ?? '');
+    const outflow = parseCell(tds[5] ?? '');
+    const ratePct = numberIn(parseCell(tds[6] ?? ''));
 
-    if (storageVolumeM3 === null && inflowM3s === null && outflowM3s === null) continue;
+    const state = cellState([storageThou, inflow, outflow]);
+    if (state === 'empty') marked = true;
+    if (state !== 'values') continue;
 
-    return { obsId, observedAt, rainfallMm, storageVolumeM3, inflowM3s, outflowM3s, storageRate };
+    const thou = numberIn(storageThou);
+    return {
+      state: 'values',
+      observations: [
+        {
+          observedAt,
+          rainfallMm: numberIn(rain),
+          storageVolumeM3: thou !== null ? thou * 1000 : null,
+          inflowM3s: numberIn(inflow),
+          outflowM3s: numberIn(outflow),
+          storageRate: ratePct !== null ? Math.max(0, Math.min(1, ratePct / 100)) : null,
+        },
+      ],
+    };
   }
+  return marked
+    ? { state: 'empty', mark: '欠測 in every stored column of every row' }
+    : { state: 'unreadable', why: 'no row with a stored value' };
+}
 
-  return null;
+/** The IFRAME the outer page embeds; its URL is dynamic per request. */
+export function hijiIframeUrl(outerHtml: string): string | null {
+  const m = outerHtml.match(/<IFRAME[^>]+src="(\/html\/frm\/DamFree10Data[^"]+)"/i);
+  return m ? `http://www1.river.go.jp${m[1]}` : null;
+}
+
+/** Both dams, each read from its own outer page and IFRAME once the run reaches it. */
+export function hijiEntries(fetchPage: (url: string) => Promise<string>): Entry[] {
+  return DAM_CONFIG.map((cfg) => ({
+    key: cfg.obsId,
+    name: cfg.name,
+    pref: cfg.prefCode,
+    reading: async () => {
+      const iframeUrl = hijiIframeUrl(await fetchPage(`${BASE_URL}?ID=${cfg.obsId}&KIND=3&PAGE=0`));
+      if (!iframeUrl) return { state: 'unreadable', why: 'no IFRAME src on the outer page' };
+      return hijiReading(await fetchPage(iframeUrl));
+    },
+  }));
 }
 
 // --- HTTP helpers ------------------------------------------------------------
 
-async function fetchEucJp(url: string, ua: string): Promise<string | null> {
+async function fetchEucJp(url: string): Promise<string> {
   const r = await fetch(url, {
-    headers: { 'user-agent': ua },
+    headers: {
+      'user-agent':
+        process.env.HTTP_USER_AGENT ??
+        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
+    },
     signal: AbortSignal.timeout(20_000),
   });
-  if (r.status !== 200) return null;
-  const raw = await r.arrayBuffer();
-  return new TextDecoder('euc-jp').decode(raw);
+  if (r.status !== 200) throw new Error(`HTTP ${r.status} for ${url}`);
+  return new TextDecoder('euc-jp').decode(await r.arrayBuffer());
 }
 
-async function fetchDamRow(
-  cfg: DamCfg,
-  ua: string,
-  log: (s: string) => void,
-): Promise<ParsedRow | null> {
-  const outerUrl = `${BASE_URL}?ID=${cfg.obsId}&KIND=3&PAGE=0`;
-  const outerHtml = await fetchEucJp(outerUrl, ua);
-  if (!outerHtml) {
-    log(`${SOURCE_ID}: outer page failed for ${cfg.name}`);
-    return null;
-  }
-
-  const iframeMatch = outerHtml.match(/<IFRAME[^>]+src="(\/html\/frm\/DamFree10Data[^"]+)"/i);
-  if (!iframeMatch) {
-    log(`${SOURCE_ID}: no IFRAME src for ${cfg.name}`);
-    return null;
-  }
-
-  const iframeUrl = `http://www1.river.go.jp${iframeMatch[1]}`;
-  const iframeHtml = await fetchEucJp(iframeUrl, ua);
-  if (!iframeHtml) {
-    log(`${SOURCE_ID}: IFRAME fetch failed for ${cfg.name}`);
-    return null;
-  }
-
-  return parseHijiIframeHtml(cfg.obsId, iframeHtml);
-}
-
-// --- DB helpers --------------------------------------------------------------
-
-function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/貯水池$/, '')
-    .trim();
-}
-
-async function findDamId(
-  name: string,
-  prefCode: string,
-  log: (s: string) => void,
-): Promise<bigint | null> {
-  const stem = normalizeName(name);
-
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear"
-    FROM dams WHERE pref_code = ${prefCode} ORDER BY id
-  `;
-
-  let best: { m: BindableMaster; rank: number } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (m.name === name) rank = 0;
-    else if (mStem === stem) rank = 1;
-    else if (m.name === `${stem}ダム`) rank = 2;
-    else if (mStem.startsWith(stem)) rank = 3;
-    else if (mStem.includes(stem)) rank = 4;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-      best = { m, rank };
-    }
-  }
-
-  if (!best) {
-    log(`${SOURCE_ID}: no master match for "${name}" in pref ${prefCode}`);
-    return null;
-  }
-  return best.m.id;
-}
-
-/** Resolve every dam this office publishes, keyed by its 観測所 id. */
-async function matchMaster(log: (s: string) => void): Promise<Map<string, bigint>> {
-  const matches = new Map<string, bigint>();
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  for (const cfg of DAM_CONFIG) {
-    const damId = await findDamId(cfg.name, cfg.prefCode, log);
-    universe.push({
-      externalId: cfg.obsId,
-      name: cfg.name,
-      prefCode: cfg.prefCode,
-      resolvedDamId: damId,
-    });
-    if (damId) matches.set(cfg.obsId, damId);
-  }
-  await recordUniverse(SOURCE_ID, universe);
-  return matches;
-}
-
-// --- task --------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
-  const ua =
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
-
-  // Resolved before the fetches so a failing page still leaves a scan on record.
-  const damByObs = await matchMaster(log);
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-
-  for (const cfg of DAM_CONFIG) {
-    const row = await fetchDamRow(cfg, ua, log);
-    if (!row) continue;
-    log(`${SOURCE_ID}: ${cfg.name} parsed at ${row.observedAt.toISOString()}`);
-
-    const damId = damByObs.get(cfg.obsId);
-    if (!damId) continue;
-
-    inputs.push({
-      observedAt: row.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: row.storageVolumeM3,
-      storageRate: row.storageRate,
-      inflowM3s: row.inflowM3s,
-      outflowM3s: row.outflowM3s,
-      waterLevelM: null,
-      rainfallMm: row.rainfallMm,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${inputs.length} written=${written}`);
-};
-
-export default task;
+export default ingestTask(SOURCE_ID, async () => ({ entries: hijiEntries(fetchEucJp) }));

@@ -1,7 +1,19 @@
 // apps/worker/src/tasks/ingest_miyazaki_bousai.test.ts
+//
+// Table HTML → universe entries, no database: binding and writing belong to
+// the ingest run (apps/worker/src/ingest/run.test.ts).
 
 import { describe, expect, test } from 'bun:test';
-import { parseMiyazakiTable, parseMiyazakiTimestamp } from './ingest_miyazaki_bousai.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
+import { miyazakiEntries, parseMiyazakiTimestamp } from './ingest_miyazaki_bousai.ts';
+
+function observation(e: Entry | undefined) {
+  const r = e?.reading as Reading | undefined;
+  if (r?.state !== 'values') throw new Error('no values');
+  const o = r.observations[0];
+  if (!o) throw new Error('no observation');
+  return o;
+}
 
 // Miyazaki table has ONE table (not two like Ibaraki): 8 columns.
 // Col 0: 河川名, Col 1: 局名(dam), Col 2: 所在地, Col 3: 状態,
@@ -62,60 +74,63 @@ describe('parseMiyazakiTimestamp', () => {
   });
 });
 
-describe('parseMiyazakiTable', () => {
+describe('miyazakiEntries', () => {
+  const iwaishi = makeRow(
+    '祝子川',
+    '祝子ダム',
+    '延岡市',
+    '',
+    '2026 06/05 13:50',
+    '312.01',
+    '8.780',
+    '7.670',
+  );
+
   test('extracts all fields from a typical dam row', () => {
-    const html = makeHtml([
-      makeRow('祝子川', '祝子ダム', '延岡市', '', '2026 06/05 13:50', '312.01', '8.780', '7.670'),
-    ]);
-    const rows = parseMiyazakiTable(html);
-    expect(rows).toHaveLength(1);
-    const r = rows[0];
-    expect(r?.miyazakiName).toBe('祝子ダム');
-    expect(r?.riverName).toBe('祝子川');
-    expect(r?.observedAt?.toISOString()).toBe('2026-06-05T04:50:00.000Z');
-    expect(r?.waterLevelM).toBeCloseTo(312.01);
-    expect(r?.inflowM3s).toBeCloseTo(8.78);
-    expect(r?.outflowM3s).toBeCloseTo(7.67);
+    const list = miyazakiEntries(makeHtml([iwaishi]));
+    expect(list).toHaveLength(1);
+    expect(list[0]?.key).toBe('祝子ダム');
+    expect(list[0]?.name).toBe('祝子ダム');
+    expect(list[0]?.pref).toBe('45');
+    const r = observation(list[0]);
+    expect(r.observedAt.toISOString()).toBe('2026-06-05T04:50:00.000Z');
+    expect(r.waterLevelM).toBeCloseTo(312.01);
+    expect(r.inflowM3s).toBeCloseTo(8.78);
+    expect(r.outflowM3s).toBeCloseTo(7.67);
     // No storage columns
     expect(r).not.toHaveProperty('storageVolumeM3');
     expect(r).not.toHaveProperty('storageRate');
   });
 
   test('skips header/unit rows', () => {
-    const html = makeHtml([
-      makeRow('祝子川', '祝子ダム', '延岡市', '', '2026 06/05 13:50', '312.01', '8.780', '7.670'),
-    ]);
-    expect(parseMiyazakiTable(html)).toHaveLength(1);
+    expect(miyazakiEntries(makeHtml([iwaishi]))).toHaveLength(1);
   });
 
   test('parses multiple dams', () => {
     const html = makeHtml([
-      makeRow('祝子川', '祝子ダム', '延岡市', '', '2026 06/05 13:50', '312.01', '8.780', '7.670'),
+      iwaishi,
       makeRow('酒谷川', '日南ダム', '日南市', '', '2026 06/05 14:00', '107.61', '19.360', '18.990'),
     ]);
-    const rows = parseMiyazakiTable(html);
-    expect(rows).toHaveLength(2);
-    expect(rows.map((r) => r.miyazakiName)).toEqual(['祝子ダム', '日南ダム']);
+    expect(miyazakiEntries(html).map((e) => e.key)).toEqual(['祝子ダム', '日南ダム']);
   });
 
   test('strips trend arrows from numeric cells', () => {
-    const html = makeHtml([
-      makeRow('祝子川', '祝子ダム', '延岡市', '', '2026 06/05 13:50', '312.01', '8.780', '7.670'),
-    ]);
-    expect(parseMiyazakiTable(html)[0]?.waterLevelM).toBeCloseTo(312.01);
+    expect(observation(miyazakiEntries(makeHtml([iwaishi]))[0]).waterLevelM).toBeCloseTo(312.01);
   });
 
   test('returns empty array for empty HTML', () => {
-    expect(parseMiyazakiTable('')).toHaveLength(0);
+    expect(miyazakiEntries('')).toHaveLength(0);
   });
 
-  test('handles 貯水池 dam name variant', () => {
+  test('handles 貯水池 dam name variant, binding by the bare name', () => {
     const html = makeHtml([
       makeRow('本庄川', '綾南貯水池', '綾町', '', '2026 06/05 14:00', '337.34', '24.300', '10.010'),
     ]);
-    const rows = parseMiyazakiTable(html);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.miyazakiName).toBe('綾南貯水池');
+    const list = miyazakiEntries(html);
+    expect(list).toHaveLength(1);
+    expect(list[0]?.key).toBe('綾南貯水池');
+    expect(list[0]?.bind).toEqual({ name: '綾南' });
+    expect(miyazakiEntries(makeHtml([iwaishi]))[0]?.bind).toBeUndefined();
   });
 
   test('uses single table (no header-table offset)', () => {
@@ -123,8 +138,20 @@ describe('parseMiyazakiTable', () => {
     const html = makeHtml([
       makeRow('小丸川', '松尾ダム', '木城町', '', '2026 06/05 14:00', '196.31', '73.350', '73.210'),
     ]);
-    const rows = parseMiyazakiTable(html);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.miyazakiName).toBe('松尾ダム');
+    expect(miyazakiEntries(html).map((e) => e.key)).toEqual(['松尾ダム']);
+  });
+
+  test('a dam marked in every value column is provider-marked empty', () => {
+    const html = makeHtml([
+      makeRow('祝子川', '祝子ダム', '延岡市', '', '2026 06/05 13:50', '***', '---', '###'),
+    ]);
+    expect((miyazakiEntries(html)[0]?.reading as Reading | undefined)?.state).toBe('empty');
+  });
+
+  test('an unparseable timestamp is unreadable, not dropped', () => {
+    const html = makeHtml([
+      makeRow('祝子川', '祝子ダム', '延岡市', '', '', '312.01', '8.780', '7.670'),
+    ]);
+    expect((miyazakiEntries(html)[0]?.reading as Reading | undefined)?.state).toBe('unreadable');
   });
 });

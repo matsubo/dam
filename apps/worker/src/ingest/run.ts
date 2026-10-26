@@ -26,11 +26,20 @@ import { type Entry, IngestRunError, type Reading, type Scan } from './types.ts'
 export type Log = (line: string) => void;
 export type ScanFn = (log: Log) => Promise<Scan>;
 
+const SOURCE_OF = new WeakMap<Task, string>();
+
 /** The scheduled `ingest:*` task for one source. */
 export function ingestTask(sourceId: string, scan: ScanFn): Task {
-  return async (_payload, helpers) => {
+  const task: Task = async (_payload, helpers) => {
     await runScan(sourceId, scan, (line) => helpers.logger.info(line));
   };
+  SOURCE_OF.set(task, sourceId);
+  return task;
+}
+
+/** The source an ingestTask-built task records, else undefined. */
+export function ingestSourceOf(task: Task): string | undefined {
+  return SOURCE_OF.get(task);
 }
 
 function checkScan(sourceId: string, entries: readonly Entry[]): void {

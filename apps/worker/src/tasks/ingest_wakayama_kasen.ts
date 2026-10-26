@@ -23,20 +23,23 @@
 //
 // Priority 308. Cron hourly at :41.
 
-import { type BindableMaster, preferMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const DATA_URL =
   process.env.WAKAYAMA_KASEN_URL ?? 'http://kasensabo01.pref.wakayama.lg.jp/hyoujidata/dinfo.csv';
 
-const _PREF_CODE = '30';
 const SOURCE_ID = 'wakayama-kasen';
 
+// Nara (29) and Mie (24) alongside Wakayama (30): the 22077xxx/22088xxx KKR
+// dams in this source (猿谷/川迫/九尾/大滝/大迫/津風呂/坂本/池原/七色/二津野/小森/風屋)
+// sit in the 熊野川/北山川 watershed spanning all three prefectures, so the
+// universe carries no prefCode.
+const PREFS = ['24', '29', '30'] as const;
+
 // Station map from commonConfig.js DMCD_* constants.
-// col[0] station code → dam name (Wakayama name used for master matching).
+// col[0] station code → dam name.
 const STATION_MAP: Readonly<Record<string, string>> = {
   '450': '広川ダム',
   '470': '二川ダム',
@@ -59,17 +62,6 @@ const STATION_MAP: Readonly<Record<string, string>> = {
   '22088006': '風屋ダム',
 };
 
-// --- types ------------------------------------------------------------------
-
-export interface ParsedRow {
-  wakayamaName: string;
-  observedAt: Date;
-  outflowM3s: number | null;
-  inflowM3s: number | null;
-  waterLevelM: number | null;
-  storageVolumeM3: number | null;
-}
-
 // --- parsing ----------------------------------------------------------------
 
 /** "YYYYMMDDHHmm" (12 chars, JST) → UTC. Returns null on failure. */
@@ -85,140 +77,74 @@ export function parseWakayamaTimestamp(s: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function parseVal(s: string): number | null {
-  if (!s || s === '****' || s === '---' || s === '--' || s === '*') return null;
-  const n = Number(s.replace(/,/g, ''));
-  return Number.isFinite(n) ? n : null;
+/** The CSV's own no-value marks. */
+const MARKS = new Set(['****', '---', '--', '*']);
+
+function field(s: string): Cell {
+  const t = s.trim();
+  if (MARKS.has(t)) return MARKED;
+  return t ? cell(Number(t.replace(/,/g, '')), false) : null;
 }
 
-export function parseWakayamaCsv(text: string): ParsedRow[] {
-  const rows: ParsedRow[] = [];
+/** One CSV row's reading. */
+export function wakayamaReading(cols: readonly string[]): Reading {
+  if (cols.length < 7) return { state: 'unreadable', why: `${cols.length} columns` };
+  const outflow = field(cols[2] ?? '');
+  const inflow = field(cols[3] ?? '');
+  const level = field(cols[4] ?? '');
+  const volume = field(cols[5] ?? '');
+  const state = cellState([outflow, inflow, level, volume]);
+  if (state === 'empty') return { state, mark: '**** in every column' };
+  if (state === 'unreadable') return { state, why: 'no readable value in the row' };
+  const ts = (cols[6] ?? '').trim();
+  const observedAt = parseWakayamaTimestamp(ts);
+  if (!observedAt) return { state: 'unreadable', why: `観測時刻 "${ts}"` };
+  const volThou = numberIn(volume);
+  return {
+    state,
+    observations: [
+      {
+        observedAt,
+        outflowM3s: numberIn(outflow),
+        inflowM3s: numberIn(inflow),
+        waterLevelM: numberIn(level),
+        storageVolumeM3: volThou != null ? volThou * 1000 : null,
+      },
+    ],
+  };
+}
 
+/**
+ * Every station in STATION_MAP — a station blank this hour (小匠 is
+ * flood-control-only and often reports nothing) is still published — plus
+ * any row whose code the map lacks, keyed and named by its code.
+ */
+export function wakayamaEntries(text: string): Entry[] {
+  const rows = new Map<string, string[]>();
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim();
     if (!line) continue;
     const cols = line.split(',');
-    if (cols.length < 7) continue;
-
     const code = (cols[0] ?? '').trim();
-    const wakayamaName = STATION_MAP[code];
-    if (!wakayamaName) continue;
-
-    const ts = (cols[6] ?? '').trim();
-    const observedAt = parseWakayamaTimestamp(ts);
-    if (!observedAt) continue;
-
-    const outflowM3s = parseVal(cols[2] ?? '');
-    const inflowM3s = parseVal(cols[3] ?? '');
-    const waterLevelM = parseVal(cols[4] ?? '');
-    const volRaw = parseVal(cols[5] ?? '');
-
-    if (waterLevelM === null && inflowM3s === null && outflowM3s === null) continue;
-
-    rows.push({
-      wakayamaName,
-      observedAt,
-      outflowM3s,
-      inflowM3s,
-      waterLevelM,
-      storageVolumeM3: volRaw != null ? volRaw * 1000 : null,
-    });
+    if (code && !rows.has(code)) rows.set(code, cols);
   }
-
-  return rows;
-}
-
-// --- DB helpers -------------------------------------------------------------
-
-function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/貯水池$/, '')
-    .trim();
-}
-
-interface DamMatch {
-  wakayamaName: string;
-  damId: bigint;
-}
-
-/**
- * Best master dam for a station name: an exact name beats an equal stem beats
- * a `<stem>ダム` master beats a prefix beats a substring, ties going to
- * preferMaster (the current （元）/（再） twin, else the lowest master id). Pure,
- * so the universe can resolve every STATION_MAP entry without re-running the
- * fetch.
- */
-export function chooseMaster(
-  rawName: string,
-  stem: string,
-  masters: BindableMaster[],
-): bigint | null {
-  let best: { m: BindableMaster; rank: number } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (m.name === rawName) rank = 0;
-    else if (mStem === stem) rank = 1;
-    else if (m.name === `${stem}ダム`) rank = 2;
-    else if (mStem.startsWith(stem)) rank = 3;
-    else if (mStem.includes(stem)) rank = 4;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-      best = { m, rank };
-    }
-  }
-  return best?.m.id ?? null;
-}
-
-async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  // Include Nara (29) and Mie (24) alongside Wakayama (30): the 22077xxx/22088xxx
-  // KKR dams in this source (猿谷/川迫/九尾/大滝/大迫/津風呂/坂本/池原/七色/二津野/小森/風屋)
-  // sit in the 熊野川/北山川 watershed spanning all three prefectures.
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear"
-    FROM dams WHERE pref_code = ANY(ARRAY['24', '29', '30']) ORDER BY id
-  `;
-  const out: DamMatch[] = [];
-
-  for (const r of rows) {
-    const stem = normalizeName(r.wakayamaName);
-    if (!stem) continue;
-
-    const damId = chooseMaster(r.wakayamaName, stem, masters);
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${r.wakayamaName}"`);
-      continue;
-    }
-    out.push({ wakayamaName: r.wakayamaName, damId });
-  }
-
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing. Built
-  // from STATION_MAP rather than from the rows that parsed: a station blank
-  // this hour (小匠 is flood-control-only and often reports nothing) is still
-  // published, and resolving it from the constant keeps it out of 提供元なし.
-  //
-  // No prefCode: the station code is a real provider id, and 12 of the 19
-  // stations are 熊野川/北山川 dams sitting in 奈良/三重, not 和歌山.
-  const universe: UniverseRow[] = Object.entries(STATION_MAP).map(([code, name]) => {
-    const stem = normalizeName(name);
+  const entry = (code: string, name: string): Entry => {
+    const cols = rows.get(code);
     return {
-      externalId: code,
+      key: code,
       name,
-      resolvedDamId: stem ? chooseMaster(name, stem, masters) : null,
+      pref: PREFS,
+      reading: cols ? wakayamaReading(cols) : { state: 'unreadable', why: 'not in the CSV' },
     };
-  });
-  await recordUniverse(SOURCE_ID, universe);
-  return out;
+  };
+  const known = Object.entries(STATION_MAP).map(([code, name]) => entry(code, name));
+  const unknown = [...rows.keys()].filter((c) => !STATION_MAP[c]).map((c) => entry(c, c));
+  return [...known, ...unknown];
 }
 
 // --- task -------------------------------------------------------------------
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
+async function fetchCsv(): Promise<string> {
   const r = await fetch(DATA_URL, {
     headers: {
       'user-agent':
@@ -227,41 +153,25 @@ const task: Task = async (_payload, helpers) => {
     },
     signal: AbortSignal.timeout(20_000),
   });
+  if (r.status !== 200) throw new Error(`HTTP ${r.status}`);
+  return new TextDecoder('euc-jp').decode(await r.arrayBuffer());
+}
 
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
+export default ingestTask(SOURCE_ID, async (log) => {
+  let text: string;
+  try {
+    text = await fetchCsv();
+  } catch (err) {
+    // STATION_MAP is known in advance: record it unreadable rather than nothing.
+    const why = err instanceof Error ? err.message : String(err);
+    log(`${SOURCE_ID}: ${why}`);
+    return {
+      entries: wakayamaEntries('').map(
+        (e): Entry => ({ ...e, reading: { state: 'unreadable', why } }),
+      ),
+    };
   }
-
-  const buf = await r.arrayBuffer();
-  const text = new TextDecoder('euc-jp').decode(buf);
-  const rows = parseWakayamaCsv(text);
-  log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
-
-  const matches = await matchMaster(rows, log);
-  const damByName = new Map(matches.map((m) => [m.wakayamaName, m.damId]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = damByName.get(p.wakayamaName);
-    if (!damId) continue;
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: null,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+  const entries = wakayamaEntries(text);
+  log(`${SOURCE_ID}: ${entries.length} stations`);
+  return { entries };
+});

@@ -1,8 +1,9 @@
 // apps/worker/src/tasks/backfill_jwa_junpo.ts
 //
 // Walks JWA's past 旬報 archive and ingests historical observations for the
-// 26 mapped dams. Reuses the parser + name-mapping + observation upserter
-// from ingest_jwa_junpo.ts, only the URL and the date enumeration differ.
+// 26 mapped dams. Reuses the parser and the dam list from ingest_jwa_junpo.ts;
+// the live task binds through the ingest run, the backfill (outside the run)
+// binds here with its own name matching.
 //
 // Past archive URL pattern:
 //   https://www.water.go.jp/honsya/honsya/suigen/junpo/past/{YYYY}/junpo{YYYYMMDD}.html
@@ -19,9 +20,14 @@
 // months → ~72 s total). The task tolerates per-page failures (404 or
 // non-200) and continues with the next date.
 
+import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
+import { sql } from '@dam/db/client';
+import { bindExternalId } from '@dam/db/repo/dams';
 import { upsertObservations } from '@dam/db/repo/observations';
+import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
-import { ensureExternalIds, parseJwaJunpoHtml } from './ingest_jwa_junpo.ts';
+import { numberIn } from '../ingest/cells.ts';
+import { JUNPO_DAMS, parseJwaJunpoHtml } from './ingest_jwa_junpo.ts';
 
 const ARCHIVE_URL_BASE =
   process.env.JWA_JUNPO_ARCHIVE_BASE ?? 'https://www.water.go.jp/honsya/honsya/suigen/junpo/past';
@@ -29,6 +35,63 @@ const ARCHIVE_URL_BASE =
 const SLEEP_BETWEEN_FETCHES_MS = 2_000;
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+export interface DamMatch {
+  jwaName: string;
+  damId: bigint;
+}
+
+/**
+ * Idempotent: bind each listed station to one master dam and stamp
+ * external_ids->>'jwa-junpo' there (and nowhere else). Match by (prefCode IN
+ * list) AND name LIKE '%<masterName>%', preferring 「<masterName>ダム」, then
+ * the bare name, then 「再」/「元」/「再開発」, then 「貯水池」. A row already
+ * stamped keeps the station; a （元）/（再） pair goes to whichever structure
+ * is in service (chooseRanked).
+ */
+export async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
+  const matches: DamMatch[] = [];
+  // What this source publishes, matched or not — recorded so /coverage can
+  // say "they publish it, we failed to link it" instead of guessing.
+  const universe: UniverseRow[] = [];
+  for (const [jwaName, dam] of Object.entries(JUNPO_DAMS)) {
+    const masterName = dam.masterName ?? jwaName.replace(/ダム$/, '');
+    const candidates = await sql<(BindableMaster & { rank: number })[]>`
+      SELECT id, name, completed_year AS "completedYear",
+             external_ids->>'jwa-junpo' AS stamp,
+             CASE
+               WHEN name = ${`${masterName}ダム`} THEN 0
+               WHEN name = ${masterName} THEN 1
+               WHEN name LIKE ${`${masterName}（再）%`} THEN 2
+               WHEN name LIKE ${`${masterName}（元）%`} THEN 2
+               WHEN name LIKE ${`${masterName}（再開発）%`} THEN 2
+               WHEN name = ${`${masterName}貯水池`} THEN 3
+               ELSE 5
+             END AS rank
+      FROM dams
+      WHERE pref_code = ANY(${dam.prefs}::text[])
+        AND name LIKE ${`%${masterName}%`}
+    `;
+    const r = chooseRanked(candidates, jwaName);
+    universe.push({
+      externalId: jwaName,
+      name: jwaName,
+      // A multi-code entry (下久保 straddles 群馬/埼玉) is a LIKE-narrowing
+      // hint, not an attribution, and pref_code is COALESCE-sticky once
+      // written.
+      prefCode: dam.prefs.length === 1 ? (dam.prefs[0] ?? null) : null,
+      resolvedDamId: r?.id ?? null,
+    });
+    if (!r) {
+      log(`jwa-junpo: no master match for "${jwaName}" (${masterName})`);
+      continue;
+    }
+    matches.push({ jwaName, damId: r.id });
+    await bindExternalId(r.id, 'jwa-junpo', jwaName);
+  }
+  await recordUniverse('jwa-junpo', universe);
+  return matches;
+}
 
 interface BackfillPayload {
   /** Number of months back to walk. Default 12. */
@@ -100,7 +163,16 @@ const task: Task = async (rawPayload, helpers) => {
         continue;
       }
       const html = await r.text();
-      const { reportDate, rows: parsed } = parseJwaJunpoHtml(html);
+      const page = parseJwaJunpoHtml(html);
+      const reportDate = page.reportDate;
+      // Only rows printing 利水容量, 貯水量 and 貯水率 are written.
+      const parsed = page.rows.flatMap((row) => {
+        const volumeThou = numberIn(row.storageVolumeThouM3);
+        const ratePct = numberIn(row.storageRatePct);
+        return row.storageCapacityThouM3 == null || volumeThou == null || ratePct == null
+          ? []
+          : [{ jwaName: row.jwaName, volumeThou, ratePct }];
+      });
       if (!reportDate || parsed.length === 0) {
         log(
           `backfill:jwa-junpo: ${url} parsed=${parsed.length} reportDate=${reportDate?.toISOString() ?? '(missing)'}; skip`,
@@ -113,8 +185,8 @@ const task: Task = async (rawPayload, helpers) => {
       for (const row of parsed) {
         const damId = matchByName.get(row.jwaName);
         if (!damId) continue;
-        const storageVolumeM3 = row.storageVolumeThouM3 * 1_000;
-        const storageRate = Math.max(0, Math.min(1, row.storageRatePct / 100));
+        const storageVolumeM3 = row.volumeThou * 1_000;
+        const storageRate = Math.max(0, Math.min(1, row.ratePct / 100));
         inputs.push({
           observedAt: reportDate,
           damId,

@@ -1,5 +1,20 @@
+// Fixture → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
+
 import { describe, expect, test } from 'bun:test';
-import { chooseMaster, parseSaitamaCsv, parseSaitamaTimestamp } from './ingest_saitama_suibo.ts';
+import type { Reading } from '../ingest/types.ts';
+import { parseSaitamaTimestamp, saitamaEntries } from './ingest_saitama_suibo.ts';
+
+function observation(text: string, name: string) {
+  const r = saitamaEntries(text).find((e) => e.name === name)?.reading as Reading | undefined;
+  if (r?.state !== 'values') throw new Error(`${name}: no values`);
+  const o = r.observations[0];
+  if (!o) throw new Error('no observation');
+  return o;
+}
+
+const stateOf = (text: string, code: string) =>
+  (saitamaEntries(text).find((e) => e.key === code)?.reading as Reading | undefined)?.state;
 
 describe('parseSaitamaTimestamp', () => {
   test('parses "YYYYMMDDHHmm" (JST) → UTC', () => {
@@ -35,15 +50,23 @@ const SAMPLE_CSV = `55301100001,1,"0.10","0.66","315.17","4,518","38.0",20260605
 12331400006,0,"8.24","8.24","259.47","37,180","31.0",202606052120,(国)利根川ダム統合管理事務所
 `;
 
-describe('parseSaitamaCsv', () => {
-  test('parses all 9 known dam rows', () => {
-    const rows = parseSaitamaCsv(SAMPLE_CSV);
-    expect(rows).toHaveLength(9);
+describe('saitamaEntries', () => {
+  test('lists all 9 mapped stations, keyed by 地点番号, every one with values', () => {
+    const list = saitamaEntries(SAMPLE_CSV);
+    expect(list).toHaveLength(9);
+    expect(list.every((e) => (e.reading as Reading).state === 'values')).toBe(true);
+    expect(list[0]?.key).toBe('55301100001');
+    expect(list[0]?.pref).toBe('11');
+  });
+
+  test('looks up the border stations in the neighbouring prefectures too', () => {
+    const list = saitamaEntries(SAMPLE_CSV);
+    expect(list.find((e) => e.name === '渡良瀬遊水地')?.pref).toEqual(['11', '09', '10', '13']);
+    expect(list.find((e) => e.name === '下久保ダム')?.pref).toEqual(['11', '09', '10', '13']);
   });
 
   test('station names are mapped correctly', () => {
-    const rows = parseSaitamaCsv(SAMPLE_CSV);
-    expect(rows.map((r) => r.saitamaName)).toEqual([
+    expect(saitamaEntries(SAMPLE_CSV).map((e) => e.name)).toEqual([
       '合角ダム',
       '有間ダム',
       '権現堂調節池',
@@ -56,70 +79,56 @@ describe('parseSaitamaCsv', () => {
     ]);
   });
 
+  test('binds 荒川第一調節池 by the master name 荒川調節池', () => {
+    const list = saitamaEntries(SAMPLE_CSV);
+    expect(list.find((e) => e.name === '荒川第一調節池')?.bind).toEqual({ name: '荒川調節池' });
+    expect(list.find((e) => e.name === '浦山ダム')?.bind).toBeUndefined();
+  });
+
   test('合角ダム: all fields parsed correctly', () => {
-    const r = parseSaitamaCsv(SAMPLE_CSV).find((x) => x.saitamaName === '合角ダム');
-    expect(r).toBeDefined();
-    expect(r?.observedAt.toISOString()).toBe('2026-06-05T12:30:00.000Z');
-    expect(r?.outflowM3s).toBeCloseTo(0.1);
-    expect(r?.inflowM3s).toBeCloseTo(0.66);
-    expect(r?.waterLevelM).toBeCloseTo(315.17);
-    expect(r?.storageVolumeM3).toBeCloseTo(4_518_000);
+    const r = observation(SAMPLE_CSV, '合角ダム');
+    expect(r.observedAt.toISOString()).toBe('2026-06-05T12:30:00.000Z');
+    expect(r.outflowM3s).toBeCloseTo(0.1);
+    expect(r.inflowM3s).toBeCloseTo(0.66);
+    expect(r.waterLevelM).toBeCloseTo(315.17);
+    expect(r.storageVolumeM3).toBeCloseTo(4_518_000);
   });
 
   test('storageVolumeM3 = ×1000 with comma-stripped number (浦山ダム: 28,559×1000)', () => {
-    const r = parseSaitamaCsv(SAMPLE_CSV).find((x) => x.saitamaName === '浦山ダム');
-    expect(r?.storageVolumeM3).toBeCloseTo(28_559_000);
+    expect(observation(SAMPLE_CSV, '浦山ダム').storageVolumeM3).toBeCloseTo(28_559_000);
   });
 
   test('"c" values parse as null', () => {
-    const r = parseSaitamaCsv(SAMPLE_CSV).find((x) => x.saitamaName === '渡良瀬遊水地');
-    expect(r?.outflowM3s).toBeNull();
-    expect(r?.inflowM3s).toBeNull();
-    // waterLevel is not null so row is not skipped
-    expect(r?.waterLevelM).toBeCloseTo(11.75);
+    const r = observation(SAMPLE_CSV, '渡良瀬遊水地');
+    expect(r.outflowM3s).toBeNull();
+    expect(r.inflowM3s).toBeNull();
+    expect(r.waterLevelM).toBeCloseTo(11.75);
   });
 
   test('"*" values parse as null (荒川第一調節池)', () => {
-    const r = parseSaitamaCsv(SAMPLE_CSV).find((x) => x.saitamaName === '荒川第一調節池');
-    expect(r?.outflowM3s).toBeNull();
-    expect(r?.inflowM3s).toBeNull();
-    expect(r?.waterLevelM).toBeCloseTo(3.15);
+    const r = observation(SAMPLE_CSV, '荒川第一調節池');
+    expect(r.outflowM3s).toBeNull();
+    expect(r.inflowM3s).toBeNull();
+    expect(r.waterLevelM).toBeCloseTo(3.15);
   });
 
   test('unknown station code is ignored', () => {
     const csv = '99999999999,1,"1.0","2.0","100.0","500","50.0",202606052130,unknown\n';
-    expect(parseSaitamaCsv(csv)).toHaveLength(0);
+    expect(saitamaEntries(csv).map((e) => e.key)).not.toContain('99999999999');
   });
 
-  test('returns empty array for empty input', () => {
-    expect(parseSaitamaCsv('')).toHaveLength(0);
-    expect(parseSaitamaCsv('\n\n')).toHaveLength(0);
+  test('a mapped station missing from the CSV is unreadable, not dropped', () => {
+    expect(stateOf('', '55301100001')).toBe('unreadable');
+    expect(saitamaEntries('\n\n')).toHaveLength(9);
   });
 
-  test('row with all null measurements is skipped', () => {
+  test('a row marked c / blank in every column is provider-marked empty', () => {
     const csv = '55301100001,1,c,c,,c,"50.0",202606052130,秩父県土整備事務所\n';
-    expect(parseSaitamaCsv(csv)).toHaveLength(0);
-  });
-});
-
-describe('chooseMaster', () => {
-  // Real master rows (prefs 09/10/11/13) the station names could reach.
-  const masters = [
-    { id: 9292n, name: '東荒川', completedYear: 1990 },
-    { id: 9293n, name: '西荒川', completedYear: 1968 },
-    { id: 9377n, name: '渡良瀬遊水地（一期）', completedYear: 2002 },
-    { id: 9457n, name: '権現堂調節池', completedYear: 1991 },
-    { id: 9462n, name: '浦山', completedYear: 1998 },
-    { id: 9470n, name: '荒川調節池', completedYear: 1996 },
-  ];
-
-  test('binds 荒川第一調節池 to the master 荒川調節池', () => {
-    expect(chooseMaster('荒川第一調節池', masters)).toBe(9470n);
+    expect(stateOf(csv, '55301100001')).toBe('empty');
   });
 
-  test('still binds the other stations by stem', () => {
-    expect(chooseMaster('浦山ダム', masters)).toBe(9462n);
-    expect(chooseMaster('権現堂調節池', masters)).toBe(9457n);
-    expect(chooseMaster('渡良瀬遊水地', masters)).toBe(9377n);
+  test('an unparseable 観測時刻 is unreadable', () => {
+    const csv = '55301100001,1,"0.10","0.66","315.17","4,518","38.0",bad,秩父県土整備事務所\n';
+    expect(stateOf(csv, '55301100001')).toBe('unreadable');
   });
 });

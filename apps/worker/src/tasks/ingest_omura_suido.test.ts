@@ -7,12 +7,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import {
-  chooseMaster,
-  type OmuraMaster,
-  parseOmuraWater,
-  planOmura,
-} from './ingest_omura_suido.ts';
+import { omuraEntries, parseOmuraWater } from './ingest_omura_suido.ts';
 
 const FIXTURE = join(
   import.meta.dir,
@@ -54,60 +49,44 @@ describe('parseOmuraWater', () => {
   });
 });
 
-describe('chooseMaster', () => {
-  const masters: OmuraMaster[] = [
-    { id: 1n, name: '池田（元）', completedYear: 1952, stamp: null },
-    { id: 2n, name: '池田（再）', completedYear: 1986, stamp: null },
-    { id: 3n, name: '萱瀬（元）', completedYear: 1961, stamp: null },
-    { id: 4n, name: '萱瀬（再）', completedYear: 2000, stamp: null },
-    { id: 5n, name: '池田溜池', completedYear: 1950, stamp: null },
-  ];
+describe('omuraEntries', () => {
+  const entries = (page: string) => {
+    const { observedAt, rows } = parseOmuraWater(page);
+    if (!observedAt) throw new Error('no date');
+    return omuraEntries(observedAt, rows);
+  };
 
-  test('池田貯水池 goes to the completed （再）, not the （元） or a longer name', () => {
-    expect(chooseMaster('池田貯水池', masters)).toBe(2n);
-  });
-
-  test('the 萱瀬 share row resolves to the live 萱瀬（再）', () => {
-    expect(chooseMaster('萱瀬ダム（大村市水道用水分）', masters)).toBe(4n);
-  });
-
-  test('a stamped row keeps the station', () => {
-    const stamped = masters.map((m) => (m.id === 1n ? { ...m, stamp: '池田貯水池' } : m));
-    expect(chooseMaster('池田貯水池', stamped)).toBe(1n);
-  });
-
-  test('an unknown name binds to nothing', () => {
-    expect(chooseMaster('野田貯水池', masters)).toBeNull();
-  });
-});
-
-describe('planOmura', () => {
-  const masters: OmuraMaster[] = [
-    { id: 2n, name: '池田（再）', completedYear: 1986, stamp: null },
-    { id: 4n, name: '萱瀬（再）', completedYear: 2000, stamp: null },
-  ];
-
-  test('records both rows but writes only 池田, never the 萱瀬 city share', () => {
-    const plan = planOmura(parseOmuraWater(html).rows, masters);
-    expect(plan.universe.map((u) => [u.externalId, u.resolvedDamId, u.hasData])).toEqual([
-      ['萱瀬ダム（大村市水道用水分）', 4n, true],
-      ['池田貯水池', 2n, true],
+  test('binds by exact stem: 池田貯水池 as 池田 (never a longer name like 池田溜池)', () => {
+    expect(entries(html).map((e) => [e.key, e.pref, e.bind])).toEqual([
+      ['萱瀬ダム（大村市水道用水分）', '42', { exact: true }],
+      ['池田貯水池', '42', { name: '池田', exact: true }],
     ]);
-    expect(plan.writes.map((w) => [w.damId, w.row.storageVolumeM3])).toEqual([[2n, 183_274]]);
-    expect(plan.drift).toEqual([]);
+  });
+
+  test('records both rows with values but writes only 池田, never the 萱瀬 city share', () => {
+    const [kaze, ikeda] = entries(html);
+    expect(kaze?.dontWrite).toContain('share');
+    expect(kaze?.reading).toMatchObject({ state: 'values' });
+    expect(ikeda?.dontWrite).toBeUndefined();
+    expect(ikeda?.reading).toEqual({
+      state: 'values',
+      observations: [
+        {
+          observedAt: new Date('2026-09-27T22:00:00.000Z'),
+          storageVolumeM3: 183_274,
+          storageRate: expect.closeTo(0.916, 6),
+        },
+      ],
+    });
   });
 
   test('池田 is not written once its 利水貯水量 moves off 200,000', () => {
     const moved = html.replace(/(池田貯水池<\/a><\/td>\s*<td[^>]*>\s*)200,000/, '$1260,000');
-    const plan = planOmura(parseOmuraWater(moved).rows, masters);
-    expect(plan.writes).toEqual([]);
-    expect(plan.drift).toHaveLength(1);
+    expect(entries(moved)[1]?.dontWrite).toContain('re-check WRITE');
   });
 
-  test('a row whose readings do not parse is left unknown, not marked empty', () => {
+  test('a row whose readings do not parse is unreadable, not marked empty', () => {
     const blank = html.replace('183,274', '－').replace('91.6%', '－');
-    const plan = planOmura(parseOmuraWater(blank).rows, masters);
-    expect(plan.universe.find((u) => u.externalId === '池田貯水池')?.hasData).toBeNull();
-    expect(plan.writes).toEqual([]);
+    expect(entries(blank)[1]?.reading).toMatchObject({ state: 'unreadable' });
   });
 });

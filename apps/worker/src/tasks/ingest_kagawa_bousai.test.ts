@@ -1,5 +1,19 @@
+// apps/worker/src/tasks/ingest_kagawa_bousai.test.ts
+//
+// Feed → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
+
 import { describe, expect, test } from 'bun:test';
-import { chooseMaster, parseKagawaItems, parseKagawaTimestamp } from './ingest_kagawa_bousai.ts';
+import type { Entry, Observed } from '../ingest/types.ts';
+import { kagawaEntries, parseKagawaTimestamp } from './ingest_kagawa_bousai.ts';
+
+function observed(e: Entry | undefined): Observed | undefined {
+  const r = e?.reading;
+  if (!r || typeof r === 'function' || r.state !== 'values') throw new Error('no values');
+  return r.observations[0];
+}
+const state = (e: Entry | undefined) =>
+  e && typeof e.reading !== 'function' ? e.reading.state : undefined;
 
 describe('parseKagawaTimestamp', () => {
   test('parses "YYYY/MM/DD HH:MM" (JST) → UTC', () => {
@@ -54,23 +68,26 @@ const SAMPLE_JSON = {
   ],
 };
 
-describe('parseKagawaItems', () => {
-  test('returns 3 rows', () => {
-    const rows = parseKagawaItems(SAMPLE_JSON);
-    expect(rows).toHaveLength(3);
-    expect(rows.map((r) => r.kagawaName)).toEqual(['内場ダム', '野口ダム', '内海ダム']);
+describe('kagawaEntries', () => {
+  const entries = kagawaEntries(SAMPLE_JSON);
+  const named = (n: string) => entries.find((e) => e.name === n);
+
+  test('returns 3 entries keyed by the published name', () => {
+    expect(entries.map((e) => [e.key, e.pref])).toEqual([
+      ['内場ダム', '37'],
+      ['野口ダム', '37'],
+      ['内海ダム', '37'],
+    ]);
   });
 
   test('observedAt converted from JST to UTC', () => {
-    const rows = parseKagawaItems(SAMPLE_JSON);
-    for (const r of rows) {
-      expect(r.observedAt?.toISOString()).toBe('2026-06-05T12:00:00.000Z');
+    for (const e of entries) {
+      expect(observed(e)?.observedAt.toISOString()).toBe('2026-06-05T12:00:00.000Z');
     }
   });
 
   test('内場ダム: all fields parsed correctly', () => {
-    const r = parseKagawaItems(SAMPLE_JSON).find((x) => x.kagawaName === '内場ダム');
-    expect(r).toBeDefined();
+    const r = observed(named('内場ダム'));
     expect(r?.storageRate).toBeCloseTo(0.965);
     expect(r?.storageVolumeM3).toBeCloseTo(7_147_000);
     expect(r?.waterLevelM).toBeCloseTo(257.95);
@@ -79,55 +96,42 @@ describe('parseKagawaItems', () => {
   });
 
   test('野口ダム: null discharge and storage_rate → null', () => {
-    const r = parseKagawaItems(SAMPLE_JSON).find((x) => x.kagawaName === '野口ダム');
-    expect(r).toBeDefined();
+    const r = observed(named('野口ダム'));
     expect(r?.outflowM3s).toBeNull();
     expect(r?.storageRate).toBeNull();
     expect(r?.storageVolumeM3).toBeCloseTo(932_000);
   });
 
   test('内海ダム: storage_rate > 100% clamped to 1.0', () => {
-    const r = parseKagawaItems(SAMPLE_JSON).find((x) => x.kagawaName === '内海ダム');
-    expect(r).toBeDefined();
-    expect(r?.storageRate).toBe(1);
+    expect(observed(named('内海ダム'))?.storageRate).toBe(1);
   });
 
-  test('returns empty array for empty items', () => {
-    expect(parseKagawaItems({ items: [] })).toHaveLength(0);
-    expect(parseKagawaItems({})).toHaveLength(0);
-  });
-});
-
-describe('chooseMaster (#79)', () => {
-  // 香川's twin rows as the master holds them (local ids). 長柄 and 五名 are in
-  // service as the （元）: both （再） are 建設中 per 香川県 (0071), so they have
-  // no completion year. 内海（再） was completed in 2013.
-  const masters = [
-    { id: 10477n, name: '五名（元）', completedYear: 1961 },
-    { id: 10494n, name: '長柄（再）', completedYear: null },
-    { id: 10496n, name: '長柄（元）', completedYear: 1952 },
-    { id: 10515n, name: '内海（再）', completedYear: 2013 },
-    { id: 10516n, name: '内海（元）', completedYear: 1958 },
-    { id: 10524n, name: '五名（再）', completedYear: null },
-  ];
-
-  test('the stamp 0071 puts on 長柄（元）holds even once a （再）year is recorded', () => {
-    // Hypothetical year: the raise is not finished. Moving the station then
-    // takes a migration, not a name match.
-    const stamped = masters.map((m) => ({
-      ...m,
-      completedYear: m.id === 10494n ? 2025 : m.completedYear,
-      stamp: m.id === 10496n ? '長柄ダム' : null,
-    }));
-    expect(chooseMaster('長柄ダム', stamped)).toBe(10496n);
+  test('a dam whose every value is null is provider-marked empty (粟井, 2026-10-27)', () => {
+    const awai = {
+      station_name: '粟井ダム',
+      obs_datetime: '2026/10/27 00:40',
+      store: null,
+      stored: null,
+      storage_rate: null,
+      inflow: null,
+      discharge: null,
+    };
+    expect(state(kagawaEntries({ items: [awai] })[0])).toBe('empty');
   });
 
-  test('unstamped, 長柄 and 五名 bind the （元）while the （再）is unfinished', () => {
-    expect(chooseMaster('長柄ダム', masters)).toBe(10496n);
-    expect(chooseMaster('五名ダム', masters)).toBe(10477n);
+  test('a value without a readable obs_datetime, or with no value fields at all, is unreadable', () => {
+    const base = SAMPLE_JSON.items[0];
+    if (!base) throw new Error('fixture missing');
+    const undated = { ...base, obs_datetime: '' };
+    const bare = { station_name: '内場ダム', obs_datetime: '2026/06/05 21:00' };
+    expect(kagawaEntries({ items: [undated, bare] }).map(state)).toEqual([
+      'unreadable',
+      'unreadable',
+    ]);
   });
 
-  test('the completed 内海（再）beats its （元）', () => {
-    expect(chooseMaster('内海ダム', masters)).toBe(10515n);
+  test('lists nothing for empty items', () => {
+    expect(kagawaEntries({ items: [] })).toHaveLength(0);
+    expect(kagawaEntries({})).toHaveLength(0);
   });
 });

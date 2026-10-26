@@ -9,11 +9,19 @@
 //          順流総量 | 逆流総量 | 操作タイプ | 霞ヶ浦導送水 | 黒部川 ×2
 // The page labels each row NewTime − (23 − i) hours; the JSON carries no
 // per-row time.
+//
+// Fixture → universe entry, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
 
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { parseHourlyTable, tonekakoHours } from './ingest_jwa_tonekako.ts';
+import {
+  parseHourlyTable,
+  tonekakoEntry,
+  tonekakoHours,
+  tonekakoReading,
+} from './ingest_jwa_tonekako.ts';
 
 const DIR = join(import.meta.dir, '..', '..', '..', '..', 'tests/fixtures/jwa_tonekako');
 
@@ -84,5 +92,28 @@ describe('tonekakoHours', () => {
     hyo[0].ColumnList.shift();
     const shifted = src.slice(0, start) + JSON.stringify(hyo) + src.slice(end);
     expect(tonekakoHours(shifted, await ryuryo())).toEqual([]);
+  });
+});
+
+describe('tonekakoEntry', () => {
+  test('the weir is the one entry, keyed by its name, scoped to 茨城 and 千葉', async () => {
+    const entry = tonekakoEntry(tonekakoReading(await suii(), await ryuryo()));
+    expect(entry).toMatchObject({ key: '利根川河口堰', name: '利根川河口堰', pref: ['08', '12'] });
+    const r = entry.reading;
+    if (typeof r === 'function' || r.state !== 'values') throw new Error('no values');
+    expect(r.observations).toHaveLength(24);
+    expect(r.observations.at(-1)).toEqual({
+      observedAt: new Date('2026-09-27T12:00:00.000Z'),
+      waterLevelM: 1.41,
+      inflowM3s: 848.2,
+      outflowM3s: null,
+    });
+  });
+
+  test('an unrecognised table layout is unreadable', async () => {
+    expect(tonekakoReading('JsonData = eval({})', await ryuryo())).toEqual({
+      state: 'unreadable',
+      why: 'table layout not recognised',
+    });
   });
 });

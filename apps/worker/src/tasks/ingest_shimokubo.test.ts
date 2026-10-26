@@ -1,10 +1,15 @@
 // apps/worker/src/tasks/ingest_shimokubo.test.ts
+//
+// Fixture → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
 
 import { describe, expect, test } from 'bun:test';
+import type { Reading } from '../ingest/types.ts';
 import {
-  type ParsedReading,
-  parseShimokuboJson,
   parseShimokuboTimestamp,
+  type ShimokuboJson,
+  shimokuboEntries,
+  shimokuboReading,
 } from './ingest_shimokubo.ts';
 
 describe('parseShimokuboTimestamp', () => {
@@ -28,47 +33,53 @@ describe('parseShimokuboTimestamp', () => {
   });
 });
 
-describe('parseShimokuboJson', () => {
-  function makeRecord(name: string, data10: string, data60 = data10) {
-    return {
-      name,
-      datas: [
-        { data10: '0', data60: '0' }, // older point
-        { data10: data10, data60: data60 }, // latest
-      ],
-    };
-  }
+function makeRecord(name: string, data10: string, data60 = data10) {
+  return {
+    name,
+    datas: [
+      { data10: '0', data60: '0' }, // older point
+      { data10: data10, data60: data60 }, // latest
+    ],
+  };
+}
 
-  function makeJson(records: ReturnType<typeof makeRecord>[]) {
-    return {
-      update_time: '2026/06/05 11:30',
-      times: [
-        { time60: '2026/06/04 12:00', time10: '2026/06/05 07:00' },
-        { time60: '2026/06/05 11:00', time10: '2026/06/05 11:30' },
-      ],
-      records,
-    };
-  }
+function makeJson(records: ReturnType<typeof makeRecord>[]): ShimokuboJson {
+  return {
+    update_time: '2026/06/05 11:30',
+    times: [
+      { time60: '2026/06/04 12:00', time10: '2026/06/05 07:00' },
+      { time60: '2026/06/05 11:00', time10: '2026/06/05 11:30' },
+    ],
+    records,
+  };
+}
 
+function observed(r: Reading) {
+  if (r.state !== 'values') throw new Error(`expected values, got ${r.state}`);
+  const [o] = r.observations;
+  if (!o) throw new Error('no observation');
+  return o;
+}
+
+const TYPICAL = makeJson([
+  makeRecord('下久保ダム貯水位', '259.36'),
+  makeRecord('下久保ダム有効容量内貯水量', '37010'),
+  makeRecord('下久保ダム有効容量内貯水率', '30.8'),
+  makeRecord('下久保ダム全流入量', '10.31'),
+  makeRecord('下久保ダム全放流量', '8.60'),
+]);
+
+describe('shimokuboReading', () => {
   test('extracts all fields from typical live data', () => {
-    const json = makeJson([
-      makeRecord('下久保ダム貯水位', '259.36'),
-      makeRecord('下久保ダム有効容量内貯水量', '37010'),
-      makeRecord('下久保ダム有効容量内貯水率', '30.8'),
-      makeRecord('下久保ダム全流入量', '10.31'),
-      makeRecord('下久保ダム全放流量', '8.60'),
-    ]);
-
-    const r = parseShimokuboJson(json);
-
-    expect(r.observedAt?.toISOString()).toBe('2026-06-05T02:30:00.000Z');
-    expect(r.waterLevelM).toBeCloseTo(259.36);
+    const o = observed(shimokuboReading(TYPICAL));
+    expect(o.observedAt.toISOString()).toBe('2026-06-05T02:30:00.000Z');
+    expect(o.waterLevelM).toBeCloseTo(259.36);
     // 37010 千m³ × 1000 = 37,010,000 m³
-    expect(r.storageVolumeM3).toBe(37_010_000);
+    expect(o.storageVolumeM3).toBe(37_010_000);
     // 30.8 / 100 = 0.308
-    expect(r.storageRate).toBeCloseTo(0.308);
-    expect(r.inflowM3s).toBeCloseTo(10.31);
-    expect(r.outflowM3s).toBeCloseTo(8.6);
+    expect(o.storageRate).toBeCloseTo(0.308);
+    expect(o.inflowM3s).toBeCloseTo(10.31);
+    expect(o.outflowM3s).toBeCloseTo(8.6);
   });
 
   test('uses the last datas element (latest 10-min reading)', () => {
@@ -79,8 +90,7 @@ describe('parseShimokuboJson', () => {
       makeRecord('下久保ダム全流入量', '5.00'),
       makeRecord('下久保ダム全放流量', '5.00'),
     ]);
-    const r = parseShimokuboJson(json);
-    expect(r.waterLevelM).toBeCloseTo(259.99);
+    expect(observed(shimokuboReading(json)).waterLevelM).toBeCloseTo(259.99);
   });
 
   test('treats empty string and non-numeric as null', () => {
@@ -91,27 +101,27 @@ describe('parseShimokuboJson', () => {
       makeRecord('下久保ダム全流入量', '―'),
       makeRecord('下久保ダム全放流量', '8.60'),
     ]);
-    const r = parseShimokuboJson(json);
-    expect(r.waterLevelM).toBeNull();
-    expect(r.inflowM3s).toBeNull();
-    expect(r.storageVolumeM3).toBe(37_010_000);
+    const o = observed(shimokuboReading(json));
+    expect(o.waterLevelM).toBeNull();
+    expect(o.inflowM3s).toBeNull();
+    expect(o.storageVolumeM3).toBe(37_010_000);
   });
 
-  test('returns null observedAt when update_time is malformed', () => {
-    const json = makeJson([]);
-    (json as { update_time: string }).update_time = 'invalid';
-    const r = parseShimokuboJson(json);
-    expect(r.observedAt).toBeNull();
+  test('"―" on both 貯水位 and 貯水量 is provider-marked empty', () => {
+    const json = makeJson([
+      makeRecord('下久保ダム貯水位', '―'),
+      makeRecord('下久保ダム有効容量内貯水量', '―'),
+      makeRecord('下久保ダム全流入量', '5.00'),
+    ]);
+    expect(shimokuboReading(json).state).toBe('empty');
   });
 
-  test('handles missing record names gracefully (returns null fields)', () => {
-    const json = makeJson([]); // no records at all
-    const r: ParsedReading = parseShimokuboJson(json);
-    expect(r.waterLevelM).toBeNull();
-    expect(r.storageVolumeM3).toBeNull();
-    expect(r.storageRate).toBeNull();
-    expect(r.inflowM3s).toBeNull();
-    expect(r.outflowM3s).toBeNull();
+  test('a malformed update_time is unreadable', () => {
+    expect(shimokuboReading({ ...TYPICAL, update_time: 'invalid' }).state).toBe('unreadable');
+  });
+
+  test('missing record names are unreadable', () => {
+    expect(shimokuboReading(makeJson([])).state).toBe('unreadable');
   });
 
   test('duplicate record names: uses the first match', () => {
@@ -124,7 +134,22 @@ describe('parseShimokuboJson', () => {
       makeRecord('下久保ダム全流入量', '7.00'),
       makeRecord('下久保ダム全放流量', '7.00'),
     ]);
-    const r = parseShimokuboJson(json);
-    expect(r.waterLevelM).toBeCloseTo(259.1);
+    expect(observed(shimokuboReading(json)).waterLevelM).toBeCloseTo(259.1);
+  });
+});
+
+describe('shimokuboEntries', () => {
+  test('lists 下久保ダム by name, searched in 群馬 and 埼玉', async () => {
+    const [entry, ...rest] = shimokuboEntries(async () => TYPICAL);
+    expect(rest).toEqual([]);
+    expect(entry).toMatchObject({ key: '下久保ダム', name: '下久保ダム', pref: ['10', '11'] });
+    if (typeof entry?.reading !== 'function') throw new Error('expected a reading function');
+    expect((await entry.reading(null)).state).toBe('values');
+  });
+
+  test('a feed that fails to load makes the reading throw (the run records it unreadable)', async () => {
+    const [entry] = shimokuboEntries(() => Promise.reject(new Error('HTTP 503')));
+    if (typeof entry?.reading !== 'function') throw new Error('expected a reading function');
+    await expect(Promise.resolve(entry.reading(null))).rejects.toThrow('HTTP 503');
   });
 });

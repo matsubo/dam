@@ -1,13 +1,15 @@
 // apps/worker/src/tasks/ingest_hyogo.test.ts
 //
-// Pure-function tests for the 兵庫県 BODIK open-data CSV parser. The CSV
-// (CC-BY 4.0, 10-min refresh) is exposed at a stable URL on data.bodik.jp.
-// Fixture is a verbatim capture from 2026-05-26.
+// Fixture → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts). The CSV (CC-BY 4.0, 10-min
+// refresh) is exposed at a stable URL on data.bodik.jp. Fixture is a verbatim
+// capture from 2026-05-26.
 
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { chooseMaster, parseHyogoCsv } from './ingest_hyogo.ts';
+import type { Reading } from '../ingest/types.ts';
+import { hyogoEntries } from './ingest_hyogo.ts';
 
 const FIXTURE = join(
   import.meta.dir,
@@ -18,60 +20,59 @@ const FIXTURE = join(
   'tests/fixtures/hyogo/tm-dam_2026-05-26.csv',
 );
 
-describe('parseHyogoCsv', () => {
-  test('parses one row per dam with units converted', async () => {
-    const rows = parseHyogoCsv(await readFile(FIXTURE, 'utf8'));
+const entries = async () => hyogoEntries(await readFile(FIXTURE, 'utf8'));
+
+function observation(r: unknown) {
+  const reading = r as Reading | undefined;
+  if (reading?.state !== 'values') throw new Error('no values');
+  const o = reading.observations[0];
+  if (!o) throw new Error('no observation');
+  return o;
+}
+
+describe('hyogoEntries', () => {
+  test('one entry per station, keyed by 観測所名', async () => {
+    const list = await entries();
     // 22 data rows in the fixture (incl. 分水堰 weir).
-    expect(rows.length).toBe(22);
+    expect(list.length).toBe(22);
+    expect(list.every((e) => e.key === e.name && e.pref === '28')).toBe(true);
+  });
+
+  test('the 分水堰 weir is recorded but never bound', async () => {
+    const weir = (await entries()).find((e) => e.name === '分水堰');
+    expect(weir?.bind).toBe('never');
   });
 
   test('extracts 青野ダム values (貯水量 千m³ → m³)', async () => {
-    const rows = parseHyogoCsv(await readFile(FIXTURE, 'utf8'));
-    const aono = rows.find((r) => r.hyogoName === '青野ダム');
-    expect(aono).toBeDefined();
-    expect(aono?.waterLevelM).toBeCloseTo(180.81, 2);
+    const aono = observation((await entries()).find((e) => e.name === '青野ダム')?.reading);
+    expect(aono.waterLevelM).toBeCloseTo(180.81, 2);
     // 8706 千m³ → 8,706,000 m³.
-    expect(aono?.storageVolumeM3).toBe(8_706_000);
-    expect(aono?.inflowM3s).toBeCloseTo(0.27, 3);
-    expect(aono?.outflowM3s).toBeCloseTo(0.95, 3);
+    expect(aono.storageVolumeM3).toBe(8_706_000);
+    expect(aono.inflowM3s).toBeCloseTo(0.27, 3);
+    expect(aono.outflowM3s).toBeCloseTo(0.95, 3);
     // 2026/05/26 13:10 JST = 04:10 UTC.
-    expect(aono?.observedAt.toISOString()).toBe('2026-05-26T04:10:00.000Z');
+    expect(aono.observedAt.toISOString()).toBe('2026-05-26T04:10:00.000Z');
   });
 
   test('nulls a value whose flag is non-zero (但東ダム 貯水量 flag=160)', async () => {
-    const rows = parseHyogoCsv(await readFile(FIXTURE, 'utf8'));
-    const tanto = rows.find((r) => r.hyogoName === '但東ダム');
-    expect(tanto).toBeDefined();
-    expect(tanto?.storageVolumeM3).toBeNull();
+    const tanto = observation((await entries()).find((e) => e.name === '但東ダム')?.reading);
+    expect(tanto.storageVolumeM3).toBeNull();
     // its other (flag=0) fields still come through.
-    expect(tanto?.inflowM3s).toBeCloseTo(0.026, 3);
+    expect(tanto.inflowM3s).toBeCloseTo(0.026, 3);
+  });
+
+  test('a station flagged on every field is provider-marked empty', () => {
+    const [e] = hyogoEntries('1,青野ダム,2026/05/26 13:10,,160,,160,,160,,160\n');
+    expect((e?.reading as Reading | undefined)?.state).toBe('empty');
+  });
+
+  test('an unparseable 観測時刻 is unreadable, not dropped', () => {
+    const [e] = hyogoEntries('1,青野ダム,欠測,180.81,0,8706,0,0.270,0,0.950,0\n');
+    expect((e?.reading as Reading | undefined)?.state).toBe('unreadable');
   });
 
   test('returns empty array for header-only / empty input', () => {
-    expect(parseHyogoCsv('局番号,観測所名,観測時刻\n')).toEqual([]);
-    expect(parseHyogoCsv('')).toEqual([]);
-  });
-});
-
-describe('chooseMaster (#57)', () => {
-  const m = (
-    id: number,
-    name: string,
-    completedYear: number | null = null,
-    stamp: string | null = null,
-  ) => ({
-    id: BigInt(id),
-    name,
-    completedYear,
-    stamp,
-  });
-  test('keeps the 長谷 row already stamped with the station', () => {
-    // Two same-name 長谷 in 兵庫: the BODIK station is たつの's (id 20), not 神河's (id 10).
-    const masters = [m(10, '長谷'), m(20, '長谷', null, '長谷ダム')];
-    expect(chooseMaster('長谷', masters, '長谷ダム')).toBe(20n);
-  });
-  test('binds 菅生 to the completed （再）, not the lower-id （元）', () => {
-    const masters = [m(10, '菅生（元）', 1968), m(20, '菅生（再）', 2010)];
-    expect(chooseMaster('菅生', masters, '菅生ダム')).toBe(20n);
+    expect(hyogoEntries('局番号,観測所名,観測時刻\n')).toEqual([]);
+    expect(hyogoEntries('')).toEqual([]);
   });
 });

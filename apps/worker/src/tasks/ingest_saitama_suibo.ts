@@ -20,22 +20,30 @@
 //   col[6] = 貯水率 [%]
 //   col[7] = 観測時刻 "YYYYMMDDHHmm" JST
 //   col[8] = 管轄事務所名
-//   Missing values encoded as "c", "*", empty.
+//   Missing values encoded as "c", "*", empty — the portal's own mark.
 //   Volume column uses comma-formatted numbers (e.g. "4,518").
+//
+// The station map below is the universe: a mapped station whose row is
+// missing from the CSV is unreadable.
 //
 // Priority 308. Cron hourly at :44.
 
-import { type BindableMaster, preferMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const DATA_URL =
   process.env.SAITAMA_SUIBO_URL ?? 'https://suibo-river.pref.saitama.lg.jp/hyoujidata/dinfo.csv';
 
 const PREF_CODE = '11';
 const SOURCE_ID = 'saitama-suibo';
+/**
+ * 渡良瀬遊水地 and 下久保ダム sit on the prefecture's border and the master
+ * files both under 群馬 (10), so their lookup also covers the neighbours
+ * 栃木/群馬/東京; every other station is a 埼玉 dam.
+ */
+const BORDER_SCOPE: readonly string[] = [PREF_CODE, '09', '10', '13'];
+const BORDER = new Set(['12330100001', '12331400006']);
 
 // Station map from chitenconfig/DamList.csv
 const STATION_MAP: Readonly<Record<string, string>> = {
@@ -50,18 +58,12 @@ const STATION_MAP: Readonly<Record<string, string>> = {
   '12331400006': '下久保ダム',
 };
 
-// --- types ------------------------------------------------------------------
-
-export interface ParsedRow {
-  /** 地点番号 — the portal's own station code, stable across runs. */
-  code: string;
-  saitamaName: string;
-  observedAt: Date;
-  outflowM3s: number | null;
-  inflowM3s: number | null;
-  waterLevelM: number | null;
-  storageVolumeM3: number | null;
-}
+/**
+ * Published names the master files under another name. 荒川第一調節池 is the
+ * one built basin of MLIT's 荒川調節池; kasenbosai's station of the same name
+ * is bound to that row and reports identical values.
+ */
+const MASTER_NAME: Readonly<Record<string, string>> = { 荒川第一調節池: '荒川調節池' };
 
 // --- parsing ----------------------------------------------------------------
 
@@ -78,10 +80,12 @@ export function parseSaitamaTimestamp(s: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function parseVal(s: string): number | null {
-  if (!s || s === 'c' || s === '*' || s === '****' || s === '---') return null;
-  const n = Number(s.replace(/,/g, ''));
-  return Number.isFinite(n) ? n : null;
+const MARKS = new Set(['', 'c', '*', '****', '---']);
+
+function parseVal(s: string): Cell {
+  const t = s.trim();
+  if (MARKS.has(t)) return cell(null, true);
+  return cell(Number(t.replace(/,/g, '')), false);
 }
 
 /** Split one CSV line respecting RFC 4180 quoting. */
@@ -113,136 +117,58 @@ function splitCsvLine(line: string): string[] {
   return cols;
 }
 
-export function parseSaitamaCsv(text: string): ParsedRow[] {
-  const rows: ParsedRow[] = [];
+function rowReading(cols: string[]): Reading {
+  const outflow = parseVal(cols[2] ?? '');
+  const inflow = parseVal(cols[3] ?? '');
+  const level = parseVal(cols[4] ?? '');
+  const volThou = parseVal(cols[5] ?? '');
+  const state = cellState([outflow, inflow, level, volThou]);
+  if (state === 'empty') return { state, mark: 'c / * / blank in every column' };
+  if (state === 'unreadable') return { state, why: 'no numeric cell' };
+  const ts = (cols[7] ?? '').trim();
+  const observedAt = parseSaitamaTimestamp(ts);
+  if (!observedAt) return { state: 'unreadable', why: `観測時刻 "${ts}"` };
+  const vol = numberIn(volThou);
+  return {
+    state: 'values',
+    observations: [
+      {
+        observedAt,
+        outflowM3s: numberIn(outflow),
+        inflowM3s: numberIn(inflow),
+        waterLevelM: numberIn(level),
+        storageVolumeM3: vol != null ? vol * 1000 : null,
+      },
+    ],
+  };
+}
 
+/** One entry per mapped station, keyed by 地点番号; rows for unmapped codes are ignored. */
+export function saitamaEntries(text: string): Entry[] {
+  const rows = new Map<string, string[]>();
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim();
     if (!line || line.startsWith('#')) continue;
     const cols = splitCsvLine(line);
     if (cols.length < 8) continue;
-
-    const code = (cols[0] ?? '').trim();
-    const saitamaName = STATION_MAP[code];
-    if (!saitamaName) continue;
-
-    const ts = (cols[7] ?? '').trim();
-    const observedAt = parseSaitamaTimestamp(ts);
-    if (!observedAt) continue;
-
-    const outflowM3s = parseVal(cols[2] ?? '');
-    const inflowM3s = parseVal(cols[3] ?? '');
-    const waterLevelM = parseVal(cols[4] ?? '');
-    const volRaw = parseVal(cols[5] ?? '');
-
-    if (waterLevelM === null && inflowM3s === null && outflowM3s === null) continue;
-
-    rows.push({
-      code,
-      saitamaName,
-      observedAt,
-      outflowM3s,
-      inflowM3s,
-      waterLevelM,
-      storageVolumeM3: volRaw != null ? volRaw * 1000 : null,
-    });
+    rows.set((cols[0] ?? '').trim(), cols);
   }
-
-  return rows;
-}
-
-// --- DB helpers -------------------------------------------------------------
-
-function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/貯水池$/, '')
-    .replace(/調節池$/, '')
-    .replace(/遊水地$/, '')
-    .trim();
-}
-
-/**
- * Published names the master files under another name. 荒川第一調節池 is the
- * one built basin of MLIT's 荒川調節池; kasenbosai's station of the same name
- * is bound to that row and reports identical values.
- */
-const MASTER_NAME: Readonly<Record<string, string>> = { 荒川第一調節池: '荒川調節池' };
-
-/**
- * Best master for a published station name: exact name, then equal stems,
- * then prefix / substring stems; equal ranks go to preferMaster.
- */
-export function chooseMaster(published: string, masters: BindableMaster[]): bigint | null {
-  const name = MASTER_NAME[published] ?? published;
-  const stem = normalizeName(name);
-  if (!stem) return null;
-  let best: { m: BindableMaster; rank: number } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (m.name === name) rank = 0;
-    else if (mStem === stem) rank = 1;
-    else if (m.name === `${stem}ダム`) rank = 2;
-    else if (mStem.startsWith(stem)) rank = 3;
-    else if (mStem.includes(stem)) rank = 4;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-      best = { m, rank };
-    }
-  }
-  return best?.m.id ?? null;
-}
-
-interface DamMatch {
-  saitamaName: string;
-  damId: bigint;
-}
-
-async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear" FROM dams
-    WHERE pref_code IN (${PREF_CODE}, '09', '10', '13')
-    ORDER BY id
-  `;
-  const out: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing. Seeded
-  // from the station map rather than from this run's rows, so a dam whose CSV
-  // row is empty today still counts as published; the resolved rows pushed
-  // below supersede these (recordUniverse keeps the last entry per id).
-  const universe: UniverseRow[] = Object.entries(STATION_MAP).map(([code, name]) => ({
-    externalId: code,
-    name,
-    prefCode: PREF_CODE,
-    resolvedDamId: null,
-  }));
-
-  for (const r of rows) {
-    const damId = chooseMaster(r.saitamaName, masters);
-    universe.push({
-      externalId: r.code,
-      name: r.saitamaName,
-      prefCode: PREF_CODE,
-      resolvedDamId: damId,
-    });
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${r.saitamaName}"`);
-      continue;
-    }
-    out.push({ saitamaName: r.saitamaName, damId });
-  }
-
-  await recordUniverse(SOURCE_ID, universe);
-  return out;
+  return Object.entries(STATION_MAP).map(([code, name]): Entry => {
+    const cols = rows.get(code);
+    const masterName = MASTER_NAME[name];
+    return {
+      key: code,
+      name,
+      pref: BORDER.has(code) ? BORDER_SCOPE : PREF_CODE,
+      ...(masterName ? { bind: { name: masterName } } : {}),
+      reading: cols ? rowReading(cols) : { state: 'unreadable', why: 'not in dinfo.csv' },
+    };
+  });
 }
 
 // --- task -------------------------------------------------------------------
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
+export default ingestTask(SOURCE_ID, async (log) => {
   const r = await fetch(DATA_URL, {
     headers: {
       'user-agent':
@@ -251,40 +177,8 @@ const task: Task = async (_payload, helpers) => {
     },
     signal: AbortSignal.timeout(20_000),
   });
-
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
-  }
-
-  const text = await r.text();
-  const rows = parseSaitamaCsv(text);
-  log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
-
-  const matches = await matchMaster(rows, log);
-  const damByName = new Map(matches.map((m) => [m.saitamaName, m.damId]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = damByName.get(p.saitamaName);
-    if (!damId) continue;
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: null,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status}`);
+  const entries = saitamaEntries(await r.text());
+  log(`${SOURCE_ID}: ${entries.length} stations`);
+  return { entries };
+});

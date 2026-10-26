@@ -11,14 +11,16 @@
 // rate_r (利水容量貯水率), rate_y (有効容量貯水率) and rate, which tracks
 // rate_y. 長崎県 publishes 利水容量 and 有効貯水容量 separately in dam_m.json
 // (tank_risui_d / tank_ecapa), and this site's 貯水率 is the 利水 one.
+//
+// dam_m.json is 長崎県's own catalogue, so it is what the source publishes —
+// not the subset that carried a reading in this run's snapshot: a dam whose
+// gauge is silent this run is still published. dam_cd is the upstream's
+// stable id, so it is the key. When the snapshot cannot be read, every
+// catalogued dam is listed unreadable.
 // Priority 308, matching other prefectural sources.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Bind, Entry, Reading } from '../ingest/types.ts';
 
 const BASE_URL = process.env.NAGASAKI_KASEN_BASE_URL ?? 'https://dam.pref.nagasaki.jp';
 
@@ -26,24 +28,6 @@ const PREF_CODE = '42';
 const SOURCE_ID = 'nagasaki-kasen';
 
 // --- types ------------------------------------------------------------------
-
-export interface ParsedRow {
-  damCd: number;
-  damName: string;
-  observedAt: Date;
-  waterLevelM: number | null;
-  storageVolumeM3: number | null;
-  storageRate: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
-  /**
-   * source_universe.has_data: true = the task stores the row (a level or a
-   * volume); false = the provider prints its 「-」 in every field (樋口 /
-   * つづら / 笛吹, stat 0); null = an empty or unreadable field, which may be
-   * our parser rather than the provider.
-   */
-  hasData: boolean | null;
-}
 
 interface DtRange {
   min_dt: string;
@@ -55,7 +39,7 @@ export interface DamMaster {
   dam_nm: string;
 }
 
-interface DamDataItem {
+export interface DamDataItem {
   dam_cd: number;
   lv: string;
   /** 貯水率 — the feed's headline rate, on the same basis as rate_y. */
@@ -69,7 +53,7 @@ interface DamDataItem {
   dis: string;
 }
 
-interface AllDamsJson {
+export interface AllDamsJson {
   ymd: string;
   time: string;
   list: DamDataItem[];
@@ -114,52 +98,43 @@ export function buildSnapshotUrl(base: string, maxDt: string): string | null {
   return `${base}/data/all/${ym}/${ymd}/all_${ymd}_${hm}_d.json`;
 }
 
-export function parseAllDamsJson(raw: AllDamsJson, masters: Map<number, string>): ParsedRow[] {
-  const observedAt = parseNagasakiDatetime(raw.ymd, raw.time);
-  if (!observedAt) return [];
-
-  const rows: ParsedRow[] = [];
-  for (const item of raw.list) {
-    const name = masters.get(item.dam_cd);
-    if (!name) continue;
-
-    const pondageRaw = parseNum(item.pondage);
-    const waterLevelM = parseNum(item.lv);
-    const storageVolumeM3 = pondageRaw !== null ? pondageRaw * 1_000 : null;
-    const empty = [item.lv, item.pondage, item.rate, item.rate_r, item.rate_y, item.in, item.dis]
+/**
+ * One snapshot item's reading: values when it carries a level or a volume;
+ * provider-marked empty when every field is the provider's 「-」 (樋口 /
+ * つづら / 笛吹, stat 0); otherwise unreadable — an empty or unparsed field
+ * may be our parser rather than the provider.
+ */
+export function nagasakiReading(item: DamDataItem, observedAt: Date): Reading {
+  const pondageRaw = parseNum(item.pondage);
+  const waterLevelM = parseNum(item.lv);
+  const storageVolumeM3 = pondageRaw !== null ? pondageRaw * 1_000 : null;
+  if (waterLevelM === null && storageVolumeM3 === null) {
+    const marked = [item.lv, item.pondage, item.rate, item.rate_r, item.rate_y, item.in, item.dis]
       .filter((v) => v !== undefined)
       .every((v) => v.trim() === '-');
-    rows.push({
-      damCd: item.dam_cd,
-      damName: name,
-      observedAt,
-      waterLevelM,
-      storageVolumeM3,
-      // Prefer 利水容量貯水率 (rate_r): it is the rate the manager publishes,
-      // against the current-season 利水容量. rate / rate_y divide by the full
-      // 有効貯水容量 and understate flood-control dams badly — 宮崎ダム reads
-      // 17.5 % on 有効 against 100 % on 利水. Same inversion as issue #19
-      // (kasenbosai) and commit ad2323d (cgr_mlit / kumamoto / kochi).
-      storageRate: (() => {
-        const r = parseNum(item.rate_r ?? '') ?? parseNum(item.rate_y ?? '') ?? parseNum(item.rate);
-        return r !== null ? r / 100 : null;
-      })(),
-      inflowM3s: parseNum(item.in),
-      outflowM3s: parseNum(item.dis),
-      hasData: waterLevelM !== null || storageVolumeM3 !== null ? true : empty ? false : null,
-    });
+    return marked
+      ? { state: 'empty', mark: '「-」 in every field' }
+      : { state: 'unreadable', why: 'no 貯水位 or 貯水量' };
   }
-  return rows;
-}
-
-// --- DB helpers -------------------------------------------------------------
-
-function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/貯水池$/, '')
-    .trim();
+  // Prefer 利水容量貯水率 (rate_r): it is the rate the manager publishes,
+  // against the current-season 利水容量. rate / rate_y divide by the full
+  // 有効貯水容量 and understate flood-control dams badly — 宮崎ダム reads
+  // 17.5 % on 有効 against 100 % on 利水. Same inversion as issue #19
+  // (kasenbosai) and commit ad2323d (cgr_mlit / kumamoto / kochi).
+  const ratePct = parseNum(item.rate_r ?? '') ?? parseNum(item.rate_y ?? '') ?? parseNum(item.rate);
+  return {
+    state: 'values',
+    observations: [
+      {
+        observedAt,
+        waterLevelM,
+        storageVolumeM3,
+        storageRate: ratePct !== null ? ratePct / 100 : null,
+        inflowM3s: parseNum(item.in),
+        outflowM3s: parseNum(item.dis),
+      },
+    ],
+  };
 }
 
 /**
@@ -177,184 +152,71 @@ const NDI_PINS: Readonly<Record<number, string>> = {
   1106: '2609',
 };
 
-export interface NagasakiMaster extends BindableMaster {
-  ndi: string | null;
-}
-
-/** The pref-42 master for a station: its NDI pin, else its stamp, else by name. */
-export function chooseMaster(
-  damCd: number,
-  damName: string,
-  masters: NagasakiMaster[],
-): NagasakiMaster | null {
-  const pin = NDI_PINS[damCd];
-  if (pin) return masters.find((m) => m.ndi === pin) ?? null;
-  const stamped = stampedMaster(masters, String(damCd));
-  if (stamped) return stamped;
-
-  const stem = normalizeName(damName);
-  if (!stem) return null;
-  let best: { m: NagasakiMaster; rank: number } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (m.name === damName) rank = 0;
-    else if (mStem === stem) rank = 1;
-    else if (m.name === `${stem}ダム`) rank = 2;
-    else if (mStem.startsWith(stem)) rank = 3;
-    else if (mStem.includes(stem)) rank = 4;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-      best = { m, rank };
-    }
-  }
-  return best?.m ?? null;
-}
-
-interface DamMatch {
-  damCd: number;
-  damId: bigint;
-}
-
-interface MasterMatches {
-  matches: DamMatch[];
-  /** Every pref-42 master already stamped with a nagasaki-kasen dam_cd. */
-  byExternalId: Map<number, bigint>;
-}
-
-async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<MasterMatches> {
-  // The stamp is how a dam whose name differs from the master keeps its
-  // binding (け知ダム, stamped dam_cd=2030 by a migration).
-  const masters = await sql<NagasakiMaster[]>`
-    SELECT id, name, completed_year AS "completedYear",
-           external_ids->>'ndi' AS ndi, external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const byExternalId = new Map<number, bigint>(
-    masters.filter((m) => m.stamp && /^\d+$/.test(m.stamp)).map((m) => [Number(m.stamp), m.id]),
-  );
-  const out: DamMatch[] = [];
-
-  for (const r of rows) {
-    const m = chooseMaster(r.damCd, r.damName, masters);
-    if (!m) {
-      log(`${SOURCE_ID}: no master match for "${r.damName}" (dam_cd=${r.damCd})`);
-      continue;
-    }
-    out.push({ damCd: r.damCd, damId: m.id });
-    if (m.stamp !== String(r.damCd)) await bindExternalId(m.id, SOURCE_ID, String(r.damCd));
-  }
-
-  return { matches: out, byExternalId };
-}
-
 /**
- * What 長崎県 publishes, built from `dam_m.json` — the provider's own
- * catalogue — rather than from the snapshot rows that happened to carry a
- * reading. A dam whose gauge is silent this run is still published, and
- * recording only the readable ones would let it read as published by nobody.
- *
- * `dam_cd` is the upstream's stable id, so it is the external id; unmatched
- * dams stay in the list with a null `resolvedDamId` as matching backlog.
- * `hasData` is the snapshot row's; a catalogued dam without one is unknown.
+ * Every catalogued dam, read from the snapshot; a dam absent from it, or a
+ * snapshot that could not be read (`snapshot` a string saying why), is
+ * unreadable. The stamp is how a dam whose name differs from the master keeps
+ * its binding (け知ダム, stamped dam_cd=2030 by a migration).
  */
-export function buildNagasakiUniverse(
-  catalogue: DamMaster[],
-  resolve: (damCd: number) => bigint | undefined,
-  snapshot: ParsedRow[],
-): UniverseRow[] {
-  const hasData = new Map(snapshot.map((r) => [r.damCd, r.hasData]));
-  return catalogue.map((m) => ({
-    externalId: String(m.dam_cd),
-    name: m.dam_nm,
-    prefCode: PREF_CODE,
-    resolvedDamId: resolve(m.dam_cd) ?? null,
-    hasData: hasData.get(m.dam_cd) ?? null,
-  }));
+export function nagasakiEntries(catalogue: DamMaster[], snapshot: AllDamsJson | string): Entry[] {
+  const observedAt =
+    typeof snapshot === 'string' ? null : parseNagasakiDatetime(snapshot.ymd, snapshot.time);
+  const items = new Map(
+    typeof snapshot === 'string' ? [] : snapshot.list.map((i) => [i.dam_cd, i] as const),
+  );
+  return catalogue.map((m) => {
+    const item = items.get(m.dam_cd);
+    let reading: Reading;
+    if (typeof snapshot === 'string') reading = { state: 'unreadable', why: snapshot };
+    else if (!observedAt) {
+      reading = { state: 'unreadable', why: `snapshot time "${snapshot.ymd} ${snapshot.time}"` };
+    } else if (!item) reading = { state: 'unreadable', why: 'absent from the snapshot' };
+    else reading = nagasakiReading(item, observedAt);
+    const pin = NDI_PINS[m.dam_cd];
+    const bind: Bind | undefined = pin ? { ndi: pin } : undefined;
+    return {
+      key: String(m.dam_cd),
+      name: m.dam_nm,
+      pref: PREF_CODE,
+      ...(bind ? { bind } : {}),
+      reading,
+    };
+  });
 }
 
 // --- task -------------------------------------------------------------------
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
-  const headers = {
-    'user-agent':
-      process.env.HTTP_USER_AGENT ??
-      'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-  };
-  const signal = AbortSignal.timeout(20_000);
-
-  // 1. Fetch date range to get max_dt
-  const rangeRes = await fetch(`${BASE_URL}/data/dt_range.json`, { headers, signal });
-  if (rangeRes.status !== 200) {
-    log(`${SOURCE_ID}: dt_range.json HTTP ${rangeRes.status}; aborting`);
-    return;
-  }
-  const range = (await rangeRes.json()) as DtRange;
-  const snapshotUrl = buildSnapshotUrl(BASE_URL, range.max_dt);
-  if (!snapshotUrl) {
-    log(`${SOURCE_ID}: cannot build snapshot URL from max_dt="${range.max_dt}"`);
-    return;
-  }
-
-  // 2. Fetch dam master
-  const masterRes = await fetch(`${BASE_URL}/data/dam_m.json`, { headers, signal });
-  if (masterRes.status !== 200) {
-    log(`${SOURCE_ID}: dam_m.json HTTP ${masterRes.status}; aborting`);
-    return;
-  }
-  const masterList = (await masterRes.json()) as DamMaster[];
-  const masterMap = new Map<number, string>(masterList.map((m) => [m.dam_cd, m.dam_nm]));
-
-  // 3. Fetch snapshot
-  const snapRes = await fetch(snapshotUrl, { headers, signal });
-  if (snapRes.status !== 200) {
-    log(`${SOURCE_ID}: snapshot HTTP ${snapRes.status} for ${snapshotUrl}; aborting`);
-    return;
-  }
-  const allDams = (await snapRes.json()) as AllDamsJson;
-  const rows = parseAllDamsJson(allDams, masterMap);
-  log(`${SOURCE_ID}: parsed ${rows.length} dam rows from ${snapshotUrl}`);
-
-  const { matches, byExternalId } = await matchMaster(rows, log);
-  const damByCd = new Map(matches.map((m) => [m.damCd, m.damId]));
-
-  // A catalogued dam missing from this snapshot is absent from `damByCd`, but
-  // its master may already carry the stamp — resolve it rather than record a
-  // bound, published dam as unmatched backlog (#82).
-  await recordUniverse(
-    SOURCE_ID,
-    buildNagasakiUniverse(
-      masterList,
-      (damCd) => damByCd.get(damCd) ?? byExternalId.get(damCd),
-      rows,
-    ),
-  );
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = damByCd.get(p.damCd);
-    if (!damId) continue;
-    if (p.waterLevelM === null && p.storageVolumeM3 === null) continue;
-
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: p.storageRate,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${matches.length} written=${written}`);
+const HEADERS = {
+  'user-agent':
+    process.env.HTTP_USER_AGENT ??
+    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
 };
 
-export default task;
+async function fetchJson<T>(url: string): Promise<T> {
+  const res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(20_000) });
+  if (res.status !== 200) throw new Error(`HTTP ${res.status} for ${url}`);
+  return (await res.json()) as T;
+}
+
+/** This run's all-dams snapshot, or why it could not be read. */
+async function fetchSnapshot(): Promise<AllDamsJson | string> {
+  try {
+    const range = await fetchJson<DtRange>(`${BASE_URL}/data/dt_range.json`);
+    const snapshotUrl = buildSnapshotUrl(BASE_URL, range.max_dt);
+    if (!snapshotUrl) return `cannot build snapshot URL from max_dt="${range.max_dt}"`;
+    return await fetchJson<AllDamsJson>(snapshotUrl);
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  }
+}
+
+export default ingestTask(SOURCE_ID, async (log) => {
+  const catalogue = await fetchJson<DamMaster[]>(`${BASE_URL}/data/dam_m.json`);
+  const snapshot = await fetchSnapshot();
+  log(
+    typeof snapshot === 'string'
+      ? `${SOURCE_ID}: snapshot unreadable: ${snapshot}`
+      : `${SOURCE_ID}: ${catalogue.length} catalogued, snapshot ${snapshot.ymd} ${snapshot.time}`,
+  );
+  return { entries: nagasakiEntries(catalogue, snapshot) };
+});

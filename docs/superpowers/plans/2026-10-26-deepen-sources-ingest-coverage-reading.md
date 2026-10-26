@@ -66,7 +66,10 @@ an E2E smoke run. Nothing is pushed without the owner's go-ahead.
   tie leaves the entry unbound; a failed list fetch fails the job; each family's bindings are
   compared against the stored `resolved_dam_id` before it moves; a `not_dam_reason` key binds
   only by stamp; per-dam partial-failure alarms (kudamatsu, nagasaki_city, omura) are dropped.
-- Moved: okayama-bousai, tottori-bousai.
+- Moved: every active source except kasenbosai (2026-10-27). Totals of rows already listed are
+  not entries; rows that are not one master dam are `bind: 'never'` with a not_dam_reason (0224).
+  `universe_instrumentation.test.ts` is replaced by `task_list.test.ts` (every active source's
+  task is an `ingestTask` for its own id).
 
 ## 3. Coverage triage — `packages/db`
 

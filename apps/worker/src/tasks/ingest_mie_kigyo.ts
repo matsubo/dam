@@ -30,12 +30,8 @@
 //
 // Cron daily 07:17 UTC (16:17 JST), after a weekday-daytime update.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const PAGE_URL = process.env.MIE_KIGYO_URL ?? 'https://www.pref.mie.lg.jp/D1KIGYO/12674013222.htm';
 
@@ -130,41 +126,36 @@ export function observationValues(
   return { storageVolumeM3: row.storageVolumeM3, storageRate };
 }
 
-// --- matching ---------------------------------------------------------------
-
-export interface MieMaster extends BindableMaster {
-  prefCode: string;
-  activeCapacityM3?: number | null;
+/** A row's reading once its master's active capacity is known. */
+export function mieReading(
+  observedAt: Date,
+  row: ParsedRow,
+  activeCapacityM3: number | null,
+): Reading {
+  const values = observationValues(row, activeCapacityM3);
+  if (!values)
+    return { state: 'unreadable', why: 'no 現在貯水量, and no 貯水率 on the master basis' };
+  return { state: 'values', observations: [{ observedAt, ...values }] };
 }
 
-function stemOf(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .trim();
+/**
+ * Every published dam, bound by its same-stem master in its prefecture (exact
+ * rungs only); the four with 10-minute feeds are recorded, never written.
+ */
+export function mieEntries(observedAt: Date, rows: ParsedRow[]): Entry[] {
+  return rows.map(
+    (row): Entry => ({
+      key: row.name,
+      name: row.name,
+      pref: PREF_BY_NAME[row.name] ?? PREF_CODE,
+      bind: { exact: true },
+      ...(UNIVERSE_ONLY[row.name] ? { dontWrite: 'a 10-minute feed covers it' } : {}),
+      reading: (dam) => mieReading(observedAt, row, dam?.activeCapacityM3 ?? null),
+    }),
+  );
 }
 
-/** The stamped row, else the same-stem dam in the name's prefecture. */
-export function chooseMaster(name: string, masters: MieMaster[]): bigint | null {
-  const stamped = stampedMaster(masters, name);
-  if (stamped) return stamped.id;
-  const prefCode = PREF_BY_NAME[name] ?? PREF_CODE;
-  const stem = stemOf(name);
-  let best: MieMaster | null = null;
-  for (const m of masters) {
-    if (m.prefCode !== prefCode || stemOf(m.name) !== stem) continue;
-    if (!best || preferMaster(m, best)) best = m;
-  }
-  return best?.id ?? null;
-}
-
-// --- DB helpers -------------------------------------------------------------
-
-// --- task -------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
+export default ingestTask(SOURCE_ID, async (log) => {
   const r = await fetch(PAGE_URL, {
     headers: {
       'user-agent':
@@ -173,10 +164,7 @@ const task: Task = async (_payload, helpers) => {
     },
     signal: AbortSignal.timeout(20_000),
   });
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
-  }
+  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status} from ${PAGE_URL}`);
 
   const { observedAt, rows } = parseMieKigyoSuigen(await r.text());
   if (!observedAt) {
@@ -186,55 +174,5 @@ const task: Task = async (_payload, helpers) => {
   if (rows.length === 0) {
     throw new Error(`${SOURCE_ID}: date found but no dam rows — layout change?`);
   }
-
-  const masters = await sql<MieMaster[]>`
-    SELECT id, name, pref_code AS "prefCode", completed_year AS "completedYear",
-           active_capacity_m3::float8 AS "activeCapacityM3",
-           external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code IN ${sql([PREF_CODE, ...Object.values(PREF_BY_NAME)])}
-    ORDER BY id
-  `;
-
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = chooseMaster(p.name, masters);
-    const master = masters.find((m) => m.id === damId);
-    universe.push({
-      externalId: p.name,
-      name: p.name,
-      prefCode: master?.prefCode ?? PREF_BY_NAME[p.name] ?? PREF_CODE,
-      resolvedDamId: damId,
-    });
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${p.name}"`);
-      continue;
-    }
-    await bindExternalId(damId, SOURCE_ID, p.name);
-    if (UNIVERSE_ONLY[p.name]) continue;
-    const values = observationValues(p, master?.activeCapacityM3 ?? null);
-    if (!values) continue;
-    inputs.push({
-      observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      ...values,
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: null,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-  await recordUniverse(SOURCE_ID, universe);
-
-  const written = await upsertObservations(inputs);
-  log(
-    `${SOURCE_ID} done: parsed=${rows.length} matched=${universe.filter((u) => u.resolvedDamId).length} written=${written}`,
-  );
-};
-
-export default task;
+  return { entries: mieEntries(observedAt, rows) };
+});

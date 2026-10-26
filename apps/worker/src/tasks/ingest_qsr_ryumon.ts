@@ -15,14 +15,15 @@
 //   dam_chosuiritsu→ 貯水率 %            ("NN.NN％" → / 100)
 //   time_kansoku   → 観測時刻 JST        ("YYYY/MM/DD HH:MM")
 //
+// The endpoint exposes metric keys rather than a station id, so the published
+// name is the stable identity. A key answering 欠測 or a dash is the office's
+// own mark; the dam is provider-marked empty when every stored key does.
+//
 // Priority 303 (MLIT-managed dam). Cron hourly at :24.
 
-import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const BASE_URL =
   process.env.QSR_RYUMON_BASE_URL ??
@@ -30,11 +31,25 @@ const BASE_URL =
 
 const SOURCE_ID = 'qsr-ryumon-dam';
 const PREF_CODE = '40';
+const DAM_NAME = '竜門ダム';
+
+const KEYS = [
+  'time_kansoku',
+  'dam_ryunyu',
+  'dam_houryu',
+  'dam_chosuiryo',
+  'dam_chosuii',
+  'dam_chosuiritsu',
+] as const;
+export type RyumonKey = (typeof KEYS)[number];
 
 // --- parsing ----------------------------------------------------------------
 
-function parseNum(s: string): number | null {
-  const m = (s ?? '').replace(/,/g, '').match(/-?\d+(?:\.\d+)?/);
+function parseCell(s: string): Cell {
+  const t = (s ?? '').trim();
+  // 欠測 or a bare dash (a unit may follow), never a negative figure.
+  if (/^(?:欠測|[-－―ー−]+(?![\d.]))/.test(t)) return MARKED;
+  const m = t.replace(/,/g, '').match(/-?\d+(?:\.\d+)?/);
   if (!m) return null;
   const n = Number(m[0]);
   return Number.isFinite(n) ? n : null;
@@ -50,123 +65,67 @@ export function parseRyumonTimestamp(s: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-async function fetchKey(key: string, ua: string): Promise<string> {
+/** The dam's reading from the six key answers. */
+export function ryumonReading(v: Record<RyumonKey, string>): Reading {
+  const observedAt = parseRyumonTimestamp(v.time_kansoku);
+  if (!observedAt) return { state: 'unreadable', why: `time_kansoku "${v.time_kansoku}"` };
+
+  const inflow = parseCell(v.dam_ryunyu);
+  const outflow = parseCell(v.dam_houryu);
+  const storageThou = parseCell(v.dam_chosuiryo);
+  const level = parseCell(v.dam_chosuii);
+  const ratePct = numberIn(parseCell(v.dam_chosuiritsu));
+  const state = cellState([level, inflow, outflow, storageThou]);
+  if (state === 'empty') return { state, mark: '欠測 on every key' };
+  if (state === 'unreadable') return { state, why: 'no numeric key' };
+  const thou = numberIn(storageThou);
+  return {
+    state: 'values',
+    observations: [
+      {
+        observedAt,
+        storageVolumeM3: thou !== null ? thou * 1000 : null,
+        storageRate: ratePct !== null ? Math.max(0, Math.min(1, ratePct / 100)) : null,
+        inflowM3s: numberIn(inflow),
+        outflowM3s: numberIn(outflow),
+        waterLevelM: numberIn(level),
+      },
+    ],
+  };
+}
+
+/** The one dam, read once the run reaches it; a failed key makes it unreadable. */
+export function ryumonEntries(fetchKey: (key: RyumonKey) => Promise<string>): Entry[] {
+  return [
+    {
+      key: DAM_NAME,
+      name: DAM_NAME,
+      pref: PREF_CODE,
+      reading: async () => {
+        // Fetch all keys in parallel
+        const answers = await Promise.all(KEYS.map(fetchKey));
+        return ryumonReading(
+          Object.fromEntries(KEYS.map((k, i) => [k, answers[i] ?? ''])) as Record<
+            RyumonKey,
+            string
+          >,
+        );
+      },
+    },
+  ];
+}
+
+async function fetchKey(key: RyumonKey): Promise<string> {
   const r = await fetch(`${BASE_URL}?key=${key}`, {
-    headers: { 'user-agent': ua },
+    headers: {
+      'user-agent':
+        process.env.HTTP_USER_AGENT ??
+        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
+    },
     signal: AbortSignal.timeout(12_000),
   });
-  if (r.status !== 200) return '';
+  if (r.status !== 200) throw new Error(`HTTP ${r.status} for ${key}`);
   return (await r.text()).trim();
 }
 
-// --- DB helpers -------------------------------------------------------------
-
-async function findDamId(log: (s: string) => void): Promise<bigint | null> {
-  // Twins of a redeveloped dam tie on rank, so chooseRanked picks the current
-  // one; a row already stamped with the station keeps it (#79).
-  const rows = await sql<(BindableMaster & { rank: number })[]>`
-    SELECT id, name, completed_year AS "completedYear",
-           external_ids->>${SOURCE_ID} AS stamp,
-           CASE
-             WHEN name = '竜門ダム' THEN 0
-             WHEN name LIKE '%竜門%' THEN 1
-             ELSE 5
-           END AS rank
-    FROM dams
-    WHERE pref_code = ${PREF_CODE}
-      AND name LIKE '%竜門%'
-    ORDER BY rank, id
-  `;
-  const dam = chooseRanked(rows, '竜門ダム');
-  // The one dam this source publishes, matched or not — recorded so /coverage
-  // can say "they publish it, we failed to link it" instead of guessing. The
-  // endpoint exposes metric keys rather than a station id, so the published
-  // name keyed by prefecture is the stable identity.
-  const universe: UniverseRow[] = [
-    {
-      externalId: '竜門ダム',
-      name: '竜門ダム',
-      prefCode: PREF_CODE,
-      resolvedDamId: dam?.id ?? null,
-    },
-  ];
-  await recordUniverse(SOURCE_ID, universe);
-  if (!dam) {
-    log(`${SOURCE_ID}: no master match for 竜門ダム (pref ${PREF_CODE})`);
-    return null;
-  }
-  await bindExternalId(dam.id, SOURCE_ID, '竜門ダム');
-  return dam.id;
-}
-
-// --- task -------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
-  const ua =
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
-
-  // Fetch all keys in parallel
-  const [timeStr, ryunyuStr, houryuStr, chosuiryoStr, chosuiiStr, chosuiritsuStr] =
-    await Promise.all([
-      fetchKey('time_kansoku', ua),
-      fetchKey('dam_ryunyu', ua),
-      fetchKey('dam_houryu', ua),
-      fetchKey('dam_chosuiryo', ua),
-      fetchKey('dam_chosuii', ua),
-      fetchKey('dam_chosuiritsu', ua),
-    ]);
-
-  // Resolved before the value checks below: the provider publishes this dam
-  // whether or not this run's fetch carried usable numbers, and skipping the
-  // lookup would leave the source recorded as never scanned.
-  const damId = await findDamId(log);
-
-  const observedAt = parseRyumonTimestamp(timeStr);
-  if (!observedAt) {
-    log(`${SOURCE_ID}: failed to parse time: "${timeStr}"`);
-    return;
-  }
-  log(`${SOURCE_ID}: data at ${observedAt.toISOString()}`);
-
-  const inflowM3s = parseNum(ryunyuStr);
-  const outflowM3s = parseNum(houryuStr);
-  const storageThousandM3 = parseNum(chosuiryoStr);
-  const storageVolumeM3 = storageThousandM3 !== null ? storageThousandM3 * 1000 : null;
-  const waterLevelM = parseNum(chosuiiStr);
-  const ratePct = parseNum(chosuiritsuStr);
-  const storageRate = ratePct !== null ? Math.max(0, Math.min(1, ratePct / 100)) : null;
-
-  if (
-    waterLevelM === null &&
-    inflowM3s === null &&
-    outflowM3s === null &&
-    storageVolumeM3 === null
-  ) {
-    log(`${SOURCE_ID}: all values null; skipping`);
-    return;
-  }
-
-  if (!damId) return;
-
-  const written = await upsertObservations([
-    {
-      observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3,
-      storageRate,
-      inflowM3s,
-      outflowM3s,
-      waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    },
-  ]);
-  log(`${SOURCE_ID} done: written=${written}`);
-};
-
-export default task;
+export default ingestTask(SOURCE_ID, async () => ({ entries: ryumonEntries(fetchKey) }));

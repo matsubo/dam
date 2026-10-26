@@ -36,12 +36,9 @@
 // outrank them there. The other three dams have no other live source.
 // Cron hourly at :32.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { cellState } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const DATA_URL = process.env.MC_TOTTORI_HYDRO_URL ?? 'https://mchp-k.co.jp/business/list.php';
 
@@ -110,66 +107,37 @@ export function parseMcTottoriHydro(html: string): ParsedRow[] {
   return rows;
 }
 
-// --- matching ---------------------------------------------------------------
+// --- entries ----------------------------------------------------------------
 
-/**
- * Best master dam for a published name: the row already stamped with it keeps
- * it; otherwise the exact stem ("中津ダム" / "三朝調整池" → 中津 / 三朝), the
- * live （元）/（再） twin before the lower id. Only exact stems bind — the
- * names are short enough that a prefix or substring hit (中津 → 中津川) would
- * be a different dam.
- */
-export function chooseMaster(name: string, masters: BindableMaster[]): bigint | null {
-  const stamped = stampedMaster(masters, name);
-  if (stamped) return stamped.id;
-  const stemOf = (s: string): string =>
-    s
-      .normalize('NFKC')
-      .replace(/\([^)]*\)/g, '')
-      .replace(/(ダム|調整池)$/, '')
-      .trim();
-  const stem = stemOf(name);
-  let best: BindableMaster | null = null;
-  for (const m of masters) {
-    if (stemOf(m.name) !== stem) continue;
-    if (!best || preferMaster(m, best)) best = m;
+export function mcTottoriReading(r: ParsedRow): Reading {
+  if (cellState([r.inflowM3s, r.outflowM3s]) !== 'values') {
+    return { state: 'unreadable', why: 'no inflow or release' };
   }
-  return best?.id ?? null;
+  if (!r.observedAt) return { state: 'unreadable', why: 'no 年月日 / 時刻' };
+  return {
+    state: 'values',
+    observations: [{ observedAt: r.observedAt, inflowM3s: r.inflowM3s, outflowM3s: r.outflowM3s }],
+  };
 }
 
-// --- DB helpers -------------------------------------------------------------
-
-async function matchMaster(
-  rows: ParsedRow[],
-  log: (s: string) => void,
-): Promise<Map<string, bigint>> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const damByName = new Map<string, bigint>();
-  const universe: UniverseRow[] = [];
-
-  for (const r of rows) {
-    const damId = chooseMaster(r.name, masters);
-    universe.push({ externalId: r.name, name: r.name, prefCode: PREF_CODE, resolvedDamId: damId });
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${r.name}"`);
-      continue;
-    }
-    damByName.set(r.name, damId);
-    await bindExternalId(damId, SOURCE_ID, r.name);
-  }
-
-  await recordUniverse(SOURCE_ID, universe);
-  return damByName;
+/**
+ * Every dam block, keyed by its <h1>. Only exact stems bind ("中津ダム" /
+ * "三朝調整池" → 中津 / 三朝) — the names are short enough that a prefix or
+ * substring hit (中津 → 中津川) would be a different dam.
+ */
+export function mcTottoriEntries(html: string): Entry[] {
+  return parseMcTottoriHydro(html).map((r) => ({
+    key: r.name,
+    name: r.name,
+    pref: PREF_CODE,
+    bind: { name: r.name.replace(/調整池$/, ''), exact: true },
+    reading: mcTottoriReading(r),
+  }));
 }
 
 // --- task -------------------------------------------------------------------
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
+export default ingestTask(SOURCE_ID, async (log) => {
   const r = await fetch(DATA_URL, {
     headers: {
       'user-agent':
@@ -178,46 +146,10 @@ const task: Task = async (_payload, helpers) => {
     },
     signal: AbortSignal.timeout(20_000),
   });
+  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status}`);
 
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
-  }
-
-  const rows = parseMcTottoriHydro(await r.text());
-  log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
-  if (rows.length === 0) {
-    log(`${SOURCE_ID}: no dam blocks on the page; not recording an empty universe`);
-    return;
-  }
-
-  const damByName = await matchMaster(rows, log);
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = damByName.get(p.name);
-    if (!damId) continue;
-    if (!p.observedAt) {
-      log(`${SOURCE_ID}: no observation time for "${p.name}"; skipping`);
-      continue;
-    }
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: null,
-      storageRate: null,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: null,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${damByName.size} written=${written}`);
-};
-
-export default task;
+  // No dam block on the page lists nothing, and the run fails the job.
+  const entries = mcTottoriEntries(await r.text());
+  log(`${SOURCE_ID}: ${entries.length} dams`);
+  return { entries };
+});

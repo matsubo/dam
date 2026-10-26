@@ -8,7 +8,9 @@
 //   荒川系  4: 二瀬/滝沢/浦山/荒川貯水池
 //
 // Source: https://www.water.go.jp/honsya/honsya/suigen/sokuhou/toneara/index.html
-// Format: Static HTML table; "令和N年M月D日0時現在"; units 万m³.
+// Format: Static HTML table; "令和N年M月D日0時現在"; units 万m³. Each system's
+//         table ends with an 「9ダム合計」/「4ダム合計」 row, a sum over the
+//         facilities above it, so not a universe entry.
 // License: 水資源機構 published; 出典明示で再配布可.
 //
 // New coverage vs prior sources:
@@ -16,39 +18,55 @@
 //   Overlap dams (矢木沢/奈良俣/下久保/草木/浦山/滝沢) get daily cadence here
 //   instead of jwa-junpo's 10-day cadence.
 
-import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const PAGE_URL =
   process.env.JWA_TONEARA_URL ??
   'https://www.water.go.jp/honsya/honsya/suigen/sokuhou/toneara/index.html';
+const SOURCE_ID = 'jwa-toneara';
 
-const NAME_MAP: Array<{ tonaraName: string; masterName: string; prefCodes: string[] }> = [
+/**
+ * The prefectures each listed facility's master may be in, by printed name.
+ * A multi-code entry is a lookup scope, not an attribution — its first code
+ * is sometimes the wrong prefecture (草木 is 群馬, not 栃木).
+ */
+const PREFS_BY_NAME: Readonly<Record<string, string[]>> = {
   // 利根川水系
-  { tonaraName: '矢木沢ダム', masterName: '矢木沢', prefCodes: ['10'] }, // 群馬
-  { tonaraName: '奈良俣ダム', masterName: '奈良俣', prefCodes: ['10'] },
-  { tonaraName: '藤原ダム', masterName: '藤原', prefCodes: ['10'] },
-  { tonaraName: '相俣ダム', masterName: '相俣', prefCodes: ['10'] },
-  { tonaraName: '薗原ダム', masterName: '薗原', prefCodes: ['10'] },
-  { tonaraName: '八ッ場ダム', masterName: '八ッ場', prefCodes: ['10', '20'] },
-  { tonaraName: '下久保ダム', masterName: '下久保', prefCodes: ['10', '11'] },
-  { tonaraName: '草木ダム', masterName: '草木', prefCodes: ['09', '10'] }, // 栃木/群馬
-  { tonaraName: '渡良瀬貯水池', masterName: '渡良瀬', prefCodes: ['08', '09', '10', '11'] },
+  矢木沢ダム: ['10'], // 群馬
+  奈良俣ダム: ['10'],
+  藤原ダム: ['10'],
+  相俣ダム: ['10'],
+  薗原ダム: ['10'],
+  八ッ場ダム: ['10', '20'],
+  下久保ダム: ['10', '11'],
+  草木ダム: ['09', '10'], // 栃木/群馬
+  渡良瀬貯水池: ['08', '09', '10', '11'],
   // 荒川水系
-  { tonaraName: '二瀬ダム', masterName: '二瀬', prefCodes: ['11'] }, // 埼玉
-  { tonaraName: '滝沢ダム', masterName: '滝沢', prefCodes: ['11'] },
-  { tonaraName: '浦山ダム', masterName: '浦山', prefCodes: ['11'] },
-  { tonaraName: '荒川貯水池', masterName: '荒川', prefCodes: ['11', '13'] },
-];
+  二瀬ダム: ['11'], // 埼玉
+  滝沢ダム: ['11'],
+  浦山ダム: ['11'],
+  荒川貯水池: ['11', '13'],
+};
 
-interface ParsedRow {
+/**
+ * The master's name where it differs from the printed one: 渡良瀬貯水池 is
+ * filed as 渡良瀬遊水地（一期）, 荒川貯水池 as 荒川調節池 (tokyo-waterworks
+ * binds the same two names to them).
+ */
+const MASTER_NAME: Readonly<Record<string, string>> = {
+  渡良瀬貯水池: '渡良瀬',
+  荒川貯水池: '荒川',
+};
+
+/** Cells the page prints instead of a number. */
+const DASHES: Readonly<Record<string, true>> = { '―': true, '-': true, '—': true };
+
+export interface ParsedRow {
   tonaraName: string;
-  storageVolumeManM3: number;
-  storageRatePct: number;
+  storageVolumeManM3: Cell;
+  storageRatePct: Cell;
 }
 
 function textOf(s: string): string {
@@ -62,11 +80,9 @@ function textOf(s: string): string {
     .trim();
 }
 
-function parseNum(s: string): number | null {
+function parseCell(s: string): Cell {
   const cleaned = s.replace(/[,\s　%万m³/]/g, '');
-  if (!cleaned || cleaned === '―' || cleaned === '-' || cleaned === '—') return null;
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? n : null;
+  return cell(cleaned ? Number(cleaned) : null, DASHES[cleaned] === true);
 }
 
 /**
@@ -85,88 +101,73 @@ export function parseToneAraTimestamp(text: string): Date | null {
 }
 
 /**
- * Parse HTML table rows. Expected column layout per row:
+ * Parse HTML table rows. Expected column layout per data row (<td> cells):
  *   [0] ダム名  [1] 利水容量(万m³)  [2] 前日(万m³)  [3] 現在(万m³)  [4] 現在貯水率(%)
+ * Header rows are <th>; a 合計 row sums the facilities above it and is skipped.
  */
 export function parseToneAraHtml(html: string): { reportDate: Date | null; rows: ParsedRow[] } {
   const reportDate = parseToneAraTimestamp(html);
   const rows: ParsedRow[] = [];
-  const knownNames = new Set(NAME_MAP.map((m) => m.tonaraName));
   const seen = new Set<string>();
 
   const rowRe = /<tr\b[^>]*>([\s\S]*?)<\/tr>/g;
   let m: RegExpExecArray | null;
   // biome-ignore lint/suspicious/noAssignInExpressions: idiomatic regex iteration
   while ((m = rowRe.exec(html)) !== null) {
-    const cells = [...(m[1] ?? '').matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/g)].map((c) =>
+    const cells = [...(m[1] ?? '').matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/g)].map((c) =>
       textOf(c[1] ?? ''),
     );
     if (cells.length < 5) continue;
     const name = cells[0] ?? '';
-    if (!knownNames.has(name) || seen.has(name)) continue;
-    // Column 3 = current storage (万m³), column 4 = storage rate (%).
-    const volume = parseNum(cells[3] ?? '');
-    const rate = parseNum(cells[4] ?? '');
-    if (volume == null || rate == null) continue;
+    if (!name || name.endsWith('合計') || seen.has(name)) continue;
     seen.add(name);
-    rows.push({ tonaraName: name, storageVolumeManM3: volume, storageRatePct: rate });
+    // Column 3 = current storage (万m³), column 4 = storage rate (%).
+    rows.push({
+      tonaraName: name,
+      storageVolumeManM3: parseCell(cells[3] ?? ''),
+      storageRatePct: parseCell(cells[4] ?? ''),
+    });
   }
   return { reportDate, rows };
 }
 
-interface DamMatch {
-  tonaraName: string;
-  damId: bigint;
+/** One row's reading at the page's 0時 timestamp. */
+export function toneAraReading(row: ParsedRow, reportDate: Date | null): Reading {
+  const state = cellState([row.storageVolumeManM3, row.storageRatePct]);
+  if (state === 'empty') return { state, mark: '貯水量 and 貯水率 printed as ―' };
+  if (state === 'unreadable') return { state, why: 'no 現在貯水量 or 現在貯水率 number' };
+  if (!reportDate) return { state: 'unreadable', why: 'no 令和N年M月D日 on the page' };
+  const volumeMan = numberIn(row.storageVolumeManM3);
+  const ratePct = numberIn(row.storageRatePct);
+  return {
+    state: 'values',
+    observations: [
+      {
+        observedAt: reportDate,
+        storageVolumeM3: volumeMan != null ? volumeMan * 10_000 : null, // 万m³ → m³
+        storageRate: ratePct != null ? Math.max(0, Math.min(1, ratePct / 100)) : null,
+      },
+    ],
+  };
 }
 
-async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
-  const matches: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  for (const m of NAME_MAP) {
-    // （元） and （再） rank alike so chooseRanked binds the current twin.
-    const candidates = await sql<(BindableMaster & { rank: number })[]>`
-      SELECT id, name, completed_year AS "completedYear",
-             external_ids->>'jwa-toneara' AS stamp,
-             CASE
-               WHEN name = ${`${m.masterName}ダム`}        THEN 0
-               WHEN name = ${m.masterName}                  THEN 1
-               WHEN name = ${`${m.masterName}貯水池`}       THEN 2
-               WHEN name LIKE ${`${m.masterName}（再）%`}   THEN 3
-               WHEN name LIKE ${`${m.masterName}（元）%`}   THEN 3
-               ELSE 5
-             END AS rank
-      FROM dams
-      WHERE pref_code = ANY(${m.prefCodes}::text[])
-        AND name LIKE ${`%${m.masterName}%`}
-    `;
-    const r = chooseRanked(candidates, m.tonaraName);
-    universe.push({
-      externalId: m.tonaraName,
-      name: m.tonaraName,
-      // A multi-code entry is a LIKE-narrowing hint, not an attribution — its
-      // first code is sometimes the wrong prefecture (草木 is 群馬, not 栃木),
-      // and pref_code is COALESCE-sticky once written.
-      prefCode: m.prefCodes.length === 1 ? (m.prefCodes[0] ?? null) : null,
-      resolvedDamId: r?.id ?? null,
-    });
-    if (!r) {
-      log(`jwa-toneara: no master match for "${m.tonaraName}" (${m.masterName})`);
-      continue;
-    }
-    matches.push({ tonaraName: m.tonaraName, damId: r.id });
-    await bindExternalId(r.id, 'jwa-toneara', m.tonaraName);
-  }
-  await recordUniverse('jwa-toneara', universe);
-  return matches;
+/** Every listed facility, keyed by its printed name. */
+export function toneAraEntries(html: string): Entry[] {
+  const { reportDate, rows } = parseToneAraHtml(html);
+  return rows.map((row) => {
+    const prefs = PREFS_BY_NAME[row.tonaraName] ?? [];
+    const masterName = MASTER_NAME[row.tonaraName];
+    return {
+      key: row.tonaraName,
+      name: row.tonaraName,
+      pref: prefs.length === 0 ? null : prefs.length === 1 ? (prefs[0] ?? null) : prefs,
+      ...(masterName ? { bind: { name: masterName } } : {}),
+      reading: toneAraReading(row, reportDate),
+    };
+  });
 }
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  const matches = await ensureExternalIds(log);
-  log(`jwa-toneara: matched ${matches.length}/${NAME_MAP.length} master dams`);
-
+export default ingestTask(SOURCE_ID, async (log) => {
   const r = await fetch(PAGE_URL, {
     headers: {
       'user-agent':
@@ -175,42 +176,8 @@ const task: Task = async (_payload, helpers) => {
     },
     signal: AbortSignal.timeout(20_000),
   });
-  if (r.status !== 200) {
-    log(`jwa-toneara: HTTP ${r.status}; aborting`);
-    return;
-  }
-  const html = await r.text();
-  const { reportDate, rows: parsed } = parseToneAraHtml(html);
-  log(
-    `jwa-toneara: parsed ${parsed.length} rows, reportDate=${reportDate?.toISOString() ?? '(missing)'}`,
-  );
-
-  if (!reportDate) {
-    log('jwa-toneara: no reportDate found; aborting to avoid wrong timestamps');
-    return;
-  }
-
-  const matchByName = new Map(matches.map((m) => [m.tonaraName, m.damId]));
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const row of parsed) {
-    const damId = matchByName.get(row.tonaraName);
-    if (!damId) continue;
-    inputs.push({
-      observedAt: reportDate,
-      damId,
-      sourceId: 'jwa-toneara',
-      storageVolumeM3: row.storageVolumeManM3 * 10_000, // 万m³ → m³
-      storageRate: Math.max(0, Math.min(1, row.storageRatePct / 100)),
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: null,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-  const written = await upsertObservations(inputs);
-  log(`jwa-toneara done: parsed=${parsed.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status} for ${PAGE_URL}`);
+  const entries = toneAraEntries(await r.text());
+  log(`${SOURCE_ID}: ${entries.length} facilities listed`);
+  return { entries };
+});

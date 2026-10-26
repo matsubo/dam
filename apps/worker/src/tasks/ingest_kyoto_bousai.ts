@@ -5,8 +5,12 @@
 //   大野ダム / 畑川ダム (大野ダム管理) /
 //   天ヶ瀬ダム (淀川ダム統管) /
 //   日吉ダム / 高山ダム / 布目ダム (水資源機構)
-//   (+ 瀬田洗堰1・瀬田洗堰2 appear as sluice gates; they resolve to no master
+//   (+ 瀬田洗堰1・瀬田洗堰2 appear as sluice gates; they are not one master
 //    dam, and are recorded in source_universe with a null resolvedDamId)
+//
+// The 局名 cell is the only id the table publishes, so the printed name is the
+// key. 布目ダム is managed by 水資源機構 and sits in Nara (29) but appears in
+// this feed, so masters are looked up in 26 and 29.
 //
 // Source:
 //   https://chisuibousai2.pref.kyoto.jp/bousai/servlet/bousaiweb.servletBousaiTableStatus?dk=4
@@ -23,24 +27,21 @@
 //
 // Priority 308. Cron hourly at :42.
 
-import { type BindableMaster, preferMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Bind, Entry, Reading } from '../ingest/types.ts';
 
 const DATA_URL =
   process.env.KYOTO_BOUSAI_URL ??
   'https://chisuibousai2.pref.kyoto.jp/bousai/servlet/bousaiweb.servletBousaiTableStatus?dk=4';
 
-const PREF_CODE = '26';
+const PREFS = ['26', '29'];
 const SOURCE_ID = 'kyoto-bousai';
 
 // --- types ------------------------------------------------------------------
 
 export interface ParsedRow {
   kyotoName: string;
-  observedAt: Date;
+  observedAt: Date | null;
   waterLevelM: number | null;
   storageVolumeM3: number | null;
   inflowM3s: number | null;
@@ -53,13 +54,16 @@ function cleanCell(html: string): string {
   return html
     .replace(/&(?:rarr|uarr|darr|larr|nbsp|amp|lt|gt);/gi, ' ')
     .replace(/<[^>]+>/g, '')
-    .replace(/ /g, ' ')
+    .replace(/\u00a0/g, ' ')
     .trim();
 }
 
 /** "YYYY MM/DD HH:MM" (non-breaking spaces allowed, JST) → UTC. */
 export function parseKyotoTimestamp(s: string): Date | null {
-  const normalized = s.replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
+  const normalized = s
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   const m = normalized.match(/^(\d{4})\s+(\d{2})\/(\d{2})\s+(\d{2}):(\d{2})$/);
   if (!m) return null;
   const [, yr, mo, dy, hh, mi] = m.map(Number) as [string, number, number, number, number, number];
@@ -83,106 +87,72 @@ export function parseKyotoTable(html: string): ParsedRow[] {
     );
     if (rawCells.length < 11) continue;
 
-    const nameHtml = rawCells[2] ?? '';
-    const damName = cleanCell(nameHtml);
+    const damName = cleanCell(rawCells[2] ?? '');
     if (!damName) continue;
 
-    const tsRaw = cleanCell(rawCells[4] ?? '');
-    const observedAt = parseKyotoTimestamp(tsRaw);
-    if (!observedAt) continue;
-
-    const waterLevelM = parseVal(cleanCell(rawCells[7] ?? ''));
     const volRaw = parseVal(cleanCell(rawCells[8] ?? ''));
-    const inflowM3s = parseVal(cleanCell(rawCells[9] ?? ''));
-    const outflowM3s = parseVal(cleanCell(rawCells[10] ?? ''));
-
-    if (waterLevelM === null && inflowM3s === null && outflowM3s === null) continue;
-
     rows.push({
       kyotoName: damName,
-      observedAt,
-      waterLevelM,
+      observedAt: parseKyotoTimestamp(cleanCell(rawCells[4] ?? '')),
+      waterLevelM: parseVal(cleanCell(rawCells[7] ?? '')),
       storageVolumeM3: volRaw != null ? volRaw * 1000 : null,
-      inflowM3s,
-      outflowM3s,
+      inflowM3s: parseVal(cleanCell(rawCells[9] ?? '')),
+      outflowM3s: parseVal(cleanCell(rawCells[10] ?? '')),
     });
   }
 
   return rows;
 }
 
-// --- DB helpers -------------------------------------------------------------
-
-function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/貯水池$/, '')
-    .trim();
-}
-
-interface DamMatch {
-  kyotoName: string;
-  damId: bigint;
-}
-
-async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  // Include Nara (29) alongside Kyoto (26): 布目ダム is managed by 水資源機構 and
-  // sits in Nara pref, but appears in the Kyoto data feed.
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear"
-    FROM dams WHERE pref_code = ANY(ARRAY['26', '29']) ORDER BY id
-  `;
-  const out: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing. The
-  // 瀬田洗堰 sluice-gate rows belong here too, with a null resolvedDamId.
-  const universe: UniverseRow[] = [];
-
-  for (const r of rows) {
-    const stem = normalizeName(r.kyotoName);
-    if (!stem) continue;
-
-    let best: { m: BindableMaster; rank: number } | null = null;
-    for (const m of masters) {
-      const mStem = normalizeName(m.name);
-      let rank: number;
-      if (m.name === r.kyotoName) rank = 0;
-      else if (mStem === stem) rank = 1;
-      else if (m.name === `${stem}ダム`) rank = 2;
-      else if (mStem.startsWith(stem)) rank = 3;
-      else if (mStem.includes(stem)) rank = 4;
-      else continue;
-      if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-        best = { m, rank };
-      }
-    }
-
-    // The 局名 cell is the only id the table publishes; pair it with the
-    // feed's own prefecture (26) so the key stays unique.
-    universe.push({
-      externalId: r.kyotoName,
-      name: r.kyotoName,
-      prefCode: PREF_CODE,
-      resolvedDamId: best?.m.id ?? null,
-    });
-
-    if (!best) {
-      log(`${SOURCE_ID}: no master match for "${r.kyotoName}"`);
-      continue;
-    }
-    out.push({ kyotoName: r.kyotoName, damId: best.m.id });
+/** A row with a time and a 貯水位 or a flow has values; blank cells carry no legend. */
+export function kyotoReading(p: ParsedRow): Reading {
+  if (!p.observedAt) return { state: 'unreadable', why: 'no 最新観測時刻' };
+  if (p.waterLevelM === null && p.inflowM3s === null && p.outflowM3s === null) {
+    return { state: 'unreadable', why: 'no 貯水位 or flow' };
   }
+  return {
+    state: 'values',
+    observations: [
+      {
+        observedAt: p.observedAt,
+        waterLevelM: p.waterLevelM,
+        storageVolumeM3: p.storageVolumeM3,
+        inflowM3s: p.inflowM3s,
+        outflowM3s: p.outflowM3s,
+      },
+    ],
+  };
+}
 
-  await recordUniverse(SOURCE_ID, universe);
-  return out;
+/**
+ * How a row binds when the name ladder cannot: 天ヶ瀬ダム's stem matches
+ * 天ヶ瀬（再）/（元） and a third, bare 天ヶ瀬 row (no NDI), so it is pinned to
+ * the redeveloped 天ヶ瀬（再） (NDI 1495) kkr-mlit-dam and kasenbosai feed. The
+ * 瀬田洗堰 sluice gates are no master dam.
+ */
+function bindFor(kyotoName: string): Bind | undefined {
+  if (kyotoName === '天ヶ瀬ダム') return { ndi: '1495' };
+  if (kyotoName.includes('洗堰')) return 'never';
+  return undefined;
+}
+
+/** Every row of the table. */
+export function kyotoEntries(rows: ParsedRow[]): Entry[] {
+  return rows.map((p): Entry => {
+    const bind = bindFor(p.kyotoName);
+    return {
+      key: p.kyotoName,
+      name: p.kyotoName,
+      pref: PREFS,
+      ...(bind ? { bind } : {}),
+      reading: kyotoReading(p),
+    };
+  });
 }
 
 // --- task -------------------------------------------------------------------
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
+export default ingestTask(SOURCE_ID, async (log) => {
   const r = await fetch(DATA_URL, {
     headers: {
       'user-agent':
@@ -191,41 +161,10 @@ const task: Task = async (_payload, helpers) => {
     },
     signal: AbortSignal.timeout(20_000),
   });
+  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status}`);
 
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
-  }
-
-  const buf = await r.arrayBuffer();
-  const html = new TextDecoder('shift_jis').decode(buf);
+  const html = new TextDecoder('shift_jis').decode(await r.arrayBuffer());
   const rows = parseKyotoTable(html);
   log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
-
-  const matches = await matchMaster(rows, log);
-  const damByName = new Map(matches.map((m) => [m.kyotoName, m.damId]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = damByName.get(p.kyotoName);
-    if (!damId) continue;
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: null,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+  return { entries: kyotoEntries(rows) };
+});

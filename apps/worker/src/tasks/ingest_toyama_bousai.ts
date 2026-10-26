@@ -45,15 +45,18 @@
 // its 貯水量 / 貯水率.
 //
 // A 貯水率 on a row whose 貯水位 is 欠測 is dropped: 城端 and 利賀川 carried
-// 18.8 / 15.4 % that way while MLIT flagged the same readings missing.
+// 18.8 / 15.4 % that way while MLIT flagged the same readings missing. A dam
+// whose 貯水位 and flows are all at the 欠測 sentinel is provider-marked
+// empty.
+//
+// damname_data.csv is the published list, keyed by the printed name (the
+// stamp since this source started). When dam_data.csv cannot be read, every
+// listed dam is unreadable.
 // Priority 308.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const DATA_BASE = process.env.TOYAMA_BOUSAI_DATA_BASE ?? 'https://kawa.pref.toyama.jp/camera/data';
 
@@ -83,16 +86,6 @@ export interface ToyamaStation {
   ratePublished: boolean;
 }
 
-export interface ParsedRow {
-  toyamaName: string;
-  observedAt: Date;
-  waterLevelM: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
-  /** 貯水率 利水容量, 0..1. */
-  storageRate: number | null;
-}
-
 // --- parsing ----------------------------------------------------------------
 
 function csvRows(csv: string): string[][] {
@@ -102,11 +95,12 @@ function csvRows(csv: string): string[][] {
     .map((line) => line.split(',').map((c) => c.trim()));
 }
 
-/** A number, or null when missing or at/below the upstream's 欠測 sentinel. */
-function reading(s: string | undefined, missingAtOrBelow: number): number | null {
+/** A value cell: the upstream's 欠測 sentinel (or below) is its mark. */
+function reading(s: string | undefined, missingAtOrBelow: number): Cell {
   if (s === undefined || s === '') return null;
   const n = Number(s);
-  return Number.isFinite(n) && n > missingAtOrBelow ? n : null;
+  if (!Number.isFinite(n)) return null;
+  return cell(n, n <= missingAtOrBelow);
 }
 
 /** damname_data.csv — the provider's whole published list, in page order. */
@@ -120,136 +114,80 @@ export function parseToyamaStations(csv: string): ToyamaStation[] {
   return out;
 }
 
-/** dam_data.csv joined to the station list by code. */
-export function parseToyamaDamData(csv: string, stations: ToyamaStation[]): ParsedRow[] {
-  const byCode = new Map(stations.map((s) => [s.code, s]));
-  const rows: ParsedRow[] = [];
-  for (const c of csvRows(csv)) {
-    const [code, date, time, level, , inflow, outflow, rateIrr] = c;
-    const station = code ? byCode.get(code) : undefined;
-    if (!station) continue;
-    const dm = date?.match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
-    const tm = time?.match(/^(\d{2}):(\d{2})$/);
-    if (!dm || !tm) continue;
-    const observedAt = new Date(
-      Date.UTC(Number(dm[1]), Number(dm[2]) - 1, Number(dm[3]), Number(tm[1]) - 9, Number(tm[2])),
-    );
+/** One dam's reading from its dam_data.csv row. */
+export function toyamaReading(station: ToyamaStation, row: string[] | undefined): Reading {
+  if (!row) return { state: 'unreadable', why: 'no dam_data.csv row' };
+  const [, date, time, levelRaw, , inflowRaw, outflowRaw, rateIrr] = row;
+  const dm = date?.match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
+  const tm = time?.match(/^(\d{2}):(\d{2})$/);
+  if (!dm || !tm) return { state: 'unreadable', why: `time "${date} ${time}"` };
+  const observedAt = new Date(
+    Date.UTC(Number(dm[1]), Number(dm[2]) - 1, Number(dm[3]), Number(tm[1]) - 9, Number(tm[2])),
+  );
 
-    const waterLevelM = reading(level, -9999.99);
-    const fix = FLOW_FIX[station.code];
-    const flow = (s: string | undefined): number | null => {
-      const v = reading(s, -99999.99);
-      return v !== null && fix ? fix(v) : v;
-    };
-    const inflowM3s = flow(inflow);
-    const outflowM3s = flow(outflow);
-    const pct = station.ratePublished && waterLevelM !== null ? reading(rateIrr, -99.9) : null;
-    const storageRate = pct === null ? null : pct / 100;
+  const level = reading(levelRaw, -9999.99);
+  const fix = FLOW_FIX[station.code];
+  const flow = (s: string | undefined): Cell => {
+    const v = reading(s, -99999.99);
+    return typeof v === 'number' && fix ? fix(v) : v;
+  };
+  const inflow = flow(inflowRaw);
+  const outflow = flow(outflowRaw);
+  // A rate held over a 欠測 level is not a reading, and where the page prints
+  // － (shown flag 0) there is none.
+  const rate: Cell[] =
+    station.ratePublished && typeof level === 'number' ? [reading(rateIrr, -99.9)] : [];
 
-    if (waterLevelM === null && inflowM3s === null && outflowM3s === null && storageRate === null) {
-      continue;
-    }
-    rows.push({
-      toyamaName: station.toyamaName,
-      observedAt,
-      waterLevelM,
-      inflowM3s,
-      outflowM3s,
-      storageRate,
-    });
-  }
-  return rows;
+  const state = cellState([level, inflow, outflow, ...rate]);
+  if (state === 'empty') return { state, mark: '欠測 sentinel on 貯水位 and both flows' };
+  if (state === 'unreadable') return { state, why: 'no value cell parsed' };
+  const pct = rate[0] === undefined ? null : numberIn(rate[0]);
+  return {
+    state: 'values',
+    observations: [
+      {
+        observedAt,
+        waterLevelM: numberIn(level),
+        inflowM3s: numberIn(inflow),
+        outflowM3s: numberIn(outflow),
+        storageRate: pct === null ? null : pct / 100,
+      },
+    ],
+  };
 }
 
-// --- DB helpers -------------------------------------------------------------
-
-function normalizeName(s: string): string {
-  return (
-    s
-      .replace(/[（(][^）)]*[）)]/g, '')
-      .replace(/ダム$/, '')
-      .replace(/貯水池$/, '')
-      // Normalise 第N kanji numerals → Arabic so "第二" matches master "第2".
-      .replace(/第一/g, '第1')
-      .replace(/第二/g, '第2')
-      .replace(/第三/g, '第3')
-      .replace(/第四/g, '第4')
-      .replace(/第五/g, '第5')
-      .trim()
-  );
+/** 第N kanji numerals as the master writes them: 上市川第二 → 上市川第2. */
+function arabicOrdinal(name: string): string {
+  return name.replace(/第([一二三四五])/g, (_m, k: string) => `第${'一二三四五'.indexOf(k) + 1}`);
 }
 
 /**
- * Best master dam for a published dam name. The name is also the station's
- * stamp, so a row already stamped with it keeps it (#57); otherwise exact name
- * beats stem beats prefix beats substring, and a tie goes to the current
- * （元）/（再） twin.
+ * Every published dam, read from dam_data.csv joined by code (an Error when
+ * the CSV could not be read). A data row whose code is not on the list is not
+ * published.
  */
-export function chooseMaster(toyamaName: string, masters: BindableMaster[]): bigint | null {
-  const stamped = stampedMaster(masters, toyamaName);
-  if (stamped) return stamped.id;
-  const stem = normalizeName(toyamaName);
-  if (!stem) return null;
-  let best: { m: BindableMaster; rank: number } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (m.name === toyamaName) rank = 0;
-    else if (mStem === stem) rank = 1;
-    else if (m.name === `${stem}ダム`) rank = 2;
-    else if (mStem.startsWith(stem)) rank = 3;
-    else if (mStem.includes(stem)) rank = 4;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-      best = { m, rank };
-    }
-  }
-  return best?.m.id ?? null;
-}
-
-interface DamMatch {
-  toyamaName: string;
-  damId: bigint;
-}
-
-/** Binds each published dam and records the whole published list. */
-async function matchMaster(
-  stations: ToyamaStation[],
-  log: (s: string) => void,
-): Promise<DamMatch[]> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const out: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-
-  for (const r of stations) {
-    if (!normalizeName(r.toyamaName)) continue;
-    const damId = chooseMaster(r.toyamaName, masters);
-    universe.push({
-      externalId: r.toyamaName,
-      name: r.toyamaName,
-      prefCode: PREF_CODE,
-      resolvedDamId: damId,
-    });
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${r.toyamaName}"`);
-      continue;
-    }
-    out.push({ toyamaName: r.toyamaName, damId });
-    await bindExternalId(damId, SOURCE_ID, r.toyamaName);
-  }
-
-  await recordUniverse(SOURCE_ID, universe);
-  return out;
+export function toyamaEntries(stations: ToyamaStation[], dataCsv: string | Error): Entry[] {
+  const rowByCode = new Map(
+    dataCsv instanceof Error ? [] : csvRows(dataCsv).map((c) => [c[0], c] as const),
+  );
+  return stations.map((s): Entry => {
+    const bindName = arabicOrdinal(s.toyamaName);
+    return {
+      key: s.toyamaName,
+      name: s.toyamaName,
+      pref: PREF_CODE,
+      ...(bindName !== s.toyamaName ? { bind: { name: bindName } } : {}),
+      reading:
+        dataCsv instanceof Error
+          ? { state: 'unreadable', why: dataCsv.message }
+          : toyamaReading(s, rowByCode.get(s.code)),
+    };
+  });
 }
 
 // --- task -------------------------------------------------------------------
 
-async function fetchCsv(file: string, log: (s: string) => void): Promise<string | null> {
+async function fetchCsv(file: string): Promise<string> {
   const r = await fetch(`${DATA_BASE}/${file}`, {
     headers: {
       'user-agent':
@@ -258,49 +196,16 @@ async function fetchCsv(file: string, log: (s: string) => void): Promise<string 
     },
     signal: AbortSignal.timeout(20_000),
   });
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: ${file} HTTP ${r.status}; aborting`);
-    return null;
-  }
+  if (r.status !== 200) throw new Error(`${file} HTTP ${r.status}`);
   return r.text();
 }
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
-  const namesCsv = await fetchCsv('damname_data.csv', log);
-  if (namesCsv === null) return;
-  const dataCsv = await fetchCsv('dam_data.csv', log);
-  if (dataCsv === null) return;
-
-  const stations = parseToyamaStations(namesCsv);
-  const rows = parseToyamaDamData(dataCsv, stations);
-  log(`${SOURCE_ID}: ${stations.length} published dams, ${rows.length} with readings`);
-
-  const matches = await matchMaster(stations, log);
-  const damByName = new Map(matches.map((m) => [m.toyamaName, m.damId]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = damByName.get(p.toyamaName);
-    if (!damId) continue;
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: null,
-      storageRate: p.storageRate,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+export default ingestTask(SOURCE_ID, async (log) => {
+  const stations = parseToyamaStations(await fetchCsv('damname_data.csv'));
+  const dataCsv = await fetchCsv('dam_data.csv').catch((err: unknown) =>
+    err instanceof Error ? err : new Error(String(err)),
+  );
+  if (dataCsv instanceof Error) log(`${SOURCE_ID}: ${dataCsv.message}`);
+  log(`${SOURCE_ID}: ${stations.length} published dams`);
+  return { entries: toyamaEntries(stations, dataCsv) };
+});

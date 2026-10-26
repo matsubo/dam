@@ -3,16 +3,15 @@
 // Fixtures are verbatim captures of the two CSVs behind 富山県 河川現況表
 // (https://kawa.pref.toyama.jp/camera/02condlist.html?id=0&sel=3), taken
 // 2026-09-27 at the 16:30 JST update.
+//
+// Fixture → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
 
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import {
-  chooseMaster,
-  parseToyamaDamData,
-  parseToyamaStations,
-  type ToyamaStation,
-} from './ingest_toyama_bousai.ts';
+import type { Entry, Observed } from '../ingest/types.ts';
+import { parseToyamaStations, toyamaEntries } from './ingest_toyama_bousai.ts';
 
 const FIXTURES = join(import.meta.dir, '..', '..', '..', '..', 'tests/fixtures/toyama');
 
@@ -53,104 +52,100 @@ describe('parseToyamaStations', () => {
   });
 });
 
-describe('parseToyamaDamData', () => {
-  let stations: ToyamaStation[] = [];
-  const parse = async () => {
-    stations = parseToyamaStations(await fixture('damname_data_2026-09-27.csv'));
-    return parseToyamaDamData(await fixture('dam_data_2026-09-27-1630.csv'), stations);
-  };
+describe('toyamaEntries', () => {
+  const entries = async () =>
+    toyamaEntries(
+      parseToyamaStations(await fixture('damname_data_2026-09-27.csv')),
+      await fixture('dam_data_2026-09-27-1630.csv'),
+    );
+  const find = async (name: string) => (await entries()).find((e) => e.key === name);
+
+  function observation(e: Entry | undefined): Observed | undefined {
+    const r = e?.reading;
+    if (!r || typeof r === 'function' || r.state !== 'values') throw new Error('no values');
+    return r.observations[0];
+  }
+
+  test('lists all 16 published dams by their printed name', async () => {
+    const list = await entries();
+    expect(list).toHaveLength(16);
+    expect(list[0]).toMatchObject({ key: '室牧ダム', name: '室牧ダム', pref: '16' });
+  });
 
   test('室牧: 貯水率 is the 利水容量 column, stamped with the row own JST time', async () => {
-    const r = (await parse()).find((x) => x.toyamaName === '室牧ダム');
+    const o = observation(await find('室牧ダム'));
     // 16:20 JST on this row while most rows read 16:30.
-    expect(r?.observedAt.toISOString()).toBe('2026-09-27T07:20:00.000Z');
-    expect(r?.waterLevelM).toBeCloseTo(244.15);
-    expect(r?.inflowM3s).toBeCloseTo(4.28);
-    expect(r?.outflowM3s).toBeCloseTo(17.23);
+    expect(o?.observedAt.toISOString()).toBe('2026-09-27T07:20:00.000Z');
+    expect(o?.waterLevelM).toBeCloseTo(244.15);
+    expect(o?.inflowM3s).toBeCloseTo(4.28);
+    expect(o?.outflowM3s).toBeCloseTo(17.23);
     // 利水容量 66.3 %, not 有効容量 36.6 %.
-    expect(r?.storageRate).toBeCloseTo(0.663, 6);
+    expect(o?.storageRate).toBeCloseTo(0.663, 6);
   });
 
   test('大谷: a full 利水 pool reads 1.0 while 有効 reads 4.7 %', async () => {
-    const r = (await parse()).find((x) => x.toyamaName === '大谷ダム');
-    expect(r?.storageRate).toBeCloseTo(1, 6);
+    expect(observation(await find('大谷ダム'))?.storageRate).toBeCloseTo(1, 6);
   });
 
   test('角川: flows are scaled ×10 the way the page renders them', async () => {
     // CSV carries 0.04; the page (and MLIT 川の防災情報 for the same station)
     // shows 0.40 m³/s.
-    const r = (await parse()).find((x) => x.toyamaName === '角川ダム');
-    expect(r?.inflowM3s).toBeCloseTo(0.4, 6);
-    expect(r?.outflowM3s).toBeCloseTo(0.4, 6);
-    expect(r?.storageRate).toBeCloseTo(0.978, 6);
+    const o = observation(await find('角川ダム'));
+    expect(o?.inflowM3s).toBeCloseTo(0.4, 6);
+    expect(o?.outflowM3s).toBeCloseTo(0.4, 6);
+    expect(o?.storageRate).toBeCloseTo(0.978, 6);
   });
 
   test('舟川: flows floor to 0.01 after ÷10, as the page renders them', async () => {
     // CSV 2.11 at 16:30; the page (fileaccess.js DAMZenryuunyuuCalc), MLIT
     // 川の防災情報 for the same minute and the Salesforce 実況表 all read 0.21.
-    const r = (await parse()).find((x) => x.toyamaName === '舟川ダム');
-    expect(r?.inflowM3s).toBe(0.21);
-    expect(r?.outflowM3s).toBe(0.21);
+    const o = observation(await find('舟川ダム'));
+    expect(o?.inflowM3s).toBe(0.21);
+    expect(o?.outflowM3s).toBe(0.21);
   });
 
   test('熊野川: no 貯水率 where the page prints －, level still kept', async () => {
-    const r = (await parse()).find((x) => x.toyamaName === '熊野川ダム');
-    expect(r?.waterLevelM).toBeCloseTo(308.52);
-    expect(r?.storageRate).toBeNull();
+    const o = observation(await find('熊野川ダム'));
+    expect(o?.waterLevelM).toBeCloseTo(308.52);
+    expect(o?.storageRate).toBeNull();
   });
 
   test('城端 / 利賀川: a 貯水率 held over a 欠測 level is not a reading', async () => {
     // Both print 貯水位 欠測 and no flows, yet the CSV still carries 利水
     // 18.8 / 15.4 %; MLIT flags the same stations' rates missing.
-    const names = (await parse()).map((x) => x.toyamaName);
-    expect(names).not.toContain('城端ダム');
-    expect(names).not.toContain('利賀川ダム');
-    expect(names).toHaveLength(14);
-  });
-
-  test('a data row for a code missing from the name list is dropped', () => {
-    const rows = parseToyamaDamData('9999999,2026/09/27,16:30,1.00,1,1.00,1.00,50.0,20.0,-99.9', [
-      { code: '0040001', toyamaName: '室牧ダム', ratePublished: true },
+    const list = await entries();
+    const notValues = list.filter(
+      (e) => typeof e.reading !== 'function' && e.reading.state !== 'values',
+    );
+    expect(notValues.map((e) => [e.key, e.reading])).toEqual([
+      ['利賀川ダム', { state: 'empty', mark: '欠測 sentinel on 貯水位 and both flows' }],
+      ['城端ダム', { state: 'empty', mark: '欠測 sentinel on 貯水位 and both flows' }],
     ]);
-    expect(rows).toEqual([]);
-  });
-});
-
-describe('chooseMaster (#79)', () => {
-  const m = (
-    id: number,
-    name: string,
-    completedYear: number | null = null,
-    stamp: string | null = null,
-  ) => ({ id: BigInt(id), name, completedYear, stamp });
-
-  test('上市川第二ダム binds 上市川第2, not the 上市川 its stem starts with', () => {
-    const masters = [m(9596, '上市川', 1964), m(9595, '上市川第2', 1985)];
-    expect(chooseMaster('上市川第二ダム', masters)).toBe(9595n);
-    expect(chooseMaster('上市川ダム', masters)).toBe(9596n);
   });
 
-  test('a row already stamped with the station keeps it over a better name match', () => {
-    const masters = [m(10, '室牧'), m(20, '室牧発電所', null, '室牧ダム')];
-    expect(chooseMaster('室牧ダム', masters)).toBe(20n);
+  test('a dam with no dam_data.csv row is unreadable; a row off the list is not listed', () => {
+    const list = toyamaEntries(
+      [{ code: '0040001', toyamaName: '室牧ダム', ratePublished: true }],
+      '9999999,2026/09/27,16:30,1.00,1,1.00,1.00,50.0,20.0,-99.9',
+    );
+    expect(list.map((e) => [e.key, e.reading])).toEqual([
+      ['室牧ダム', { state: 'unreadable', why: 'no dam_data.csv row' }],
+    ]);
   });
 
-  test('a stamp on two rows is ambiguous, so the name decides', () => {
-    const masters = [m(10, '室牧', null, '室牧ダム'), m(20, '室牧発電所', null, '室牧ダム')];
-    expect(chooseMaster('室牧ダム', masters)).toBe(10n);
+  test('an unreadable dam_data.csv lists every dam unreadable', async () => {
+    const list = toyamaEntries(
+      parseToyamaStations(await fixture('damname_data_2026-09-27.csv')),
+      new Error('dam_data.csv HTTP 503'),
+    );
+    expect(list).toHaveLength(16);
+    expect(list[0]?.reading).toEqual({ state: 'unreadable', why: 'dam_data.csv HTTP 503' });
   });
 
-  test('binds the completed （再）, not the lower-id （元）', () => {
-    const masters = [m(10, '境川（元）', 1960), m(20, '境川（再）', 1993)];
-    expect(chooseMaster('境川ダム', masters)).toBe(20n);
-  });
-
-  test('binds the （元） while the （再） has no completion year', () => {
-    const masters = [m(10, '境川（再）'), m(20, '境川（元）', 1960)];
-    expect(chooseMaster('境川ダム', masters)).toBe(20n);
-  });
-
-  test('returns null when no master name contains the stem', () => {
-    expect(chooseMaster('熊野川ダム', [m(1, '上市川')])).toBeNull();
+  test('上市川第二ダム binds 上市川第2ダム, not the 上市川 its stem starts with', async () => {
+    const list = await entries();
+    expect(list.filter((e) => e.bind).map((e) => [e.key, e.bind])).toEqual([
+      ['上市川第二ダム', { name: '上市川第2ダム' }],
+    ]);
   });
 });

@@ -1,5 +1,8 @@
 // apps/worker/src/tasks/ingest_jwa_chikugo_rt.test.ts
 //
+// Fixture → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
+//
 // Fixtures are verbatim Shift_JIS captures of 水資源機構 筑後川局
 // 水管理情報WEB (chikugo.ec-net.jp/chikugo/kyoku/pc/new/rep{EG,KB,CO}_I60.html):
 // EG and KB taken 2026-09-27 21:43 JST (24 hourly rows, 2026/09/26 22:00 …
@@ -8,23 +11,47 @@
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { chooseMaster, parseChikugoRtPage, STATIONS } from './ingest_jwa_chikugo_rt.ts';
+import { bindEntry, type Master } from '../ingest/bind.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
+import {
+  chikugoRtEntries,
+  chikugoRtReading,
+  type FetchPage,
+  parseChikugoRtPage,
+} from './ingest_jwa_chikugo_rt.ts';
 
-async function page(code: string, date = '2026-09-27'): Promise<string> {
+const FIXTURE_DATE: Record<string, string> = {
+  EG: '2026-09-27',
+  KB: '2026-09-27',
+  CO: '2026-09-28',
+};
+
+async function page(code: string): Promise<string> {
   const path = join(
     import.meta.dir,
     '..',
     '..',
     '..',
     '..',
-    `tests/fixtures/jwa_chikugo_rt/rep${code}_I60_${date}.shiftjis.html`,
+    `tests/fixtures/jwa_chikugo_rt/rep${code}_I60_${FIXTURE_DATE[code]}.shiftjis.html`,
   );
   return new TextDecoder('shift_jis').decode(await readFile(path));
 }
 
+/** Serves the captured pages; a station without a capture answers like a dead page. */
+const fixtures: FetchPage = async (code) => {
+  if (!FIXTURE_DATE[code]) throw new Error(`HTTP 503 for rep${code}_I60.html`);
+  return page(code);
+};
+
+async function readingOf(e: Entry | undefined): Promise<Reading> {
+  if (!e) throw new Error('no entry');
+  return typeof e.reading === 'function' ? e.reading(null) : e.reading;
+}
+
 describe('parseChikugoRtPage', () => {
   test('reads every hourly row of 小石原川ダム in JST, oldest first', async () => {
-    const rows = parseChikugoRtPage(await page('KB'));
+    const { rows } = parseChikugoRtPage(await page('KB'));
     expect(rows).toHaveLength(24);
     expect(rows[0]).toEqual({
       observedAt: new Date('2026-09-26T13:00:00Z'), // 09/26 22:00 JST
@@ -41,7 +68,7 @@ describe('parseChikugoRtPage', () => {
   });
 
   test('reads "24:00" under the previous date as midnight of the next day', async () => {
-    const rows = parseChikugoRtPage(await page('KB'));
+    const { rows } = parseChikugoRtPage(await page('KB'));
     expect(rows[2]?.observedAt).toEqual(new Date('2026-09-26T15:00:00Z')); // 09/27 00:00 JST
     expect(rows[2]?.waterLevelM).toBe(321.75);
     expect(rows[3]?.observedAt).toEqual(new Date('2026-09-26T16:00:00Z')); // 09/27 01:00 JST
@@ -50,7 +77,7 @@ describe('parseChikugoRtPage', () => {
   });
 
   test('maps the 欠測 marker to null without dropping the row', async () => {
-    const rows = parseChikugoRtPage(await page('EG'));
+    const { rows } = parseChikugoRtPage(await page('EG'));
     expect(rows).toHaveLength(24);
     expect(rows[0]).toMatchObject({
       waterLevelM: 188.21,
@@ -64,7 +91,7 @@ describe('parseChikugoRtPage', () => {
   test('reads 筑後大堰 pool level, not its 設定水位, and neither its fixed 有効貯水量 nor flows', async () => {
     // The 有効貯水量 column prints the pool's 930 千m³ capacity in every row,
     // 3.13–3.63 m alike; water-source.html gave 820 千m³ (88.2 %) for 9/25 0時.
-    const rows = parseChikugoRtPage(await page('CO', '2026-09-28'));
+    const { rows } = parseChikugoRtPage(await page('CO'));
     expect(rows).toHaveLength(24);
     expect(rows[0]).toEqual({
       observedAt: new Date('2026-09-27T04:00:00Z'), // 09/27 13:00 JST
@@ -79,37 +106,65 @@ describe('parseChikugoRtPage', () => {
   });
 });
 
-describe('chooseMaster', () => {
-  const m = (
-    id: number,
-    name: string,
-    completedYear: number | null = null,
-    stamp: string | null = null,
-  ) => ({ id: BigInt(id), name, completedYear, stamp });
-  const station = (code: string) => {
-    const s = STATIONS.find((x) => x.code === code);
-    if (!s) throw new Error(code);
-    return s;
-  };
-
-  test('binds each station to the master of the same name', () => {
-    const masters = [m(11054, '寺内', 1978), m(11055, '江川', 1972), m(11080, '筑後大堰', 1984)];
-    expect(chooseMaster(station('EG'), masters)).toBe(11055n);
-    expect(chooseMaster(station('TR'), masters)).toBe(11054n);
-    expect(chooseMaster(station('CO'), masters)).toBe(11080n);
+describe('chikugoRtReading', () => {
+  test('a page whose every hour is *** in every column is provider-marked empty', async () => {
+    const html = (await page('EG')).replace(
+      /(<td class="data"[^>]*>)-?\d+(?:\.\d+)?(&nbsp;<\/td>)/g,
+      '$1***$2',
+    );
+    expect(chikugoRtReading(parseChikugoRtPage(html))).toEqual({
+      state: 'empty',
+      mark: '*** in every column of every hour',
+    });
   });
 
-  test('does not bind a dam whose name merely contains the station name', () => {
-    expect(chooseMaster(station('OY'), [m(1, '大山川')])).toBeNull();
+  test('a page without hourly rows is unreadable', () => {
+    expect(chikugoRtReading(parseChikugoRtPage('<html>メンテナンス中</html>')).state).toBe(
+      'unreadable',
+    );
+  });
+});
+
+describe('chikugoRtEntries', () => {
+  const entries = chikugoRtEntries(fixtures);
+
+  test('lists the menu’s five stations, keyed by screen id, in their prefectures', () => {
+    expect(entries.map((e) => [e.key, e.name, e.pref])).toEqual([
+      ['EG', '江川ダム', '40'],
+      ['TR', '寺内ダム', '40'],
+      ['KB', '小石原川ダム', '40'],
+      ['OY', '大山ダム', '44'],
+      ['CO', '筑後大堰', '40'],
+    ]);
   });
 
-  test('keeps the row already stamped with the station code', () => {
-    const masters = [m(1, '江川'), m(2, '江川', null, 'EG')];
-    expect(chooseMaster(station('EG'), masters)).toBe(2n);
+  test('reads each station’s whole 24 h window from its own page', async () => {
+    const kb = await readingOf(entries.find((e) => e.key === 'KB'));
+    expect(kb.state).toBe('values');
+    if (kb.state !== 'values') return;
+    expect(kb.observations).toHaveLength(24);
+    expect(kb.observations[0]?.storageVolumeM3).toBe(12_617_000);
   });
 
-  test('binds the completed （再） over the lower-id （元）', () => {
-    const masters = [m(1, '寺内（元）', 1978), m(2, '寺内（再）', 2020)];
-    expect(chooseMaster(station('TR'), masters)).toBe(2n);
+  test('a page that fails to fetch throws, so the run records the station unreadable', async () => {
+    await expect(readingOf(entries.find((e) => e.key === 'TR'))).rejects.toThrow('HTTP 503');
+  });
+
+  test('binds by name only, never by prefix or contains: 大山 is not 大山川', () => {
+    for (const e of entries) expect(e.bind).toEqual({ exact: true });
+    const master = (id: number, name: string): Master => ({
+      id: BigInt(id),
+      name,
+      completedYear: null,
+      stamp: null,
+      prefCode: '44',
+      ndi: null,
+      totalCapacityM3: null,
+      activeCapacityM3: null,
+    });
+    const oy = entries.find((e) => e.key === 'OY');
+    if (!oy) throw new Error('no OY');
+    expect(bindEntry(oy, [master(1, '大山川')], false).dam).toBeNull();
+    expect(bindEntry(oy, [master(1, '大山川'), master(2, '大山')], false).dam?.id).toBe(2n);
   });
 });

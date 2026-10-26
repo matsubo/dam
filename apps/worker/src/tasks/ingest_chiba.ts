@@ -19,14 +19,11 @@
 //
 // Cron: daily at 02:30 UTC = 11:30 JST. The page changes about once a week
 // (sometimes skipping one); polling daily and UPSERTing on the survey date
-// picks the update up within a day.
+// picks the update up within a day. A weekly survey: the scan is dated.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const PAGE_URL =
   process.env.CHIBA_DAM_URL ?? 'https://www.pref.chiba.lg.jp/suisei/chosui/chosuijoukyou.html';
@@ -34,17 +31,17 @@ const PAGE_URL =
 const PREF_CODE = '12';
 const SOURCE_ID = 'chiba-suisei';
 
-interface ParsedRow {
+export interface ParsedRow {
   pageName: string;
-  storageVolumeM3: number | null;
-  storageRate: number | null;
+  storageVolumeM3: Cell;
+  /** 0..1, or the page's mark. */
+  storageRate: Cell;
 }
 
-function parseNum(s: string): number | null {
+function parseNum(s: string): Cell {
   const t = s.replace(/[,\s　]/g, '');
-  if (!t || t === '-' || t === '−' || t === '欠測') return null;
-  const n = Number(t);
-  return Number.isFinite(n) ? n : null;
+  if (t === '-' || t === '−' || t === '欠測') return MARKED;
+  return t ? cell(Number(t), false) : null;
 }
 
 /**
@@ -61,11 +58,6 @@ export function parseChibaTimestamp(html: string): Date | null {
   return new Date(Date.UTC(yyyy, Number(m[2]) - 1, Number(m[3]), hour - 9, 0, 0, 0));
 }
 
-/** Normalize 一/二 → 1/2 and strip "ダム" suffix to compare against master.name. */
-function normalizeName(s: string): string {
-  return s.replace(/ダム$/, '').replace(/一/g, '1').replace(/二/g, '2').replace(/三/g, '3').trim();
-}
-
 /**
  * Parse the Chiba page HTML. Skips subtotal rows where the No column is "-".
  */
@@ -78,72 +70,59 @@ export function parseChibaPage(html: string): ParsedRow[] {
     const no = cells[i] ?? '';
     const name = cells[i + 1] ?? '';
     const op = cells[i + 2] ?? '';
-    const capStr = cells[i + 3] ?? '';
     const volStr = cells[i + 4] ?? '';
     const rateStr = cells[i + 5] ?? '';
     if (!no || no === '-' || /小計/.test(op) || /小計/.test(name)) continue;
     if (!/^\d+$/.test(no)) continue;
-    const vol = parseNum(volStr);
     const rate = parseNum(rateStr);
     out.push({
       pageName: name,
-      storageVolumeM3: vol,
-      storageRate: rate != null ? rate / 100 : null,
+      storageVolumeM3: parseNum(volStr),
+      storageRate: typeof rate === 'number' ? rate / 100 : rate,
     });
-    // capStr currently unused — could be stored as design capacity in future.
-    void capStr;
   }
   return out;
 }
 
-interface DamMatch {
-  pageName: string;
-  damId: bigint;
+export function chibaReading(row: ParsedRow, observedAt: Date | null): Reading {
+  const state = cellState([row.storageVolumeM3, row.storageRate]);
+  if (state === 'empty') return { state, mark: '貯水量 and 貯水率 marked' };
+  if (state === 'unreadable') return { state, why: 'no 貯水量 or 貯水率' };
+  if (!observedAt) return { state: 'unreadable', why: 'no 県内ダム貯水状況 heading date' };
+  return {
+    state,
+    observations: [
+      {
+        observedAt,
+        storageVolumeM3: numberIn(row.storageVolumeM3),
+        storageRate: numberIn(row.storageRate),
+      },
+    ],
+  };
 }
 
-async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const out: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing. Keyed by
-  // name: one dam can appear in both the 水道用 and 工業用水 tables, and
-  // recordUniverse must see each published dam exactly once.
-  const universe = new Map<string, UniverseRow>();
-  for (const r of rows) {
-    const stem = normalizeName(r.pageName);
-    if (!stem) continue;
-    // A row already stamped with this station keeps it (#57); otherwise the
-    // master name normalized the same way, or minus ダム, must equal it.
-    let r0 = stampedMaster(masters, r.pageName);
-    if (!r0) {
-      for (const m of masters) {
-        if (normalizeName(m.name) !== stem && m.name.replace(/ダム$/, '') !== r.pageName) continue;
-        if (!r0 || preferMaster(m, r0)) r0 = m;
-      }
-    }
-    universe.set(r.pageName, {
-      externalId: r.pageName,
-      name: r.pageName,
-      prefCode: PREF_CODE,
-      resolvedDamId: r0?.id ?? null,
-    });
-    if (!r0) {
-      log(`${SOURCE_ID}: no master match for ${r.pageName}`);
-      continue;
-    }
-    out.push({ pageName: r.pageName, damId: r0.id });
-    await bindExternalId(r0.id, SOURCE_ID, r.pageName);
-  }
-  await recordUniverse(SOURCE_ID, [...universe.values()]);
-  return out;
+/**
+ * Every listed dam, keyed by its printed name (one dam can appear in both the
+ * 水道用 and 工業用水 tables; the run merges the pair). The master is matched
+ * exactly, with 一/二/三 read as 1/2/3: the master writes 東第2 and 第1袋倉
+ * where the page prints 東第二 and 第一袋倉 (第二奥谷 keeps its kanji in the
+ * master and is held by its stamp).
+ */
+export function chibaEntries(html: string): Entry[] {
+  const observedAt = parseChibaTimestamp(html);
+  return parseChibaPage(html).map((r) => ({
+    key: r.pageName,
+    name: r.pageName,
+    pref: PREF_CODE,
+    bind: {
+      name: r.pageName.replace(/一/g, '1').replace(/二/g, '2').replace(/三/g, '3'),
+      exact: true,
+    },
+    reading: chibaReading(r, observedAt),
+  }));
 }
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
+export default ingestTask(SOURCE_ID, async (log) => {
   const ua =
     process.env.HTTP_USER_AGENT ??
     'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
@@ -152,43 +131,9 @@ const task: Task = async (_payload, helpers) => {
     headers: { 'user-agent': ua },
     signal: AbortSignal.timeout(15_000),
   });
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; abort`);
-    return;
-  }
+  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status}`);
   const html = await r.text();
-  const observedAt = parseChibaTimestamp(html);
-  if (!observedAt) {
-    log(`${SOURCE_ID}: could not parse page timestamp`);
-    return;
-  }
-  const parsed = parseChibaPage(html);
-  log(`${SOURCE_ID}: parsed ${parsed.length} dams at ${observedAt.toISOString()}`);
-
-  const matches = await matchMaster(parsed, log);
-  const matchByName = new Map(matches.map((m) => [m.pageName, m.damId]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of parsed) {
-    const damId = matchByName.get(p.pageName);
-    if (!damId) continue;
-    if (p.storageVolumeM3 == null && p.storageRate == null) continue;
-    inputs.push({
-      observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: p.storageRate,
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: null,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${parsed.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+  const entries = chibaEntries(html);
+  log(`${SOURCE_ID}: ${entries.length} dams at ${parseChibaTimestamp(html)?.toISOString()}`);
+  return { entries, dated: true };
+});

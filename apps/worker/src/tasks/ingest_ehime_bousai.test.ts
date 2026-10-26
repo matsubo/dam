@@ -1,7 +1,18 @@
 // apps/worker/src/tasks/ingest_ehime_bousai.test.ts
+//
+// Page → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
 
 import { describe, expect, test } from 'bun:test';
-import { chooseMaster, parseEhimePage, parseEhimeTimestamp } from './ingest_ehime_bousai.ts';
+import type { Observed, Reading } from '../ingest/types.ts';
+import { ehimeEntries, ehimeReading, parseEhimeTimestamp } from './ingest_ehime_bousai.ts';
+
+const NOW = new Date('2026-06-22T10:30:00.000Z');
+
+function observed(r: Reading): Observed | undefined {
+  if (r.state !== 'values') throw new Error(r.state);
+  return r.observations[0];
+}
 
 // Sample HTML matching the actual kawabou-mng format (2 tables):
 // Table 0: meta (観測所名, 水系名, ...)
@@ -59,36 +70,35 @@ describe('parseEhimeTimestamp', () => {
   });
 });
 
-describe('parseEhimePage', () => {
+describe('ehimeReading', () => {
   test('extracts latest (last) row as the observation', () => {
     const html = makeHtml([
       makeRow('06/21 20:00', '216.69', '2.67', '2.80', '309', '35.3'),
       makeRow('21:00', '216.68', '2.66', '2.80', '308', '35.2'),
       makeRow('06/22 19:00', '216.39', '2.61', '2.78', '295', '33.7'),
     ]);
-    const r = parseEhimePage(html, 'U1001_MMENU001', '鹿森ダム', 2026);
-    expect(r).not.toBeNull();
-    expect(r?.observedAt?.toISOString()).toBe('2026-06-22T10:00:00.000Z');
-    expect(r?.waterLevelM).toBeCloseTo(216.39);
+    const r = ehimeReading(html, NOW);
+    if (r.state !== 'values') throw new Error(r.state);
+    expect(r.observations).toHaveLength(1);
+    expect(r.observations[0]?.observedAt.toISOString()).toBe('2026-06-22T10:00:00.000Z');
+    expect(r.observations[0]?.waterLevelM).toBeCloseTo(216.39);
   });
 
   test('scales storageVolumeM3: 千m³ × 1000', () => {
     const html = makeHtml([makeRow('06/22 19:00', '216.39', '2.61', '2.78', '295', '33.7')]);
-    const r = parseEhimePage(html, 'U1001_MMENU001', '鹿森ダム', 2026);
-    expect(r?.storageVolumeM3).toBe(295_000);
+    expect(observed(ehimeReading(html, NOW))?.storageVolumeM3).toBe(295_000);
   });
 
   test('scales storageRate: % ÷ 100 → fraction', () => {
     const html = makeHtml([makeRow('06/22 19:00', '216.39', '2.61', '2.78', '295', '33.7')]);
-    const r = parseEhimePage(html, 'U1001_MMENU001', '鹿森ダム', 2026);
-    expect(r?.storageRate).toBeCloseTo(0.337);
+    expect(observed(ehimeReading(html, NOW))?.storageRate).toBeCloseTo(0.337);
   });
 
   test('returns null storageRate when column is "-"', () => {
     const html = makeHtml([makeRow('06/22 19:00', '289.35', '4.55', '6.63', '25584', '-')]);
-    const r = parseEhimePage(html, 'U1001_MMENU007', '柳瀬ダム', 2026);
-    expect(r?.storageRate).toBeNull();
-    expect(r?.storageVolumeM3).toBe(25_584_000);
+    const o = observed(ehimeReading(html, NOW));
+    expect(o?.storageRate).toBeNull();
+    expect(o?.storageVolumeM3).toBe(25_584_000);
   });
 
   test('handles date crossing midnight via "24:00" row', () => {
@@ -97,47 +107,64 @@ describe('parseEhimePage', () => {
       makeRow('24:00', '216.65', '2.66', '2.80', '307', '35.1'),
       makeRow('06/22 01:00', '216.64', '2.64', '2.80', '307', '35.1'),
     ]);
-    const r = parseEhimePage(html, 'U1001_MMENU001', '鹿森ダム', 2026);
     // Latest is 06/22 01:00 → 01:00 JST = previous day 16:00 UTC
-    expect(r?.observedAt?.toISOString()).toBe('2026-06-21T16:00:00.000Z');
-  });
-
-  test('extracts dam name from table 0 row 0', () => {
-    const html = makeHtml(
-      [makeRow('06/22 19:00', '216.39', '2.61', '2.78', '295', '33.7')],
-      '須賀川ダム',
+    expect(observed(ehimeReading(html, NOW))?.observedAt.toISOString()).toBe(
+      '2026-06-21T16:00:00.000Z',
     );
-    const r = parseEhimePage(html, 'U1001_MMENU005', '須賀川ダム', 2026);
-    expect(r?.damName).toBe('須賀川ダム');
   });
 
-  test('returns null for empty data table', () => {
-    const html = makeHtml([]);
-    const r = parseEhimePage(html, 'U1001_MMENU001', '鹿森ダム', 2026);
-    expect(r).toBeNull();
+  test('time-only rows before the first full date take yesterday (JST) from now', () => {
+    const html = makeHtml([makeRow('20:00', '216.69', '2.67', '2.80', '309', '35.3')]);
+    // now = 06/22 19:30 JST → the window starts on 06/21.
+    expect(observed(ehimeReading(html, NOW))?.observedAt.toISOString()).toBe(
+      '2026-06-21T11:00:00.000Z',
+    );
   });
 
   test('parses inflow and outflow', () => {
     const html = makeHtml([makeRow('06/22 19:00', '50.45', '0.57', '0.46', '1346', '94.1')]);
-    const r = parseEhimePage(html, 'U1001_MMENU005', '須賀川ダム', 2026);
-    expect(r?.inflowM3s).toBeCloseTo(0.57);
-    expect(r?.outflowM3s).toBeCloseTo(0.46);
+    const o = observed(ehimeReading(html, NOW));
+    expect(o?.inflowM3s).toBeCloseTo(0.57);
+    expect(o?.outflowM3s).toBeCloseTo(0.46);
   });
 
   test('handles 100% storage rate', () => {
     const html = makeHtml([makeRow('06/22 19:00', '155.85', '2.16', '2.16', '6853', '100.0')]);
-    const r = parseEhimePage(html, 'U1001_MMENU003', '玉川ダム', 2026);
-    expect(r?.storageRate).toBeCloseTo(1.0);
+    expect(observed(ehimeReading(html, NOW))?.storageRate).toBeCloseTo(1.0);
+  });
+
+  test('a latest row of "-" in every column is provider-marked empty', () => {
+    const html = makeHtml([
+      makeRow('06/22 18:00', '216.39', '2.61', '2.78', '295', '33.7'),
+      makeRow('19:00', '-', '-', '---', '-', '-'),
+    ]);
+    expect(ehimeReading(html, NOW).state).toBe('empty');
+  });
+
+  test('an empty data table, or a latest row with blank cells, is unreadable', () => {
+    expect(ehimeReading(makeHtml([]), NOW).state).toBe('unreadable');
+    const blank = makeHtml([makeRow('06/22 19:00', '', '-', '-', '-', '-')]);
+    expect(ehimeReading(blank, NOW).state).toBe('unreadable');
   });
 });
 
-describe('chooseMaster (#79)', () => {
-  test('binds 鹿野川 (MMENU009) to the completed （再）, not the lower-id （元）', () => {
-    // The 愛媛 master holds both structures; the （元） has the lower id.
-    const masters = [
-      { id: 10444n, name: '鹿野川（元）', completedYear: 1959 },
-      { id: 10466n, name: '鹿野川（再）', completedYear: 2018 },
-    ];
-    expect(chooseMaster('鹿野川ダム', '鹿野川', masters)).toBe(10466n);
+describe('ehimeEntries', () => {
+  test('the 12-dam catalogue, keyed by myMenuId; a failed page throws for the run', async () => {
+    const page = makeHtml([makeRow('06/22 19:00', '216.39', '2.61', '2.78', '295', '33.7')]);
+    const entries = ehimeEntries(async (id) => {
+      if (id === 'U1001_MMENU001') return page;
+      throw new Error('HTTP 500');
+    });
+    expect(entries).toHaveLength(12);
+    expect(entries.map((e) => [e.key, e.name, e.pref]).slice(8, 9)).toEqual([
+      ['U1001_MMENU009', '鹿野川ダム', '38'],
+    ]);
+    const read = (i: number) => {
+      const r = entries[i]?.reading;
+      if (typeof r !== 'function') throw new Error('expected a page reading');
+      return r(null);
+    };
+    expect((await read(0)).state).toBe('values');
+    await expect(read(1)).rejects.toThrow('HTTP 500');
   });
 });

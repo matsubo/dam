@@ -137,11 +137,13 @@ in `packages/core/src/source_registry.ts` (docs/adr/0001); the crontab
 derive from it. Every task is registered in `apps/worker/src/task_list.ts`,
 and `task_list.test.ts` checks every scheduled and declared task is there.
 Task names use `:` separators because graphile-worker rejects `.` in
-identifiers. Each ingest task writes under its source's id and calls
-`recordUniverse()` with the provider's whole published list (`kasenbosai`'s
-list is recorded by `match:kasenbosai`, its `has_data` by `kasenbosai-v2`
-through `recordUniverseHasData`; exemptions live in
-`universe_instrumentation.test.ts`).
+identifiers. Each active source's ingest task is built with `ingestTask`
+(`apps/worker/src/ingest/`): the task returns the provider's whole published
+list as universe entries, and the run binds them, records the universe and
+writes the observations in one transaction (`task_list.test.ts` checks every
+active source is on it). `kasenbosai` is the exception: its list is recorded
+by `match:kasenbosai`, its `has_data` by `kasenbosai-v2` through
+`recordUniverseHasData`.
 Every ingest cron line carries `?jobKey=<task>`, so a tick replaces a job
 that is still retrying instead of queueing another; `apps/worker/src/crontab.test.ts` checks
 the key and that the default 25 attempts outlast each line's longest gap.

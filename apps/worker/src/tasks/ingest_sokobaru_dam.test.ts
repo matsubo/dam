@@ -6,17 +6,22 @@
 // link to (newest row 15:00, back to 03:00). 底原 carries values in every
 // row; 真栄里 has 貯水位/総貯水量 from 11:00 on and ** before, 放流量 ** all
 // day; 石垣 is ** in every row of every page.
+//
+// Fixtures → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
 
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { BoundDam, Reading } from '../ingest/types.ts';
 import {
-  chooseMaster,
+  type Fetcher,
   hasDataOf,
-  type NdiMaster,
   parseFieldLinks,
   parseHourlyPage,
   readingsOf,
+  readStation,
+  sokobaruEntries,
   usableVolumeM3,
 } from './ingest_sokobaru_dam.ts';
 
@@ -223,32 +228,97 @@ describe('hasDataOf', () => {
   });
 });
 
-describe('chooseMaster', () => {
-  // Real prod rows (沖縄 47).
-  const masters: NdiMaster[] = [
-    { id: 11488n, name: '石垣', ndi: '2751', completedYear: 1981 },
-    { id: 11489n, name: '底原', ndi: '2752', completedYear: 1992 },
-    { id: 11490n, name: '真栄里', ndi: '2753', completedYear: 1982 },
-    { id: 11491n, name: '名蔵', ndi: '2754', completedYear: 1998 },
-  ];
+// Real prod master capacities (沖縄 47).
+const SOKOBARU: BoundDam = {
+  id: 11489n,
+  name: '底原',
+  totalCapacityM3: 13_000_000,
+  activeCapacityM3: 12_850_000,
+};
+const MAEZATO: BoundDam = {
+  id: 11490n,
+  name: '真栄里',
+  totalCapacityM3: 2_300_000,
+  activeCapacityM3: 2_100_000,
+};
 
-  test('binds each dam to its pinned NDI row', () => {
-    expect(chooseMaster({ key: '底原ダム', ndi: '2752' }, masters)).toBe(11489n);
-    expect(chooseMaster({ key: '真栄里ダム', ndi: '2753' }, masters)).toBe(11490n);
-    expect(chooseMaster({ key: '石垣ダム', ndi: '2751' }, masters)).toBe(11488n);
+/** The captured site; a path the capture lacks answers like an HTTP error. */
+const fixtures: Fetcher = (path) => page(path).catch(() => null);
+
+async function read(key: string, get: Fetcher, dam: BoundDam | null): Promise<Reading> {
+  const e = sokobaruEntries(get).find((x) => x.key === key);
+  if (!e) throw new Error(`${key}: not listed`);
+  return typeof e.reading === 'function' ? e.reading(dam) : e.reading;
+}
+
+describe('sokobaruEntries', () => {
+  test('lists the three dams pinned by NDI and the two weirs, which bind no dam', () => {
+    expect(sokobaruEntries(fixtures).map((e) => [e.key, e.pref, e.bind])).toEqual([
+      ['底原ダム', '47', { ndi: '2752' }],
+      ['真栄里ダム', '47', { ndi: '2753' }],
+      ['石垣ダム', '47', { ndi: '2751' }],
+      ['二又堰', '47', 'never'],
+      ['平喜名堰', '47', 'never'],
+    ]);
   });
 
-  test('keeps an existing stamp over the pin', () => {
-    const stamped = [...masters, { id: 99n, name: '石垣', ndi: null, stamp: '石垣ダム' }];
-    expect(chooseMaster({ key: '石垣ダム', ndi: '2751' }, stamped)).toBe(99n);
+  test('a weir has no page and is unreadable', async () => {
+    expect(await read('二又堰', fixtures, null)).toEqual({
+      state: 'unreadable',
+      why: 'a weir: no 水文量 page',
+    });
   });
 
-  test('falls back to the same name when the pinned row is gone', () => {
-    const noPin = masters.map((m) => ({ ...m, ndi: null }));
-    expect(chooseMaster({ key: '底原ダム', ndi: '2752' }, noPin)).toBe(11489n);
+  test('底原 stores 総貯水量 less 堆砂容量 when its rate ties to the master', async () => {
+    const r = await read('底原ダム', fixtures, SOKOBARU);
+    if (r.state !== 'values') throw new Error(r.state);
+    expect(r.observations).toHaveLength(13);
+    expect(
+      r.observations.find((o) => o.observedAt.toISOString() === '2026-09-28T05:00:00.000Z'),
+    ).toEqual({
+      observedAt: new Date('2026-09-28T05:00:00.000Z'),
+      waterLevelM: 38.21,
+      storageVolumeM3: 11_129_000,
+      storageRate: 0.866,
+      inflowM3s: 0,
+      outflowM3s: 0.11,
+    });
   });
 
-  test('leaves a weir unbound', () => {
-    expect(chooseMaster({ key: '二又堰', ndi: null }, masters)).toBeNull();
+  test('真栄里 stores level only: no 貯水率 ties its 総貯水量', async () => {
+    const r = await read('真栄里ダム', fixtures, MAEZATO);
+    if (r.state !== 'values') throw new Error(r.state);
+    expect(r.observations).toHaveLength(5);
+    expect(r.observations[0]).toEqual({
+      observedAt: new Date('2026-09-28T06:00:00.000Z'),
+      waterLevelM: 38,
+      storageVolumeM3: null,
+      storageRate: null,
+      inflowM3s: null,
+      outflowM3s: null,
+    });
+  });
+
+  test('石垣, ** on every page, is provider-marked empty', async () => {
+    expect(await read('石垣ダム', fixtures, null)).toEqual({
+      state: 'empty',
+      mark: '** in every hour of every page',
+    });
+  });
+
+  test('a dam whose hourly page fails is unreadable', async () => {
+    const broken: Fetcher = (path) =>
+      path === '00005003.html' ? Promise.resolve(null) : fixtures(path);
+    expect(await readStation('00005001.html', broken, null)).toEqual({
+      state: 'unreadable',
+      why: 'a page failed to load or parse',
+    });
+  });
+
+  test('a dam whose 水文量 page fails is unreadable', async () => {
+    expect(await readStation('00009001.html', fixtures, null)).toEqual({
+      state: 'unreadable',
+      why: '00009001.html failed',
+    });
   });
 });

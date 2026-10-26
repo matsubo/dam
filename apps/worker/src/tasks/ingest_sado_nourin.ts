@@ -16,18 +16,14 @@
 // Values: volume in m³ and a whole-percent rate against the page's own
 // 有効貯水量 (羽茂 367,800 / 460,000 = 80.0 %; 小倉川 529,469 / 706,790 = 74.9 %
 // where the master holds 900,000). A page whose rate contradicts that identity
-// is dropped. The date has no hour; stored at JST midnight.
+// is unreadable. The date has no hour; stored at JST midnight.
 //
 // Cadence: irregular, roughly twice a month in かんがい期 (the 8月15日 values
 // were posted 8月24日). Polled daily; re-runs upsert the same survey.
 // Priority 281 — no other source covers these dams.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const INDEX_URL =
   process.env.SADO_NOURIN_URL ??
@@ -37,16 +33,12 @@ const ORIGIN = 'https://www.pref.niigata.lg.jp';
 const PREF_CODE = '15';
 const SOURCE_ID = 'sado-nourin';
 
-export interface ParsedPage {
-  /** 「羽茂ダム」 as the page heading prints it — the stamp and universe key. */
-  name: string;
-  observedAt: Date;
-  /** 有効貯水量 printed on the page, m³. */
-  capacityM3: number;
-  storageVolumeM3: number;
-  /** 貯水率 as a 0..1 fraction. */
-  storageRate: number;
-}
+const USER_AGENT =
+  process.env.HTTP_USER_AGENT ??
+  'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
+
+/** A per-dam page's HTML; throws when the page cannot be fetched. */
+export type FetchPage = (url: string) => Promise<string>;
 
 // --- parsing ----------------------------------------------------------------
 
@@ -63,142 +55,72 @@ export function parseSadoDamLinks(html: string): { name: string; url: string }[]
   return out;
 }
 
-export function parseSadoDamPage(html: string): ParsedPage | null {
+/** What one per-dam page publishes: volume and rate at the stated date. */
+export function sadoDamReading(html: string): Reading {
   const name = html.match(/<h1>【佐渡】(\S+?ダム)の貯水量情報<\/h1>/)?.[1];
   const text = html.replace(/<[^>]+>/g, '').replace(/,/g, '');
   const capacity = text.match(/有効貯水量\s*(\d+)\s*立[法方]メートル/);
   const current = text.match(
     /令和(\d+)年(\d+)月(\d+)日時点の貯水量は、?\s*(\d+)\s*立[法方]メートルで貯水率は\s*(\d+)\s*[%％]/,
   );
-  if (!name || !capacity || !current) return null;
+  if (!name) return { state: 'unreadable', why: 'no 【佐渡】…ダムの貯水量情報 heading' };
+  if (!capacity) return { state: 'unreadable', why: 'no 有効貯水量' };
+  if (!current) return { state: 'unreadable', why: 'no 「…時点の貯水量は」 sentence' };
 
   const capacityM3 = Number(capacity[1]);
   const volume = Number(current[4]);
   const pct = Number(current[5]);
   // 0 % on an irrigation reservoir is a drained pond, not a reading (0038/0039).
-  if (!(capacityM3 > 0 && pct > 0 && pct <= 100)) return null;
+  if (!(capacityM3 > 0 && pct > 0 && pct <= 100)) {
+    return { state: 'unreadable', why: `貯水率 ${pct} % of ${capacityM3} m³` };
+  }
   // The whole-percent rate must round from volume / 有効貯水量 on the same page.
-  if (Math.abs((100 * volume) / capacityM3 - pct) > 1) return null;
+  if (Math.abs((100 * volume) / capacityM3 - pct) > 1) {
+    return { state: 'unreadable', why: `printed ${pct} % is not ${volume}/${capacityM3}` };
+  }
 
   // JST midnight = 15:00 UTC the previous day.
   const observedAt = new Date(
     Date.UTC(2018 + Number(current[1]), Number(current[2]) - 1, Number(current[3]) - 1, 15),
   );
-  return { name, observedAt, capacityM3, storageVolumeM3: volume, storageRate: pct / 100 };
-}
-
-// --- matching ---------------------------------------------------------------
-
-/** Exact stem only: 新穂 must not take 新穂第2's page, nor the reverse. */
-export function chooseMaster(name: string, masters: BindableMaster[]): bigint | null {
-  const stamped = stampedMaster(masters, name);
-  if (stamped) return stamped.id;
-  const stem = name.replace(/ダム$/, '');
-  let best: BindableMaster | null = null;
-  for (const m of masters) {
-    if (m.name.replace(/[（(][^）)]*[）)]/g, '').trim() !== stem) continue;
-    if (!best || preferMaster(m, best)) best = m;
-  }
-  return best?.id ?? null;
-}
-
-// --- DB helpers -------------------------------------------------------------
-
-// --- task -------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
-  const headers = {
-    'user-agent':
-      process.env.HTTP_USER_AGENT ??
-      'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
+  return {
+    state: 'values',
+    observations: [{ observedAt, storageVolumeM3: volume, storageRate: pct / 100 }],
   };
+}
 
-  const indexRes = await fetch(INDEX_URL, { headers, signal: AbortSignal.timeout(20_000) });
-  if (indexRes.status !== 200) {
-    log(`${SOURCE_ID}: index HTTP ${indexRes.status}; aborting`);
-    return;
-  }
-  const links = parseSadoDamLinks(await indexRes.text());
+// --- entries ----------------------------------------------------------------
 
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing. Built
-  // from the index, not from the pages that loaded, so one failing page
-  // cannot drop a dam; recorded after the loop to carry each page's date.
-  const universe: UniverseRow[] = links.map((link) => ({
-    externalId: link.name,
+/**
+ * One entry per dam the index links, so one failing page cannot drop a dam;
+ * each reads its own page. Exact stem only: 新穂 must not take 新穂第2's
+ * page, nor the reverse.
+ */
+export function sadoNourinEntries(indexHtml: string, fetchPage: FetchPage): Entry[] {
+  return parseSadoDamLinks(indexHtml).map((link) => ({
+    key: link.name,
     name: link.name,
-    prefCode: PREF_CODE,
-    resolvedDamId: chooseMaster(link.name, masters),
+    pref: PREF_CODE,
+    bind: { exact: true },
+    reading: async () => sadoDamReading(await fetchPage(link.url)),
   }));
+}
 
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  let fetched = 0;
-  let parsed = 0;
-  for (const [i, link] of links.entries()) {
-    const damId = universe[i]?.resolvedDamId;
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${link.name}"`);
-      continue;
-    }
-    await bindExternalId(damId, SOURCE_ID, link.name);
+async function fetchHtml(url: string): Promise<string> {
+  const res = await fetch(url, {
+    headers: { 'user-agent': USER_AGENT },
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (res.status !== 200) throw new Error(`HTTP ${res.status} for ${url}`);
+  return res.text();
+}
 
-    // Seven independent pages: a timeout or DNS error on one must not throw
-    // away the other six.
-    let page: ParsedPage | null;
-    try {
-      const res = await fetch(link.url, { headers, signal: AbortSignal.timeout(20_000) });
-      if (res.status !== 200) {
-        log(`${SOURCE_ID}: HTTP ${res.status} for ${link.url}; skipping`);
-        continue;
-      }
-      fetched += 1;
-      page = parseSadoDamPage(await res.text());
-    } catch (err) {
-      log(`${SOURCE_ID}: fetch failed for ${link.url}: ${(err as Error).message}; skipping`);
-      continue;
-    }
-    if (!page) {
-      log(`${SOURCE_ID}: no usable reading on ${link.url}`);
-      continue;
-    }
-    parsed += 1;
-    // The survey date is the newest value the page publishes: holding it
-    // keeps the dam covered between the twice-monthly surveys.
-    const row = universe[i];
-    if (row) row.publishedAt = page.observedAt;
-    inputs.push({
-      observedAt: page.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: page.storageVolumeM3,
-      storageRate: page.storageRate,
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: null,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  await recordUniverse(SOURCE_ID, universe);
-  const written = await upsertObservations(inputs);
-  log(
-    `${SOURCE_ID} done: published=${links.length} parsed=${parsed} matched=${inputs.length} written=${written}`,
-  );
-
-  // A page template change reads as "no usable reading" on every dam while
-  // every fetch succeeds; fail loudly instead of exiting green.
-  if (fetched > 0 && parsed === 0) {
-    throw new Error(`${SOURCE_ID}: ${fetched} dam pages but no readings — layout change?`);
-  }
-};
-
-export default task;
+// A page template change reads as unreadable on every dam while every fetch
+// succeeds; the run then fails the job instead of exiting green.
+export default ingestTask(SOURCE_ID, async (log) => {
+  const entries = sadoNourinEntries(await fetchHtml(INDEX_URL), fetchHtml);
+  log(`${SOURCE_ID}: ${entries.length} dam pages linked`);
+  // The survey date is the newest value a page publishes: holding it keeps
+  // the dam covered between the twice-monthly surveys.
+  return { entries, dated: true };
+});

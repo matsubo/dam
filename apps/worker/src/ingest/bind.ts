@@ -20,8 +20,12 @@ export interface Master extends BindableMaster {
   activeCapacityM3: number | null;
 }
 
-/** Codepoint variants of one kanji, folded so the feed and the master compare equal. */
-const VARIANTS: readonly (readonly [RegExp, string])[] = [[/槇/g, '槙']];
+/** Codepoint variants of one kanji (and ordinal spellings), folded so the feed and the master compare equal. */
+const VARIANTS: readonly (readonly [RegExp, string])[] = [
+  [/槇/g, '槙'],
+  // iwate-kasen prints 「遠野第二ダム」 where ダム便覧 has 「遠野第2」.
+  [/第二/g, '第2'],
+];
 
 export function stemOf(name: string): string {
   let s = name.normalize('NFKC').replace(/[（(][^）)]*[）)]/g, '');

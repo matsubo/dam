@@ -20,14 +20,14 @@
 //     status: { "<id>": { name, param }, ... },
 //     table:  { header, kind,
 //               data: { ryunyu, houryu, chosuii, risui, chisui, uryou, ruika } } }
-// Each `data.<metric>.<id>` is a string (numeric) or "ー" for missing.
+// Each `data.<metric>.<id>` is a string (numeric) or "ー" for missing; "ー"
+// (or 欠測) in every stored column is provider-marked empty. The 11 dams are
+// known in advance, so a failed fetch leaves all 11 unreadable rather than
+// unlisted.
 
-import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const API_URL =
   process.env.CGR_MLIT_DAM_URL ??
@@ -38,25 +38,25 @@ interface DamCfg {
   apiId: string;
   /** Name as it appears in the JSON `status.<id>.name`. */
   apiName: string;
-  /** Substring used to LIKE-match against master `dams.name`. */
-  masterName: string;
   /** Prefecture (JIS code). */
   prefCode: string;
 }
 
 const DAMS: DamCfg[] = [
-  { apiId: '1', apiName: '菅沢ダム', masterName: '菅沢', prefCode: '31' },
-  { apiId: '2', apiName: '土師ダム', masterName: '土師', prefCode: '34' },
-  { apiId: '3', apiName: '島地川ダム', masterName: '島地川', prefCode: '35' },
-  { apiId: '4', apiName: '弥栄ダム', masterName: '弥栄', prefCode: '34' },
-  { apiId: '5', apiName: '八田原ダム', masterName: '八田原', prefCode: '34' },
-  { apiId: '6', apiName: '温井ダム', masterName: '温井', prefCode: '34' },
-  { apiId: '7', apiName: '苫田ダム', masterName: '苫田', prefCode: '33' },
-  { apiId: '8', apiName: '灰塚ダム', masterName: '灰塚', prefCode: '34' },
-  { apiId: '9', apiName: '志津見ダム', masterName: '志津見', prefCode: '32' },
-  { apiId: '10', apiName: '尾原ダム', masterName: '尾原', prefCode: '32' },
-  { apiId: '11', apiName: '殿ダム', masterName: '殿', prefCode: '31' },
+  { apiId: '1', apiName: '菅沢ダム', prefCode: '31' },
+  { apiId: '2', apiName: '土師ダム', prefCode: '34' },
+  { apiId: '3', apiName: '島地川ダム', prefCode: '35' },
+  { apiId: '4', apiName: '弥栄ダム', prefCode: '34' },
+  { apiId: '5', apiName: '八田原ダム', prefCode: '34' },
+  { apiId: '6', apiName: '温井ダム', prefCode: '34' },
+  { apiId: '7', apiName: '苫田ダム', prefCode: '33' },
+  { apiId: '8', apiName: '灰塚ダム', prefCode: '34' },
+  { apiId: '9', apiName: '志津見ダム', prefCode: '32' },
+  { apiId: '10', apiName: '尾原ダム', prefCode: '32' },
+  { apiId: '11', apiName: '殿ダム', prefCode: '31' },
 ];
+/** Where a dam the dashboard adds would be: the five prefectures it covers. */
+const PREF_CODES = [...new Set(DAMS.map((d) => d.prefCode))];
 
 const SOURCE_ID = 'cgr-mlit-dam';
 
@@ -69,16 +69,18 @@ interface ApiData {
   uryou: Record<string, string>;
   ruika: Record<string, string>;
 }
-interface ApiResponse {
+export interface ApiResponse {
   time?: string;
   status?: Record<string, { name: string; param: number }>;
   table?: { data: ApiData };
 }
 
-function parseNum(s: string | undefined): number | null {
-  if (!s) return null;
+/** "ー" is the dashboard's own "no value"; anything else non-numeric is unread. */
+function parseCell(s: string | undefined): Cell {
+  if (s == null) return null;
   const t = s.replace(/[,\s　]/g, '');
-  if (!t || t === 'ー' || t === '−' || t === '欠測' || t === '-') return null;
+  if (t === 'ー' || t === '−' || t === '欠測' || t === '-') return MARKED;
+  if (!t) return null;
   const n = Number(t);
   return Number.isFinite(n) ? n : null;
 }
@@ -92,129 +94,108 @@ export function parseCgrTimestamp(raw: string): Date | null {
   );
 }
 
-interface DamMatch {
-  cfg: DamCfg;
-  damId: bigint;
+function damReading(data: ApiData, id: string, observedAt: Date): Reading {
+  const inflow = parseCell(data.ryunyu?.[id]);
+  const outflow = parseCell(data.houryu?.[id]);
+  const level = parseCell(data.chosuii?.[id]);
+  // risui is 貯水率(利水容量) — matches this site's own 貯水率 definition
+  // (storage_volume_m3 / active_capacity_m3, 利水容量). Falls back to chisui
+  // (貯水率(有効容量)) only for dams that don't report a 利水容量 figure.
+  // Previously this always read chisui, which understates dams whose
+  // 利水容量 is much smaller than their 有効貯水容量 during flood season
+  // (e.g. 八田原ダム: chisui≈39%, risui≈97% — see issue #17).
+  const risui = parseCell(data.risui?.[id]);
+  const chisui = parseCell(data.chisui?.[id]);
+  const rate: Cell =
+    typeof risui === 'number'
+      ? risui
+      : typeof chisui === 'number'
+        ? chisui
+        : risui === MARKED && chisui === MARKED
+          ? MARKED
+          : null;
+  const rain = parseCell(data.uryou?.[id]);
+
+  const state = cellState([inflow, outflow, level, rate]);
+  if (state === 'empty') return { state, mark: 'ー in every column' };
+  if (state === 'unreadable') return { state, why: 'no numeric column' };
+  const ratePct = numberIn(rate);
+  return {
+    state: 'values',
+    observations: [
+      {
+        observedAt,
+        storageRate: ratePct != null ? ratePct / 100 : null,
+        inflowM3s: numberIn(inflow),
+        outflowM3s: numberIn(outflow),
+        waterLevelM: numberIn(level),
+        rainfallMm: numberIn(rain),
+      },
+    ],
+  };
 }
 
-async function matchMaster(log: (s: string) => void): Promise<DamMatch[]> {
-  const matches: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  for (const c of DAMS) {
-    // All candidates, ranked by name; chooseRanked keeps a row already
-    // stamped with this station, and lets a （元）/（再） pair tie so the
-    // current structure wins.
-    const rows = await sql<(BindableMaster & { rank: number })[]>`
-      SELECT id, name, completed_year AS "completedYear",
-             external_ids->>${SOURCE_ID} AS stamp,
-             CASE
-               WHEN name = ${c.masterName} THEN 0
-               WHEN name = ${`${c.masterName}ダム`} THEN 1
-               WHEN name LIKE ${`${c.masterName}（再）%`}
-                 OR name LIKE ${`${c.masterName}（元）%`} THEN 2
-               ELSE 5
-             END AS rank
-      FROM dams
-      WHERE pref_code = ${c.prefCode}
-        AND name LIKE ${`%${c.masterName}%`}
-    `;
-    const r = chooseRanked(rows, c.apiId);
-    universe.push({
-      externalId: c.apiId,
-      name: c.apiName,
-      prefCode: c.prefCode,
-      resolvedDamId: r?.id ?? null,
-    });
-    if (!r) {
-      log(`${SOURCE_ID}: no master match for ${c.apiName} (pref ${c.prefCode})`);
-      continue;
+/**
+ * The 11 configured dams plus any id the dashboard's `status` adds; with no
+ * payload (a failed fetch, a non-JSON body) every configured dam is
+ * unreadable with the reason.
+ */
+export function cgrEntries(payload: ApiResponse | { error: string }): Entry[] {
+  let read: (id: string) => Reading;
+  let status: NonNullable<ApiResponse['status']> = {};
+  if ('error' in payload) {
+    read = () => ({ state: 'unreadable', why: payload.error });
+  } else {
+    const observedAt = parseCgrTimestamp(payload.time ?? '');
+    const data = payload.table?.data;
+    status = payload.status ?? {};
+    if (!observedAt) {
+      read = () => ({ state: 'unreadable', why: `could not parse time '${payload.time}'` });
+    } else if (!data) {
+      read = () => ({ state: 'unreadable', why: 'missing table.data' });
+    } else {
+      read = (id) => damReading(data, id, observedAt);
     }
-    matches.push({ cfg: c, damId: r.id });
-    await bindExternalId(r.id, SOURCE_ID, c.apiId);
   }
-  await recordUniverse(SOURCE_ID, universe);
-  return matches;
+
+  const entries: Entry[] = DAMS.map((c) => ({
+    key: c.apiId,
+    name: c.apiName,
+    pref: c.prefCode,
+    reading: read(c.apiId),
+  }));
+  for (const [id, s] of Object.entries(status)) {
+    if (DAMS.some((c) => c.apiId === id)) continue;
+    entries.push({ key: id, name: s.name || id, pref: PREF_CODES, reading: read(id) });
+  }
+  return entries;
 }
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  const matches = await matchMaster(log);
-  log(`${SOURCE_ID}: matched ${matches.length}/${DAMS.length} master dams`);
-
-  const userAgent =
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
-
-  const r = await fetch(API_URL, {
-    method: 'POST',
-    headers: {
-      'user-agent': userAgent,
-      'content-type': 'application/json',
-      'content-length': '0',
-      referer: 'http://www.cgr.mlit.go.jp/cginfo/syokai/busyo/kasen/dam_bousai/index.php',
-    },
-    body: '',
-    signal: AbortSignal.timeout(12_000),
-  });
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; abort`);
-    return;
-  }
-  const text = await r.text();
-  let payload: ApiResponse;
+async function fetchPayload(): Promise<ApiResponse | { error: string }> {
   try {
-    payload = JSON.parse(text) as ApiResponse;
-  } catch {
-    log(`${SOURCE_ID}: JSON parse failed (got ${text.slice(0, 80)})`);
-    return;
-  }
-  const observedAt = parseCgrTimestamp(payload.time ?? '');
-  if (!observedAt) {
-    log(`${SOURCE_ID}: could not parse time '${payload.time}'`);
-    return;
-  }
-  const data = payload.table?.data;
-  if (!data) {
-    log(`${SOURCE_ID}: missing table.data`);
-    return;
-  }
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const m of matches) {
-    const id = m.cfg.apiId;
-    const inflowM3s = parseNum(data.ryunyu[id]);
-    const outflowM3s = parseNum(data.houryu[id]);
-    const waterLevelM = parseNum(data.chosuii[id]);
-    // risui is 貯水率(利水容量) — matches this site's own 貯水率 definition
-    // (storage_volume_m3 / active_capacity_m3, 利水容量). Falls back to chisui
-    // (貯水率(有効容量)) only for dams that don't report a 利水容量 figure.
-    // Previously this always read chisui, which understates dams whose
-    // 利水容量 is much smaller than their 有効貯水容量 during flood season
-    // (e.g. 八田原ダム: chisui≈39%, risui≈97% — see issue #17).
-    const rate = parseNum(data.risui[id]) ?? parseNum(data.chisui[id]);
-    const storageRate = rate != null ? rate / 100 : null;
-    const rainfallMm = parseNum(data.uryou[id]);
-    if (inflowM3s == null && outflowM3s == null && waterLevelM == null && storageRate == null) {
-      continue;
-    }
-    inputs.push({
-      observedAt,
-      damId: m.damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: null,
-      storageRate,
-      inflowM3s,
-      outflowM3s,
-      waterLevelM,
-      rainfallMm,
-      rawSnapshotId: null,
-      qualityFlag: 0,
+    const r = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'user-agent':
+          process.env.HTTP_USER_AGENT ??
+          'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
+        'content-type': 'application/json',
+        'content-length': '0',
+        referer: 'http://www.cgr.mlit.go.jp/cginfo/syokai/busyo/kasen/dam_bousai/index.php',
+      },
+      body: '',
+      signal: AbortSignal.timeout(12_000),
     });
+    if (r.status !== 200) return { error: `HTTP ${r.status}` };
+    const text = await r.text();
+    try {
+      return JSON.parse(text) as ApiResponse;
+    } catch {
+      return { error: `JSON parse failed (got ${text.slice(0, 80)})` };
+    }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
   }
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: matched=${matches.length} parsed=${inputs.length} written=${written}`);
-};
+}
 
-export default task;
+export default ingestTask(SOURCE_ID, async () => ({ entries: cgrEntries(await fetchPayload()) }));

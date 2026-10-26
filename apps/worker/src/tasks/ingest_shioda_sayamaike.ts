@@ -31,12 +31,8 @@
 //
 // Priority 285. No other source publishes 沢山池. Cron hourly at :05.
 
-import { type BindableMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const SOURCE_ID = 'shioda-sayamaike';
 const CSV_URL =
@@ -85,81 +81,50 @@ export function parseSayamaikeCsv(csv: string, lastModified: string | null): Say
   };
 }
 
-/** Bind and stamp the 長野 沢山池; null when the master has no single one. */
-export async function matchSayamaike(log: (s: string) => void): Promise<bigint | null> {
-  const candidates = await sql<BindableMaster[]>`
-    SELECT id, name, external_ids->>${SOURCE_ID} AS stamp
-    FROM dams
-    WHERE pref_code = ${PREF_CODE}
-      AND (name = ${NAME} OR external_ids->>${SOURCE_ID} = ${NAME})
-  `;
-  const master =
-    stampedMaster(candidates, NAME) ?? (candidates.length === 1 ? candidates[0] : null);
-  if (!master) {
-    log(`${SOURCE_ID}: ${candidates.length} master rows for ${NAME} in ${PREF_CODE}; not binding`);
-    return null;
-  }
-  await bindExternalId(master.id, SOURCE_ID, NAME);
-  return master.id;
+/**
+ * The reading of one CSV fetch. Rain alone does not count: the reservoir has
+ * values when level, volume, rate or inflow carries one.
+ */
+export function sayamaikeReading(csv: string, lastModified: string | null): Reading {
+  const r = parseSayamaikeCsv(csv, lastModified);
+  const hasValue =
+    r.waterLevelM !== null ||
+    r.storageVolumeM3 !== null ||
+    r.storageRate !== null ||
+    r.inflowM3s !== null;
+  if (!hasValue) return { state: 'unreadable', why: 'no level, volume, rate or inflow' };
+  // outflowM3s stays unset: the release columns are no longer shown on the page.
+  return { state: 'values', observations: [r] };
 }
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
+/**
+ * The one reservoir the provider publishes, matched only by its exact name
+ * inside 長野 (a namesake elsewhere must not bind). A layout change makes it
+ * unreadable.
+ */
+export function sayamaikeEntries(reading: Reading | (() => Reading)): Entry[] {
+  return [{ key: NAME, name: NAME, pref: PREF_CODE, bind: { exact: true }, reading }];
+}
 
-  const r = await fetch(CSV_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
+export default ingestTask(SOURCE_ID, async (log) => {
+  let csv: string;
+  let lastModified: string | null;
+  try {
+    const r = await fetch(CSV_URL, {
+      headers: {
+        'user-agent':
+          process.env.HTTP_USER_AGENT ??
+          'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
+      },
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (r.status !== 200) throw new Error(`HTTP ${r.status}`);
+    csv = await r.text();
+    lastModified = r.headers.get('last-modified');
+  } catch (err) {
+    const why = err instanceof Error ? err.message : String(err);
+    log(`${SOURCE_ID}: ${why}`);
+    return { entries: sayamaikeEntries({ state: 'unreadable', why }) };
   }
-  const reading = parseSayamaikeCsv(await r.text(), r.headers.get('last-modified'));
-  const hasValue =
-    reading.waterLevelM !== null ||
-    reading.storageVolumeM3 !== null ||
-    reading.storageRate !== null ||
-    reading.inflowM3s !== null;
-
-  // The provider publishes this one reservoir; recorded so /coverage can say
-  // "they publish it, we failed to link it" instead of guessing.
-  const damId = await matchSayamaike(log);
-  await recordUniverse(SOURCE_ID, [
-    {
-      externalId: NAME,
-      name: NAME,
-      prefCode: PREF_CODE,
-      resolvedDamId: damId,
-      hasData: hasValue ? true : null,
-    },
-  ]);
-  if (!damId || !hasValue) {
-    log(`${SOURCE_ID} done: parsed=1 matched=${damId ? 1 : 0} written=0`);
-    return;
-  }
-
-  const written = await upsertObservations([
-    {
-      observedAt: reading.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: reading.storageVolumeM3,
-      storageRate: reading.storageRate,
-      inflowM3s: reading.inflowM3s,
-      outflowM3s: null, // the release columns are no longer shown on the page
-      waterLevelM: reading.waterLevelM,
-      rainfallMm: reading.rainfallMm,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    },
-  ]);
-  log(
-    `${SOURCE_ID} done at ${reading.observedAt.toISOString()}: parsed=1 matched=1 written=${written}`,
-  );
-};
-
-export default task;
+  return { entries: sayamaikeEntries(() => sayamaikeReading(csv, lastModified)) };
+});

@@ -15,29 +15,23 @@
 //                      known capacities at plausible fill rates)
 //   合計  → sum column, skipped
 //
+// The header row is the universe: a dam column whose newest cell is blank or
+// unparseable is unreadable, and so is every dam when the file has no
+// parseable data row.
+//
 // Storage conversion: 千m³ × 1000 → m³
 // No water-level, inflow, outflow, or rainfall published.
 //
 // Cron: hourly at :35.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const DATA_URL =
   process.env.FUKUOKA_BODIK_URL ??
   'https://data.bodik.jp/dataset/d54fb22e-5b64-485c-8816-69f27ed1aaf1/resource/a5b26052-26d1-4c7a-b63f-5736de453bc1/download';
 const PREF_CODE = '40';
 const SOURCE_ID = 'fukuoka-bodik';
-
-export interface ParsedRow {
-  damName: string;
-  observedAt: Date;
-  storageVolumeM3: number | null;
-}
 
 /** Parse "YYYY/MM/DD HH:MM" (JST) → UTC Date. */
 export function parseFukuokaTimestamp(s: string): Date | null {
@@ -48,164 +42,64 @@ export function parseFukuokaTimestamp(s: string): Date | null {
   );
 }
 
-/** Strip ダム suffix and parenthetical annotations. Normalize small ヶ/ヵ to full ケ/カ. */
-export function normalizeName(s: string): string {
-  return s
-    .replace(/ヶ/g, 'ケ')
-    .replace(/ヵ/g, 'カ')
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .trim();
-}
-
 /**
- * Parse the CSV text (already decoded to UTF-8) and return observations for
- * the most recent timestamp only.
+ * Parse the CSV text (already decoded to UTF-8): one entry per dam column,
+ * read from the most recent row (top of file).
  */
-export function parseFukuokaRows(csvText: string): ParsedRow[] {
+export function fukuokaEntries(csvText: string): Entry[] {
   const lines = csvText
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
-  if (lines.length < 2) return [];
-
   const headerLine = lines[0];
   if (!headerLine) return [];
   const headers = headerLine.split(',').map((h) => h.trim());
-  const tsIdx = 0;
-  const totalIdx = headers.indexOf('合計');
 
-  const dataLine = lines[1];
-  if (!dataLine) return [];
+  const cols = (lines[1] ?? '').split(',');
+  const stamp = cols[0]?.trim() ?? '';
+  const observedAt = parseFukuokaTimestamp(stamp);
 
-  const cols = dataLine.split(',');
-  const observedAt = parseFukuokaTimestamp(cols[tsIdx]?.trim() ?? '');
-  if (!observedAt) return [];
-
-  const out: ParsedRow[] = [];
+  const out: Entry[] = [];
   for (let i = 1; i < headers.length; i++) {
-    if (i === totalIdx) continue;
     const name = headers[i];
     if (!name || name === '合計') continue;
-    const raw = Number(cols[i]?.trim());
-    const storageThouM3 = Number.isFinite(raw) && raw >= 0 ? raw : null;
+    const cellText = cols[i]?.trim() ?? '';
+    const raw = cellText ? Number(cellText) : Number.NaN;
+    let reading: Reading;
+    if (!observedAt) reading = { state: 'unreadable', why: `観測時刻 "${stamp}"` };
+    else if (!Number.isFinite(raw) || raw < 0) {
+      reading = { state: 'unreadable', why: `貯水量 "${cellText}"` };
+    } else {
+      // 千m³ → m³
+      reading = { state: 'values', observations: [{ observedAt, storageVolumeM3: raw * 1000 }] };
+    }
+    // The master spells 五ヶ山 with a small ヶ (U+30F6); the CSV header sends
+    // the full-size ケ (U+30B1). NFKC keeps them apart, so the ladder searches
+    // with the master's spelling.
+    const spelled = name.replace(/ケ/g, 'ヶ');
     out.push({
-      damName: name,
-      observedAt,
-      storageVolumeM3: storageThouM3 != null ? storageThouM3 * 1000 : null,
+      key: name,
+      name,
+      pref: PREF_CODE,
+      ...(spelled !== name ? { bind: { name: spelled } } : {}),
+      reading,
     });
   }
   return out;
 }
 
-interface DamMatch {
-  damName: string;
-  damId: bigint;
-}
-
-export function chooseMaster(
-  stem: string,
-  masters: BindableMaster[],
-  stationKey?: string,
-): bigint | null {
-  // A row already stamped with this station keeps it; names alone cannot
-  // separate same-name dams (#57).
-  const stamped = stationKey ? stampedMaster(masters, stationKey) : null;
-  if (stamped) return stamped.id;
-  let best: { m: BindableMaster; rank: number } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (mStem === stem) rank = 0;
-    else if (m.name === `${stem}ダム`) rank = 1;
-    else if (mStem.startsWith(stem)) rank = 2;
-    else if (mStem.includes(stem)) rank = 3;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-      best = { m, rank };
-    }
-  }
-  return best?.m.id ?? null;
-}
-
-async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const out: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing. Keyed by
-  // name so a repeated CSV column header can't break the upsert.
-  const universe = new Map<string, UniverseRow>();
-  for (const r of rows) {
-    const stem = normalizeName(r.damName);
-    if (!stem) continue;
-    const damId = chooseMaster(stem, masters, r.damName);
-    universe.set(r.damName, {
-      externalId: r.damName,
-      name: r.damName,
-      prefCode: PREF_CODE,
-      resolvedDamId: damId,
-    });
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for ${r.damName}`);
-      continue;
-    }
-    out.push({ damName: r.damName, damId });
-    await bindExternalId(damId, SOURCE_ID, r.damName);
-  }
-  await recordUniverse(SOURCE_ID, [...universe.values()]);
-  return out;
-}
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
-  const ua =
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
-
+export default ingestTask(SOURCE_ID, async (log) => {
   const res = await fetch(DATA_URL, {
-    headers: { 'user-agent': ua },
+    headers: {
+      'user-agent':
+        process.env.HTTP_USER_AGENT ??
+        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
+    },
     signal: AbortSignal.timeout(20_000),
   });
-  if (!res.ok) {
-    log(`${SOURCE_ID}: HTTP ${res.status}; abort`);
-    return;
-  }
-
-  const buf = await res.arrayBuffer();
-  const csvText = new TextDecoder('shift-jis').decode(buf);
-  const parsed = parseFukuokaRows(csvText);
-  log(
-    `${SOURCE_ID}: parsed ${parsed.length} dams at ${parsed[0]?.observedAt?.toISOString() ?? 'unknown'}`,
-  );
-  if (!parsed.length) return;
-
-  const matches = await matchMaster(parsed, log);
-  const damByName = new Map(matches.map((m) => [m.damName, m.damId]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of parsed) {
-    const damId = damByName.get(p.damName);
-    if (!damId) continue;
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: null,
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: null,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${parsed.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+  if (!res.ok) throw new Error(`${SOURCE_ID}: HTTP ${res.status}`);
+  const csvText = new TextDecoder('shift-jis').decode(await res.arrayBuffer());
+  const entries = fukuokaEntries(csvText);
+  log(`${SOURCE_ID}: ${entries.length} dams`);
+  return { entries };
+});

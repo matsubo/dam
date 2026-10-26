@@ -8,24 +8,23 @@
 // Source: http://shimokubo.kannet.ne.jp/data/table.json
 // Format: JSON with UTF-8-BOM; `update_time` in JST; `records[].datas[-1].data10`
 //         holds the latest 10-min reading.  Storage in 千m³ → stored as m³ (×1000).
+//         "―" / "-" is the feed's own "no value"; with it on both 貯水位 and
+//         貯水量 the dam is provider-marked empty.
 //
 // Upgrades jwa-toneara (daily, priority 296) → hourly for 下久保ダム.
 // Priority 297 > 296.
 
-import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const DATA_URL = process.env.SHIMOKUBO_DATA_URL ?? 'http://shimokubo.kannet.ne.jp/data/table.json';
 
 const SOURCE_ID = 'shimokubo';
 /** The only dam this feed publishes; it carries no station id. */
 const DAM_NAME = '下久保ダム';
-/** 下久保 straddles 群馬/埼玉; ダム便覧 files it under 群馬. */
-const PREF_CODE = '10';
+/** 下久保 straddles 群馬/埼玉; ダム便覧 files it under 群馬, so search both. */
+const PREF_CODES = ['10', '11'];
 
 // --- types ------------------------------------------------------------------
 
@@ -39,26 +38,19 @@ interface DamRecord {
   datas: Record10[];
 }
 
-interface ShimokuboJson {
+export interface ShimokuboJson {
   update_time: string;
   times: Array<{ time60: string; time10: string }>;
   records: DamRecord[];
 }
 
-export interface ParsedReading {
-  observedAt: Date | null;
-  waterLevelM: number | null;
-  storageVolumeM3: number | null;
-  storageRate: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
-}
-
 // --- parsing ----------------------------------------------------------------
 
-function parseNum(s: string): number | null {
+function parseCell(s: string | null): Cell {
+  if (s == null) return null;
   const cleaned = s.replace(/[,\s　]/g, '');
-  if (!cleaned || cleaned === '―' || cleaned === '-' || cleaned === '—') return null;
+  if (cleaned === '―' || cleaned === '-' || cleaned === '—') return MARKED;
+  if (!cleaned) return null;
   const n = Number(cleaned);
   return Number.isFinite(n) ? n : null;
 }
@@ -84,66 +76,48 @@ function latestData10(records: DamRecord[], name: string): string | null {
   return rec.datas[rec.datas.length - 1]?.data10 ?? null;
 }
 
-export function parseShimokuboJson(json: ShimokuboJson): ParsedReading {
+export function shimokuboReading(json: ShimokuboJson): Reading {
   const observedAt = parseShimokuboTimestamp(json.update_time);
+  if (!observedAt) return { state: 'unreadable', why: `update_time "${json.update_time}"` };
 
-  const waterLevelM = parseNum(latestData10(json.records, '下久保ダム貯水位') ?? '');
-  const storageThou = parseNum(latestData10(json.records, '下久保ダム有効容量内貯水量') ?? '');
-  const rateRaw = parseNum(latestData10(json.records, '下久保ダム有効容量内貯水率') ?? '');
-  const inflowM3s = parseNum(latestData10(json.records, '下久保ダム全流入量') ?? '');
-  const outflowM3s = parseNum(latestData10(json.records, '下久保ダム全放流量') ?? '');
+  const level = parseCell(latestData10(json.records, '下久保ダム貯水位'));
+  const storageThou = parseCell(latestData10(json.records, '下久保ダム有効容量内貯水量'));
+  const ratePct = numberIn(parseCell(latestData10(json.records, '下久保ダム有効容量内貯水率')));
+  const inflow = parseCell(latestData10(json.records, '下久保ダム全流入量'));
+  const outflow = parseCell(latestData10(json.records, '下久保ダム全放流量'));
 
+  const state = cellState([level, storageThou]);
+  if (state === 'empty') return { state, mark: '― on 貯水位 and 貯水量' };
+  if (state === 'unreadable') return { state, why: 'no 貯水位 or 貯水量 figure' };
+  const thou = numberIn(storageThou);
   return {
-    observedAt,
-    waterLevelM,
-    storageVolumeM3: storageThou !== null ? storageThou * 1_000 : null,
-    storageRate: rateRaw !== null ? rateRaw / 100 : null,
-    inflowM3s,
-    outflowM3s,
+    state: 'values',
+    observations: [
+      {
+        observedAt,
+        waterLevelM: numberIn(level),
+        storageVolumeM3: thou !== null ? thou * 1_000 : null,
+        storageRate: ratePct !== null ? ratePct / 100 : null,
+        inflowM3s: numberIn(inflow),
+        outflowM3s: numberIn(outflow),
+      },
+    ],
   };
 }
 
-// --- DB helpers -------------------------------------------------------------
-
-async function resolveDamId(log: (s: string) => void): Promise<bigint | null> {
-  // Twins of a redeveloped dam tie on rank, so chooseRanked picks the current
-  // one; a row already stamped with the station keeps it (#79).
-  const rows = await sql<(BindableMaster & { rank: number })[]>`
-    SELECT id, name, completed_year AS "completedYear",
-           external_ids->>${SOURCE_ID} AS stamp,
-           CASE
-             WHEN name = '下久保ダム' THEN 0
-             WHEN name = '下久保'     THEN 1
-             ELSE 2
-           END AS rank
-    FROM dams
-    WHERE pref_code = ANY(ARRAY['10', '11'])
-      AND name LIKE '%下久保%'
-    ORDER BY rank, id
-  `;
-  const dam = chooseRanked(rows, DAM_NAME);
-  if (!dam) {
-    log(`${SOURCE_ID}: no master match for 下久保ダム`);
-    return null;
-  }
-  const { id, name } = dam;
-  await bindExternalId(id, SOURCE_ID, DAM_NAME);
-  log(`${SOURCE_ID}: matched "${name}" (id=${id})`);
-  return id;
+/** The one dam, read once the run reaches it: a failed fetch leaves it unreadable. */
+export function shimokuboEntries(fetchJson: () => Promise<ShimokuboJson>): Entry[] {
+  return [
+    {
+      key: DAM_NAME,
+      name: DAM_NAME,
+      pref: PREF_CODES,
+      reading: async () => shimokuboReading(await fetchJson()),
+    },
+  ];
 }
 
-// --- task -------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  const damId = await resolveDamId(log);
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  await recordUniverse(SOURCE_ID, [
-    { externalId: DAM_NAME, name: DAM_NAME, prefCode: PREF_CODE, resolvedDamId: damId },
-  ]);
-  if (!damId) return;
-
+async function fetchJson(): Promise<ShimokuboJson> {
   const r = await fetch(DATA_URL, {
     headers: {
       'user-agent':
@@ -152,48 +126,10 @@ const task: Task = async (_payload, helpers) => {
     },
     signal: AbortSignal.timeout(20_000),
   });
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
-  }
-
+  if (r.status !== 200) throw new Error(`HTTP ${r.status}`);
   // The file uses a UTF-8 BOM; strip it before parsing.
-  const raw = await r.arrayBuffer();
-  const text = new TextDecoder('utf-8').decode(raw).replace(/^﻿/, '');
-  const json = JSON.parse(text) as ShimokuboJson;
+  const text = new TextDecoder('utf-8').decode(await r.arrayBuffer()).replace(/^\uFEFF/, '');
+  return JSON.parse(text) as ShimokuboJson;
+}
 
-  const reading = parseShimokuboJson(json);
-  log(
-    `${SOURCE_ID}: observedAt=${reading.observedAt?.toISOString() ?? '(missing)'} ` +
-      `waterLevel=${reading.waterLevelM} storageM3=${reading.storageVolumeM3} ` +
-      `inflow=${reading.inflowM3s} outflow=${reading.outflowM3s}`,
-  );
-
-  if (!reading.observedAt) {
-    log(`${SOURCE_ID}: no timestamp; aborting`);
-    return;
-  }
-  if (reading.waterLevelM === null && reading.storageVolumeM3 === null) {
-    log(`${SOURCE_ID}: all primary metrics null; skipping`);
-    return;
-  }
-
-  const written = await upsertObservations([
-    {
-      observedAt: reading.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: reading.storageVolumeM3,
-      storageRate: reading.storageRate,
-      inflowM3s: reading.inflowM3s,
-      outflowM3s: reading.outflowM3s,
-      waterLevelM: reading.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    },
-  ]);
-  log(`${SOURCE_ID} done: written=${written}`);
-};
-
-export default task;
+export default ingestTask(SOURCE_ID, async () => ({ entries: shimokuboEntries(fetchJson) }));

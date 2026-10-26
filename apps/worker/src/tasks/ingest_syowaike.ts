@@ -32,11 +32,9 @@
 // Priority 299. Cron hourly at :23 (the page updated at :01/:21/:41 while
 // this was written).
 
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const PAGE_URL = process.env.SYOWAIKE_URL ?? 'http://www.syowaike.jp/public/DamData.jsp';
 
@@ -50,111 +48,73 @@ const STATION = '昭和池';
 // apart, so the binding is pinned.
 const NDI = '1539';
 
-export interface SyowaikeReading {
-  observedAt: Date;
-  waterLevelM: number | null;
-  storageVolumeM3: number | null;
-  inflowM3s: number | null;
-  rainfallMm: number | null;
-}
-
-/** Parse the テレメータデータ page; null when it carries no live 更新時刻. */
-export function parseSyowaikeHtml(html: string): SyowaikeReading | null {
+/** The テレメータデータ page's reading. */
+export function syowaikeReading(html: string): Reading {
   const ts = html.match(/更新時刻[：:]\s*(\d{4})\/(\d{2})\/(\d{2})\s+(\d{2}):(\d{2})/);
-  if (!ts || Number(ts[1]) === 0) return null;
+  if (!ts) return { state: 'unreadable', why: 'no 更新時刻' };
+  if (Number(ts[1]) === 0) return { state: 'empty', mark: '更新時刻 0000/00/00 (offline)' };
   const observedAt = new Date(
     Date.UTC(Number(ts[1]), Number(ts[2]) - 1, Number(ts[3]), Number(ts[4]) - 9, Number(ts[5])),
   );
 
-  const values = new Map<string, number | null>();
+  const values = new Map<string, Cell>();
   for (const m of html.matchAll(
     /<td[^>]*bgcolor="#aaffaa"[^>]*>([\s\S]*?)<\/td>\s*<td[^>]*bgcolor="(#[0-9a-f]{6})"[^>]*>([\s\S]*?)<\/td>/gi,
   )) {
     const label = (m[1] ?? '').replace(/<[^>]+>/g, '').trim();
     const text = (m[3] ?? '').replace(/<[^>]+>|&nbsp;|[\s　,]/g, '');
-    const valid = (m[2] ?? '').toLowerCase() !== '#ff8080' && /^-?\d+(?:\.\d+)?$/.test(text);
-    values.set(label, valid ? Number(text) : null);
+    // #ff8080 is the page's own 無効/欠測.
+    const marked = (m[2] ?? '').toLowerCase() === '#ff8080';
+    values.set(label, cell(/^-?\d+(?:\.\d+)?$/.test(text) ? Number(text) : null, marked));
   }
 
+  const level = values.get('貯水位(m)') ?? null;
+  const volume = values.get('貯水量(m3)') ?? null;
+  const inflow = values.get('流入量(m3/s)') ?? null;
+  const rain = values.get('時間雨量(mm)') ?? null;
+  const state = cellState([level, volume, inflow, rain]);
+  if (state === 'empty') return { state, mark: '無効/欠測 on every stored item' };
+  if (state === 'unreadable') return { state, why: 'no readable value' };
   return {
-    observedAt,
-    waterLevelM: values.get('貯水位(m)') ?? null,
-    storageVolumeM3: values.get('貯水量(m3)') ?? null,
-    inflowM3s: values.get('流入量(m3/s)') ?? null,
-    rainfallMm: values.get('時間雨量(mm)') ?? null,
+    state,
+    observations: [
+      {
+        observedAt,
+        waterLevelM: numberIn(level),
+        storageVolumeM3: numberIn(volume),
+        inflowM3s: numberIn(inflow),
+        rainfallMm: numberIn(rain),
+      },
+    ],
   };
 }
 
-async function findDamId(log: (s: string) => void): Promise<bigint | null> {
-  const [dam] = await sql<{ id: bigint }[]>`
-    SELECT id FROM dams
-    WHERE pref_code = ${PREF_CODE} AND external_ids->>'ndi' = ${NDI}
-  `;
-  // The one reservoir this page publishes, matched or not, so /coverage can
-  // tell "published, not linked" from "nobody publishes it".
-  await recordUniverse(SOURCE_ID, [
-    { externalId: STATION, name: STATION, prefCode: PREF_CODE, resolvedDamId: dam?.id ?? null },
-  ]);
-  if (!dam) {
-    log(`${SOURCE_ID}: no master with NDI ${NDI} in pref ${PREF_CODE}`);
-    return null;
-  }
-  await bindExternalId(dam.id, SOURCE_ID, STATION);
-  return dam.id;
+function entry(reading: Reading): Entry {
+  return { key: STATION, name: STATION, pref: PREF_CODE, bind: { ndi: NDI }, reading };
 }
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
+export function syowaikeEntries(html: string): Entry[] {
+  return [entry(syowaikeReading(html))];
+}
 
+export default ingestTask(SOURCE_ID, async (log) => {
   const ua =
     process.env.HTTP_USER_AGENT ??
     'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
 
-  // Resolved before the fetch: the system publishes the reservoir whether or
-  // not this run's page loads, and the universe must say so.
-  const damId = await findDamId(log);
-
-  const res = await fetch(PAGE_URL, {
-    headers: { 'user-agent': ua },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (res.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${res.status}; abort`);
-    return;
+  try {
+    const res = await fetch(PAGE_URL, {
+      headers: { 'user-agent': ua },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
+    return {
+      entries: syowaikeEntries(new TextDecoder('shift_jis').decode(await res.arrayBuffer())),
+    };
+  } catch (err) {
+    // The system publishes the reservoir whether or not this run's page loads.
+    const why = err instanceof Error ? err.message : String(err);
+    log(`${SOURCE_ID}: ${why}`);
+    return { entries: [entry({ state: 'unreadable', why })] };
   }
-  const reading = parseSyowaikeHtml(new TextDecoder('shift_jis').decode(await res.arrayBuffer()));
-  if (!reading) {
-    log(`${SOURCE_ID}: no live 更新時刻 on the page; abort`);
-    return;
-  }
-  const { observedAt, waterLevelM, storageVolumeM3, inflowM3s, rainfallMm } = reading;
-  if (
-    waterLevelM === null &&
-    storageVolumeM3 === null &&
-    inflowM3s === null &&
-    rainfallMm === null
-  ) {
-    log(`${SOURCE_ID}: all values missing at ${observedAt.toISOString()}; skip`);
-    return;
-  }
-  if (!damId) return;
-
-  const written = await upsertObservations([
-    {
-      observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3,
-      storageRate: null,
-      inflowM3s,
-      outflowM3s: null,
-      waterLevelM,
-      rainfallMm,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    },
-  ]);
-  log(`${SOURCE_ID} done: parsed=1 matched=1 written=${written} at ${observedAt.toISOString()}`);
-};
-
-export default task;
+});

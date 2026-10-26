@@ -21,12 +21,8 @@
 // Priority 300: nothing else publishes 千本 / 大谷. Cron daily 04:58 UTC
 // (13:58 JST), after the late-morning update.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry } from '../ingest/types.ts';
 
 const PAGE_URL =
   process.env.MATSUE_SUIDO_URL ?? 'https://www.water.matsue.shimane.jp/shiryo/chosui-list.html';
@@ -115,35 +111,36 @@ function publishedNames(html: string): string[] {
   return [...names];
 }
 
-// --- matching ---------------------------------------------------------------
-
-function stemOf(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .trim();
+/**
+ * One entry per dam named in a column header, carrying every day of both
+ * tables; a dam with no filled-in day is unreadable. The master name is the
+ * header name without ダム, so binding stops at the exact rungs.
+ */
+export function matsueEntries(html: string): Entry[] {
+  const rows = parseMatsueChosuiList(html);
+  return publishedNames(html).map((name): Entry => {
+    const days = rows.filter((r) => r.name === name);
+    return {
+      key: name,
+      name,
+      pref: PREF_CODE,
+      bind: { exact: true },
+      reading:
+        days.length === 0
+          ? { state: 'unreadable', why: 'no day with a 貯水量 or 貯水率' }
+          : {
+              state: 'values',
+              observations: days.map((d) => ({
+                observedAt: d.observedAt,
+                storageVolumeM3: d.storageVolumeM3,
+                storageRate: d.storageRate,
+              })),
+            },
+    };
+  });
 }
 
-/** The stamped row, else the dam of the same name (live twin of （元）/（再）). */
-export function chooseMaster(name: string, masters: BindableMaster[]): bigint | null {
-  const stamped = stampedMaster(masters, name);
-  if (stamped) return stamped.id;
-  const stem = stemOf(name);
-  let best: BindableMaster | null = null;
-  for (const m of masters) {
-    if (stemOf(m.name) !== stem) continue;
-    if (!best || preferMaster(m, best)) best = m;
-  }
-  return best?.id ?? null;
-}
-
-// --- DB helpers -------------------------------------------------------------
-
-// --- task -------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
+export default ingestTask(SOURCE_ID, async (log) => {
   const r = await fetch(PAGE_URL, {
     headers: {
       'user-agent':
@@ -152,64 +149,12 @@ const task: Task = async (_payload, helpers) => {
     },
     signal: AbortSignal.timeout(20_000),
   });
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
+  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status} from ${PAGE_URL}`);
+
+  const entries = matsueEntries(await r.text());
+  log(`${SOURCE_ID}: ${entries.length} dams`);
+  if (entries.length === 0) {
+    throw new Error(`${SOURCE_ID}: no dam column on ${PAGE_URL} — layout change?`);
   }
-
-  const html = await r.text();
-  const rows = parseMatsueChosuiList(html);
-  const published = publishedNames(html);
-  log(`${SOURCE_ID}: parsed ${rows.length} daily readings for ${published.length} dams`);
-
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-
-  const damByName = new Map<string, bigint>();
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  for (const name of published) {
-    const damId = chooseMaster(name, masters);
-    universe.push({ externalId: name, name, prefCode: PREF_CODE, resolvedDamId: damId });
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${name}"`);
-      continue;
-    }
-    damByName.set(name, damId);
-    await bindExternalId(damId, SOURCE_ID, name);
-  }
-  await recordUniverse(SOURCE_ID, universe);
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = damByName.get(p.name);
-    if (!damId) continue;
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: p.storageRate,
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: null,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${damByName.size} written=${written}`);
-
-  if (published.length === 0 || rows.length === 0) {
-    throw new Error(
-      `${SOURCE_ID}: ${published.length} dams / ${rows.length} readings on ${PAGE_URL} — layout change?`,
-    );
-  }
-};
-
-export default task;
+  return { entries };
+});

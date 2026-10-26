@@ -29,20 +29,16 @@
 // Rate: printed as 現在貯水量 / 利水容量 (ため池: / 満水貯水量) from the same row
 // and clamped at 100 % (「貯水率が100%を超えるときは、100%として表記」), so every
 // row carries its own denominator. A row that fails that identity is a misread
-// and is dropped. trusted_rate_basis is set by migration 0097 on that evidence.
+// and is unreadable. trusted_rate_basis is set by migration 0097 on that evidence.
 //
 // Cadence: 1日・15日 in かんがい期, monthly otherwise. Priority 286 — below
 // miyagi-kasen (308) and kasenbosai (310), which carry 14 of the 17 dams hourly
 // and must keep winning them; above fukushima-nourin (285) only by
 // convention — no dam is shared with it.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
 import { getDocumentProxy } from 'unpdf';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Observed, Reading } from '../ingest/types.ts';
 
 const INDEX_URL =
   process.env.MIYAGI_NOUSEI_URL ?? 'https://www.pref.miyagi.jp/soshiki/nosonshin/yousui.html';
@@ -53,20 +49,6 @@ const SOURCE_ID = 'miyagi-nousei';
 
 /** Rate tolerance between the printed 貯水率 and volume / capacity, in points. */
 const RATE_TOLERANCE_PCT = 1.5;
-
-export interface ParsedRow {
-  /** Name exactly as the PDF prints it — also the stamp and universe key. */
-  name: string;
-  /** 利水容量 (dams) or 満水貯水量 (ため池), m³. */
-  capacityM3: number;
-  storageVolumeM3: number;
-  /** 貯水率 as a 0..1 fraction. */
-  storageRate: number;
-  /** Current 貯水位 (EL.m); dams only. */
-  waterLevelM: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
-}
 
 // --- PDF → lines --------------------------------------------------------------
 
@@ -113,29 +95,28 @@ function parseNum(s: string | undefined): number | null {
 /**
  * capacity / volume / rate read around the first 「NN.N%」 token, which is
  * 貯水率 in both tables (the dam table's stray 「(82.1%)」 cell is on the
- * other line and parenthesised). Null unless the three agree.
+ * other line and parenthesised). A string saying why unless the three agree.
  */
 function readStorage(
   tokens: string[],
-): { capacityM3: number; storageVolumeM3: number; storageRate: number; at: number } | null {
+): { storageVolumeM3: number; storageRate: number; at: number } | string {
   const at = tokens.findIndex((t) => /^\d+(?:\.\d+)?%$/.test(t));
-  if (at < 2) return null;
+  if (at < 2) return 'no 貯水率 after two figures';
   const capacity = parseNum(tokens[at - 2]);
   const volume = parseNum(tokens[at - 1]);
   const pct = Number(tokens[at]?.slice(0, -1));
-  if (capacity == null || volume == null || capacity <= 0) return null;
+  if (capacity == null || volume == null || capacity <= 0) {
+    return `capacity 「${tokens[at - 2]}」 volume 「${tokens[at - 1]}」`;
+  }
   // A 0 % agricultural reservoir is drained or out of survey — storing it
   // would recreate the phantom zeros migrations 0038/0039 had to undo.
-  if (!(pct > 0 && pct <= 100)) return null;
+  if (!(pct > 0 && pct <= 100)) return `貯水率 ${pct} % is not an operating reading`;
   const implied = (100 * volume) / capacity;
   const clamped = pct === 100 && implied >= 100;
-  if (!clamped && Math.abs(implied - pct) > RATE_TOLERANCE_PCT) return null;
-  return {
-    capacityM3: capacity * 1000,
-    storageVolumeM3: volume * 1000,
-    storageRate: pct / 100,
-    at,
-  };
+  if (!clamped && Math.abs(implied - pct) > RATE_TOLERANCE_PCT) {
+    return `printed ${pct} % is not ${volume}/${capacity}`;
+  }
+  return { storageVolumeM3: volume * 1000, storageRate: pct / 100, at };
 }
 
 const FULLWIDTH_DIGIT = /[０-９]/g;
@@ -154,17 +135,40 @@ export function parseMiyagiNouseiDate(text: string): Date | null {
 const DAM_NAME_RE = /^(\S+(?:ダム|溜池|ため池))$/;
 const ERA_RE = /^\([SHR]\d+\.\d+\)$/;
 
+/** One dam or ため池 the PDF lists, and what we read from it. */
+export interface MiyagiRow {
+  /** Name exactly as the PDF prints it — also the stamp and universe key. */
+  name: string;
+  reading: Reading;
+}
+
 export function parseMiyagiNouseiLines(lines: string[]): {
   reportDate: Date | null;
-  rows: ParsedRow[];
-  published: string[];
+  rows: MiyagiRow[];
 } {
   const reportDate = parseMiyagiNouseiDate(lines.join('\n'));
-  const rows: ParsedRow[] = [];
-  const published: string[] = [];
+  const rows: MiyagiRow[] = [];
+  const read = (
+    storage: ReturnType<typeof readStorage>,
+    extra: Omit<Observed, 'observedAt' | 'storageVolumeM3' | 'storageRate'>,
+  ): Reading => {
+    if (typeof storage === 'string') return { state: 'unreadable', why: storage };
+    if (!reportDate) return { state: 'unreadable', why: 'no 「…現在」 survey date in the PDF' };
+    return {
+      state: 'values',
+      observations: [
+        {
+          observedAt: reportDate,
+          storageVolumeM3: storage.storageVolumeM3,
+          storageRate: storage.storageRate,
+          ...extra,
+        },
+      ],
+    };
+  };
 
   // A dam's first line (name + levels) waits here for its figures line.
-  let pending: { name: string; level: number | null } | null = null;
+  let pending: { row: MiyagiRow; level: number | null } | null = null;
   let section: 'none' | 'dam' | 'pond' = 'none';
 
   for (const line of lines) {
@@ -180,25 +184,26 @@ export function parseMiyagiNouseiLines(lines: string[]): {
       if (name && /EL\s*[\d.]+m/.test(line)) {
         // 満水位, 現在の水位, 平年の水位 — in column order.
         const levels = [...line.matchAll(/EL\s*([\d.]+)m/g)].map((m) => Number(m[1]));
-        pending = { name, level: levels[1] ?? null };
-        published.push(name);
+        const row: MiyagiRow = {
+          name,
+          reading: { state: 'unreadable', why: 'no figures line under the name' },
+        };
+        rows.push(row);
+        pending = { row, level: levels[1] ?? null };
         continue;
       }
       if (pending && ERA_RE.test(tokens[0] ?? '')) {
         const storage = readStorage(tokens);
-        if (storage) {
-          // After 貯水率: an optional 傾向 arrow, then 流入量 and 放流量.
-          const after = tokens.slice(storage.at + 1).filter((t) => !/^[↑↓→]$/.test(t));
-          rows.push({
-            name: pending.name,
-            capacityM3: storage.capacityM3,
-            storageVolumeM3: storage.storageVolumeM3,
-            storageRate: storage.storageRate,
-            waterLevelM: pending.level,
-            inflowM3s: parseNum(after[0]),
-            outflowM3s: parseNum(after[1]),
-          });
-        }
+        // After 貯水率: an optional 傾向 arrow, then 流入量 and 放流量.
+        const after =
+          typeof storage === 'string'
+            ? []
+            : tokens.slice(storage.at + 1).filter((t) => !/^[↑↓→]$/.test(t));
+        pending.row.reading = read(storage, {
+          waterLevelM: pending.level,
+          inflowM3s: parseNum(after[0]),
+          outflowM3s: parseNum(after[1]),
+        });
         pending = null;
       }
       continue;
@@ -206,21 +211,10 @@ export function parseMiyagiNouseiLines(lines: string[]): {
 
     // ため池 table: everything is on the name's own line.
     if (!name || !line.includes('%')) continue;
-    published.push(name);
-    const storage = readStorage(tokens);
-    if (!storage) continue;
-    rows.push({
-      name,
-      capacityM3: storage.capacityM3,
-      storageVolumeM3: storage.storageVolumeM3,
-      storageRate: storage.storageRate,
-      waterLevelM: null,
-      inflowM3s: null,
-      outflowM3s: null,
-    });
+    rows.push({ name, reading: read(readStorage(tokens), {}) });
   }
 
-  return { reportDate, rows, published };
+  return { reportDate, rows };
 }
 
 // --- discovery --------------------------------------------------------------
@@ -249,142 +243,41 @@ export function findReportPdfUrl(html: string): string | null {
   return m[1].startsWith('http') ? m[1] : `${ORIGIN}${m[1]}`;
 }
 
-// --- matching ---------------------------------------------------------------
+// --- entries ----------------------------------------------------------------
 
-/**
- * The pond table prints 愛子溜池 as 「愛子ダム」, so the kind suffix is not part
- * of the identity: both sides drop ダム/溜池/ため池 and parentheticals.
- */
-function stemOf(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/(ダム|溜池|ため池)$/, '')
-    .trim();
+/** Every dam and ため池 the PDF lists, in print order. */
+export function miyagiNouseiEntries(lines: string[]): Entry[] {
+  return parseMiyagiNouseiLines(lines).rows.map((r) => ({
+    key: r.name,
+    name: r.name,
+    pref: PREF_CODE,
+    reading: r.reading,
+  }));
 }
 
-/**
- * Best master for a published name: the row already stamped with it, else an
- * exact stem beats a prefix (南川 over 南川鞍部), equal ranks going to the
- * live （元）/（再） twin.
- */
-export function chooseMaster(name: string, masters: BindableMaster[]): bigint | null {
-  const stamped = stampedMaster(masters, name);
-  if (stamped) return stamped.id;
-  const stem = stemOf(name);
-  if (!stem) return null;
-  let best: { m: BindableMaster; rank: number } | null = null;
-  for (const m of masters) {
-    const mStem = stemOf(m.name);
-    let rank: number;
-    if (mStem === stem) rank = 0;
-    else if (mStem.startsWith(stem)) rank = 1;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-      best = { m, rank };
-    }
-  }
-  return best?.m.id ?? null;
+async function fetchOk(url: string, timeoutMs: number): Promise<Response> {
+  const res = await fetch(url, {
+    headers: {
+      'user-agent':
+        process.env.HTTP_USER_AGENT ??
+        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
+    },
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (res.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${res.status} for ${url}`);
+  return res;
 }
 
-// --- DB helpers -------------------------------------------------------------
-
-// --- task -------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
-  const headers = {
-    'user-agent':
-      process.env.HTTP_USER_AGENT ??
-      'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-  };
-
-  const indexRes = await fetch(INDEX_URL, { headers, signal: AbortSignal.timeout(20_000) });
-  if (indexRes.status !== 200) {
-    log(`${SOURCE_ID}: index HTTP ${indexRes.status}; aborting`);
-    return;
-  }
-  const reportUrl = findLatestReportUrl(await indexRes.text());
-  if (!reportUrl) {
-    log(`${SOURCE_ID}: no survey page linked from the index; aborting`);
-    return;
-  }
-  const reportRes = await fetch(reportUrl, { headers, signal: AbortSignal.timeout(20_000) });
-  if (reportRes.status !== 200) {
-    log(`${SOURCE_ID}: report HTTP ${reportRes.status} for ${reportUrl}; aborting`);
-    return;
-  }
-  const pdfUrl = findReportPdfUrl(await reportRes.text());
-  if (!pdfUrl) {
-    log(`${SOURCE_ID}: no PDF on ${reportUrl}; aborting`);
-    return;
-  }
-  const pdfRes = await fetch(pdfUrl, { headers, signal: AbortSignal.timeout(30_000) });
-  if (pdfRes.status !== 200) {
-    log(`${SOURCE_ID}: PDF HTTP ${pdfRes.status} for ${pdfUrl}; aborting`);
-    return;
-  }
-
-  const lines = await pdfToLines(new Uint8Array(await pdfRes.arrayBuffer()));
-  const { reportDate, rows, published } = parseMiyagiNouseiLines(lines);
-  if (!reportDate) {
-    log(`${SOURCE_ID}: no survey date in ${pdfUrl}; aborting`);
-    return;
-  }
-  log(
-    `${SOURCE_ID}: parsed ${rows.length}/${published.length} rows for ${reportDate.toISOString()}`,
-  );
-
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  const damByName = new Map<string, bigint>();
-  for (const name of published) {
-    const damId = chooseMaster(name, masters);
-    universe.push({ externalId: name, name, prefCode: PREF_CODE, resolvedDamId: damId });
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${name}"`);
-      continue;
-    }
-    damByName.set(name, damId);
-    await bindExternalId(damId, SOURCE_ID, name);
-  }
-  await recordUniverse(SOURCE_ID, universe);
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = damByName.get(p.name);
-    if (!damId) continue;
-    inputs.push({
-      observedAt: reportDate,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: p.storageRate,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${damByName.size} written=${written}`);
-
-  // Positional line rebuilding is what a layout change breaks first; a run
-  // that finds names but no figures must fail loudly, not exit green.
-  if (published.length > 0 && rows.length === 0) {
-    throw new Error(
-      `${SOURCE_ID}: parsed ${published.length} names but no usable rows from ${pdfUrl} — layout change?`,
-    );
-  }
-};
-
-export default task;
+// Positional line rebuilding is what a layout change breaks first; a run that
+// finds names but no figures reads every entry as unreadable, and the run
+// fails the job instead of exiting green.
+export default ingestTask(SOURCE_ID, async (log) => {
+  const reportUrl = findLatestReportUrl(await (await fetchOk(INDEX_URL, 20_000)).text());
+  if (!reportUrl) throw new Error(`${SOURCE_ID}: no survey page linked from ${INDEX_URL}`);
+  const pdfUrl = findReportPdfUrl(await (await fetchOk(reportUrl, 20_000)).text());
+  if (!pdfUrl) throw new Error(`${SOURCE_ID}: no PDF on ${reportUrl}`);
+  const pdf = await fetchOk(pdfUrl, 30_000);
+  const entries = miyagiNouseiEntries(await pdfToLines(new Uint8Array(await pdf.arrayBuffer())));
+  log(`${SOURCE_ID}: ${entries.length} rows in ${pdfUrl}`);
+  return { entries, dated: true };
+});

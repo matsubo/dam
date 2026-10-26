@@ -1,5 +1,8 @@
 // apps/worker/src/tasks/ingest_dainichigawa_lid.test.ts
 //
+// Fixture → universe entry, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
+//
 // Fixtures are verbatim captures from dainichigawa-lid.com taken 2026-09-28
 // 15:50 JST: the 大日川ダム情報 page (dam.html, 「令和８年９月２８日９時更新」,
 // Last-Modified 08:35 JST) and the 令和８年９月 日別ダム情報 PDF it links
@@ -9,8 +12,11 @@
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { Reading } from '../ingest/types.ts';
 import {
-  chooseMaster,
+  dailyReading,
+  dainichigawaEntry,
+  type Fetcher,
   parseDailyLinks,
   parseDailyText,
   pdfToText,
@@ -21,6 +27,20 @@ const PAGE_URL = 'http://dainichigawa-lid.com/dam.html';
 
 async function septemberText(): Promise<string> {
   return pdfToText(new Uint8Array(await readFile(join(DIR, 'R8sepday-dam_2026-09-28.pdf'))));
+}
+
+/** The page and September's PDF; every other month's PDF answers 404. */
+const fixtureFetcher: Fetcher = async (url) => {
+  if (url === PAGE_URL) return new Response(await readFile(join(DIR, 'dam_2026-09-28.html')));
+  if (url.endsWith('/R8sepday-dam.pdf')) {
+    return new Response(await readFile(join(DIR, 'R8sepday-dam_2026-09-28.pdf')));
+  }
+  return new Response('not found', { status: 404 });
+};
+
+async function read(fetcher: Fetcher): Promise<Reading> {
+  const r = dainichigawaEntry(fetcher, () => {}).reading;
+  return typeof r === 'function' ? r(null) : r;
 }
 
 describe('parseDailyLinks', () => {
@@ -75,20 +95,27 @@ describe('parseDailyText', () => {
   });
 });
 
-describe('chooseMaster', () => {
-  const hyogo = { id: 10274n, name: '大日川', ndi: '1594', stamp: null };
-
-  test('binds the NDI-pinned 大日川 (南あわじ市), not another same-named row', () => {
-    const other = { id: 99n, name: '大日川', ndi: '9999', stamp: null };
-    expect(chooseMaster([other, hyogo])).toBe(10274n);
+describe('dainichigawaEntry', () => {
+  test('is the one dam, pinned to NDI 1594 (南あわじ市), not a same-named 大日川', () => {
+    // Two masters are named 大日川: NDI 1594 (兵庫) and NDI 1242 (石川).
+    const e = dainichigawaEntry(fixtureFetcher, () => {});
+    expect(e).toMatchObject({ key: '大日川ダム', name: '大日川ダム', pref: '28' });
+    expect(e.bind).toEqual({ ndi: '1594' });
   });
 
-  test('a row already stamped with the station keeps it', () => {
-    const stamped = { id: 77n, name: '大日川ダム', ndi: null, stamp: '大日川ダム' };
-    expect(chooseMaster([hyogo, stamped])).toBe(77n);
+  test('reads every measured day of the months it could fetch', async () => {
+    // 8月's PDF answers 404 here: September's 28 days still stand.
+    const r = await read(fixtureFetcher);
+    if (r.state !== 'values') throw new Error(r.state);
+    expect(r.observations).toHaveLength(28);
   });
 
-  test('no pinned or stamped row: unmatched', () => {
-    expect(chooseMaster([{ id: 1n, name: '大日川', ndi: '1242', stamp: null }])).toBeNull();
+  test('a page that cannot be fetched throws, so the run records it unreadable', async () => {
+    const down: Fetcher = async () => new Response('', { status: 503 });
+    await expect(read(down)).rejects.toThrow('HTTP 503');
+  });
+
+  test('no measured day is unreadable', () => {
+    expect(dailyReading([]).state).toBe('unreadable');
   });
 });

@@ -41,8 +41,8 @@
 // Binding: NDI pins, from the master's ダム便覧 cross-ids: 底原 NDI 2752
 // (ダム便覧 2903, 宮良川水系底原川), 真栄里 NDI 2753 (2897, 宮良川), 石垣
 // NDI 2751 (2937, 宮良川水系磯辺川) — "石垣" alone also names the island and
-// the city, so the name is only a fallback. The weirs have no master row;
-// 0220 records why they stay unresolved.
+// the city. The weirs have no master row; 0220 records why they stay
+// unresolved.
 //
 // Licence: the pages state no terms of use and no operator; there is no
 // robots.txt (404, checked 2026-09-28).
@@ -50,12 +50,8 @@
 // Priority 291: no other source carries these dams except mudam (280), which
 // holds 真栄里's 1-2 year old daily figures; 291 is unused. Cron hourly at :05.
 
-import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { BoundDam, Entry, Reading } from '../ingest/types.ts';
 
 const BASE_URL = process.env.SOKOBARU_DAM_URL ?? 'http://www.cosmos.ne.jp/~sokobaru/';
 
@@ -118,7 +114,7 @@ export function parseFieldLinks(html: string): { href: string; label: string }[]
   ].map((m) => ({ href: m[1] as string, label: m[2] as string }));
 }
 
-export interface Reading {
+export interface HourReading {
   observedAt: Date;
   waterLevelM: number | null;
   /** 総貯水量 / 貯水量 as published: gross, from the bed. See usableVolumeM3. */
@@ -129,7 +125,7 @@ export interface Reading {
   outflowM3s: number | null;
 }
 
-type Field = Exclude<keyof Reading, 'observedAt'>;
+type Field = Exclude<keyof HourReading, 'observedAt'>;
 
 /** Hourly page label → stored field and the factor from its unit. */
 const FIELDS: Record<string, { field: Field; unit: string; scale: number }> = {
@@ -143,8 +139,8 @@ const FIELDS: Record<string, { field: Field; unit: string; scale: number }> = {
 };
 
 /** One row per hour across a dam's pages; hours with every value missing are dropped. */
-export function readingsOf(series: (HourlySeries | null)[]): Reading[] {
-  const byHour = new Map<number, Reading>();
+export function readingsOf(series: (HourlySeries | null)[]): HourReading[] {
+  const byHour = new Map<number, HourReading>();
   for (const s of series) {
     const f = s ? FIELDS[s.label] : undefined;
     if (!s || !f || f.unit !== s.unit) continue;
@@ -200,7 +196,7 @@ const RATE_ROUNDING = 0.0005;
  * master's capacity table; a dam that prints no rate never stores a volume.
  */
 export function usableVolumeM3(
-  r: Pick<Reading, 'grossVolumeM3' | 'storageRate'>,
+  r: Pick<HourReading, 'grossVolumeM3' | 'storageRate'>,
   cap: MasterCapacity,
 ): number | null {
   const { totalCapacityM3: total, activeCapacityM3: active } = cap;
@@ -211,33 +207,62 @@ export function usableVolumeM3(
   return usable;
 }
 
-// --- matching ---------------------------------------------------------------
+// --- entries ----------------------------------------------------------------
 
-export type NdiMaster = BindableMaster & { ndi: string | null };
+/** A page by path under BASE_URL, decoded; null on an HTTP error. */
+export type Fetcher = (path: string) => Promise<string | null>;
 
-/** The stamped row, else the pinned NDI row, else the dam of the same name. */
-export function chooseMaster(
-  station: { key: string; ndi: string | null },
-  masters: NdiMaster[],
-): bigint | null {
-  const stem = station.key.replace(/ダム$/, '');
-  const ranked = masters.flatMap((m) => {
-    if (m.stamp === station.key) return [{ ...m, rank: 0 }];
-    if (station.ndi !== null && m.ndi === station.ndi) return [{ ...m, rank: 0 }];
-    if (m.name.replace(/[（(][^）)]*[）)]/g, '') === stem) return [{ ...m, rank: 1 }];
-    return [];
-  });
-  return chooseRanked(ranked, station.key)?.id ?? null;
+/**
+ * One dam's reading from its 水文量 page and every hourly page it links to.
+ * The bound master's capacities decide whether the gross volume is stored.
+ */
+export async function readStation(
+  page: string,
+  get: Fetcher,
+  dam: BoundDam | null,
+): Promise<Reading> {
+  const html = await get(page);
+  const links = html ? parseFieldLinks(html).filter((l) => l.label in FIELDS) : [];
+  const series: (HourlySeries | null)[] = [];
+  for (const l of links) {
+    const hourly = await get(l.href);
+    series.push(hourly ? parseHourlyPage(hourly) : null);
+  }
+  const hasData = hasDataOf(series);
+  if (hasData === false) return { state: 'empty', mark: '** in every hour of every page' };
+  if (hasData === null) {
+    return { state: 'unreadable', why: html ? 'a page failed to load or parse' : `${page} failed` };
+  }
+  return {
+    state: 'values',
+    observations: readingsOf(series).map(({ grossVolumeM3, ...r }) => ({
+      ...r,
+      // An hour whose only value was an untied gross volume carries no value.
+      storageVolumeM3: dam
+        ? usableVolumeM3({ grossVolumeM3, storageRate: r.storageRate }, dam)
+        : null,
+    })),
+  };
 }
 
-// --- DB helpers -------------------------------------------------------------
+export function sokobaruEntries(get: Fetcher): Entry[] {
+  return STATIONS.map(
+    ({ key, page, ndi }): Entry => ({
+      key,
+      name: key,
+      pref: PREF_CODE,
+      bind: ndi ? { ndi } : 'never',
+      reading: page
+        ? (dam: BoundDam | null) => readStation(page, get, dam)
+        : { state: 'unreadable', why: 'a weir: no 水文量 page' },
+    }),
+  );
+}
 
 // --- task -------------------------------------------------------------------
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
-  const get = async (path: string): Promise<string | null> => {
+export default ingestTask(SOURCE_ID, async (log) => {
+  const get: Fetcher = async (path) => {
     const r = await fetch(new URL(path, BASE_URL), {
       headers: {
         'user-agent':
@@ -252,84 +277,6 @@ const task: Task = async (_payload, helpers) => {
     }
     return new TextDecoder('shift_jis').decode(await r.arrayBuffer());
   };
-
-  const masters = await sql<(NdiMaster & MasterCapacity)[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>'ndi' AS ndi,
-           external_ids->>${SOURCE_ID} AS stamp,
-           total_capacity_m3::float8 AS "totalCapacityM3",
-           active_capacity_m3::float8 AS "activeCapacityM3"
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-
-  const universe: UniverseRow[] = [];
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  let parsed = 0;
-  let matched = 0;
-  for (const station of STATIONS) {
-    const damId = chooseMaster(station, masters);
-    const master = masters.find((m) => m.id === damId);
-    let hasData: boolean | null = null;
-    if (station.page) {
-      const html = await get(station.page);
-      const links = html ? parseFieldLinks(html).filter((l) => l.label in FIELDS) : [];
-      const series: (HourlySeries | null)[] = [];
-      for (const l of links) {
-        const page = await get(l.href);
-        series.push(page ? parseHourlyPage(page) : null);
-      }
-      const readings = readingsOf(series);
-      parsed += readings.length;
-      hasData = hasDataOf(series);
-      if (master) {
-        for (const { grossVolumeM3, ...r } of readings) {
-          const storageVolumeM3 = usableVolumeM3(
-            { grossVolumeM3, storageRate: r.storageRate },
-            master,
-          );
-          // An hour whose only value was an untied gross volume stores nothing.
-          if (
-            storageVolumeM3 === null &&
-            r.waterLevelM === null &&
-            r.storageRate === null &&
-            r.inflowM3s === null &&
-            r.outflowM3s === null
-          ) {
-            continue;
-          }
-          inputs.push({
-            ...r,
-            storageVolumeM3,
-            damId: master.id,
-            sourceId: SOURCE_ID,
-            rainfallMm: null,
-            rawSnapshotId: null,
-            qualityFlag: 0,
-          });
-        }
-      }
-    }
-    // Pushed before the unmatched skip: the list is what /coverage reads.
-    universe.push({
-      externalId: station.key,
-      name: station.key,
-      prefCode: PREF_CODE,
-      resolvedDamId: damId,
-      hasData,
-    });
-    if (!damId) {
-      if (station.page) log(`${SOURCE_ID}: no master match for ${station.key}`);
-      continue;
-    }
-    matched++;
-    await bindExternalId(damId, SOURCE_ID, station.key);
-  }
-  await recordUniverse(SOURCE_ID, universe);
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${parsed} matched=${matched} written=${written}`);
-  if (universe.every((u) => u.hasData == null)) {
-    throw new Error(`${SOURCE_ID}: no dam page parsed under ${BASE_URL} — layout change?`);
-  }
-};
-
-export default task;
+  // No page parsed for any dam reads nothing, and the run fails the job.
+  return { entries: sokobaruEntries(get) };
+});

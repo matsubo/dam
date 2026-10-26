@@ -1,7 +1,19 @@
 // apps/worker/src/tasks/ingest_tokushima_bousai.test.ts
+//
+// Page HTML → universe entries, no database: binding and writing belong to
+// the ingest run (apps/worker/src/ingest/run.test.ts).
 
 import { describe, expect, test } from 'bun:test';
-import { parseTokushimaTable, parseTokushimaTimestamp } from './ingest_tokushima_bousai.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
+import { parseTokushimaTimestamp, tokushimaEntries } from './ingest_tokushima_bousai.ts';
+
+function observation(e: Entry | undefined) {
+  const r = e?.reading as Reading | undefined;
+  if (r?.state !== 'values') throw new Error('no values');
+  const o = r.observations[0];
+  if (!o) throw new Error('no observation');
+  return o;
+}
 
 // Minimal HTML fragment mimicking the Tokushima dam_status.html structure
 function makeHtml(
@@ -61,7 +73,7 @@ describe('parseTokushimaTimestamp', () => {
   });
 });
 
-describe('parseTokushimaTable', () => {
+describe('tokushimaEntries', () => {
   test('parses a single dam with all three values', () => {
     const html = makeHtml([
       {
@@ -72,13 +84,16 @@ describe('parseTokushimaTable', () => {
         outflow: '137.08',
       },
     ]);
-    const rows = parseTokushimaTable(html, 2026);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.tokushimaName).toBe('長安口ダム');
-    expect(rows[0]?.observedAt.toISOString()).toBe('2026-06-05T06:20:00.000Z');
-    expect(rows[0]?.waterLevelM).toBeCloseTo(221.99);
-    expect(rows[0]?.inflowM3s).toBeCloseTo(148.51);
-    expect(rows[0]?.outflowM3s).toBeCloseTo(137.08);
+    const list = tokushimaEntries(html, 2026);
+    expect(list).toHaveLength(1);
+    expect(list[0]?.key).toBe('長安口ダム');
+    expect(list[0]?.name).toBe('長安口ダム');
+    expect(list[0]?.pref).toBe('36');
+    const r = observation(list[0]);
+    expect(r.observedAt.toISOString()).toBe('2026-06-05T06:20:00.000Z');
+    expect(r.waterLevelM).toBeCloseTo(221.99);
+    expect(r.inflowM3s).toBeCloseTo(148.51);
+    expect(r.outflowM3s).toBeCloseTo(137.08);
   });
 
   test('parses multiple dams', () => {
@@ -105,9 +120,11 @@ describe('parseTokushimaTable', () => {
         outflow: '175.90',
       },
     ]);
-    const rows = parseTokushimaTable(html, 2026);
-    expect(rows).toHaveLength(3);
-    expect(rows.map((r) => r.tokushimaName)).toEqual(['長安口ダム', '福井ダム', '川口ダム']);
+    expect(tokushimaEntries(html, 2026).map((e) => e.key)).toEqual([
+      '長安口ダム',
+      '福井ダム',
+      '川口ダム',
+    ]);
   });
 
   test('parses *** as null', () => {
@@ -120,22 +137,36 @@ describe('parseTokushimaTable', () => {
         outflow: '***',
       },
     ]);
-    const rows = parseTokushimaTable(html, 2026);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.waterLevelM).toBeCloseTo(128.85);
-    expect(rows[0]?.inflowM3s).toBeNull();
-    expect(rows[0]?.outflowM3s).toBeNull();
+    const r = observation(tokushimaEntries(html, 2026)[0]);
+    expect(r.waterLevelM).toBeCloseTo(128.85);
+    expect(r.inflowM3s).toBeNull();
+    expect(r.outflowM3s).toBeNull();
   });
 
   test('parses blank cell as null', () => {
     const html = makeHtml([
       { name: '棚野ダム', timestamp: '06/05 15:20', level: '', inflow: '', outflow: '33.80' },
     ]);
-    const rows = parseTokushimaTable(html, 2026);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.waterLevelM).toBeNull();
-    expect(rows[0]?.inflowM3s).toBeNull();
-    expect(rows[0]?.outflowM3s).toBeCloseTo(33.8);
+    const r = observation(tokushimaEntries(html, 2026)[0]);
+    expect(r.waterLevelM).toBeNull();
+    expect(r.inflowM3s).toBeNull();
+    expect(r.outflowM3s).toBeCloseTo(33.8);
+  });
+
+  test('a dam marked *** or blank in every value column is provider-marked empty', () => {
+    const html = makeHtml([
+      { name: '棚野ダム', timestamp: '***', level: '***', inflow: '', outflow: '***' },
+    ]);
+    expect((tokushimaEntries(html, 2026)[0]?.reading as Reading | undefined)?.state).toBe('empty');
+  });
+
+  test('a value without a timestamp is unreadable, not dropped', () => {
+    const html = makeHtml([
+      { name: '棚野ダム', timestamp: '***', level: '12.00', inflow: '', outflow: '' },
+    ]);
+    const list = tokushimaEntries(html, 2026);
+    expect(list.map((e) => e.key)).toEqual(['棚野ダム']);
+    expect((list[0]?.reading as Reading | undefined)?.state).toBe('unreadable');
   });
 
   test('dam name with parentheses is preserved', () => {
@@ -148,8 +179,7 @@ describe('parseTokushimaTable', () => {
         outflow: '220.60',
       },
     ]);
-    const rows = parseTokushimaTable(html, 2026);
-    expect(rows[0]?.tokushimaName).toBe('池田ダム(水)');
+    expect(tokushimaEntries(html, 2026)[0]?.key).toBe('池田ダム(水)');
   });
 
   test('midnight crossover in observedAt', () => {
@@ -162,12 +192,13 @@ describe('parseTokushimaTable', () => {
         outflow: '9.00',
       },
     ]);
-    const rows = parseTokushimaTable(html, 2026);
     // 06:00 JST = 2026-06-04T21:00:00Z
-    expect(rows[0]?.observedAt.toISOString()).toBe('2026-06-04T21:00:00.000Z');
+    expect(observation(tokushimaEntries(html, 2026)[0]).observedAt.toISOString()).toBe(
+      '2026-06-04T21:00:00.000Z',
+    );
   });
 
   test('returns empty array when no dam sections found', () => {
-    expect(parseTokushimaTable('<html></html>', 2026)).toHaveLength(0);
+    expect(tokushimaEntries('<html></html>', 2026)).toHaveLength(0);
   });
 });

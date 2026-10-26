@@ -1,7 +1,20 @@
 // apps/worker/src/tasks/ingest_oita_bousai.test.ts
+//
+// Sample HTML and fixture → universe entries, no database: binding and writing
+// belong to the ingest run (apps/worker/src/ingest/run.test.ts).
+//
+// tests/fixtures/oita_bousai holds a verbatim Shift_JIS capture of the dk=4
+// table at 2026-10-27 00:50 JST (all 10 dams, three at their 00:40 reading).
 
 import { describe, expect, test } from 'bun:test';
-import { parseOitaTable, parseOitaTimestamp } from './ingest_oita_bousai.ts';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { oitaEntries, parseOitaTable, parseOitaTimestamp } from './ingest_oita_bousai.ts';
+
+const FIXTURE = join(
+  import.meta.dir,
+  '../../../../tests/fixtures/oita_bousai/tableStatus_dk4_2026-10-27T0050.shiftjis.html',
+);
 
 // Oita table: the data table is the FIRST table (index 0) with 10 columns:
 // Col 0: 管理者名, Col 1: 河川名, Col 2: 局名(dam, inside <a class="site">),
@@ -255,5 +268,78 @@ describe('parseOitaTable', () => {
     ]);
     expect(parseOitaTable(html)).toHaveLength(1);
     expect(parseOitaTable(html)[0]?.oitaName).toBe('玉来ダム');
+  });
+});
+
+describe('oitaEntries', () => {
+  const row = (dam: string, level: string, storage: string, ts = '2026&nbsp;06/05&nbsp;14:20') =>
+    makeRow('国東土木', '安岐川', dam, '国東市', ts, level, '2.460', storage, '100.0', '3.130');
+
+  test('lists every row keyed by its printed name; 稲葉貯水池 binds by its stem', () => {
+    const list = oitaEntries(
+      parseOitaTable(
+        makeHtml([row('安岐ダム', '154.19', '1004'), row('稲葉貯水池', '437.95', '718')]),
+      ),
+    );
+    expect(list.map((e) => [e.key, e.pref, e.bind])).toEqual([
+      ['安岐ダム', '44', undefined],
+      ['稲葉貯水池', '44', { name: '稲葉' }],
+    ]);
+  });
+
+  test('*** / --- in every value cell is provider-marked empty', () => {
+    const html = makeHtml([
+      makeRow(
+        '国東土木',
+        '安岐川',
+        '安岐ダム',
+        '国東市',
+        '2026&nbsp;06/05&nbsp;14:20',
+        '***',
+        '***',
+        '***',
+        '---',
+        '***',
+      ),
+    ]);
+    expect(oitaEntries(parseOitaTable(html))[0]?.reading).toEqual({
+      state: 'empty',
+      mark: '*** / --- in every value cell',
+    });
+  });
+
+  test('a row without a time, or without 貯水位 and 貯水量, is unreadable', () => {
+    const list = oitaEntries(
+      parseOitaTable(
+        makeHtml([row('安岐ダム', '154.19', '1004', '&nbsp;'), row('行入ダム', '***', '---')]),
+      ),
+    );
+    expect(list.map((e) => e.reading)).toEqual([
+      { state: 'unreadable', why: 'no 最新観測時刻' },
+      { state: 'unreadable', why: 'no 貯水位 or 貯水量' },
+    ]);
+  });
+
+  test('the live table lists all ten dams with their own times', async () => {
+    const html = new TextDecoder('shift_jis').decode(await readFile(FIXTURE));
+    const list = oitaEntries(parseOitaTable(html));
+    expect(list.map((e) => e.key)).toEqual([
+      '安岐ダム',
+      '青江ダム',
+      '野津ダム',
+      '黒沢ダム',
+      '床木ダム',
+      '稲葉ダム',
+      '玉来ダム',
+      '行入ダム',
+      '芹川ダム',
+      '北川ダム',
+    ]);
+    const tokigi = list.find((e) => e.key === '床木ダム')?.reading;
+    if (!tokigi || typeof tokigi === 'function' || tokigi.state !== 'values') {
+      throw new Error('床木 has no values');
+    }
+    expect(tokigi.observations[0]?.observedAt.toISOString()).toBe('2026-10-26T15:40:00.000Z');
+    expect(tokigi.observations[0]?.storageVolumeM3).toBe(520_000);
   });
 });

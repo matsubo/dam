@@ -1,5 +1,8 @@
 // apps/worker/src/tasks/ingest_jwa_fukudou.test.ts
 //
+// Fixture → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
+//
 // Fixtures are verbatim Shift_JIS captures of 水資源機構 筑後川局 福岡導水管理室
 // water.go.jp/chikugo/fukudou/html/info02.html:
 //   2026-09-25 (Last-Modified 04:34 JST): 山口調整池 at 令和8年9月25日 0時 —
@@ -10,7 +13,9 @@
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { chooseMaster, parseFukudouPage, usableVolumeM3 } from './ingest_jwa_fukudou.ts';
+import { bindEntry, type Master } from '../ingest/bind.ts';
+import type { BoundDam, Reading } from '../ingest/types.ts';
+import { fukudouEntry, parseFukudouPage, usableVolumeM3 } from './ingest_jwa_fukudou.ts';
 
 async function fixtureHtml(date = '2026-09-25'): Promise<string> {
   const path = join(
@@ -26,6 +31,11 @@ async function fixtureHtml(date = '2026-09-25'): Promise<string> {
 
 // ダム便覧 / NDI figures for 山口調整池 (ndi 2487).
 const YAMAGUCHI = { totalCapacityM3: 4_000_000, activeCapacityM3: 3_900_000 };
+
+async function readingOf(html: string, dam: BoundDam | null): Promise<Reading> {
+  const { reading } = fukudouEntry(html);
+  return typeof reading === 'function' ? reading(dam) : reading;
+}
 
 describe('parseFukudouPage', () => {
   test('reads 山口調整池 level, gross volume and rate at the JST report hour', async () => {
@@ -74,20 +84,62 @@ describe('usableVolumeM3', () => {
   });
 });
 
-describe('chooseMaster', () => {
-  const m = (id: number, name: string, stamp: string | null = null) => ({
-    id: BigInt(id),
-    name,
-    completedYear: null,
-    stamp,
+describe('fukudouEntry', () => {
+  test('one entry, keyed by the pond’s name in 福岡', async () => {
+    const e = fukudouEntry(await fixtureHtml());
+    expect([e.key, e.name, e.pref]).toEqual(['山口調整池', '山口調整池', '40']);
   });
 
-  test('binds 山口調整池, never the unrelated 山口 dam in the same prefecture', () => {
-    expect(chooseMaster([m(11001, '山口'), m(11058, '山口調整池')])).toBe(11058n);
-    expect(chooseMaster([m(11001, '山口')])).toBeNull();
+  test('reads the level and the 有効 storage against the bound master’s capacities', async () => {
+    const dam: BoundDam = { id: 11058n, name: '山口調整池', ...YAMAGUCHI };
+    expect(await readingOf(await fixtureHtml(), dam)).toEqual({
+      state: 'values',
+      observations: [
+        {
+          observedAt: new Date('2026-09-24T15:00:00Z'),
+          waterLevelM: 117.04,
+          storageVolumeM3: 3_658_400,
+        },
+      ],
+    });
   });
 
-  test('keeps the row already stamped with the station', () => {
-    expect(chooseMaster([m(1, '山口調整池'), m(2, '山口調整池', '山口調整池')])).toBe(2n);
+  test('keeps the level when the volume does not tie to the master', async () => {
+    const dam: BoundDam = {
+      id: 1n,
+      name: '山口調整池',
+      totalCapacityM3: 3_900_000,
+      activeCapacityM3: 3_900_000,
+    };
+    const r = await readingOf(await fixtureHtml(), dam);
+    expect(r.state === 'values' && r.observations[0]).toMatchObject({
+      waterLevelM: 117.04,
+      storageVolumeM3: null,
+    });
+  });
+
+  test('a page without the 山口調整池 block is unreadable', async () => {
+    expect((await readingOf('<html><body>メンテナンス中</body></html>', null)).state).toBe(
+      'unreadable',
+    );
+  });
+
+  test('binds 山口調整池, never the unrelated 山口 dam in the same prefecture', async () => {
+    const e = fukudouEntry(await fixtureHtml());
+    expect(e.bind).toEqual({ exact: true });
+    const master = (id: number, name: string): Master => ({
+      id: BigInt(id),
+      name,
+      completedYear: null,
+      stamp: null,
+      prefCode: '40',
+      ndi: null,
+      totalCapacityM3: null,
+      activeCapacityM3: null,
+    });
+    expect(bindEntry(e, [master(11001, '山口'), master(11058, '山口調整池')], false).dam?.id).toBe(
+      11058n,
+    );
+    expect(bindEntry(e, [master(11001, '山口')], false).dam).toBeNull();
   });
 });

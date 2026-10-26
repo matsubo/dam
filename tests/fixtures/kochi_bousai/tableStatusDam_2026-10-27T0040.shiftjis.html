@@ -1,0 +1,93 @@
+<!DOCTYPE HTML SYSTEM "about:legacy-compat">
+<html lang="ja">
+<head>
+<META http-equiv="Content-Type" content="text/html; charset=SHIFT_JIS">
+<meta content="no-cache" http-equiv="pragma">
+<meta charset="Shift_JIS">
+<title>ダム諸量現況表</title>
+<link href="../css/common.css" rel="stylesheet">
+<link href="../css/common-dataArea.css" rel="stylesheet">
+<link href="../css/tableStatus.css" rel="stylesheet">
+<script src="../lib/jquery/jquery-3.7.1.min.js"></script><script src="../js/utildlg.js"></script><script src="../js/param.js"></script><script>
+<!--
+
+function myIn(no,time,nw) {        // クリック
+  if($("#d1").prop("checked")){
+    dialogOpen(urlex("../graph/model_dam_"+no+".html"), 1010, 680);
+  }else if($("#d2").prop("checked")){
+    dialogOpen(urlex("../graph/gra_dam_"+no+"_0.html"), 890, 800);
+  }
+}
+
+    --></script>
+<style>
+html,body{
+  height:100%;
+}
+</style>
+</head>
+<body>
+<form name="form1">
+<div class="header">
+<div class="title">ダム諸量現況表(全県)</div>
+<div class="datatime">&nbsp;2026年10月27日00時40分&nbsp;現在</div>
+</div>
+<div>
+<div style="display:flex;align-items:center;padding:4px 0">局名リンク先設定&nbsp;&nbsp;<input id="d1" checked value="gra" name="link" type="radio"><label for="d1">ダム横断図</label></input><input id="d2" value="gra2" name="link" type="radio"><label for="d2">グラフ</label></input>
+<div style="margin-left:400px;">※流入量が計画高水流量の70％超過の場合、セルの色が<span style="color:#ff0000">赤色■</span>で表示されます。</div>
+</div>
+</div>
+<div class="tab">
+<table style="width:1301px;" class="data">
+<thead>
+<tr>
+<th class="manage" rowspan="2">管理者名</th><th class="riverName" rowspan="2">河川名</th><th class="da_siteName" rowspan="2">観測所名</th><th class="da_furigana" rowspan="2">フリガナ</th><th class="location" rowspan="2">所在地</th><th class="newest" rowspan="2">最新観測時刻</th><th>貯水率<br>(有効容量)</th><th>貯水率<br>(利水容量)</th><th>貯水位</th><th>貯水量</th><th>流入量</th><th>全放流量</th><th height="34" colspan="2">警報値</th>
+</tr>
+<tr>
+<th style="width:80px;">[%]</th><th style="width:80px;">[%]</th><th style="width:80px;">[m]</th><th style="width:80px;">[10<sup>3</sup>m<sup>3</sup>]</th><th style="width:80px;">[m<sup>3</sup>/s]</th><th style="width:80px;">[m<sup>3</sup>/s]</th><th style="width:80px;background-color:#ffff00;">洪水量<br>[m<sup>3</sup>/s]</th><th style="width:80px;background-color:#ff0000;">計画高<br>水流量<br>[m<sup>3</sup>/s]</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="odd">高知（河）</td><td class="odd">和食川</td><td class="odd"><A href="javascript:void(0)" class="menu" onclick="myIn('10','202610270040','1')">和食ダム</A></td><td style="font-size:11px" class="odd">ワジキダム</td><td class="odd">芸西村</td><td class="odd">2026/10/27&nbsp;00:40</td><td class="odd">&nbsp;45.30</td><td class="odd">&nbsp;95.20</td><td class="odd">&nbsp;&nbsp;&nbsp;87.50</td><td class="odd">&nbsp;367.000</td><td class="odd">&nbsp;&nbsp;&nbsp;0.3160</td><td class="odd">&nbsp;&nbsp;&nbsp;0.0390</td><td class="odd">&nbsp;&nbsp;&nbsp;&nbsp;9.000</td><td class="odd">&nbsp;&nbsp;&nbsp;56.000</td>
+</tr>
+<tr>
+<td class="">高知（河）</td><td class="">物部川</td><td class=""><A href="javascript:void(0)" class="menu" onclick="myIn('1','202610270040','1')">永瀬ダム</A></td><td style="font-size:11px" class="">ナガセダム</td><td class="">香美市</td><td class="">2026/10/27&nbsp;00:40</td><td class="">&nbsp;55.26</td><td class="">&nbsp;70.32</td><td class="">&nbsp;&nbsp;190.90</td><td class="">&nbsp;19697.000</td><td class="">&nbsp;&nbsp;84.7800</td><td class="">&nbsp;&nbsp;64.2300</td><td class="">&nbsp;&nbsp;500.000</td><td class="">&nbsp;3300.000</td>
+</tr>
+<tr>
+<td class="odd">高知（河）</td><td class="odd">鎌井谷川</td><td class="odd"><A href="javascript:void(0)" class="menu" onclick="myIn('2','202610270040','1')">鎌井谷ダム</A></td><td style="font-size:11px" class="odd">カマイダニダム</td><td class="odd">香南市</td><td class="odd">2026/10/27&nbsp;00:40</td><td class="odd">&nbsp;13.27</td><td class="odd">&nbsp;22.26</td><td class="odd">&nbsp;&nbsp;&nbsp;60.66</td><td class="odd">&nbsp;&nbsp;18.807</td><td class="odd">&nbsp;&nbsp;&nbsp;0.0540</td><td class="odd">&nbsp;&nbsp;&nbsp;0.0060</td><td class="odd">&nbsp;&nbsp;&nbsp;&nbsp;1.000</td><td class="odd">&nbsp;&nbsp;&nbsp;&nbsp;6.000</td>
+</tr>
+<tr>
+<td class="">国交省</td><td class="">吉野川</td><td class=""><A href="javascript:void(0)" class="menu" onclick="myIn('8','202610270040','1')">早明浦ダム</A></td><td style="font-size:11px" class="">サメウラダム</td><td class="">土佐町</td><td class="">2026/10/27&nbsp;00:40</td><td class="">&nbsp;27.60</td><td class="">&nbsp;</td><td class="">&nbsp;&nbsp;305.11</td><td class="">&nbsp;79660.000</td><td class="">&nbsp;&nbsp;66.3900</td><td class="">&nbsp;&nbsp;&nbsp;0.0000</td><td class="">&nbsp;&nbsp;800.000</td><td class="">&nbsp;4700.000</td>
+</tr>
+<tr>
+<td class="odd">高知（河）</td><td class="odd">鏡川</td><td class="odd"><A href="javascript:void(0)" class="menu" onclick="myIn('3','202610270040','1')">鏡ダム</A></td><td style="font-size:11px" class="odd">カガミダム</td><td class="odd">高知市</td><td class="odd">2026/10/27&nbsp;00:40</td><td class="odd">&nbsp;75.04</td><td class="odd">&nbsp;88.28</td><td class="odd">&nbsp;&nbsp;&nbsp;73.61</td><td class="odd">&nbsp;6101.000</td><td class="odd">&nbsp;&nbsp;24.9100</td><td class="odd">&nbsp;&nbsp;26.3200</td><td class="odd">&nbsp;&nbsp;300.000</td><td class="odd">&nbsp;1450.000</td>
+</tr>
+<tr>
+<td class="">国交省</td><td class="">仁淀川</td><td class=""><A href="javascript:void(0)" class="menu" onclick="myIn('6','202610270040','1')">大渡ダム</A></td><td style="font-size:11px" class="">オオドダム</td><td class="">仁淀川町</td><td class="">2026/10/27&nbsp;00:40</td><td class="">&nbsp;48.10</td><td class="">&nbsp;73.50</td><td class="">&nbsp;&nbsp;198.00</td><td class="">&nbsp;24996.000</td><td class="">&nbsp;&nbsp;64.1800</td><td class="">&nbsp;&nbsp;&nbsp;5.1500</td><td class="">&nbsp;2100.000</td><td class="">&nbsp;6000.000</td>
+</tr>
+<tr>
+<td class="odd">高知（河）</td><td class="odd">坂折川</td><td class="odd"><A href="javascript:void(0)" class="menu" onclick="myIn('4','202610270040','1')">桐見ダム</A></td><td style="font-size:11px" class="odd">キリミダム</td><td class="odd">越知町</td><td class="odd">2026/10/27&nbsp;00:40</td><td class="odd">&nbsp;36.00</td><td class="odd">&nbsp;78.31</td><td class="odd">&nbsp;&nbsp;120.12</td><td class="odd">&nbsp;2246.000</td><td class="odd">&nbsp;&nbsp;&nbsp;3.7900</td><td class="odd">&nbsp;&nbsp;&nbsp;1.6800</td><td class="odd">&nbsp;&nbsp;300.000</td><td class="odd">&nbsp;&nbsp;990.000</td>
+</tr>
+<tr>
+<td class="">高知（河）</td><td class="">松田川</td><td class=""><A href="javascript:void(0)" class="menu" onclick="myIn('5','202610270040','1')">坂本ダム</A></td><td style="font-size:11px" class="">サカモトダム</td><td class="">宿毛市</td><td class="">2026/10/27&nbsp;00:40</td><td class="">&nbsp;11.14</td><td class="">&nbsp;100.00</td><td class="">&nbsp;&nbsp;&nbsp;81.35</td><td class="">&nbsp;1785.000</td><td class="">&nbsp;&nbsp;&nbsp;8.1000</td><td class="">&nbsp;&nbsp;&nbsp;8.0900</td><td class="">&nbsp;&nbsp;200.000</td><td class="">&nbsp;&nbsp;950.000</td>
+</tr>
+<tr>
+<td class="odd">国交省</td><td class="odd">中筋川</td><td class="odd"><A href="javascript:void(0)" class="menu" onclick="myIn('7','202610270040','1')">中筋川ダム</A></td><td style="font-size:11px" class="odd">ナカスジガワダム</td><td class="odd">宿毛市</td><td class="odd">2026/10/27&nbsp;00:40</td><td class="odd">&nbsp;30.30</td><td class="odd">&nbsp;100.00</td><td class="odd">&nbsp;&nbsp;&nbsp;73.17</td><td class="odd">&nbsp;3716.000</td><td class="odd">&nbsp;&nbsp;&nbsp;3.3300</td><td class="odd">&nbsp;&nbsp;&nbsp;3.8900</td><td class="odd">&nbsp;&nbsp;&nbsp;50.000</td><td class="odd">&nbsp;&nbsp;350.000</td>
+</tr>
+<tr>
+<td class="">国交省</td><td class="">横瀬川</td><td class=""><A href="javascript:void(0)" class="menu" onclick="myIn('11','202610270040','1')">横瀬川ダム</A></td><td style="font-size:11px" class="">ヨコゼガワダム</td><td class="">宿毛市</td><td class="">2026/10/27&nbsp;00:40</td><td class="">&nbsp;42.50</td><td class="">&nbsp;93.90</td><td class="">&nbsp;&nbsp;131.05</td><td class="">&nbsp;3231.000</td><td class="">&nbsp;&nbsp;&nbsp;1.8000</td><td class="">&nbsp;&nbsp;&nbsp;0.2200</td><td class="">&nbsp;&nbsp;&nbsp;35.000</td><td class="">&nbsp;&nbsp;210.000</td>
+</tr>
+<tr>
+<td class="odd">高知（河）</td><td class="odd">以布利川</td><td class="odd"><A href="javascript:void(0)" class="menu" onclick="myIn('9','202610270040','1')">以布利川ダム</A></td><td style="font-size:11px" class="odd">イブリガワダム</td><td class="odd">土佐清水市</td><td class="odd">2026/10/27&nbsp;00:40</td><td class="odd">&nbsp;56.92</td><td class="odd">&nbsp;100.00</td><td class="odd">&nbsp;&nbsp;&nbsp;32.74</td><td class="odd">&nbsp;199.800</td><td class="odd">&nbsp;&nbsp;&nbsp;0.0675</td><td class="odd">&nbsp;&nbsp;&nbsp;0.0682</td><td class="odd">&nbsp;&nbsp;&nbsp;&nbsp;9.000</td><td class="odd">&nbsp;&nbsp;&nbsp;27.000</td>
+</tr>
+<tr>
+<td class="page" colspan="14">&nbsp;</td>
+</tr>
+</tbody>
+</table>
+<p class="view_desc_msg">●水防観測情報はGoogle Chrome、Firefox、Microsoft Edgeでご覧いただけます。</p>
+</div>
+</form>
+</body>
+</html>

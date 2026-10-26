@@ -6,16 +6,19 @@
 // taken 2026-09-28 12:54 JST (ret_time). It carries the real item shape —
 // `point` as a WKT string ("POINT(134.21909 34.24903)", "POINT(0 0)" for
 // 野口) and 粟井ダム published with every value null.
+//
+// Fixture → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
 
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { BousaiItem, BousaiResponse } from './ingest_kagoshima_bousai.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 import {
-  chooseMaster,
-  parseItems,
+  type BousaiItem,
+  type BousaiResponse,
+  kagoshimaBousaiEntries,
   parseKagoshimaTimestamp,
-  toObservations,
 } from './ingest_kagoshima_bousai.ts';
 
 const FIXTURE = join(
@@ -27,7 +30,17 @@ const FIXTURE = join(
   'tests/fixtures/kagoshima_bousai/kagawa_dam_station_2026-09-28T1254.json',
 );
 
-const vendor = parseItems((JSON.parse(await readFile(FIXTURE, 'utf8')) as BousaiResponse).items);
+const vendor = kagoshimaBousaiEntries(
+  (JSON.parse(await readFile(FIXTURE, 'utf8')) as BousaiResponse).items,
+);
+
+function observation(e: Entry | undefined) {
+  const r = e?.reading as Reading | undefined;
+  if (r?.state !== 'values') throw new Error('no values');
+  const o = r.observations[0];
+  if (!o) throw new Error('no observation');
+  return o;
+}
 
 describe('parseKagoshimaTimestamp', () => {
   test('parses YYYY/MM/DD HH:MM JST → UTC', () => {
@@ -84,74 +97,63 @@ const SAMPLE_ITEMS: BousaiItem[] = [
   },
 ];
 
-describe('parseItems', () => {
-  test('parses timestamp and converts stored (千m³ → m³)', () => {
-    const rows = parseItems(SAMPLE_ITEMS);
-    expect(rows).toHaveLength(3);
+describe('kagoshimaBousaiEntries', () => {
+  test('keys by station_no, reads the timestamp and converts stored (千m³ → m³)', () => {
+    const list = kagoshimaBousaiEntries(SAMPLE_ITEMS);
+    expect(list).toHaveLength(3);
 
-    const kabagawa = rows[0];
-    expect(kabagawa?.stationName).toBe('椛川ダム');
-    expect(kabagawa?.observedAt?.toISOString()).toBe('2026-06-05T01:00:00.000Z');
-    expect(kabagawa?.waterLevelM).toBeCloseTo(234.56);
+    expect(list[0]?.key).toBe('013707018000000000');
+    expect(list[0]?.name).toBe('椛川ダム');
+    expect(list[0]?.pref).toBe('46');
+    const kabagawa = observation(list[0]);
+    expect(kabagawa.observedAt.toISOString()).toBe('2026-06-05T01:00:00.000Z');
+    expect(kabagawa.waterLevelM).toBeCloseTo(234.56);
     // 1234 千m³ × 1000 = 1,234,000 m³
-    expect(kabagawa?.storageVolumeM3).toBeCloseTo(1_234_000);
-    expect(kabagawa?.inflowM3s).toBeCloseTo(12.3);
-    expect(kabagawa?.outflowM3s).toBeCloseTo(8.5);
+    expect(kabagawa.storageVolumeM3).toBeCloseTo(1_234_000);
+    expect(kabagawa.inflowM3s).toBeCloseTo(12.3);
+    expect(kabagawa.outflowM3s).toBeCloseTo(8.5);
   });
 
   test('handles null stored', () => {
-    const rows = parseItems(SAMPLE_ITEMS);
-    const yamato = rows[1];
-    expect(yamato?.stationName).toBe('大和ダム');
-    expect(yamato?.storageVolumeM3).toBeNull();
-    expect(yamato?.waterLevelM).toBeCloseTo(156.78);
+    const yamato = observation(kagoshimaBousaiEntries(SAMPLE_ITEMS)[1]);
+    expect(yamato.storageVolumeM3).toBeNull();
+    expect(yamato.waterLevelM).toBeCloseTo(156.78);
   });
 
   test('handles null store and flow values', () => {
-    const rows = parseItems(SAMPLE_ITEMS);
-    const kawabe = rows[2];
-    expect(kawabe?.stationName).toBe('川辺ダム');
-    expect(kawabe?.waterLevelM).toBeNull();
-    expect(kawabe?.storageVolumeM3).toBeCloseTo(567_000);
-    expect(kawabe?.inflowM3s).toBeNull();
-    expect(kawabe?.outflowM3s).toBeNull();
+    const kawabe = observation(kagoshimaBousaiEntries(SAMPLE_ITEMS)[2]);
+    expect(kawabe.waterLevelM).toBeNull();
+    expect(kawabe.storageVolumeM3).toBeCloseTo(567_000);
+    expect(kawabe.inflowM3s).toBeNull();
+    expect(kawabe.outflowM3s).toBeNull();
   });
 
-  test('returns empty array for empty items', () => {
-    expect(parseItems([])).toHaveLength(0);
+  test('lists nothing for empty items (the portal outside a flood)', () => {
+    expect(kagoshimaBousaiEntries([])).toHaveLength(0);
   });
 
   test('reads the vendor WKT point "POINT(lon lat)" as lat/lng', () => {
-    const monnyu = vendor.find((r) => r.stationName === '門入ダム');
+    const monnyu = vendor.find((e) => e.name === '門入ダム');
     expect(monnyu?.lat).toBe(34.24903);
     expect(monnyu?.lng).toBe(134.21909);
+    expect(observation(monnyu).observedAt.toISOString()).toBe('2026-09-28T03:40:00.000Z');
+    expect(observation(monnyu).storageVolumeM3).toBe(1_731_000);
   });
 
   test('POINT(0 0) is no position, not the Gulf of Guinea', () => {
-    const noguchi = vendor.find((r) => r.stationName === '野口ダム');
+    const noguchi = vendor.find((e) => e.name === '野口ダム');
     expect(noguchi?.lat).toBeNull();
     expect(noguchi?.lng).toBeNull();
-    expect(noguchi?.waterLevelM).toBe(249.17);
+    expect(observation(noguchi).waterLevelM).toBe(249.17);
   });
-});
 
-describe('toObservations', () => {
-  const matched = new Map([
-    ['門入ダム', 1n],
-    ['粟井ダム', 2n],
-  ]);
-
-  test('skips a matched station published with every value null (粟井)', () => {
-    const logs: string[] = [];
-    const inputs = toObservations(vendor, matched, (s) => logs.push(s));
-    expect(inputs.map((i) => i.damId)).toEqual([1n]);
-    expect(inputs[0]?.observedAt.toISOString()).toBe('2026-09-28T03:40:00.000Z');
-    expect(inputs[0]?.storageVolumeM3).toBe(1_731_000);
-    expect(logs.some((s) => s.includes('粟井ダム'))).toBe(true);
+  test('a station published with every value null is provider-marked empty (粟井)', () => {
+    const awai = vendor.find((e) => e.name === '粟井ダム');
+    expect((awai?.reading as Reading | undefined)?.state).toBe('empty');
   });
 
   test('keeps a row that carries only flows', () => {
-    const rows = parseItems([
+    const [kawabe] = kagoshimaBousaiEntries([
       {
         station_name: '川辺ダム',
         station_no: '013707010000000000',
@@ -162,27 +164,11 @@ describe('toObservations', () => {
         discharge: null,
       },
     ]);
-    const inputs = toObservations(rows, new Map([['川辺ダム', 3n]]), () => {});
-    expect(inputs.map((i) => i.inflowM3s)).toEqual([3.1]);
-  });
-});
-
-describe('chooseMaster (#79)', () => {
-  const m = (
-    id: number,
-    name: string,
-    completedYear: number | null = null,
-    stamp: string | null = null,
-  ) => ({ id: BigInt(id), name, completedYear, stamp });
-
-  test('keeps the row already stamped with the station number over a lower-id name hit', () => {
-    const masters = [m(10, '大和'), m(20, '大和', null, '013707002000000000')];
-    expect(chooseMaster('大和ダム', '大和', masters, '013707002000000000')).toBe(20n);
+    expect(observation(kawabe).inflowM3s).toBe(3.1);
   });
 
-  test('binds 鶴田 to the completed （再）, not the lower-id （元）', () => {
-    // Real pref-46 twin rows and completion years from the master.
-    const masters = [m(11438, '鶴田（元）', 2017), m(11453, '鶴田（再）', 2017)];
-    expect(chooseMaster('鶴田ダム', '鶴田', masters, '013707099000000000')).toBe(11453n);
+  test('a missing timestamp is unreadable, not dropped', () => {
+    const [e] = kagoshimaBousaiEntries([{ ...(SAMPLE_ITEMS[0] as BousaiItem), obs_datetime: '' }]);
+    expect((e?.reading as Reading | undefined)?.state).toBe('unreadable');
   });
 });

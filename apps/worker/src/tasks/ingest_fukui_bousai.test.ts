@@ -1,7 +1,19 @@
 // apps/worker/src/tasks/ingest_fukui_bousai.test.ts
+//
+// Page → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
 
 import { describe, expect, test } from 'bun:test';
-import { parseFukuiListing, parseFukuiPage, parseFukuiTimestamp } from './ingest_fukui_bousai.ts';
+import type { Entry, Observed } from '../ingest/types.ts';
+import { fukuiEntries, parseFukuiTimestamp } from './ingest_fukui_bousai.ts';
+
+function observed(e: Entry | undefined): Observed | undefined {
+  const r = e?.reading;
+  if (!r || typeof r === 'function' || r.state !== 'values') throw new Error('no values');
+  return r.observations[0];
+}
+const states = (entries: Entry[]) =>
+  entries.map((e) => [e.name, typeof e.reading === 'function' ? 'fn' : e.reading.state]);
 
 describe('parseFukuiTimestamp', () => {
   test('parses "YYYY&nbsp;MM/DD&nbsp;HH:MM" JST → UTC', () => {
@@ -43,25 +55,26 @@ const SAMPLE_PAGE = `<html><head><meta charset="Shift_JIS"></head><body>
 </table>
 </body></html>`;
 
-describe('parseFukuiPage', () => {
-  test('parses all 3 dam rows', () => {
-    const rows = parseFukuiPage(SAMPLE_PAGE);
-    expect(rows).toHaveLength(3);
-    expect(rows.map((r) => r.fukuiName)).toEqual(['永平寺ダム', '真名川ダム', '開谷ダム']);
+describe('fukuiEntries', () => {
+  const entries = fukuiEntries(SAMPLE_PAGE);
+  const named = (n: string) => entries.find((e) => e.name === n);
+
+  test('parses all 3 dam rows, keyed by name', () => {
+    expect(entries.map((e) => [e.key, e.pref])).toEqual([
+      ['永平寺ダム', '18'],
+      ['真名川ダム', '18'],
+      ['開谷ダム', '18'],
+    ]);
   });
 
   test('all rows share the same observedAt (2026-06-05T07:50Z)', () => {
-    const rows = parseFukuiPage(SAMPLE_PAGE);
-    const ts = '2026-06-05T07:50:00.000Z';
-    for (const r of rows) {
-      expect(r.observedAt.toISOString()).toBe(ts);
+    for (const e of entries) {
+      expect(observed(e)?.observedAt.toISOString()).toBe('2026-06-05T07:50:00.000Z');
     }
   });
 
   test('永平寺ダム: all fields parsed correctly', () => {
-    const rows = parseFukuiPage(SAMPLE_PAGE);
-    const r = rows.find((x) => x.fukuiName === '永平寺ダム');
-    expect(r).toBeDefined();
+    const r = observed(named('永平寺ダム'));
     expect(r?.storageRate).toBeCloseTo(0.9955);
     expect(r?.waterLevelM).toBeCloseTo(319.76);
     expect(r?.storageVolumeM3).toBe(438_000);
@@ -70,15 +83,11 @@ describe('parseFukuiPage', () => {
   });
 
   test('converts 有効貯水量 10³m³ → m³ (× 1000)', () => {
-    const rows = parseFukuiPage(SAMPLE_PAGE);
-    const r = rows.find((x) => x.fukuiName === '開谷ダム');
-    expect(r?.storageVolumeM3).toBe(59_000);
+    expect(observed(named('開谷ダム'))?.storageVolumeM3).toBe(59_000);
   });
 
   test('真名川ダム: missing storage (&nbsp;) → null', () => {
-    const rows = parseFukuiPage(SAMPLE_PAGE);
-    const r = rows.find((x) => x.fukuiName === '真名川ダム');
-    expect(r).toBeDefined();
+    const r = observed(named('真名川ダム'));
     expect(r?.storageVolumeM3).toBeNull();
     expect(r?.storageRate).toBeCloseTo(0.559);
     expect(r?.inflowM3s).toBeCloseTo(2.36);
@@ -86,18 +95,14 @@ describe('parseFukuiPage', () => {
   });
 
   test('開谷ダム: "---" inflow/outflow → null', () => {
-    const rows = parseFukuiPage(SAMPLE_PAGE);
-    const r = rows.find((x) => x.fukuiName === '開谷ダム');
+    const r = observed(named('開谷ダム'));
     expect(r?.inflowM3s).toBeNull();
     expect(r?.outflowM3s).toBeNull();
   });
 
-  test('returns empty array for page with no dam rows', () => {
-    expect(parseFukuiPage('<html><body>no data</body></html>')).toHaveLength(0);
-  });
-
-  test('returns empty array for empty string', () => {
-    expect(parseFukuiPage('')).toHaveLength(0);
+  test('lists nothing for a page with no dam rows', () => {
+    expect(fukuiEntries('<html><body>no data</body></html>')).toHaveLength(0);
+    expect(fukuiEntries('')).toHaveLength(0);
   });
 });
 
@@ -106,21 +111,26 @@ describe('parseFukuiPage', () => {
 const TAKINAMI_ROW =
   '<tr><td nowrap class="normal0"><a href="javascript:void(0)" onClick="myIn(\'16\',\'202609280820\',\'1\')">滝波ダム</a></td><td nowrap class="normal0">福井市清水町滝波</td><td nowrap class="normal0">2026&nbsp;09/28&nbsp;08:00</td><td nowrap class="normal0">---</td><td nowrap class="normal0">&nbsp;</td><td nowrap class="normal0">&nbsp;</td><td nowrap class="normal0">&nbsp;</td><td nowrap class="normal0">&nbsp;</td><td nowrap class="normal0">福井市</td>';
 
-describe('parseFukuiListing', () => {
-  test('lists every dam, marking the one whose value columns are all empty', () => {
-    const listing = parseFukuiListing(SAMPLE_PAGE.replace('</tbody>', `${TAKINAMI_ROW}</tbody>`));
-    expect(listing).toEqual([
-      { name: '永平寺ダム', hasData: true },
-      { name: '真名川ダム', hasData: true },
-      { name: '開谷ダム', hasData: true },
-      { name: '滝波ダム', hasData: false },
+describe('fukuiEntries states', () => {
+  test('lists every dam; the one whose value columns are all empty is provider-marked empty', () => {
+    const page = SAMPLE_PAGE.replace('</tbody>', `${TAKINAMI_ROW}</tbody>`);
+    expect(states(fukuiEntries(page))).toEqual([
+      ['永平寺ダム', 'values'],
+      ['真名川ダム', 'values'],
+      ['開谷ダム', 'values'],
+      ['滝波ダム', 'empty'],
     ]);
   });
 
-  test('an unreadable value cell is unknown, not "no value"', () => {
+  test('an unreadable value cell is unreadable, not "no value"', () => {
     // Garbage where a number belongs is more likely our parser than the
     // provider publishing nothing.
     const garbled = TAKINAMI_ROW.replace('>---<', '>12,3<');
-    expect(parseFukuiListing(garbled)).toEqual([{ name: '滝波ダム', hasData: null }]);
+    expect(states(fukuiEntries(garbled))).toEqual([['滝波ダム', 'unreadable']]);
+  });
+
+  test('a value without a readable 最新観測時刻 is unreadable', () => {
+    const undated = SAMPLE_PAGE.replace('2026&nbsp;06/05&nbsp;16:50', '--/-- --:--');
+    expect(states(fukuiEntries(undated))[0]).toEqual(['永平寺ダム', 'unreadable']);
   });
 });

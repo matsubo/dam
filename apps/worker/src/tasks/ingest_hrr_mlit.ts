@@ -13,62 +13,46 @@
 //
 // 7 dams across 6 prefectures (福島/山形/新潟/長野/富山/石川):
 //   大川 / 大石 / 横川 / 三国川 / 大町 / 宇奈月 / 手取川
+//
+// The file is the published list: every row is a universe entry, keyed by its
+// name, so a dam 北陸地整 adds shows up as an unmatched row instead of
+// vanishing. "-" (or 欠測) in all three value columns is provider-marked empty.
 
-import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const CSV_URL =
   process.env.HRR_MLIT_DAM_URL ?? 'https://www.hrr.mlit.go.jp/river/dam-bousai/data/tmDam.txt';
 
-interface DamCfg {
-  /** Substring used to LIKE-match against master `dams.name`. */
-  masterName: string;
-  prefCode: string;
-}
-
-const DAMS: Record<string, DamCfg> = {
-  大川ダム: { masterName: '大川', prefCode: '07' },
-  大石ダム: { masterName: '大石', prefCode: '15' },
-  横川ダム: { masterName: '横川', prefCode: '06' },
-  三国川ダム: { masterName: '三国川', prefCode: '15' },
-  大町ダム: { masterName: '大町', prefCode: '20' },
-  宇奈月ダム: { masterName: '宇奈月', prefCode: '16' },
-  手取川ダム: { masterName: '手取川', prefCode: '17' },
+/** Prefecture of each configured dam; a row not listed here has none to search. */
+const PREF_BY_NAME: Record<string, string> = {
+  大川ダム: '07',
+  大石ダム: '15',
+  横川ダム: '06',
+  三国川ダム: '15',
+  大町ダム: '20',
+  宇奈月ダム: '16',
+  手取川ダム: '17',
 };
 
 const SOURCE_ID = 'hrr-mlit-dam';
 
-interface ParsedRow {
-  name: string;
-  observedAt: Date;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
-  waterLevelM: number | null;
-}
-
-function parseNum(s: string | undefined): number | null {
-  if (!s) return null;
-  const t = s.replace(/[,\s　]/g, '');
-  if (!t || t === '-' || t === '−' || t === '欠測') return null;
+function parseCell(s: string | undefined): Cell {
+  const t = (s ?? '').replace(/[,\s　]/g, '');
+  if (t === '-' || t === '−' || t === '欠測') return MARKED;
+  if (!t) return null;
   const n = Number(t);
   return Number.isFinite(n) ? n : null;
 }
 
-/** Parse a single CSV line. Skip blank lines. Returns null if shape is unexpected. */
-export function parseHrrLine(line: string): ParsedRow | null {
-  const cols = line.split(',').map((c) => c.trim());
-  if (cols.length < 10) return null;
-  const name = cols[0] ?? '';
-  const date = cols[5] ?? '';
-  const time = cols[6] ?? '';
-  if (!name.endsWith('ダム') || !date || !time) return null;
-  const dMatch = date.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
-  const tMatch = time.match(/(\d{1,2}):(\d{1,2})/);
-  if (!dMatch || !tMatch) return null;
+/** One CSV row's reading (columns as in the header comment). */
+export function hrrReading(cols: readonly string[]): Reading {
+  const dMatch = (cols[5] ?? '').match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  const tMatch = (cols[6] ?? '').match(/(\d{1,2}):(\d{1,2})/);
+  if (!dMatch || !tMatch) {
+    return { state: 'unreadable', why: `date/time "${cols[5]} ${cols[6]}"` };
+  }
   const observedAt = new Date(
     Date.UTC(
       Number(dMatch[1]),
@@ -80,101 +64,55 @@ export function parseHrrLine(line: string): ParsedRow | null {
       0,
     ),
   );
+  const inflow = parseCell(cols[7]);
+  const outflow = parseCell(cols[8]);
+  const level = parseCell(cols[9]);
+  const state = cellState([inflow, outflow, level]);
+  if (state === 'empty') return { state, mark: '- in every value column' };
+  if (state === 'unreadable') return { state, why: 'no numeric value column' };
   return {
-    name,
-    observedAt,
-    inflowM3s: parseNum(cols[7]),
-    outflowM3s: parseNum(cols[8]),
-    waterLevelM: parseNum(cols[9]),
+    state: 'values',
+    observations: [
+      {
+        observedAt,
+        inflowM3s: numberIn(inflow),
+        outflowM3s: numberIn(outflow),
+        waterLevelM: numberIn(level),
+      },
+    ],
   };
 }
 
-async function matchMaster(log: (s: string) => void): Promise<Map<string, bigint>> {
-  const result = new Map<string, bigint>();
-  for (const [pageName, c] of Object.entries(DAMS)) {
-    // All candidates, ranked by name; chooseRanked keeps a row already
-    // stamped with this station, and lets a （元）/（再） pair tie so the
-    // current structure wins.
-    const rows = await sql<(BindableMaster & { rank: number })[]>`
-      SELECT id, name, completed_year AS "completedYear",
-             external_ids->>${SOURCE_ID} AS stamp,
-             CASE
-               WHEN name = ${c.masterName} THEN 0
-               WHEN name = ${`${c.masterName}ダム`} THEN 1
-               WHEN name LIKE ${`${c.masterName}（再）%`}
-                 OR name LIKE ${`${c.masterName}（元）%`} THEN 2
-               ELSE 5
-             END AS rank
-      FROM dams
-      WHERE pref_code = ${c.prefCode}
-        AND name LIKE ${`%${c.masterName}%`}
-    `;
-    const r = chooseRanked(rows, pageName);
-    if (!r) {
-      log(`${SOURCE_ID}: no master match for ${pageName} (pref ${c.prefCode})`);
-      continue;
-    }
-    result.set(pageName, r.id);
-    await bindExternalId(r.id, SOURCE_ID, pageName);
+/** Every named row of tmDam.txt; blank and short lines are not rows. */
+export function hrrEntries(text: string): Entry[] {
+  const entries: Entry[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const cols = line.split(',').map((c) => c.trim());
+    const name = cols[0] ?? '';
+    if (cols.length < 10 || !name) continue;
+    entries.push({
+      key: name,
+      name,
+      pref: PREF_BY_NAME[name] ?? null,
+      lat: Number(cols[3]) || null,
+      lng: Number(cols[4]) || null,
+      reading: hrrReading(cols),
+    });
   }
-  return result;
+  return entries;
 }
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  const matches = await matchMaster(log);
-  log(`${SOURCE_ID}: matched ${matches.size}/${Object.keys(DAMS).length} master dams`);
-
-  const userAgent =
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
-
+export default ingestTask(SOURCE_ID, async (log) => {
   const r = await fetch(CSV_URL, {
-    headers: { 'user-agent': userAgent },
+    headers: {
+      'user-agent':
+        process.env.HTTP_USER_AGENT ??
+        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
+    },
     signal: AbortSignal.timeout(12_000),
   });
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; abort`);
-    return;
-  }
-  const text = await r.text();
-  // What this source publishes, matched or not — recorded so /coverage can say
-  // "they publish it, we failed to link it" instead of guessing. Built from the
-  // CSV rather than from `DAMS`, because the CSV is the published list and
-  // `DAMS` is only the subset we have configured: a dam 北陸地整 adds shows up
-  // here as an unmatched row instead of vanishing. Keyed by name so a repeated
-  // row can't break the upsert.
-  const universe = new Map<string, UniverseRow>();
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const raw of text.split(/\r?\n/)) {
-    const p = parseHrrLine(raw);
-    if (!p) continue;
-    const damId = matches.get(p.name);
-    universe.set(p.name, {
-      externalId: p.name,
-      name: p.name,
-      prefCode: DAMS[p.name]?.prefCode ?? null,
-      resolvedDamId: damId ?? null,
-    });
-    if (!damId) continue;
-    if (p.waterLevelM == null && p.inflowM3s == null && p.outflowM3s == null) continue;
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: null,
-      storageRate: null,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-  await recordUniverse(SOURCE_ID, [...universe.values()]);
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: matched=${matches.size} parsed=${inputs.length} written=${written}`);
-};
-
-export default task;
+  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status}`);
+  const entries = hrrEntries(await r.text());
+  log(`${SOURCE_ID}: ${entries.length} rows`);
+  return { entries };
+});

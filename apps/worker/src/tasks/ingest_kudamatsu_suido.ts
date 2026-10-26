@@ -24,12 +24,8 @@
 //
 // Priority 293. Cron daily 02:47 UTC (11:47 JST).
 
-import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const PAGE_URL =
   process.env.KUDAMATSU_SUIDO_URL ??
@@ -38,7 +34,9 @@ const PAGE_URL =
 const SOURCE_ID = 'kudamatsu-suido';
 const PREF_CODE = '35';
 /** Published here but better covered elsewhere (see the header). */
-const UNIVERSE_ONLY: Record<string, true> = { 末武川ダム: true };
+const UNIVERSE_ONLY: Record<string, string> = {
+  末武川ダム: 'kasenbosai and yamaguchi-bousai carry it every 10 minutes, on the master basis',
+};
 
 // --- parsing ----------------------------------------------------------------
 
@@ -105,28 +103,40 @@ export function parseKudamatsuSuigen(html: string): ParsedDam[] {
   return dams;
 }
 
-// --- DB helpers -------------------------------------------------------------
-
-/** The 山口 master for a heading: its stamp first, then exact stem, then prefix. */
-async function findDamId(name: string): Promise<bigint | null> {
-  const stem = name.replace(/ダム$/, '');
-  const rows = await sql<(BindableMaster & { rank: number })[]>`
-    SELECT id, name, completed_year AS "completedYear",
-           external_ids->>${SOURCE_ID} AS stamp,
-           CASE WHEN name = ${stem} THEN 0 ELSE 1 END AS rank
-    FROM dams
-    WHERE pref_code = ${PREF_CODE}
-      AND (name LIKE ${`${stem}%`} OR external_ids->>${SOURCE_ID} = ${name})
-    ORDER BY rank, id
-  `;
-  return chooseRanked(rows, name)?.id ?? null;
+/** A section's reading: its own 「…現在」 stamp and at least one of 水位 / 貯水量 / 貯水率. */
+export function kudamatsuReading(d: ParsedDam): Reading {
+  if (!d.observedAt) return { state: 'unreadable', why: 'no 「…現在」 stamp' };
+  if (d.waterLevelM === null && d.storageVolumeM3 === null && d.storageRate === null) {
+    return { state: 'unreadable', why: 'no 水位, 貯水量 or 貯水率' };
+  }
+  return {
+    state: 'values',
+    observations: [
+      {
+        observedAt: d.observedAt,
+        waterLevelM: d.waterLevelM,
+        storageVolumeM3: d.storageVolumeM3,
+        storageRate: d.storageRate,
+      },
+    ],
+  };
 }
 
-// --- task -------------------------------------------------------------------
+/** Every 「…の状況」 section; 末武川 is recorded, never written. */
+export function kudamatsuEntries(dams: ParsedDam[]): Entry[] {
+  return dams.map((d): Entry => {
+    const dontWrite = UNIVERSE_ONLY[d.name];
+    return {
+      key: d.name,
+      name: d.name,
+      pref: PREF_CODE,
+      ...(dontWrite ? { dontWrite } : {}),
+      reading: kudamatsuReading(d),
+    };
+  });
+}
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
+export default ingestTask(SOURCE_ID, async (log) => {
   const r = await fetch(PAGE_URL, {
     headers: {
       'user-agent':
@@ -135,64 +145,13 @@ const task: Task = async (_payload, helpers) => {
     },
     signal: AbortSignal.timeout(20_000),
   });
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
-  }
+  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status} from ${PAGE_URL}`);
 
   const dams = parseKudamatsuSuigen(await r.text());
   log(`${SOURCE_ID}: parsed ${dams.length} dams (${dams.map((d) => d.name).join(', ')})`);
   if (dams.length === 0) {
     throw new Error(`${SOURCE_ID}: no 「…ダムの状況」 section on ${PAGE_URL} — layout change?`);
   }
-
-  // Every published dam, matched or not and skipped or not, so /coverage can
-  // tell "published, not linked" from "nobody publishes it".
-  const universe: UniverseRow[] = [];
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  const undated: string[] = [];
-  let matched = 0;
-  for (const d of dams) {
-    const damId = await findDamId(d.name);
-    universe.push({ externalId: d.name, name: d.name, prefCode: PREF_CODE, resolvedDamId: damId });
-    if (UNIVERSE_ONLY[d.name]) continue;
-    if (!damId) {
-      log(`${SOURCE_ID}: no master dam for "${d.name}" (pref ${PREF_CODE})`);
-      continue;
-    }
-    matched++;
-    await bindExternalId(damId, SOURCE_ID, d.name);
-    if (!d.observedAt) {
-      undated.push(d.name);
-      continue;
-    }
-    if (d.waterLevelM === null && d.storageVolumeM3 === null && d.storageRate === null) {
-      log(`${SOURCE_ID}: ${d.name} has no values at ${d.observedAt.toISOString()}; skip`);
-      continue;
-    }
-    inputs.push({
-      observedAt: d.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: d.storageVolumeM3,
-      storageRate: d.storageRate,
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: d.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-  await recordUniverse(SOURCE_ID, universe);
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${dams.length} matched=${matched} written=${written}`);
-  // Thrown only after the universe and the dated dams are stored, so one lost
-  // stamp does not also hide the list or the other dam.
-  if (undated.length > 0) {
-    throw new Error(`${SOURCE_ID}: no 「…現在」 stamp for ${undated.join(', ')} — layout change?`);
-  }
-};
-
-export default task;
+  // About monthly, each section under its own 「…現在」 stamp.
+  return { entries: kudamatsuEntries(dams), dated: true };
+});

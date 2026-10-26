@@ -48,11 +48,8 @@
 // Priority 288. Cron daily; the page changes about monthly and a re-read
 // upserts the same rows.
 
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { BoundDam, Entry, Reading } from '../ingest/types.ts';
 
 const PAGE_URL = process.env.AWAJI_SUIDO_URL ?? 'http://www.awaji-suido.jp/osirase-01.html';
 
@@ -77,8 +74,8 @@ export interface Pin {
  *
  * - 牛内 is bound but not written: kasenbosai and hyogo-bodik carry it hourly
  *   with the same volume.
- * - Not listed, so unresolved in the universe: 天川第１ダム (no master row) and
- *   成相・北富士ダム (one figure for 成相 NDI 1592 and 北富士 NDI 1596).
+ * - Not pinned: 天川第１ダム (no master row) and 成相・北富士ダム (one figure for
+ *   成相 NDI 1592 and 北富士 NDI 1596, so never bound).
  */
 export const PINNED: Readonly<Record<string, Pin>> = {
   猪鼻第1ダム: { ndi: '1588', basisM3: 311_000, write: true },
@@ -88,6 +85,9 @@ export const PINNED: Readonly<Record<string, Pin>> = {
   牛内ダム: { ndi: '1598', basisM3: 1_100_000, write: false },
   本庄川ダム: { ndi: '1591', basisM3: 710_000, write: true },
 };
+
+/** Rows that are not one master dam. */
+const COMBINED: Readonly<Record<string, true>> = { '成相・北富士ダム': true };
 
 // volume / 貯水率 may stray this far from basisM3 (a one-decimal rate near 1 %
 // is off by 5 %), and the stored volume may reach this multiple of the master
@@ -250,13 +250,54 @@ export function storedVolume(
   return { volumeM3: stored };
 }
 
-// --- DB helpers -------------------------------------------------------------
+/** A 貯水量 cell that is only a dash: the utility printed no volume. */
+const DASH = /^[-－‐―ー−]+$/;
 
-// --- task -------------------------------------------------------------------
+/**
+ * One row's reading. A pinned row's volume faces storedVolume against its
+ * bound master; an unpinned row reads the printed 貯水量 as is.
+ */
+export function awajiReading(
+  observedAt: Date,
+  row: ParsedRow,
+  pin: Pick<Pin, 'basisM3' | 'gross'> | undefined,
+  dam: Pick<BoundDam, 'totalCapacityM3' | 'activeCapacityM3'> | null,
+): Reading {
+  if (row.storageVolumeM3 === null) {
+    return DASH.test(row.volumeText)
+      ? { state: 'empty', mark: `貯水量 「${row.volumeText}」` }
+      : { state: 'unreadable', why: `貯水量 「${row.volumeText}」` };
+  }
+  let volumeM3 = row.storageVolumeM3;
+  if (pin) {
+    const stored = storedVolume(row, pin, {
+      totalM3: dam?.totalCapacityM3 ?? null,
+      activeM3: dam?.activeCapacityM3 ?? null,
+    });
+    if ('problem' in stored) {
+      return { state: 'unreadable', why: `貯水量 「${row.volumeText}」: ${stored.problem}` };
+    }
+    volumeM3 = stored.volumeM3;
+  }
+  return { state: 'values', observations: [{ observedAt, storageVolumeM3: volumeM3 }] };
+}
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
+/** Every table row: the page's list is the universe. */
+export function awajiEntries(page: ParsedPage): Entry[] {
+  return page.rows.map((row): Entry => {
+    const pin = PINNED[row.name];
+    return {
+      key: row.name,
+      name: row.name,
+      pref: PREF_CODE,
+      ...(pin ? { bind: { ndi: pin.ndi } } : COMBINED[row.name] ? { bind: 'never' } : {}),
+      ...(pin && !pin.write ? { dontWrite: 'kasenbosai and hyogo-bodik carry it hourly' } : {}),
+      reading: (dam) => awajiReading(page.observedAt, row, pin, dam),
+    };
+  });
+}
 
+export default ingestTask(SOURCE_ID, async (log) => {
   const r = await fetch(PAGE_URL, {
     headers: {
       'user-agent':
@@ -269,72 +310,13 @@ const task: Task = async (_payload, helpers) => {
 
   const page = parseAwajiChosui(await r.text());
   log(`${SOURCE_ID}: ${page.rows.length} rows at ${page.observedAt.toISOString()}`);
-
-  const ndis = Object.values(PINNED).map((p) => p.ndi);
-  const masters = await sql<
-    { id: bigint; ndi: string; total: string | null; active: string | null }[]
-  >`
-    SELECT id, external_ids->>'ndi' AS ndi,
-           total_capacity_m3 AS total, active_capacity_m3 AS active
-    FROM dams WHERE pref_code = ${PREF_CODE} AND external_ids->>'ndi' IN ${sql(ndis)}
-  `;
-  const masterByNdi = new Map(masters.map((m) => [m.ndi, m]));
-
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  let matched = 0;
   for (const row of page.rows) {
-    const pin = PINNED[row.name];
-    const master = pin ? (masterByNdi.get(pin.ndi) ?? null) : null;
-    const damId = master?.id ?? null;
-    universe.push({
-      externalId: row.name,
-      name: row.name,
-      prefCode: PREF_CODE,
-      resolvedDamId: damId,
-    });
-    if (!pin || !damId) {
-      log(`${SOURCE_ID}: no master for "${row.name}"`);
-      continue;
-    }
-    matched++;
-    await bindExternalId(damId, SOURCE_ID, row.name);
-    if (!pin.write) continue;
-    const stored = storedVolume(row, pin, {
-      totalM3: master?.total == null ? null : Number(master.total),
-      activeM3: master?.active == null ? null : Number(master.active),
-    });
-    if ('problem' in stored) {
-      log(
-        `${SOURCE_ID}: "${row.name}" 貯水量 「${row.volumeText}」 not written: ${stored.problem}`,
-      );
-      continue;
-    }
     if (row.volumeFromTotal) {
       log(
         `${SOURCE_ID}: "${row.name}" 貯水量 「${row.volumeText}」 read from the 合計 as ${row.storageVolumeM3}`,
       );
     }
-    inputs.push({
-      observedAt: page.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: stored.volumeM3,
-      storageRate: null,
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: null,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
   }
-  await recordUniverse(SOURCE_ID, universe);
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${page.rows.length} matched=${matched} written=${written}`);
-};
-
-export default task;
+  // Edited by hand about monthly under its own 現在 date.
+  return { entries: awajiEntries(page), dated: true };
+});

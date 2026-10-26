@@ -21,18 +21,15 @@
 // so the stored level is T.P. elevation like every other dam's EL.m.
 //
 // No 貯水量 / 貯水率 is published; volume and rate stay NULL (not
-// trusted_rate_basis). Missing values: any blank / non-numeric cell → null.
+// trusted_rate_basis). Missing values: any blank / non-numeric cell → null;
+// the feed has no mark of its own for a missing reading.
 //
 // Priority 297 (JWA realtime siblings: jwa-yoshino / jwa-chikugo). The only
 // other source on this dam is mudam (280). Cron hourly at :58; each run
 // re-upserts the 24-hour window so an outage self-heals.
 
-import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Observed, Reading } from '../ingest/types.ts';
 
 const DATA_URL = process.env.JWA_BIWAKO_URL ?? 'http://www.biwako-mizukanri.jp/daminfo1_h.json';
 
@@ -80,66 +77,59 @@ export function parseBiwakoDamInfo(text: string): ParsedRow[] {
   return out;
 }
 
-async function matchMaster(log: (s: string) => void): Promise<bigint | null> {
-  const rows = await sql<(BindableMaster & { rank: number })[]>`
-    SELECT id, name, completed_year AS "completedYear",
-           external_ids->>${SOURCE_ID} AS stamp,
-           CASE WHEN name = ${MASTER_NAME} THEN 0 ELSE 5 END AS rank
-    FROM dams
-    WHERE pref_code = ${PREF_CODE}
-      AND name LIKE ${`%${STATION}%`}
-    ORDER BY rank, id
-  `;
-  const r = chooseRanked(rows, STATION);
-  // The provider publishes exactly this one station; recorded whether or not
-  // it binds so /coverage can tell a failed link from absence.
-  await recordUniverse(SOURCE_ID, [
-    { externalId: STATION, name: STATION, prefCode: PREF_CODE, resolvedDamId: r?.id ?? null },
-  ]);
-  if (!r) {
-    log(`${SOURCE_ID}: no master match for ${STATION} (${MASTER_NAME})`);
-    return null;
+/** The lake's reading: every hour that carries a value, or why none could be read. */
+export function biwakoReading(page: { text: string } | { failed: string }): Reading {
+  if ('failed' in page) return { state: 'unreadable', why: page.failed };
+  let rows: ParsedRow[];
+  try {
+    rows = parseBiwakoDamInfo(page.text);
+  } catch (err) {
+    return { state: 'unreadable', why: `not JSON: ${err instanceof Error ? err.message : err}` };
   }
-  await bindExternalId(r.id, SOURCE_ID, STATION);
-  return r.id;
+  const observations: Observed[] = rows.filter(
+    (r) => r.waterLevelM !== null || r.inflowM3s !== null || r.outflowM3s !== null,
+  );
+  if (observations.length === 0) {
+    return { state: 'unreadable', why: `no value in ${rows.length} hourly rows` };
+  }
+  return { state: 'values', observations };
 }
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  const damId = await matchMaster(log);
-
-  const r = await fetch(DATA_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
+/**
+ * The provider publishes exactly this one station, known in advance: listed
+ * even when the feed fails, so /coverage can tell a failed read from absence.
+ */
+export function biwakoEntries(page: { text: string } | { failed: string }): Entry[] {
+  return [
+    {
+      key: STATION,
+      name: STATION,
+      pref: PREF_CODE,
+      bind: { name: MASTER_NAME },
+      reading: biwakoReading(page),
     },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
+  ];
+}
+
+async function fetchFeed(): Promise<{ text: string } | { failed: string }> {
+  try {
+    const r = await fetch(DATA_URL, {
+      headers: {
+        'user-agent':
+          process.env.HTTP_USER_AGENT ??
+          'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
+      },
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (r.status !== 200) return { failed: `HTTP ${r.status} for ${DATA_URL}` };
+    return { text: await r.text() };
+  } catch (err) {
+    return { failed: err instanceof Error ? err.message : String(err) };
   }
-  const rows = parseBiwakoDamInfo(await r.text());
-  log(`${SOURCE_ID}: parsed ${rows.length} hourly rows`);
-  if (!damId) return;
+}
 
-  const written = await upsertObservations(
-    rows.map((p) => ({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: null,
-      storageRate: null,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    })),
-  );
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=1 written=${written}`);
-};
-
-export default task;
+export default ingestTask(SOURCE_ID, async (log) => {
+  const page = await fetchFeed();
+  if ('failed' in page) log(`${SOURCE_ID}: ${page.failed}`);
+  return { entries: biwakoEntries(page) };
+});

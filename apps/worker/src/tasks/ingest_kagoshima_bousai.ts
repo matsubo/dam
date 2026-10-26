@@ -7,8 +7,10 @@
 //   (JSON API, globally accessible — not geo-blocked)
 //
 // NOTE: This endpoint is populated only during active flood/disaster events.
-//   During normal conditions the "items" array is empty. The adapter handles
-//   this gracefully and exits early when no dam data is present.
+//   During normal conditions the "items" array is empty, and the scan lists
+//   nothing: this source is marked universe_enumerable = FALSE (migration
+//   0044) precisely because it lists dams only during a flood event, so the
+//   run records nothing rather than faking an empty scan.
 //
 // Response shape (when items are present). The Kagoshima feed has never been
 // seen populated; this is the vendor's shape as served live by its Kagawa
@@ -29,16 +31,13 @@
 //     ]
 //   }
 // A station may be listed with every value null (Kagawa's 粟井ダム); it is
-// recorded in the universe but writes no observation.
+// provider-marked empty.
 //
 // Priority 308 (hourly pref-managed). Cron :56 (spaced from other sources).
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const DATA_URL =
   process.env.KAGOSHIMA_BOUSAI_URL ??
@@ -67,19 +66,6 @@ export interface BousaiResponse {
   items: BousaiItem[];
 }
 
-export interface ParsedRow {
-  stationName: string;
-  /** The portal's own station id — the stable key for `source_universe`. */
-  stationNo: string;
-  lat: number | null;
-  lng: number | null;
-  observedAt: Date | null;
-  waterLevelM: number | null;
-  storageVolumeM3: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
-}
-
 // --- parsing ----------------------------------------------------------------
 
 /** "YYYY/MM/DD HH:MM" JST → UTC Date */
@@ -92,161 +78,67 @@ export function parseKagoshimaTimestamp(s: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function toNum(v: number | null | undefined): number | null {
-  if (v === null || v === undefined) return null;
-  return Number.isFinite(v) ? v : null;
+/** An explicit null is the portal's own blank; a missing field is unreadable. */
+function field(v: number | null | undefined): Cell {
+  if (v === undefined) return null;
+  return cell(v, v === null);
 }
 
-export function parseItems(items: BousaiItem[]): ParsedRow[] {
-  return items.map((item) => {
+function itemReading(item: BousaiItem): Reading {
+  const level = field(item.store);
+  const storedThou = field(item.stored);
+  const inflow = field(item.inflow);
+  const outflow = field(item.discharge);
+  const state = cellState([level, storedThou, inflow, outflow]);
+  if (state === 'empty') return { state, mark: 'every value null' };
+  if (state === 'unreadable') return { state, why: 'no numeric value' };
+  const observedAt = parseKagoshimaTimestamp(item.obs_datetime ?? '');
+  if (!observedAt) return { state: 'unreadable', why: `obs_datetime "${item.obs_datetime}"` };
+  const thou = numberIn(storedThou);
+  return {
+    state: 'values',
+    observations: [
+      {
+        observedAt,
+        waterLevelM: numberIn(level),
+        // stored is in 千m³; convert to m³
+        storageVolumeM3: thou !== null ? thou * 1_000 : null,
+        inflowM3s: numberIn(inflow),
+        outflowM3s: numberIn(outflow),
+      },
+    ],
+  };
+}
+
+/**
+ * One entry per listed station, keyed by the portal's own station_no; an item
+ * without a number or a name cannot be an entry.
+ */
+export function kagoshimaBousaiEntries(items: BousaiItem[]): Entry[] {
+  const named = items.filter((i) => i.station_no?.trim() && i.station_name?.trim());
+  return named.map((item) => {
     // WKT "POINT(lon lat)"; the vendor prints POINT(0 0) for an unlocated station.
     const wkt = item.point?.match(/^POINT\((-?[\d.]+) (-?[\d.]+)\)$/);
     const lng = wkt ? Number(wkt[1]) : 0;
     const lat = wkt ? Number(wkt[2]) : 0;
     const located = Number.isFinite(lng) && Number.isFinite(lat) && (lng !== 0 || lat !== 0);
+    // The master files a 貯水池 under its bare name.
+    const bare = item.station_name.replace(/貯水池$/, '');
     return {
-      stationName: item.station_name,
-      stationNo: item.station_no,
+      key: item.station_no,
+      name: item.station_name,
+      pref: PREF_CODE,
+      ...(bare !== item.station_name ? { bind: { name: bare } } : {}),
       lat: located ? lat : null,
       lng: located ? lng : null,
-      observedAt: parseKagoshimaTimestamp(item.obs_datetime),
-      waterLevelM: toNum(item.store),
-      // stored is in 千m³; convert to m³
-      storageVolumeM3: toNum(item.stored) !== null ? (toNum(item.stored) as number) * 1_000 : null,
-      inflowM3s: toNum(item.inflow),
-      outflowM3s: toNum(item.discharge),
+      reading: itemReading(item),
     };
   });
 }
 
-/** Observation inputs for the matched stations with a timestamp and any value. */
-export function toObservations(
-  rows: ParsedRow[],
-  damByName: Map<string, bigint>,
-  log: (s: string) => void,
-): Parameters<typeof upsertObservations>[0] {
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = damByName.get(p.stationName);
-    if (!damId) continue;
-    if (!p.observedAt) {
-      log(`${SOURCE_ID}: missing timestamp for "${p.stationName}"; skipping`);
-      continue;
-    }
-    if (
-      p.waterLevelM === null &&
-      p.storageVolumeM3 === null &&
-      p.inflowM3s === null &&
-      p.outflowM3s === null
-    ) {
-      log(`${SOURCE_ID}: "${p.stationName}" has no values; skipping`);
-      continue;
-    }
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: null,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-  return inputs;
-}
-
-// --- DB helpers -------------------------------------------------------------
-
-function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/貯水池$/, '')
-    .trim();
-}
-
-interface DamMatch {
-  stationName: string;
-  damId: bigint;
-}
-
-/**
- * Best master dam for a station: the row already stamped with its
- * `station_no` keeps it; otherwise an exact raw-name hit beats a stem hit
- * beats a prefix/substring hit, and equal ranks go to the live （元）/（再）
- * twin before the lower id.
- */
-export function chooseMaster(
-  rawName: string,
-  stem: string,
-  masters: BindableMaster[],
-  stationKey: string,
-): bigint | null {
-  const stamped = stampedMaster(masters, stationKey);
-  if (stamped) return stamped.id;
-  let best: { m: BindableMaster; rank: number } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (m.name === rawName) rank = 0;
-    else if (mStem === stem) rank = 1;
-    else if (m.name === `${stem}ダム`) rank = 2;
-    else if (mStem.startsWith(stem)) rank = 3;
-    else if (mStem.includes(stem)) rank = 4;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-      best = { m, rank };
-    }
-  }
-  return best?.m.id ?? null;
-}
-
-async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const out: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-
-  for (const r of rows) {
-    const stem = normalizeName(r.stationName);
-    if (!stem) continue;
-
-    const damId = chooseMaster(r.stationName, stem, masters, r.stationNo);
-
-    universe.push({
-      externalId: r.stationNo,
-      name: r.stationName,
-      prefCode: PREF_CODE,
-      lat: r.lat,
-      lng: r.lng,
-      resolvedDamId: damId,
-    });
-
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${r.stationName}"`);
-      continue;
-    }
-    out.push({ stationName: r.stationName, damId });
-    await bindExternalId(damId, SOURCE_ID, r.stationNo);
-  }
-
-  await recordUniverse(SOURCE_ID, universe);
-  return out;
-}
-
 // --- task -------------------------------------------------------------------
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
+export default ingestTask(SOURCE_ID, async (log) => {
   const r = await fetch(DATA_URL, {
     headers: {
       'user-agent':
@@ -255,31 +147,10 @@ const task: Task = async (_payload, helpers) => {
     },
     signal: AbortSignal.timeout(20_000),
   });
-
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
-  }
+  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status}`);
 
   const data = (await r.json()) as BousaiResponse;
-  const items = data.items ?? [];
-
-  if (items.length === 0) {
-    // Deliberately records nothing: an empty portal is not a scan. This
-    // source is marked universe_enumerable = FALSE (migration 0044) precisely
-    // because it lists dams only during a flood event, so it is excluded from
-    // the coverage gate rather than faking an empty scan here.
-    log(`${SOURCE_ID}: no items (portal inactive — normal outside flood events)`);
-    return;
-  }
-
-  const rows = parseItems(items);
-  log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
-
-  const matches = await matchMaster(rows, log);
-  const inputs = toObservations(rows, new Map(matches.map((m) => [m.stationName, m.damId])), log);
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+  const entries = kagoshimaBousaiEntries(data.items ?? []);
+  log(`${SOURCE_ID}: ${entries.length} stations at ${data.ret_time}`);
+  return { entries };
+});

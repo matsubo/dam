@@ -9,7 +9,7 @@
 //     hiyoshi   → 日吉ダム    (Kyoto  26)
 //     muro      → 室生ダム    (Nara   29)
 //     syourenji → 青蓮寺ダム  (Mie    24)
-//     takayama  → 高山ダム    (Nara   29)
+//     takayama  → 高山ダム    (Kyoto  26)
 //     nunome    → 布目ダム    (Nara   29)
 //     hinati    → 比奈知ダム  (Mie    24)
 //     hitokura  → 一庫ダム    (Hyogo  28)
@@ -24,13 +24,14 @@
 //   UPSERT on (dam_id, observed_at, source_id) makes repeated polls idempotent.
 // Priority: 302 — MLIT national management, daily cadence.
 //   Slightly below hourly MLIT sources (304) but above JWA daily (296).
+//
+// The feed's `dam` keys are the universe, plus every configured dam the day's
+// JSON leaves out (unreadable), so the universe stays complete when one
+// dam's entry is missing. The feed prints no "no value" mark of its own: a
+// blank or implausible 貯水率 is unreadable.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const DATA_URL = process.env.KKR_MLIT_URL ?? 'https://www.kkr.mlit.go.jp/river/json/dam.json';
 
@@ -50,7 +51,7 @@ const MAX_PLAUSIBLE_PCT = 200;
  *     overflowed and failed the whole task. 一庫ダム published exactly 100.0 on
  *     2026-09-14, and every 近畿 dam has been stale since.
  *
- * A reading outside 0..MAX_PLAUSIBLE_PCT is dropped rather than clipped: a
+ * A reading outside 0..MAX_PLAUSIBLE_PCT is unreadable rather than clipped: a
  * clipped value is indistinguishable from a real one downstream, and 0 % would
  * recreate the phantom-zero problem 0038/0039 had to dig out.
  */
@@ -60,30 +61,23 @@ export function toFraction(pct: number | null): number | null {
   return pct / 100;
 }
 
-// Map from JSON key to canonical Japanese dam name
-const KEY_TO_NAME: Record<string, string> = {
-  managawa: '真名川ダム',
-  kuzuryu: '九頭竜ダム',
-  amagase: '天ヶ瀬ダム',
-  hiyoshi: '日吉ダム',
-  muro: '室生ダム',
-  syourenji: '青蓮寺ダム',
-  takayama: '高山ダム',
-  nunome: '布目ダム',
-  hinati: '比奈知ダム',
-  hitokura: '一庫ダム',
-  otaki: '大滝ダム',
-  sarutani: '猿谷ダム',
+// JSON key → canonical Japanese dam name and the prefecture of its master.
+const KEYS: Record<string, { name: string; pref: string }> = {
+  managawa: { name: '真名川ダム', pref: '18' },
+  kuzuryu: { name: '九頭竜ダム', pref: '18' },
+  amagase: { name: '天ヶ瀬ダム', pref: '26' },
+  hiyoshi: { name: '日吉ダム', pref: '26' },
+  muro: { name: '室生ダム', pref: '29' },
+  syourenji: { name: '青蓮寺ダム', pref: '24' },
+  takayama: { name: '高山ダム', pref: '26' },
+  nunome: { name: '布目ダム', pref: '29' },
+  hinati: { name: '比奈知ダム', pref: '24' },
+  hitokura: { name: '一庫ダム', pref: '28' },
+  otaki: { name: '大滝ダム', pref: '29' },
+  sarutani: { name: '猿谷ダム', pref: '29' },
 };
-
-// --- types ------------------------------------------------------------------
-
-export interface ParsedRow {
-  key: string;
-  damName: string;
-  observedAt: Date;
-  storageRate: number | null;
-}
+/** Where a dam the feed adds would be: the five prefectures it covers. */
+const PREF_CODES = [...new Set(Object.values(KEYS).map((k) => k.pref))];
 
 // --- parsing ----------------------------------------------------------------
 
@@ -102,113 +96,43 @@ export function parseKkrDatetime(s: string): Date | null {
 }
 
 interface KkrJson {
-  datetime: string;
-  dam: Record<string, { chosuiritsu?: { today?: string } }>;
+  datetime?: string;
+  dam?: Record<string, { chosuiritsu?: { today?: string } } | undefined>;
 }
 
-export function parseKkrJson(raw: unknown): ParsedRow[] {
+function damReading(
+  entry: { chosuiritsu?: { today?: string } } | undefined,
+  observedAt: Date | null,
+  datetime: string | undefined,
+): Reading {
+  if (!entry) return { state: 'unreadable', why: "not in today's feed" };
+  if (!observedAt) return { state: 'unreadable', why: `datetime "${datetime}"` };
+  const rateStr = entry.chosuiritsu?.today?.trim() ?? '';
+  const storageRate = toFraction(rateStr === '' ? null : Number(rateStr));
+  if (storageRate === null) return { state: 'unreadable', why: `貯水率 "${rateStr}"` };
+  return { state: 'values', observations: [{ observedAt, storageRate }] };
+}
+
+/** Every dam key in the JSON, then every configured dam it leaves out. */
+export function kkrEntries(raw: unknown): Entry[] {
   const data = raw as KkrJson;
   const observedAt = parseKkrDatetime(data.datetime ?? '');
-  if (!observedAt) return [];
-
-  const rows: ParsedRow[] = [];
-  for (const [key, name] of Object.entries(KEY_TO_NAME)) {
-    const entry = data.dam?.[key];
-    if (!entry) continue;
-    const rateStr = entry.chosuiritsu?.today?.trim() ?? '';
-    const pct = rateStr === '' ? null : Number(rateStr);
-    rows.push({
+  const dams = data.dam ?? {};
+  const keys = [...new Set([...Object.keys(dams), ...Object.keys(KEYS)])];
+  return keys.map((key) => {
+    const cfg = KEYS[key];
+    return {
       key,
-      damName: name,
-      observedAt,
-      storageRate: toFraction(pct),
-    });
-  }
-  return rows;
-}
-
-// --- DB helpers -------------------------------------------------------------
-
-function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/貯水池$/, '')
-    .trim();
-}
-
-interface DamMatch {
-  damName: string;
-  damId: bigint;
-}
-
-/**
- * Match every dam in KEY_TO_NAME, not just the ones the current fetch
- * returned. KEY_TO_NAME *is* the feed's published catalogue, so walking it
- * keeps `source_universe` complete on a day when one dam's entry is missing
- * from the JSON; the match itself depends only on the name, never on the
- * fetched values.
- */
-async function matchMaster(log: (s: string) => void): Promise<DamMatch[]> {
-  // Search all dams (no pref_code filter — these span Fukui/Kyoto/Nara/Mie/Hyogo)
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams ORDER BY id
-  `;
-  const out: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-
-  for (const [key, damName] of Object.entries(KEY_TO_NAME)) {
-    const stem = normalizeName(damName);
-    if (!stem) continue;
-
-    let best: { m: BindableMaster; rank: number } | null = null;
-    for (const m of masters) {
-      const mStem = normalizeName(m.name);
-      let rank: number;
-      if (m.name === damName) rank = 0;
-      else if (mStem === stem) rank = 1;
-      else if (m.name === `${stem}ダム`) rank = 2;
-      else if (mStem.startsWith(stem)) rank = 3;
-      else if (mStem.includes(stem)) rank = 4;
-      else continue;
-      if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-        best = { m, rank };
-      }
-    }
-    // A row already stamped with this key keeps it rather than being
-    // re-decided by name every run (天ヶ瀬 has （元）/（再） twins and a
-    // same-name dam in 佐賀) (#79).
-    const damId = stampedMaster(masters, key)?.id ?? best?.m.id ?? null;
-
-    // The feed's own JSON key is the stable id; these 12 dams span five
-    // prefectures and the feed publishes no pref code, so leave it null.
-    universe.push({
-      externalId: key,
-      name: damName,
-      resolvedDamId: damId,
-    });
-
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${damName}"`);
-      continue;
-    }
-
-    out.push({ damName, damId });
-    await bindExternalId(damId, SOURCE_ID, key);
-  }
-
-  await recordUniverse(SOURCE_ID, universe);
-  return out;
+      name: cfg?.name ?? key,
+      pref: cfg?.pref ?? PREF_CODES,
+      reading: damReading(dams[key], observedAt, data.datetime),
+    };
+  });
 }
 
 // --- task -------------------------------------------------------------------
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
+export default ingestTask(SOURCE_ID, async (log) => {
   const r = await fetch(DATA_URL, {
     headers: {
       'user-agent':
@@ -217,45 +141,8 @@ const task: Task = async (_payload, helpers) => {
     },
     signal: AbortSignal.timeout(20_000),
   });
-
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
-  }
-
-  const json: unknown = await r.json();
-  const rows = parseKkrJson(json);
-  log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
-
-  const matches = await matchMaster(log);
-  const damByName = new Map(matches.map((m) => [m.damName, m.damId]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = damByName.get(p.damName);
-    if (!damId) continue;
-    if (p.storageRate === null) {
-      log(`${SOURCE_ID}: no storage rate for "${p.damName}"; skipping`);
-      continue;
-    }
-
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: null,
-      storageRate: p.storageRate,
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: null,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status}`);
+  const entries = kkrEntries(await r.json());
+  log(`${SOURCE_ID}: ${entries.length} dams`);
+  return { entries };
+});

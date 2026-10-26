@@ -32,13 +32,11 @@
 // volume / annual 有効 — the same figure the site would derive from the
 // static capacity, so back-solving it is an identity.
 
-import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
+const SOURCE_ID = 'aomori-dam';
 const BASE_URL =
   process.env.AOMORI_DAM_BASE_URL ?? 'https://www.kasensabo.bousai.pref.aomori.jp/bousai/servlet';
 const LIST_URL = `${BASE_URL}/bousaiweb.servletBousaiTableStatus?sv=3&dk=4&mp=0&no=0&fn=0&pg=1`;
@@ -71,11 +69,11 @@ export interface AomoriRow {
   storageRate: number | null;
 }
 
-function parseNum(s: string): number | null {
+/** "---" (無効/閉局/保守) and "***" (欠測) are the page's marks; empty is 未受信. */
+function valueCell(s: string): Cell {
   const t = s.replace(/&nbsp;/g, '').trim();
-  if (!t || t === '---' || t === '***') return null;
-  const n = Number(t);
-  return Number.isFinite(n) ? n : null;
+  if (t === '---' || t === '***') return MARKED;
+  return cell(t ? Number(t) : null, false);
 }
 
 // Guards the positional cell mapping below: if the provider reorders or
@@ -86,10 +84,16 @@ const HEADER_RE =
 const ROW_RE =
   /<th[^>]*class="title time"[^>]*>(\d{2}):(\d{2})[^<]*<\/th>((?:\s*<td[^>]*>[^<]*<\/td>){8})/g;
 
-/** Parse one ダム諸量グラフ (10分) page into dated rows that carry dam data. */
-export function parseAomoriDamGraph(html: string): AomoriRow[] {
+interface GraphRow {
+  observedAt: Date;
+  /** [0] 流入量 [1] 全放流量 [2] 貯水位 [3] 貯水量(有効) 千m³ [4] 貯水率(有効) % [5] 貯水率(利水) % */
+  cells: Cell[];
+}
+
+/** Every dated row of one ダム諸量グラフ (10分) page; null unless the layout is the known one. */
+function parseGraphRows(html: string): GraphRow[] | null {
   const dm = html.match(/class="date">(\d{4})年(\d{1,2})月(\d{1,2})日</);
-  if (!dm || !HEADER_RE.test(html)) return [];
+  if (!dm || !HEADER_RE.test(html)) return null;
   const [y, mo, d] = [Number(dm[1]), Number(dm[2]), Number(dm[3])];
 
   const raw: { minutes: number; cells: string[] }[] = [];
@@ -108,83 +112,44 @@ export function parseAomoriDamGraph(html: string): AomoriRow[] {
     dayOffset[i] = (dayOffset[i + 1] ?? 0) - (cur.minutes > next.minutes ? 1 : 0);
   }
 
-  const out: AomoriRow[] = [];
-  raw.forEach((r, i) => {
+  return raw.map((r, i) => ({
+    observedAt: new Date(
+      Date.UTC(y, mo - 1, d + (dayOffset[i] ?? 0), Math.floor(r.minutes / 60) - 9, r.minutes % 60),
+    ),
     // cells: [0] 10分雨量 [1] 累加雨量 [2] 流入量 [3] 全放流量 [4] 貯水位
     //        [5] 貯水量(有効) 千m³ [6] 貯水率(有効) % [7] 貯水率(利水) %
-    const inflow = parseNum(r.cells[2] ?? '');
-    const outflow = parseNum(r.cells[3] ?? '');
-    const level = parseNum(r.cells[4] ?? '');
-    const volume = parseNum(r.cells[5] ?? '');
-    const ratePct = parseNum(r.cells[7] ?? '') ?? parseNum(r.cells[6] ?? '');
-    if (
-      inflow === null &&
-      outflow === null &&
-      level === null &&
-      volume === null &&
-      ratePct === null
-    ) {
-      return;
-    }
-    const hh = Math.floor(r.minutes / 60);
-    const mm = r.minutes % 60;
-    out.push({
-      observedAt: new Date(Date.UTC(y, mo - 1, d + (dayOffset[i] ?? 0), hh - 9, mm)),
-      waterLevelM: level,
-      inflowM3s: inflow,
-      outflowM3s: outflow,
-      storageVolumeM3: volume !== null ? volume * 1_000 : null,
-      storageRate: ratePct !== null ? ratePct / 100 : null,
-    });
-  });
-  return out;
+    cells: r.cells.slice(2, 8).map(valueCell),
+  }));
 }
 
-interface DamMatch {
-  cfg: DamCfg;
-  damId: bigint;
+function toRow({ observedAt, cells }: GraphRow): AomoriRow {
+  const [inflow, outflow, level, volume, rateEffective, rateWaterUse] = cells.map(numberIn);
+  const ratePct = rateWaterUse ?? rateEffective ?? null;
+  return {
+    observedAt,
+    waterLevelM: level ?? null,
+    inflowM3s: inflow ?? null,
+    outflowM3s: outflow ?? null,
+    storageVolumeM3: volume != null ? volume * 1_000 : null,
+    storageRate: ratePct !== null ? ratePct / 100 : null,
+  };
 }
 
-async function ensureExternalIds(dams: DamCfg[], log: (s: string) => void): Promise<DamMatch[]> {
-  const matches: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  for (const c of dams) {
-    const masterName = c.aomoriName.replace(/ダム$/, '');
-    // All candidates, ranked by name; chooseRanked keeps a row already
-    // stamped with this station, and lets a （元）/（再） pair tie so the
-    // current structure wins.
-    const rows = await sql<(BindableMaster & { rank: number })[]>`
-      SELECT id, name, completed_year AS "completedYear",
-             external_ids->>'aomori-dam' AS stamp,
-             CASE
-               WHEN name = ${masterName} THEN 0
-               WHEN name = ${`${masterName}ダム`} THEN 1
-               WHEN name LIKE ${`${masterName}（再）%`}
-                 OR name LIKE ${`${masterName}（元）%`} THEN 2
-               ELSE 5
-             END AS rank
-      FROM dams
-      WHERE pref_code = ${PREF_CODE}
-        AND name LIKE ${`%${masterName}%`}
-    `;
-    const r = chooseRanked(rows, c.aomoriName);
-    universe.push({
-      externalId: c.aomoriName,
-      name: c.aomoriName,
-      prefCode: PREF_CODE,
-      resolvedDamId: r?.id ?? null,
-    });
-    if (!r) {
-      log(`aomori-dam: no master match for ${c.aomoriName}`);
-      continue;
-    }
-    matches.push({ cfg: c, damId: r.id });
-    await bindExternalId(r.id, 'aomori-dam', c.aomoriName);
-  }
-  await recordUniverse('aomori-dam', universe);
-  return matches;
+/** Parse one ダム諸量グラフ (10分) page into dated rows that carry dam data. */
+export function parseAomoriDamGraph(html: string): AomoriRow[] {
+  return (parseGraphRows(html) ?? []).filter((r) => cellState(r.cells) === 'values').map(toRow);
+}
+
+/** A dam's reading: the page's latest row that carries dam data. */
+export function aomoriReading(html: string): Reading {
+  const rows = parseGraphRows(html);
+  if (!rows) return { state: 'unreadable', why: 'not the ダム諸量グラフ layout' };
+  const state = cellState(rows.flatMap((r) => r.cells));
+  if (state === 'empty') return { state, mark: '"---" / "***" in every dam column' };
+  if (state === 'unreadable') return { state, why: 'no dam value in the window' };
+  const latest = rows.filter((r) => cellState(r.cells) === 'values').at(-1);
+  if (!latest) return { state: 'unreadable', why: 'no dam value in the window' };
+  return { state, observations: [toRow(latest)] };
 }
 
 const headers = {
@@ -193,58 +158,34 @@ const headers = {
     'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
 };
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
+async function fetchShiftJis(url: string): Promise<string> {
+  const r = await fetch(url, { headers, signal: AbortSignal.timeout(15_000) });
+  if (r.status !== 200) throw new Error(`HTTP ${r.status}`);
+  return new TextDecoder('shift_jis').decode(await r.arrayBuffer());
+}
 
-  const list = await fetch(LIST_URL, { headers, signal: AbortSignal.timeout(15_000) });
-  if (list.status !== 200) {
-    log(`aomori-dam: ダム諸量現況表 HTTP ${list.status}; aborting`);
-    return;
-  }
-  const dams = parseAomoriDamList(new TextDecoder('shift_jis').decode(await list.arrayBuffer()));
-  if (dams.length === 0) {
-    log('aomori-dam: ダム諸量現況表 lists no dams; aborting');
-    return;
-  }
-  const matches = await ensureExternalIds(dams, log);
-  log(`aomori-dam: matched ${matches.length}/${dams.length} master dams`);
+/** One dam's graph page, by 局番号. */
+export type GraphFetcher = (stationNo: number) => Promise<string>;
 
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const { cfg, damId } of matches) {
-    const url = `${GRAPH_URL}?style=dam_graph10m&dk=4&it=0&sn=${cfg.stationNo}&nw=1`;
-    // One page per dam: a timeout or network error on one must not throw away
-    // the readings already collected for the others.
-    try {
-      const r = await fetch(url, { headers, signal: AbortSignal.timeout(15_000) });
-      if (r.status !== 200) {
-        log(`aomori-dam: ${cfg.aomoriName} HTTP ${r.status}; skipping`);
-        continue;
-      }
-      const html = new TextDecoder('shift_jis').decode(await r.arrayBuffer());
-      const latest = parseAomoriDamGraph(html).at(-1);
-      if (!latest) {
-        log(`aomori-dam: ${cfg.aomoriName} no parseable rows; skipping`);
-        continue;
-      }
-      inputs.push({
-        observedAt: latest.observedAt,
-        damId,
-        sourceId: 'aomori-dam',
-        storageVolumeM3: latest.storageVolumeM3,
-        storageRate: latest.storageRate,
-        inflowM3s: latest.inflowM3s,
-        outflowM3s: latest.outflowM3s,
-        waterLevelM: latest.waterLevelM,
-        rainfallMm: null,
-        rawSnapshotId: null,
-        qualityFlag: 0,
-      });
-    } catch (err) {
-      log(`aomori-dam: ${cfg.aomoriName} fetch error: ${(err as Error).message}`);
-    }
-  }
-  const written = await upsertObservations(inputs);
-  log(`aomori-dam done: matched=${matches.length} parsed=${inputs.length} written=${written}`);
-};
+const fetchGraph: GraphFetcher = (sn) =>
+  fetchShiftJis(`${GRAPH_URL}?style=dam_graph10m&dk=4&it=0&sn=${sn}&nw=1`);
 
-export default task;
+/**
+ * Every listed dam; each reads its own page once the run has bound it, and a
+ * page that fails leaves only that dam unreadable.
+ */
+export function aomoriEntries(dams: DamCfg[], graph: GraphFetcher = fetchGraph): Entry[] {
+  return dams.map((c) => ({
+    key: c.aomoriName,
+    name: c.aomoriName,
+    pref: PREF_CODE,
+    reading: async () => aomoriReading(await graph(c.stationNo)),
+  }));
+}
+
+export default ingestTask(SOURCE_ID, async (log) => {
+  const dams = parseAomoriDamList(await fetchShiftJis(LIST_URL));
+  if (dams.length === 0) throw new Error(`${SOURCE_ID}: ダム諸量現況表 lists no dams`);
+  log(`${SOURCE_ID}: ${dams.length} dams listed`);
+  return { entries: aomoriEntries(dams) };
+});

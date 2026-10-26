@@ -32,12 +32,8 @@
 // Priority 293. Cron daily 07:46 UTC (16:46 JST): the page is edited during the
 // day with that morning's 0時 figures.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const PAGE_URL =
   process.env.SHIMONOSEKI_SUIDO_URL ?? 'https://www.city.shimonoseki.lg.jp/site/water/5617.html';
@@ -109,82 +105,36 @@ export function parseShimonosekiSuigen(html: string): {
   return { observedAt: parseAsOf(html), rows };
 }
 
-// --- matching ---------------------------------------------------------------
-
-function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/(貯水池|ダム)$/, '')
-    .trim();
-}
-
-/**
- * Master dam for a published 施設名: a COMBINED figure binds to none; else the
- * row stamped with it keeps it; else an exact stem beats a prefix. A name whose
- * best rank reaches several different dams binds to none; the （元）/（再）
- * twins of one dam share a stem and go to the live one.
- */
-export function chooseMaster(name: string, masters: BindableMaster[]): bigint | null {
-  if (COMBINED[name]) return null;
-  const stamped = stampedMaster(masters, name);
-  if (stamped) return stamped.id;
-  const stem = normalizeName(name);
-  if (!stem) return null;
-  let best: { m: BindableMaster; rank: number; stems: string[] } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (mStem === stem) rank = 0;
-    else if (mStem.startsWith(stem)) rank = 1;
-    else continue;
-    if (best === null || rank < best.rank) {
-      best = { m, rank, stems: [mStem] };
-    } else if (rank === best.rank) {
-      best = { m: preferMaster(m, best.m) ? m : best.m, rank, stems: [...best.stems, mStem] };
-    }
+/** A row's reading: a volume or a rate is a value; blank cells we leave unread. */
+export function shimonosekiReading(observedAt: Date, row: ParsedRow): Reading {
+  if (row.storageVolumeM3 === null && row.storageRate === null) {
+    return { state: 'unreadable', why: 'no 貯水量 or 貯水率' };
   }
-  if (best === null || new Set(best.stems).size > 1) return null;
-  return best.m.id;
+  return {
+    state: 'values',
+    observations: [
+      { observedAt, storageVolumeM3: row.storageVolumeM3, storageRate: row.storageRate },
+    ],
+  };
 }
 
-// --- DB helpers -------------------------------------------------------------
-
-/** Records the whole published list; returns the dams to write, by 施設名. */
-async function matchMaster(
-  rows: ParsedRow[],
-  log: (s: string) => void,
-): Promise<Map<string, bigint>> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear",
-           external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const damByName = new Map<string, bigint>();
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-
-  for (const r of rows) {
-    const damId = chooseMaster(r.name, masters);
-    universe.push({ externalId: r.name, name: r.name, prefCode: PREF_CODE, resolvedDamId: damId });
-    if (!damId) {
-      log(`${SOURCE_ID}: no single master dam for "${r.name}"`);
-      continue;
-    }
-    if (UNIVERSE_ONLY[r.name]) continue;
-    damByName.set(r.name, damId);
-    await bindExternalId(damId, SOURCE_ID, r.name);
-  }
-
-  await recordUniverse(SOURCE_ID, universe);
-  return damByName;
+/** Every 施設 row: 内日貯水池 never binds, 木屋川ダム is recorded, never written. */
+export function shimonosekiEntries(observedAt: Date, rows: ParsedRow[]): Entry[] {
+  return rows.map(
+    (row): Entry => ({
+      key: row.name,
+      name: row.name,
+      pref: PREF_CODE,
+      ...(COMBINED[row.name] ? { bind: 'never' as const } : {}),
+      ...(UNIVERSE_ONLY[row.name]
+        ? { dontWrite: 'kasenbosai and yamaguchi-bousai carry it every 10 minutes' }
+        : {}),
+      reading: shimonosekiReading(observedAt, row),
+    }),
+  );
 }
 
-// --- task -------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
+export default ingestTask(SOURCE_ID, async (log) => {
   const r = await fetch(PAGE_URL, {
     headers: {
       'user-agent':
@@ -193,10 +143,12 @@ const task: Task = async (_payload, helpers) => {
     },
     signal: AbortSignal.timeout(20_000),
   });
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
+  // The page is a 渇水 notice, taken down when the drought ends: nothing listed.
+  if (r.status === 404) {
+    log(`${SOURCE_ID}: HTTP 404 from ${PAGE_URL} (no drought notice)`);
+    return { entries: [] };
   }
+  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status} from ${PAGE_URL}`);
 
   const { observedAt, rows } = parseShimonosekiSuigen(await r.text());
   if (!observedAt) {
@@ -206,30 +158,5 @@ const task: Task = async (_payload, helpers) => {
   if (rows.length === 0) {
     throw new Error(`${SOURCE_ID}: date found but no 貯水量 table rows — layout change?`);
   }
-
-  const damByName = await matchMaster(rows, log);
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = damByName.get(p.name);
-    if (!damId || (p.storageVolumeM3 === null && p.storageRate === null)) continue;
-    inputs.push({
-      observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: p.storageRate,
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: null,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${damByName.size} written=${written}`);
-};
-
-export default task;
+  return { entries: shimonosekiEntries(observedAt, rows) };
+});

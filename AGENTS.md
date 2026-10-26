@@ -57,7 +57,7 @@ canonical product/architecture spec. It precedes any LLM-written doc.
 | Test cleanups must be **scoped to fixture IDs**, never use a blanket source/external_id filter | Past test wiped prod twice |
 | `source_priorities.priority DESC` decides which source the chart shows | Multiple sources can cover one dam; the top-priority one wins |
 | Every per-source fact (priority, status, gate flags, trusted basis, schedule, freshness, /sources text) is declared once in `packages/core/src/source_registry.ts`; migrations and tasks never write `source_priorities` | `bootstrap.sh` syncs the declarations after migrations; two writers drifted and could re-activate a retired source (docs/adr/0001) |
-| Every observation-ingesting task calls `recordUniverse()` | `/coverage` can only say "no provider publishes this dam" once every provider has recorded its published list; a task that skips it leaves its dams stuck in 未調査. Enforced by `apps/worker/src/tasks/universe_instrumentation.test.ts` |
+| Every active source's `ingest:*` task is built with `ingestTask` (the ingest run, `apps/worker/src/ingest/`); kasenbosai is the one declared exception | The run records the provider's whole published list with a required state per entry, so `/coverage` can say "no provider publishes this dam". Enforced by `apps/worker/src/task_list.test.ts` |
 | `External API responses use HAL+JSON with `_links`` | HATEOAS Level 3 is required by `~/.claude/rules/api-design.md` |
 | `Page components decode params with `decodeURIComponent(rawSlug)`` | Next 15 leaves URL-encoded kanji in dynamic params (route handlers decode automatically; pages do not) |
 
@@ -153,34 +153,28 @@ bun run apps/web/bin/seed_synthetic_observations.ts     --hourly-days 30 --years
    `ingestCron`, details) and register the task in
    `apps/worker/src/task_list.ts`; the crontab, cadence and `source_priorities`
    row follow from the declaration. Write the task on the ingest run
-   (`apps/worker/src/ingest/`): `export default ingestTask(SOURCE_ID, scan)`,
-   where `scan` returns one entry per row the provider lists, each with a
-   required state (`values` / provider-marked `empty` / `unreadable`). The run
-   binds, records the universe, stamps and writes in one transaction, so the
-   rules below hold by construction. `ingest_okayama.ts` and
-   `ingest_tottori_bousai.ts` are the reference implementations; tasks not yet
-   moved (docs/superpowers/plans/2026-10-26-…, §2) still call
-   `recordUniverse(SOURCE_ID, rows)` themselves, once per run with the
-   provider's WHOLE published list — the unmatched rows
-   are the point, since they are what separates "they publish it, we failed to
-   link it" from "nobody publishes it". Push into the array BEFORE the
-   `continue` that skips unmatched rows (`ingest_cgr_mlit.ts`: hardcoded array).
-   A task that genuinely cannot enumerate a list goes in the EXEMPT map in
-   `universe_instrumentation.test.ts` with a reason. Where the parser can
-   see that a listed row carries no value because the provider marks it empty
-   (調査対象外, "---" in every column, a page with no readings), pass
-   `hasData: false` (and `true` for rows with values); /coverage then files
-   the dam under `published_no_data` instead of blaming ingestion. Leave it
-   unset when unsure: an unreadable cell may be our own parser breaking. Each
-   scan overwrites the stored value (unset included), so a row that stops
-   parsing drops back to unknown rather than keeping an earlier `false`.
-   A provider that prints its own date and publishes less often than every
-   30 days (a monthly survey, a weekly table that lapses) should also pass
-   `publishedAt` — the exact `observedAt` it stores for that row — on rows it
-   writes. Holding that value keeps the dam `covered` past the 30-day window;
-   without it the dam reads as an ingestion bug the day the survey turns 31.
-   `ingest_sado_nourin.ts` / `ingest_hyogo_suigen.ts` / `ingest_sue_suido.ts`
-   / `ingest_nagasaki_city_suido.ts` are the reference implementations.
+   (`apps/worker/src/ingest/`): `export default ingestTask(SOURCE_ID, scan)`.
+   `scan` fetches and parses, never touches the database, and returns one
+   entry per row the provider LISTS — the listed-but-unmatched rows are the
+   point, since they separate "they publish it, we failed to link it" from
+   "nobody publishes it". Each entry carries a required state:
+   `values`; provider-marked `empty` (調査対象外, "---"/欠測 in every field, a
+   page with no readings: /coverage then files the dam under
+   `published_no_data`); or `unreadable` (we could not read it — it may be our
+   own parser breaking, so it says nothing about the provider). Use
+   `ingest/cells.ts` where the provider flags fields. A page per station is a
+   reading function (a throw makes the entry unreadable, never drops it); a
+   catalogue known in advance whose shared fetch fails returns its entries as
+   unreadable; a failed list fetch throws. Totals of rows already listed are
+   not entries; a row that is not one master dam is `bind: 'never'`. A
+   provider that prints its own date and publishes less often than every 30
+   days returns `dated: true`, so the run records the stored observedAt as
+   `publishedAt` and keeps the dam `covered` past the 30-day window.
+   `ingest_okayama.ts` (fetched list), `ingest_cgr_mlit.ts` (catalogue),
+   `ingest_shiga.ts` (page per station) and `ingest_sue_suido.ts` (dated)
+   are references; the run, binding and planning are tested in
+   `apps/worker/src/ingest/*.test.ts`, so a task's own tests are fixture →
+   entries with no database.
    An unmatched row that is **not a master dam at all** (a 堰, a 調整池 not
    in the NDI master, a combined row like 呑吐・大川瀬, a station with no dam)
    leaves the backlog (`coverageSummary().unmatchedStations`) once a

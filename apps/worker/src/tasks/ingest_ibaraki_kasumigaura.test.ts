@@ -5,11 +5,13 @@
 // 15:58 JST (Last-Modified 15:52). Header 「2026年 09月28日 16：00 現在」, 零点高
 // T.P.-0.96m, 24 hourly rows 09/27 17:00 … 09/28 15:00 (with 24:00 between
 // 23:00 and 09/28 01:00) plus the latest 10-minute row 15:50 (1.51 m).
+// No database: binding and writing belong to the ingest run
+// (apps/worker/src/ingest/run.test.ts).
 
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { parseDejimaGraph } from './ingest_ibaraki_kasumigaura.ts';
+import { dejimaReading, kasumigauraEntry, parseDejimaGraph } from './ingest_ibaraki_kasumigaura.ts';
 
 const FIXTURE = join(
   import.meta.dir,
@@ -73,5 +75,22 @@ describe('parseDejimaGraph', () => {
   test('refuses a page for another station', async () => {
     const html = (await fixture()).replace('<td>出島</td>', '<td>白浜</td>');
     expect(parseDejimaGraph(html)).toBeNull();
+  });
+});
+
+describe('kasumigauraEntry', () => {
+  test('one station keyed 372, bound to 霞ヶ浦開発 by its exact name; all 24 rows are values', async () => {
+    const e = kasumigauraEntry(dejimaReading(await fixture()));
+    expect([e.key, e.name, e.pref]).toEqual(['372', '出島（霞ヶ浦）', '08']);
+    expect(e.bind).toEqual({ name: '霞ヶ浦開発', exact: true });
+    const r = e.reading;
+    if (typeof r === 'function' || r.state !== 'values') throw new Error('no values');
+    expect(r.observations).toHaveLength(24);
+    expect(r.observations.at(-1)?.waterLevelM).toBe(1.39);
+  });
+
+  test('a page for another station is unreadable', async () => {
+    const html = (await fixture()).replace('<td>出島</td>', '<td>白浜</td>');
+    expect(dejimaReading(html).state).toBe('unreadable');
   });
 });

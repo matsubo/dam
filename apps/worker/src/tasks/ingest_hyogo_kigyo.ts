@@ -35,12 +35,8 @@
 // a weekly page is polled daily so a Tuesday update after a holiday, or an
 // urgent 「随時更新」, lands the same day.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const PAGE_URL =
   process.env.HYOGO_KIGYO_URL ?? 'https://web.pref.hyogo.lg.jp/kc02/ea02_000000005.html';
@@ -119,60 +115,35 @@ export function parseHyogoKigyoChosui(html: string): {
   return { observedAt: parseAsOf(html), rows };
 }
 
-/** The rows this source writes: 神谷, when it carries a reading. */
-export function storedReadings(rows: ParsedRow[]): ParsedRow[] {
-  return rows.filter(
-    (r) => r.name === STORED_NAME && (r.storageVolumeM3 !== null || r.storageRate !== null),
-  );
-}
-
-// --- matching ---------------------------------------------------------------
-
-function stemOf(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .trim();
+/** A row's reading: a volume or a rate is a value; blank cells we leave unread. */
+export function hyogoKigyoReading(observedAt: Date, row: ParsedRow): Reading {
+  if (row.storageVolumeM3 === null && row.storageRate === null) {
+    return { state: 'unreadable', why: 'no 貯水量 or 貯水率' };
+  }
+  return {
+    state: 'values',
+    observations: [
+      { observedAt, storageVolumeM3: row.storageVolumeM3, storageRate: row.storageRate },
+    ],
+  };
 }
 
 /**
- * Master dam for a published ダム名称: the row stamped with it keeps it; else an
- * exact stem beats a prefix. A name whose best rank reaches several different
- * dams (平荘 → 平荘第1/第2/第3) is a reservoir total and binds to none unless
- * stamped (0135 stamps 平荘 / 権現); the （元）/（再） twins of one dam share a
- * stem and go to the live one. 黒川's row is an allocation, not the dam, and
- * binds to none even if stamped.
+ * Every 水源 row. 神谷 is written; the rest are recorded only (see the
+ * header). 平荘 / 権現 bind by their 0135 stamps (the ladder reaches several
+ * dam bodies and stays unbound); 黒川 is the 企業庁 share, never the dam.
  */
-export function chooseMaster(name: string, masters: BindableMaster[]): bigint | null {
-  if (name === NOT_THE_DAM) return null;
-  const stamped = stampedMaster(masters, name);
-  if (stamped) return stamped.id;
-  const stem = stemOf(name);
-  if (!stem) return null;
-  let best: { m: BindableMaster; rank: number; stems: string[] } | null = null;
-  for (const m of masters) {
-    const mStem = stemOf(m.name);
-    let rank: number;
-    if (mStem === stem) rank = 0;
-    else if (mStem.startsWith(stem)) rank = 1;
-    else continue;
-    if (best === null || rank < best.rank) {
-      best = { m, rank, stems: [mStem] };
-    } else if (rank === best.rank) {
-      best = { m: preferMaster(m, best.m) ? m : best.m, rank, stems: [...best.stems, mStem] };
-    }
-  }
-  if (best === null || new Set(best.stems).size > 1) return null;
-  return best.m.id;
+export function hyogoKigyoEntries(observedAt: Date, rows: ParsedRow[]): Entry[] {
+  return rows.map((row): Entry => {
+    const reading = hyogoKigyoReading(observedAt, row);
+    const base = { key: row.name, name: row.name, pref: PREF_CODE, reading };
+    if (row.name === NOT_THE_DAM) return { ...base, bind: 'never' };
+    if (row.name === STORED_NAME) return base;
+    return { ...base, dontWrite: 'not on the master basis, or a live feed covers it' };
+  });
 }
 
-// --- DB helpers -------------------------------------------------------------
-
-// --- task -------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
+export default ingestTask(SOURCE_ID, async (log) => {
   const r = await fetch(PAGE_URL, {
     headers: {
       'user-agent':
@@ -181,65 +152,14 @@ const task: Task = async (_payload, helpers) => {
     },
     signal: AbortSignal.timeout(20_000),
   });
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
-  }
+  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status} from ${PAGE_URL}`);
 
   const { observedAt, rows } = parseHyogoKigyoChosui(await r.text());
-  if (!observedAt || rows.length === 0) {
+  if (!observedAt || !rows.some((row) => row.name === STORED_NAME)) {
     throw new Error(
-      `${SOURCE_ID}: date=${observedAt?.toISOString() ?? 'none'} rows=${rows.length} on ${PAGE_URL} — layout change?`,
+      `${SOURCE_ID}: date=${observedAt?.toISOString() ?? 'none'} rows=${rows.length}, no ${STORED_NAME} on ${PAGE_URL} — layout change?`,
     );
   }
   log(`${SOURCE_ID}: parsed ${rows.length} 水源 as of ${observedAt.toISOString()}`);
-
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-
-  const damByName = new Map<string, bigint>();
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  for (const { name } of rows) {
-    const damId = chooseMaster(name, masters);
-    universe.push({ externalId: name, name, prefCode: PREF_CODE, resolvedDamId: damId });
-    if (!damId) {
-      log(`${SOURCE_ID}: no single master dam for "${name}"`);
-      continue;
-    }
-    damByName.set(name, damId);
-    await bindExternalId(damId, SOURCE_ID, name);
-  }
-  await recordUniverse(SOURCE_ID, universe);
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of storedReadings(rows)) {
-    const damId = damByName.get(p.name);
-    if (!damId) continue;
-    inputs.push({
-      observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: p.storageRate,
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: null,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${damByName.size} written=${written}`);
-
-  if (inputs.length === 0) {
-    throw new Error(`${SOURCE_ID}: no 神谷ダム reading on ${PAGE_URL} — layout change?`);
-  }
-};
-
-export default task;
+  return { entries: hyogoKigyoEntries(observedAt, rows) };
+});

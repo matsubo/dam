@@ -1,7 +1,11 @@
 // apps/worker/src/tasks/ingest_skr_hiji.test.ts
+//
+// Fixture → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
 
 import { describe, expect, test } from 'bun:test';
-import { parseHijiIframeHtml, parseHijiTimestamp } from './ingest_skr_hiji.ts';
+import type { Reading } from '../ingest/types.ts';
+import { hijiEntries, hijiIframeUrl, hijiReading, parseHijiTimestamp } from './ingest_skr_hiji.ts';
 
 const SAMPLE_IFRAME_HTML = `
 <HTML>
@@ -36,6 +40,17 @@ const SAMPLE_IFRAME_HTML = `
 </HTML>
 `;
 
+// The outer DspDamData.exe page, trimmed to its IFRAME (captured 2026-10-27).
+const OUTER_HTML = `<TD>
+<IFRAME src="/html/frm/DamFree10Data202610270048543126096.html" scrolling="AUTO" width="840" height="65%" align="middle" frameborder="0"></IFRAME>
+</TD>`;
+
+const EXPECT_AT = '2026-06-05T09:50:00.000Z';
+const EXPECT_M3 = 10_541_000;
+const EXPECT_RATE = 0.865;
+const EXPECT_IN = 12.49;
+const EXPECT_OUT = 11.7;
+
 describe('parseHijiTimestamp', () => {
   test('parses "YYYY/MM/DD HH:MM" (JST) → UTC', () => {
     const d = parseHijiTimestamp('2026/06/05', '18:50');
@@ -54,52 +69,102 @@ describe('parseHijiTimestamp', () => {
   });
 });
 
-describe('parseHijiIframeHtml', () => {
-  const OBS_ID = '1368080276020';
+function observed(r: Reading) {
+  if (r.state !== 'values') throw new Error(`expected values, got ${r.state}`);
+  const [o] = r.observations;
+  if (!o) throw new Error('no observation');
+  return o;
+}
 
-  test('returns most recent row (first TR with valid date)', () => {
-    const row = parseHijiIframeHtml(OBS_ID, SAMPLE_IFRAME_HTML);
-    expect(row).not.toBeNull();
-    expect(row?.obsId).toBe(OBS_ID);
-    expect(row?.observedAt.toISOString()).toBe('2026-06-05T09:50:00.000Z');
+describe('hijiReading', () => {
+  test('reads the most recent row (first TR)', () => {
+    expect(observed(hijiReading(SAMPLE_IFRAME_HTML)).observedAt.toISOString()).toBe(EXPECT_AT);
   });
 
   test('storage volume converted from 千m³ to m³', () => {
-    const row = parseHijiIframeHtml(OBS_ID, SAMPLE_IFRAME_HTML);
-    expect(row?.storageVolumeM3).toBe(10_541_000);
+    expect(observed(hijiReading(SAMPLE_IFRAME_HTML)).storageVolumeM3).toBe(EXPECT_M3);
   });
 
   test('storageRate as decimal ratio', () => {
-    const row = parseHijiIframeHtml(OBS_ID, SAMPLE_IFRAME_HTML);
-    expect(row?.storageRate).toBeCloseTo(0.865);
+    expect(observed(hijiReading(SAMPLE_IFRAME_HTML)).storageRate).toBeCloseTo(EXPECT_RATE);
   });
 
   test('inflow and outflow parsed correctly', () => {
-    const row = parseHijiIframeHtml(OBS_ID, SAMPLE_IFRAME_HTML);
-    expect(row?.inflowM3s).toBeCloseTo(12.49);
-    expect(row?.outflowM3s).toBeCloseTo(11.7);
+    const o = observed(hijiReading(SAMPLE_IFRAME_HTML));
+    expect(o.inflowM3s).toBeCloseTo(EXPECT_IN);
+    expect(o.outflowM3s).toBeCloseTo(EXPECT_OUT);
   });
 
   test('rainfall parsed correctly', () => {
-    const row = parseHijiIframeHtml(OBS_ID, SAMPLE_IFRAME_HTML);
-    expect(row?.rainfallMm).toBeCloseTo(0.0);
+    expect(observed(hijiReading(SAMPLE_IFRAME_HTML)).rainfallMm).toBeCloseTo(0.0);
   });
 
-  test('returns null for empty HTML', () => {
-    expect(parseHijiIframeHtml(OBS_ID, '')).toBeNull();
-    expect(parseHijiIframeHtml(OBS_ID, '<HTML></HTML>')).toBeNull();
-  });
-
-  test('returns null when all numeric fields are missing', () => {
+  test('skips a newest row with no stored value for the next one', () => {
     const html = `<TABLE><TR>
-      <TD>2026/06/05</TD><TD>18:50</TD>
+      <TD>2026/06/05</TD><TD>19:00</TD>
+      <TD></TD><TD></TD><TD></TD><TD></TD><TD></TD>
+    </TR></TABLE>${SAMPLE_IFRAME_HTML}`;
+    expect(observed(hijiReading(html)).observedAt.toISOString()).toBe(EXPECT_AT);
+  });
+
+  test('an empty page is unreadable', () => {
+    expect(hijiReading('').state).toBe('unreadable');
+    expect(hijiReading('<HTML></HTML>').state).toBe('unreadable');
+  });
+
+  test('a row with blank numeric cells is unreadable', () => {
+    const html = `<TABLE><TR>
+      <TD>2026/06/05</TD><TD>18:30</TD>
       <TD></TD><TD></TD><TD></TD><TD></TD><TD></TD>
     </TR></TABLE>`;
-    expect(parseHijiIframeHtml(OBS_ID, html)).toBeNull();
+    expect(hijiReading(html).state).toBe('unreadable');
   });
 
-  test('obsId is preserved in returned row', () => {
-    const row = parseHijiIframeHtml('1368080255010', SAMPLE_IFRAME_HTML);
-    expect(row?.obsId).toBe('1368080255010');
+  test('欠測 in every stored column of every row is provider-marked empty', () => {
+    const html = `<TABLE><TR>
+      <TD>2026/06/05</TD><TD>18:30</TD>
+      <TD>欠測</TD><TD>欠測</TD><TD>欠測</TD><TD>欠測</TD><TD>欠測</TD>
+    </TR></TABLE>`;
+    expect(hijiReading(html)).toEqual({
+      state: 'empty',
+      mark: '欠測 in every stored column of every row',
+    });
+  });
+});
+
+describe('hijiEntries', () => {
+  test('lists 野村 and 鹿野川 by 観測所 id in 愛媛, each read via its outer page and IFRAME', async () => {
+    const urls: string[] = [];
+    const entries = hijiEntries(async (url) => {
+      urls.push(url);
+      return url.includes('DspDamData.exe') ? OUTER_HTML : SAMPLE_IFRAME_HTML;
+    });
+    expect(entries.map((e) => [e.key, e.name, e.pref])).toEqual([
+      ['1368080276020', '野村ダム', '38'],
+      ['1368080255010', '鹿野川ダム', '38'],
+    ]);
+    const nomura = entries[0];
+    if (typeof nomura?.reading !== 'function') throw new Error('expected a reading function');
+    expect((await nomura.reading(null)).state).toBe('values');
+    expect(urls).toEqual([
+      'http://www1.river.go.jp/cgi-bin/DspDamData.exe?ID=1368080276020&KIND=3&PAGE=0',
+      'http://www1.river.go.jp/html/frm/DamFree10Data202610270048543126096.html',
+    ]);
+  });
+
+  test('an outer page without an IFRAME is unreadable', async () => {
+    const [nomura] = hijiEntries(async () => '<HTML></HTML>');
+    if (typeof nomura?.reading !== 'function') throw new Error('expected a reading function');
+    expect((await nomura.reading(null)).state).toBe('unreadable');
+  });
+
+  test('a page that fails to load makes the reading throw (the run records it unreadable)', async () => {
+    const [nomura] = hijiEntries(() => Promise.reject(new Error('HTTP 503')));
+    if (typeof nomura?.reading !== 'function') throw new Error('expected a reading function');
+    await expect(Promise.resolve(nomura.reading(null))).rejects.toThrow('HTTP 503');
+  });
+
+  test('hijiIframeUrl returns null without an IFRAME', () => {
+    expect(hijiIframeUrl('')).toBeNull();
   });
 });

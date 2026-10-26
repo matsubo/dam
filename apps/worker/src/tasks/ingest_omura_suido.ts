@@ -25,12 +25,8 @@
 // Priority 292: nothing else publishes 池田; 萱瀬 is never written.
 // Cron daily 01:41 UTC (10:41 JST), after the 07:00 edition.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const PAGE_URL = process.env.OMURA_SUIDO_URL ?? 'https://omura-waterworks.jp/water/';
 
@@ -113,72 +109,49 @@ export function parseOmuraWater(html: string): ParsedPage {
   return { observedAt, rows };
 }
 
-// --- matching ---------------------------------------------------------------
-
-export type OmuraMaster = BindableMaster;
-
-/** Page name without its （…） note and ダム / 貯水池; master name without （元）/（再）, ダム. */
-function stemOf(s: string): string {
-  return s
-    .normalize('NFKC')
-    .replace(/\([^)]*\)/g, '')
-    .replace(/(ダム|貯水池)$/, '')
-    .trim();
-}
-
-/** The stamped row, else the dam of the same stem (（元）/（再） by the twin rule). */
-export function chooseMaster(name: string, masters: OmuraMaster[]): bigint | null {
-  const stamped = stampedMaster(masters, name);
-  if (stamped) return stamped.id;
-  const stem = stemOf(name);
-  let best: OmuraMaster | null = null;
-  for (const m of masters) {
-    if (stemOf(m.name) !== stem) continue;
-    if (!best || preferMaster(m, best)) best = m;
+/** A row's reading: a volume or a rate is a value; blank cells we leave unread. */
+export function omuraReading(observedAt: Date, row: ParsedRow): Reading {
+  if (row.storageVolumeM3 === null && row.storageRate === null) {
+    return { state: 'unreadable', why: 'no 現在利水貯水量 or 利水貯水率' };
   }
-  return best?.id ?? null;
+  return {
+    state: 'values',
+    observations: [
+      { observedAt, storageVolumeM3: row.storageVolumeM3, storageRate: row.storageRate },
+    ],
+  };
 }
 
-export interface OmuraPlan {
-  universe: UniverseRow[];
-  writes: { damId: bigint; row: ParsedRow }[];
-  /** WRITE rows whose printed 利水貯水量 no longer matches the binding. */
-  drift: string[];
+/** Why a row is recorded but not written, or null for a WRITE row that still fits. */
+function notWritten(row: ParsedRow): string | null {
+  const want = WRITE[row.name];
+  if (!want) return "the city's 水道 share; kasenbosai and nagasaki-kasen carry the dam whole";
+  if (row.capacityM3 !== want.capacityM3) {
+    return `利水貯水量 ${row.capacityM3} (binding assumes ${want.capacityM3}) — re-check WRITE`;
+  }
+  return null;
 }
 
-/** The whole list for the universe; readings only for WRITE rows that still fit. */
-export function planOmura(rows: ParsedRow[], masters: OmuraMaster[]): OmuraPlan {
-  const universe: UniverseRow[] = [];
-  const writes: OmuraPlan['writes'] = [];
-  const drift: string[] = [];
-  for (const row of rows) {
-    const damId = chooseMaster(row.name, masters);
-    universe.push({
-      externalId: row.name,
+/**
+ * Both rows, bound by the master of the same stem (exact rungs; a （元）/（再）
+ * pair goes to the live twin). 池田貯水池 is the master's 池田.
+ */
+export function omuraEntries(observedAt: Date, rows: ParsedRow[]): Entry[] {
+  return rows.map((row): Entry => {
+    const dontWrite = notWritten(row);
+    const name = row.name.replace(/貯水池$/, '');
+    return {
+      key: row.name,
       name: row.name,
-      prefCode: PREF_CODE,
-      resolvedDamId: damId,
-      hasData: row.storageVolumeM3 !== null || row.storageRate !== null ? true : null,
-    });
-    const want = WRITE[row.name];
-    if (!want || !damId) continue;
-    if (row.capacityM3 !== want.capacityM3) {
-      drift.push(`${row.name} 利水貯水量 ${row.capacityM3} (binding assumes ${want.capacityM3})`);
-      continue;
-    }
-    if (row.storageVolumeM3 === null && row.storageRate === null) continue;
-    writes.push({ damId, row });
-  }
-  return { universe, writes, drift };
+      pref: PREF_CODE,
+      bind: name === row.name ? { exact: true } : { name, exact: true },
+      ...(dontWrite ? { dontWrite } : {}),
+      reading: omuraReading(observedAt, row),
+    };
+  });
 }
 
-// --- DB helpers -------------------------------------------------------------
-
-// --- task -------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
+export default ingestTask(SOURCE_ID, async (log) => {
   const r = await fetch(PAGE_URL, {
     headers: {
       'user-agent':
@@ -187,10 +160,7 @@ const task: Task = async (_payload, helpers) => {
     },
     signal: AbortSignal.timeout(20_000),
   });
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
-  }
+  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status} from ${PAGE_URL}`);
 
   const { observedAt, rows } = parseOmuraWater(await r.text());
   log(`${SOURCE_ID}: parsed ${rows.length} rows, 現在 ${observedAt?.toISOString() ?? 'missing'}`);
@@ -199,42 +169,5 @@ const task: Task = async (_payload, helpers) => {
       `${SOURCE_ID}: ${rows.length} rows / date ${observedAt ? 'found' : 'missing'} on ${PAGE_URL} — layout change?`,
     );
   }
-
-  const masters = await sql<OmuraMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const plan = planOmura(rows, masters);
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  await recordUniverse(SOURCE_ID, plan.universe);
-  for (const u of plan.universe) {
-    if (!u.resolvedDamId) log(`${SOURCE_ID}: no master match for "${u.name}"`);
-  }
-  for (const w of plan.writes) await bindExternalId(w.damId, SOURCE_ID, w.row.name);
-
-  const written = await upsertObservations(
-    plan.writes.map(({ damId, row }) => ({
-      observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: row.storageVolumeM3,
-      storageRate: row.storageRate,
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: null,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    })),
-  );
-  log(
-    `${SOURCE_ID} done: parsed=${rows.length} matched=${plan.universe.filter((u) => u.resolvedDamId).length} written=${written}`,
-  );
-
-  if (plan.drift.length > 0) {
-    throw new Error(`${SOURCE_ID}: ${plan.drift.join('; ')} — re-check WRITE`);
-  }
-};
-
-export default task;
+  return { entries: omuraEntries(observedAt, rows) };
+});

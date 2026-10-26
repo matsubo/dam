@@ -24,28 +24,24 @@
 //
 // 頓田貯水池 is one figure (890 万m³ / 97.3 % → 915) for what the master holds
 // as two dams, 頓田第1（再） 440 + 頓田第2（再） 475 万m³. Writing it to either
-// would show a volume the dam cannot hold, so chooseMaster refuses a name that
-// reaches several different master dams; it is recorded unresolved.
+// would show a volume the dam cannot hold, so it never binds; it is recorded
+// unresolved.
 //
 // Priority 300: kasenbosai (310) keeps 油木/ます渕/力丸/畑/耶馬溪, which it
 // publishes every 10 minutes; this feed is the only one for 白木 / 道原 /
 // 松ヶ江 / 遠賀川河口堰, and sits above kyushu-nousei (279) and oita-nourin
 // (282) on 油木 / 耶馬溪. Cron daily 08:50 UTC (17:50 JST).
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const PAGE_URL =
   process.env.KITAKYUSHU_SUIDO_URL ?? 'https://www.city.kitakyushu.lg.jp/suidou/s00900011.html';
 
-/** 耶馬渓 is in 大分; every other facility is in 福岡. */
-const PREF_CODES = ['40', '44'];
-const DEFAULT_PREF_CODE = '40';
 const SOURCE_ID = 'kitakyushu-suido';
+
+/** One figure for two master dams; see the header. */
+const COMBINED = '頓田貯水池';
 
 // --- parsing ----------------------------------------------------------------
 
@@ -111,84 +107,51 @@ export function parseKitakyushuSuigen(html: string): {
   return { observedAt: parseCaption(html), rows };
 }
 
-// --- matching ---------------------------------------------------------------
-
-function normalizeName(s: string): string {
-  return (
-    s
-      .replace(/[（(][^）)]*[）)]/g, '')
-      .replace(/(貯水池|ダム)$/, '')
-      // 耶馬渓 (page) vs 耶馬溪 (master) — the same name in new and old kanji.
-      .replace(/溪/g, '渓')
-      .trim()
-  );
-}
-
 /**
- * Master dam for a published 場所: the row stamped with it keeps it; else an
- * exact stem beats a prefix. A name whose best rank reaches several different
- * dams (頓田 → 頓田第1 + 頓田第2) is a combined figure and binds to none; the
- * （元）/（再） twins of one dam share a stem and go to the live one.
+ * The master's name for a published 場所: without 貯水池, and 耶馬渓 (page) in
+ * the master's old kanji 耶馬溪.
  */
-export function chooseMaster(name: string, masters: BindableMaster[]): bigint | null {
-  const stamped = stampedMaster(masters, name);
-  if (stamped) return stamped.id;
-  const stem = normalizeName(name);
-  if (!stem) return null;
-  let best: { m: BindableMaster; rank: number; stems: string[] } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (mStem === stem) rank = 0;
-    else if (mStem.startsWith(stem)) rank = 1;
-    else continue;
-    if (best === null || rank < best.rank) {
-      best = { m, rank, stems: [mStem] };
-    } else if (rank === best.rank) {
-      best = { m: preferMaster(m, best.m) ? m : best.m, rank, stems: [...best.stems, mStem] };
-    }
-  }
-  if (best === null || new Set(best.stems).size > 1) return null;
-  return best.m.id;
+function masterName(name: string): string {
+  return name.replace(/貯水池$/, '').replace(/渓/g, '溪');
 }
 
-// --- DB helpers -------------------------------------------------------------
-
-async function matchMaster(
-  rows: ParsedRow[],
-  log: (s: string) => void,
-): Promise<Map<string, bigint>> {
-  const masters = await sql<(BindableMaster & { prefCode: string })[]>`
-    SELECT id, name, pref_code AS "prefCode", completed_year AS "completedYear",
-           external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code IN ${sql(PREF_CODES)} ORDER BY id
-  `;
-  const damByName = new Map<string, bigint>();
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-
-  for (const r of rows) {
-    const damId = chooseMaster(r.name, masters);
-    const prefCode = masters.find((m) => m.id === damId)?.prefCode ?? DEFAULT_PREF_CODE;
-    universe.push({ externalId: r.name, name: r.name, prefCode, resolvedDamId: damId });
-    if (!damId) {
-      log(`${SOURCE_ID}: no single master dam for "${r.name}"`);
-      continue;
-    }
-    damByName.set(r.name, damId);
-    await bindExternalId(damId, SOURCE_ID, r.name);
+/** A row's reading: a level, a volume or a rate is a value; blank cells we leave unread. */
+export function kitakyushuReading(observedAt: Date, row: ParsedRow): Reading {
+  if (row.waterLevelM === null && row.storageVolumeM3 === null && row.storageRate === null) {
+    return { state: 'unreadable', why: 'no 水位, 貯水量 or 貯水率' };
   }
-
-  await recordUniverse(SOURCE_ID, universe);
-  return damByName;
+  return {
+    state: 'values',
+    observations: [
+      {
+        observedAt,
+        waterLevelM: row.waterLevelM,
+        storageVolumeM3: row.storageVolumeM3,
+        storageRate: row.storageRate,
+      },
+    ],
+  };
 }
 
-// --- task -------------------------------------------------------------------
+/** Every facility of the table; 耶馬渓 is in 大分, every other in 福岡. */
+export function kitakyushuEntries(observedAt: Date, rows: ParsedRow[]): Entry[] {
+  return rows.map((row): Entry => {
+    const name = masterName(row.name);
+    return {
+      key: row.name,
+      name: row.name,
+      pref: row.name.startsWith('耶馬渓') ? '44' : '40',
+      ...(row.name === COMBINED
+        ? { bind: 'never' as const }
+        : name !== row.name
+          ? { bind: { name } }
+          : {}),
+      reading: kitakyushuReading(observedAt, row),
+    };
+  });
+}
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
+export default ingestTask(SOURCE_ID, async (log) => {
   const r = await fetch(PAGE_URL, {
     headers: {
       'user-agent':
@@ -197,10 +160,7 @@ const task: Task = async (_payload, helpers) => {
     },
     signal: AbortSignal.timeout(20_000),
   });
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
-  }
+  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status} from ${PAGE_URL}`);
 
   const { observedAt, rows } = parseKitakyushuSuigen(await r.text());
   if (!observedAt) {
@@ -210,30 +170,5 @@ const task: Task = async (_payload, helpers) => {
   if (rows.length === 0) {
     throw new Error(`${SOURCE_ID}: caption found but no facility rows — layout change?`);
   }
-
-  const damByName = await matchMaster(rows, log);
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = damByName.get(p.name);
-    if (!damId) continue;
-    inputs.push({
-      observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: p.storageRate,
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${damByName.size} written=${written}`);
-};
-
-export default task;
+  return { entries: kitakyushuEntries(observedAt, rows) };
+});

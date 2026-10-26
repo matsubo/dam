@@ -17,16 +17,14 @@
 //   outflow(m³/s), storage(1000m³), storageRate(%) ]
 // Timestamp: first col is "MM/DD HH:MM" at date changes, "HH:MM" otherwise.
 //   "24:00" = midnight of the NEXT calendar day.
-// storageRate may be "-" for national dams → null.
+// "-" / "---" are the page's own blanks (storageRate is "-" for national dams);
+// a latest row with nothing but those is provider-marked empty.
 //
 // Priority 308. Cron hourly at :57.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const BASE_URL =
   process.env.EHIME_BOUSAI_URL ??
@@ -54,27 +52,13 @@ const DAMS = [
   { myMenuId: 'U1001_MMENU012', name: '富郷ダム' },
 ] as const;
 
-// --- types -------------------------------------------------------------------
-
-export interface EhimeReading {
-  myMenuId: string;
-  damName: string;
-  observedAt: Date | null;
-  waterLevelM: number | null;
-  storageVolumeM3: number | null;
-  storageRate: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
-}
-
 // --- parsing -----------------------------------------------------------------
 
-function parseNum(s: string): number | null {
-  if (!s || s === '-' || s === '---') return null;
+/** A value cell: "-" / "---" are the page's own marks. */
+function valueCell(s: string): Cell {
+  if (s === '-' || s === '---') return MARKED;
   const m = s.match(/-?\d+(?:\.\d+)?/);
-  if (!m) return null;
-  const n = Number(m[0]);
-  return Number.isFinite(n) ? n : null;
+  return cell(m ? Number(m[0]) : null, false);
 }
 
 function cleanText(html: string): string {
@@ -146,227 +130,84 @@ export function parseEhimeTimestamp(
 }
 
 /**
- * Parse an Ehime dam page HTML and return the latest (last) hourly reading.
- * Returns null if no data rows are found.
+ * One dam page's reading: its latest (last) hourly row. `now` seeds the
+ * date context for rows that print only "HH:MM" before the first full date.
  */
-export function parseEhimePage(
-  html: string,
-  myMenuId: string,
-  expectedName: string,
-  currentYear: number,
-): EhimeReading | null {
+export function ehimeReading(html: string, now: Date = new Date()): Reading {
   const tables = extractTables(html);
   // Table 0: meta (観測所名, 水系名, …)
   // Table 1: 24-row hourly data
   const dataRows = tables[1];
-  if (!dataRows || dataRows.length === 0) return null;
+  if (!dataRows || dataRows.length === 0) return { state: 'unreadable', why: 'no data table' };
 
-  // Determine initial date context from today's JST
-  // The 24-hour window starts ~24h before now, so use "yesterday" as fallback
-  const nowUtc = Date.now();
-  const jstMs = nowUtc + 9 * 3600 * 1000;
-  const jst = new Date(jstMs);
+  // The 24-hour window starts ~24h before now, so start from "yesterday" (JST).
+  const jst = new Date(now.getTime() + 9 * 3600 * 1000);
+  const yesterday = new Date(
+    Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate() - 1),
+  );
   let ctx = {
-    year: currentYear,
-    month: jst.getUTCMonth() + 1,
-    day: jst.getUTCDate(),
-  };
-  // Walk back 1 day to cover cases where rows begin the day before
-  const yesterday = new Date(Date.UTC(ctx.year, ctx.month - 1, ctx.day - 1));
-  ctx = {
     year: yesterday.getUTCFullYear(),
     month: yesterday.getUTCMonth() + 1,
     day: yesterday.getUTCDate(),
   };
 
-  // Extract dam name from table 0 if available
-  const damName = tables[0]?.[0]?.[1]?.replace(/[(（][^)）]*[)）]/g, '').trim() ?? expectedName;
-
-  // Process all rows, tracking dates; keep the last complete one
-  let lastReading: EhimeReading | null = null;
-
+  // Process all rows, tracking dates; keep the last dated one
+  let last: { observedAt: Date; row: string[] } | null = null;
   for (const row of dataRows) {
     if (row.length < 5) continue;
-    const tsCell = row[0] ?? '';
-    const { date, ctx: newCtx } = parseEhimeTimestamp(tsCell, ctx);
+    const { date, ctx: newCtx } = parseEhimeTimestamp(row[0] ?? '', ctx);
     ctx = newCtx;
-    if (!date) continue;
-
-    const storageRatePct = parseNum(row[5] ?? '');
-    lastReading = {
-      myMenuId,
-      damName,
-      observedAt: date,
-      waterLevelM: parseNum(row[1] ?? ''),
-      inflowM3s: parseNum(row[2] ?? ''),
-      outflowM3s: parseNum(row[3] ?? ''),
-      storageVolumeM3: (() => {
-        const v = parseNum(row[4] ?? '');
-        return v !== null ? v * 1_000 : null;
-      })(),
-      storageRate: storageRatePct !== null ? storageRatePct / 100 : null,
-    };
+    if (date) last = { observedAt: date, row };
   }
+  if (!last) return { state: 'unreadable', why: 'no dated row' };
 
-  return lastReading;
+  const { observedAt, row } = last;
+  const [level, inflow, outflow, volume, rate] = [1, 2, 3, 4, 5].map((i) =>
+    valueCell(row[i] ?? ''),
+  ) as [Cell, Cell, Cell, Cell, Cell];
+  const state = cellState([level, inflow, outflow, volume, rate]);
+  if (state === 'empty') return { state, mark: '"-" in every column of the latest row' };
+  if (state === 'unreadable') return { state, why: 'no numeric value in the latest row' };
+  const v = numberIn(volume);
+  const ratePct = numberIn(rate);
+  return {
+    state,
+    observations: [
+      {
+        observedAt,
+        waterLevelM: numberIn(level),
+        inflowM3s: numberIn(inflow),
+        outflowM3s: numberIn(outflow),
+        storageVolumeM3: v !== null ? v * 1_000 : null,
+        storageRate: ratePct !== null ? ratePct / 100 : null,
+      },
+    ],
+  };
 }
 
-// --- DB helpers --------------------------------------------------------------
+/** One dam's page, by myMenuId. */
+export type PageFetcher = (myMenuId: string) => Promise<string>;
 
-function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/貯水池$/, '')
-    .trim();
-}
-
-interface DamMatch {
-  myMenuId: string;
-  damId: bigint;
-}
-
-/**
- * Pick the best master dam for a published name: an exact raw-name hit beats a
- * stem hit beats a prefix/substring hit, ties going to the current （元）/（再）
- * twin, else the lower id.
- */
-export function chooseMaster(
-  rawName: string,
-  stem: string,
-  masters: BindableMaster[],
-): bigint | null {
-  let best: { m: BindableMaster; rank: number } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (m.name === rawName) rank = 0;
-    else if (mStem === stem) rank = 1;
-    else if (m.name === `${stem}ダム`) rank = 2;
-    else if (mStem.startsWith(stem)) rank = 3;
-    else if (mStem.includes(stem)) rank = 4;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-      best = { m, rank };
-    }
-  }
-  return best?.m.id ?? null;
-}
-
-async function matchMaster(
-  readings: EhimeReading[],
-  log: (s: string) => void,
-): Promise<DamMatch[]> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const out: DamMatch[] = [];
-
-  for (const r of readings) {
-    // A row already stamped with this station keeps it (#57).
-    const byExtId = stampedMaster(masters, r.myMenuId);
-    if (byExtId) {
-      out.push({ myMenuId: r.myMenuId, damId: byExtId.id });
-      continue;
-    }
-
-    const stem = normalizeName(r.damName);
-    if (!stem) continue;
-    const damId = chooseMaster(r.damName, stem, masters);
-
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${r.damName}" (${r.myMenuId})`);
-      continue;
-    }
-
-    await bindExternalId(damId, SOURCE_ID, r.myMenuId);
-    out.push({ myMenuId: r.myMenuId, damId });
-  }
-
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing. Built
-  // from the DAMS catalogue rather than from `readings`: the 12 pages are
-  // fetched through Promise.allSettled, so one timing out drops that dam from
-  // readings entirely, and recording only what came back would eventually have
-  // /coverage claim nobody publishes it.
-  const matchedByMenuId = new Map(out.map((m) => [m.myMenuId, m.damId]));
-  const universe: UniverseRow[] = DAMS.map(({ myMenuId, name }) => ({
-    externalId: myMenuId,
-    name,
-    prefCode: PREF_CODE,
-    // This run's match when the page came back; otherwise resolve the
-    // catalogue name, and let recordUniverse's COALESCE keep an already
-    // stored link if that finds nothing.
-    resolvedDamId:
-      matchedByMenuId.get(myMenuId) ?? chooseMaster(name, normalizeName(name), masters),
-  }));
-  await recordUniverse(SOURCE_ID, universe);
-
-  return out;
-}
-
-// --- task --------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
-  const currentYear = new Date().getUTCFullYear();
-  const fetchHeaders = { 'user-agent': USER_AGENT };
-
-  // Fetch all 12 dams concurrently
-  const results = await Promise.allSettled(
-    DAMS.map(async ({ myMenuId, name }) => {
-      const url = `${BASE_URL}&myMenuId=${myMenuId}`;
-      const resp = await fetch(url, {
-        headers: fetchHeaders,
-        signal: AbortSignal.timeout(20_000),
-      });
-      if (resp.status !== 200) {
-        log(`${SOURCE_ID}: ${myMenuId} HTTP ${resp.status}`);
-        return null;
-      }
-      const html = await resp.text();
-      return parseEhimePage(html, myMenuId, name, currentYear);
-    }),
-  );
-
-  const readings: EhimeReading[] = results
-    .map((r) => (r.status === 'fulfilled' ? r.value : null))
-    .filter((r): r is EhimeReading => r !== null);
-
-  log(`${SOURCE_ID}: fetched ${readings.length} readings`);
-
-  const matches = await matchMaster(readings, log);
-  const damByMenuId = new Map(matches.map((m) => [m.myMenuId, m.damId]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const r of readings) {
-    const damId = damByMenuId.get(r.myMenuId);
-    if (!damId) continue;
-    if (!r.observedAt) {
-      log(`${SOURCE_ID}: missing observedAt for ${r.myMenuId}; skipping`);
-      continue;
-    }
-    if (r.waterLevelM === null && r.storageVolumeM3 === null && r.storageRate === null) continue;
-
-    inputs.push({
-      observedAt: r.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: r.storageVolumeM3,
-      storageRate: r.storageRate,
-      inflowM3s: r.inflowM3s,
-      outflowM3s: r.outflowM3s,
-      waterLevelM: r.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${readings.length} matched=${matches.length} written=${written}`);
+const fetchPage: PageFetcher = async (myMenuId) => {
+  const resp = await fetch(`${BASE_URL}&myMenuId=${myMenuId}`, {
+    headers: { 'user-agent': USER_AGENT },
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (resp.status !== 200) throw new Error(`HTTP ${resp.status}`);
+  return resp.text();
 };
 
-export default task;
+/**
+ * The 12-dam catalogue, keyed by myMenuId; each dam reads its own page, and a
+ * page that fails leaves only that dam unreadable.
+ */
+export function ehimeEntries(page: PageFetcher = fetchPage): Entry[] {
+  return DAMS.map(({ myMenuId, name }) => ({
+    key: myMenuId,
+    name,
+    pref: PREF_CODE,
+    reading: async () => ehimeReading(await page(myMenuId)),
+  }));
+}
+
+export default ingestTask(SOURCE_ID, async () => ({ entries: ehimeEntries() }));

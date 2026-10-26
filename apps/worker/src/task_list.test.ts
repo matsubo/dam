@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { CRONTAB } from '@dam/core/crontab';
 import { SOURCES } from '@dam/core/sources';
 import { parseCrontab } from 'graphile-worker';
+import { ingestSourceOf } from './ingest/run.ts';
 import { TASK_LIST } from './task_list.ts';
 
 describe('TASK_LIST', () => {
@@ -20,5 +21,21 @@ describe('TASK_LIST', () => {
       (task) => task.startsWith('ingest:') && !declared.has(task),
     );
     expect(orphans).toEqual([]);
+  });
+
+  // /coverage can only say "no provider publishes this dam" once every
+  // source records its whole published list. The ingest run does that by
+  // construction, so every active source's ingest task must be built with
+  // ingestTask, for its own id. kasenbosai is the one declared exception:
+  // match:kasenbosai records its universe, ingest:kasenbosai-v2 only has_data.
+  test('every active source ingests through the ingest run', () => {
+    const scheduled = SOURCES.filter(
+      (s) => s.status === 'active' && s.ingest && s.id !== 'kasenbosai',
+    );
+    const off = scheduled.flatMap((s) => {
+      const task = s.ingest ? TASK_LIST[s.ingest.task] : undefined;
+      return task && ingestSourceOf(task) === s.id ? [] : [s.id];
+    });
+    expect(off).toEqual([]);
   });
 });

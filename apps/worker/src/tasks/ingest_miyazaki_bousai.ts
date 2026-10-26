@@ -15,14 +15,14 @@
 //   貯水位[m] | 流入量[m³/s] | 全放流量[m³/s]
 // Timestamp: "YYYY MM/DD HH:MM" JST.
 // No 貯水量 or 貯水率 columns (storage values set null).
+// Cell marks follow the same vendor servlet as kagoshima-kasen (*** 欠測,
+// --- 無効, ### 範囲異常, blank 未入力); a dam marked in all three value
+// columns is provider-marked empty.
 // Priority 308, matching other 防災Web prefectural sources.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const DATA_URL =
   process.env.MIYAZAKI_BOUSAI_URL ??
@@ -30,17 +30,6 @@ const DATA_URL =
 
 const PREF_CODE = '45';
 const SOURCE_ID = 'miyazaki-bousai';
-
-// --- types ------------------------------------------------------------------
-
-export interface ParsedRow {
-  miyazakiName: string;
-  riverName: string;
-  observedAt: Date | null;
-  waterLevelM: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
-}
 
 // --- parsing ----------------------------------------------------------------
 
@@ -54,11 +43,12 @@ function cleanCell(raw: string): string {
     .trim();
 }
 
-function parseNum(s: string): number | null {
+const MARKS = new Set(['', '***', '---', '###']);
+
+function parseNum(s: string): Cell {
+  if (MARKS.has(s)) return cell(null, true);
   const m = s.match(/-?\d+(?:\.\d+)?/);
-  if (!m) return null;
-  const n = Number(m[0]);
-  return Number.isFinite(n) ? n : null;
+  return cell(m ? Number(m[0]) : null, false);
 }
 
 /** "YYYY MM/DD HH:MM" JST → UTC Date */
@@ -70,9 +60,35 @@ export function parseMiyazakiTimestamp(s: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/** Extract rows from the 防災Web table (8 columns per data row). */
-export function parseMiyazakiTable(html: string): ParsedRow[] {
-  const rows: ParsedRow[] = [];
+function rowReading(cells: string[]): Reading {
+  const level = parseNum(cleanCell(cells[5] ?? ''));
+  const inflow = parseNum(cleanCell(cells[6] ?? ''));
+  const outflow = parseNum(cleanCell(cells[7] ?? ''));
+  const state = cellState([level, inflow, outflow]);
+  if (state === 'empty') return { state, mark: '***/---/###/blank in every value column' };
+  if (state === 'unreadable') return { state, why: 'no numeric cell' };
+  const ts = cleanCell(cells[4] ?? '');
+  const observedAt = parseMiyazakiTimestamp(ts);
+  if (!observedAt) return { state: 'unreadable', why: `最新観測時刻 "${ts}"` };
+  return {
+    state: 'values',
+    observations: [
+      {
+        observedAt,
+        waterLevelM: numberIn(level),
+        inflowM3s: numberIn(inflow),
+        outflowM3s: numberIn(outflow),
+      },
+    ],
+  };
+}
+
+/**
+ * One entry per dam row of the 防災Web table (8 columns per data row). The
+ * table carries no station id, so the published name is the key.
+ */
+export function miyazakiEntries(html: string): Entry[] {
+  const out: Entry[] = [];
   const tableMatch = html.match(/<table[\s\S]*?<\/table>/gi);
   const dataTable = tableMatch?.[0] ?? '';
 
@@ -85,97 +101,22 @@ export function parseMiyazakiTable(html: string): ParsedRow[] {
     // Dam name at col 1 — filter out header/unit rows.
     const damName = cleanCell(cells[1] ?? '');
     if (!damName || (!damName.includes('ダム') && !damName.includes('貯水池'))) continue;
-
-    const ts = cleanCell(cells[4] ?? '');
-    const observedAt = parseMiyazakiTimestamp(ts);
-
-    rows.push({
-      miyazakiName: damName,
-      riverName: cleanCell(cells[0] ?? ''),
-      observedAt,
-      waterLevelM: parseNum(cleanCell(cells[5] ?? '')),
-      inflowM3s: parseNum(cleanCell(cells[6] ?? '')),
-      outflowM3s: parseNum(cleanCell(cells[7] ?? '')),
+    // The master files a 貯水池 under its bare name (綾南貯水池 → 綾南).
+    const bare = damName.replace(/貯水池$/, '');
+    out.push({
+      key: damName,
+      name: damName,
+      pref: PREF_CODE,
+      ...(bare !== damName ? { bind: { name: bare } } : {}),
+      reading: rowReading(cells),
     });
   }
-
-  return rows;
-}
-
-// --- DB helpers -------------------------------------------------------------
-
-function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/貯水池$/, '')
-    .trim();
-}
-
-interface DamMatch {
-  miyazakiName: string;
-  damId: bigint;
-}
-
-async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const out: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing. The
-  // table carries no station id, so the published name keyed by prefecture
-  // is the stable identity.
-  const universe: UniverseRow[] = [];
-
-  for (const r of rows) {
-    const stem = normalizeName(r.miyazakiName);
-    if (!stem) continue;
-
-    // A row already stamped with this station keeps it (#57); rank -1 outranks
-    // every name match.
-    const stamped = stampedMaster(masters, r.miyazakiName);
-    let best: { m: BindableMaster; rank: number } | null = stamped
-      ? { m: stamped, rank: -1 }
-      : null;
-    for (const m of masters) {
-      const mStem = normalizeName(m.name);
-      let rank: number;
-      if (mStem === stem) rank = 0;
-      else if (m.name === `${stem}ダム`) rank = 1;
-      else if (mStem.startsWith(stem)) rank = 2;
-      else if (mStem.includes(stem)) rank = 3;
-      else continue;
-      if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-        best = { m, rank };
-      }
-    }
-
-    universe.push({
-      externalId: r.miyazakiName,
-      name: r.miyazakiName,
-      prefCode: PREF_CODE,
-      resolvedDamId: best?.m.id ?? null,
-    });
-    if (!best) {
-      log(`${SOURCE_ID}: no master match for "${r.miyazakiName}"`);
-      continue;
-    }
-
-    out.push({ miyazakiName: r.miyazakiName, damId: best.m.id });
-    await bindExternalId(best.m.id, SOURCE_ID, r.miyazakiName);
-  }
-
-  await recordUniverse(SOURCE_ID, universe);
   return out;
 }
 
 // --- task -------------------------------------------------------------------
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
+export default ingestTask(SOURCE_ID, async (log) => {
   const r = await fetch(DATA_URL, {
     headers: {
       'user-agent':
@@ -184,47 +125,10 @@ const task: Task = async (_payload, helpers) => {
     },
     signal: AbortSignal.timeout(20_000),
   });
+  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status}`);
 
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
-  }
-
-  const raw = await r.arrayBuffer();
-  const html = new TextDecoder('shift_jis').decode(raw);
-  const rows = parseMiyazakiTable(html);
-  log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
-
-  const matches = await matchMaster(rows, log);
-  const damByName = new Map(matches.map((m) => [m.miyazakiName, m.damId]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = damByName.get(p.miyazakiName);
-    if (!damId) continue;
-    if (!p.observedAt) {
-      log(`${SOURCE_ID}: missing timestamp for "${p.miyazakiName}"; skipping`);
-      continue;
-    }
-    if (p.waterLevelM === null) continue;
-
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: null,
-      storageRate: null,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+  const html = new TextDecoder('shift_jis').decode(await r.arrayBuffer());
+  const entries = miyazakiEntries(html);
+  log(`${SOURCE_ID}: ${entries.length} dams`);
+  return { entries };
+});

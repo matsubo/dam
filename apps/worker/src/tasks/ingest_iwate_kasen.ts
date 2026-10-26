@@ -16,14 +16,12 @@
 //   [6] 全放流量(m³/s) [7] 調整流量
 // Timestamp: "<td class=\"ListDate\">MM/DD&nbsp;HH:MM</td>" JST; year from
 //   commonParam "dispDate:YYYY-MM-DD-HH-MM" embedded in the response HTML.
+// "-", "―", "欠測" and "c" (調整中) are the server's own marks.
 // Priority 308, matching other prefectural sources.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const BASE_URL =
   process.env.IWATE_KASEN_URL ?? 'http://kasen.pref.iwate.jp/iwate/servlet/Gamen32Servlet';
@@ -32,8 +30,8 @@ const PREF_CODE = '03';
 const SOURCE_ID = 'iwate-kasen';
 
 // Station index → (stationNo, dam name).  Index matches the server's dropdown
-// order; stationNo is the source_universe key (dams.external_ids is stamped
-// with the name instead).
+// order; stationNo is the key (universe and stamp). The server writes
+// 「遠野第二ダム」 where ダム便覧 has 「遠野第2」; bind.ts folds the ordinal.
 interface StationCfg {
   readonly idx: number;
   readonly stationNo: string;
@@ -53,24 +51,12 @@ const STATIONS: StationCfg[] = [
   { idx: 9, stationNo: '103007016', name: '遠野第二ダム' },
 ];
 
-// --- types ------------------------------------------------------------------
-
-export interface ParsedRow {
-  iwateName: string;
-  observedAt: Date | null;
-  waterLevelM: number | null;
-  storageVolumeM3: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
-}
-
 // --- parsing ----------------------------------------------------------------
 
-function parseNum(s: string): number | null {
+function valueCell(s: string): Cell {
   const t = s.replace(/[,\s　]/g, '');
-  if (!t || t === '-' || t === '―' || t === '欠測') return null;
-  const n = Number(t);
-  return Number.isFinite(n) ? n : null;
+  if (t === '-' || t === '―' || t === '欠測' || t === 'c') return MARKED;
+  return cell(t ? Number(t) : null, false);
 }
 
 /** Extract year from the embedded commonParam "dispDate:YYYY-MM-DD-HH-MM$..." */
@@ -92,182 +78,85 @@ export function parseIwateTimestamp(rowDate: string, year: number): Date | null 
 }
 
 /**
- * Parse the most recent row from a Gamen32Servlet response for one dam.
- * Finds the first ListDate cell, then collects the next 8 dat2 values.
+ * One dam page's reading: its most recent row. Finds the first ListDate
+ * cell, then collects the next 8 dat2 values.
  */
-export function parseIwatePage(html: string, iwateName: string): ParsedRow {
+export function iwateReading(html: string): Reading {
   const year = extractYear(html);
 
   // First ListDate cell → timestamp
   const dateMatch = html.match(/<td[^>]+class="ListDate"[^>]*>([\s\S]*?)<\/td>/);
-  const rawDate = dateMatch
-    ? (dateMatch[1] ?? '')
-        .replace(/<[^>]+>/g, '')
-        .replace(/&nbsp;/g, ' ')
-        .trim()
-    : '';
-  const observedAt = rawDate ? parseIwateTimestamp(rawDate, year) : null;
+  if (!dateMatch) return { state: 'unreadable', why: 'no ListDate cell' };
+  const rawDate = (dateMatch[1] ?? '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .trim();
 
   // dat2 values after the first ListDate cell position
-  const startPos = dateMatch ? html.indexOf(dateMatch[0]) + dateMatch[0].length : 0;
+  const startPos = html.indexOf(dateMatch[0]) + dateMatch[0].length;
   const dat2Re = /<div class="dat2"><span[^>]*>([\s\S]*?)<\/span><\/div>/g;
   dat2Re.lastIndex = startPos;
-  const vals: Array<number | null> = [];
+  const vals: Cell[] = [];
   for (let i = 0; i < 8; i++) {
     const hit = dat2Re.exec(html);
     if (!hit) break;
-    vals.push(parseNum((hit[1] ?? '').trim()));
+    vals.push(valueCell((hit[1] ?? '').trim()));
   }
 
-  const storageThou = vals[1] ?? null;
+  // [0] 貯水位 [1] 貯水量 千m³ [3] 全流入量 [6] 全放流量
+  const [level, storageThou, inflow, outflow] = [0, 1, 3, 6].map((i) => vals[i] ?? null) as [
+    Cell,
+    Cell,
+    Cell,
+    Cell,
+  ];
+  const state = cellState([level, storageThou, inflow, outflow]);
+  if (state === 'empty') return { state, mark: '"c" / "-" / "欠測" in every column' };
+  if (state === 'unreadable') return { state, why: 'no numeric value' };
+  const observedAt = parseIwateTimestamp(rawDate, year);
+  if (!observedAt) return { state: 'unreadable', why: `ListDate "${rawDate}"` };
+  const thou = numberIn(storageThou);
   return {
-    iwateName,
-    observedAt,
-    waterLevelM: vals[0] ?? null,
-    storageVolumeM3: storageThou !== null ? storageThou * 1_000 : null,
-    inflowM3s: vals[3] ?? null,
-    outflowM3s: vals[6] ?? null,
+    state,
+    observations: [
+      {
+        observedAt,
+        waterLevelM: numberIn(level),
+        storageVolumeM3: thou !== null ? thou * 1_000 : null,
+        inflowM3s: numberIn(inflow),
+        outflowM3s: numberIn(outflow),
+      },
+    ],
   };
 }
 
-// --- DB helpers -------------------------------------------------------------
+/** One station's page, by its dropdown index. */
+export type PageFetcher = (idx: number) => Promise<string>;
 
-const KANJI_DIGIT: Record<string, string> = { 一: '1', 二: '2', 三: '3', 四: '4', 五: '5' };
-
-// The server writes 「遠野第二ダム」 where ダム便覧 has 「遠野第2」, so the
-// ordinal is folded to an ASCII digit on both sides.
-function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/貯水池$/, '')
-    .replace(/第([一二三四五])/g, (_, k: string) => `第${KANJI_DIGIT[k]}`)
-    .trim();
-}
-
-interface DamMatch {
-  iwateName: string;
-  damId: bigint;
-}
-
-/**
- * Pick the best master dam for a station name: the row already stamped with
- * the station keeps it; otherwise an exact stem hit beats 「<stem>ダム」 beats
- * a prefix hit beats a substring hit, ties going to the current （元）/（再）
- * twin, else the lower id (#79).
- */
-export function chooseMaster(stationName: string, masters: BindableMaster[]): bigint | null {
-  const stamped = stampedMaster(masters, stationName);
-  if (stamped) return stamped.id;
-  const stem = normalizeName(stationName);
-  if (!stem) return null;
-  let best: { m: BindableMaster; rank: number } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (mStem === stem) rank = 0;
-    else if (m.name === `${stem}ダム`) rank = 1;
-    else if (mStem.startsWith(stem)) rank = 2;
-    else if (mStem.includes(stem)) rank = 3;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-      best = { m, rank };
-    }
-  }
-  return best?.m.id ?? null;
-}
-
-async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const out: DamMatch[] = [];
-
-  for (const r of rows) {
-    const damId = chooseMaster(r.iwateName, masters);
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${r.iwateName}"`);
-      continue;
-    }
-
-    out.push({ iwateName: r.iwateName, damId });
-    await bindExternalId(damId, SOURCE_ID, r.iwateName);
-  }
-
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing. Built
-  // from STATIONS, not from `rows`: one station's servlet timing out would
-  // otherwise drop that dam from the universe, and once every provider has
-  // scanned, /coverage would claim nobody publishes it.
-  const universe: UniverseRow[] = STATIONS.map((stn) => ({
-    externalId: stn.stationNo,
-    name: stn.name,
-    prefCode: PREF_CODE,
-    resolvedDamId: chooseMaster(stn.name, masters),
-  }));
-  await recordUniverse(SOURCE_ID, universe);
-
-  return out;
-}
-
-// --- task -------------------------------------------------------------------
-
-const headers = {
-  'user-agent':
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-};
-
-async function fetchStation(stn: StationCfg): Promise<ParsedRow | null> {
-  const url = `${BASE_URL}?param=station=${stn.idx}`;
-  const r = await fetch(url, {
-    headers,
+const fetchPage: PageFetcher = async (idx) => {
+  const r = await fetch(`${BASE_URL}?param=station=${idx}`, {
+    headers: {
+      'user-agent':
+        process.env.HTTP_USER_AGENT ??
+        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
+    },
     signal: AbortSignal.timeout(20_000),
   });
-  if (r.status !== 200) return null;
-  const raw = await r.arrayBuffer();
-  const html = new TextDecoder('shift_jis').decode(raw);
-  return parseIwatePage(html, stn.name);
-}
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-
-  const results = await Promise.all(STATIONS.map((stn) => fetchStation(stn)));
-  const rows = results.filter((r): r is ParsedRow => r !== null);
-  log(`${SOURCE_ID}: fetched ${rows.length}/${STATIONS.length} stations`);
-
-  const matches = await matchMaster(rows, log);
-  const damByName = new Map(matches.map((m) => [m.iwateName, m.damId]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = damByName.get(p.iwateName);
-    if (!damId) continue;
-    if (!p.observedAt) {
-      log(`${SOURCE_ID}: missing timestamp for "${p.iwateName}"; skipping`);
-      continue;
-    }
-    if (p.waterLevelM === null) continue;
-
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: null,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: fetched=${rows.length} matched=${matches.length} written=${written}`);
+  if (r.status !== 200) throw new Error(`station=${idx} HTTP ${r.status}`);
+  return new TextDecoder('shift_jis').decode(await r.arrayBuffer());
 };
 
-export default task;
+/**
+ * The 10-station catalogue, keyed by stationNo; each dam reads its own page,
+ * and a page that fails leaves only that dam unreadable.
+ */
+export function iwateEntries(page: PageFetcher = fetchPage): Entry[] {
+  return STATIONS.map((stn) => ({
+    key: stn.stationNo,
+    name: stn.name,
+    pref: PREF_CODE,
+    reading: async () => iwateReading(await page(stn.idx)),
+  }));
+}
+
+export default ingestTask(SOURCE_ID, async () => ({ entries: iwateEntries() }));
