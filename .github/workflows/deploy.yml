@@ -79,7 +79,7 @@ jobs:
       # Joins as an ephemeral tag:ci node. The tailnet policy lets tag:ci reach
       # only tcp:6443 on t1/t2/t3, so the tailnet's DNS (AdGuard on n4) is out of
       # reach: keep the runner's own resolver with --accept-dns=false.
-      - uses: tailscale/github-action@d1b6cd204f8dceda5b3eaad7f1f767be390056cd # v4.2.0
+      - uses: tailscale/github-action@99a8333667fff04fdd6cffb46dfd409f8329a7bf # v4.3.0
         with:
           oauth-client-id: TNSPGzaJJp11CNTRL-kDFtSUjpDP11CNTRL
           audience: api.tailscale.com/TNSPGzaJJp11CNTRL-kDFtSUjpDP11CNTRL
