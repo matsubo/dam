@@ -30,6 +30,7 @@
 
 import { ingestTask } from '../ingest/run.ts';
 import type { Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const BASE_URL =
   process.env.JPOWER_NAHARIGAWA_URL ?? 'https://jpower-naharigawa-daminfo.jp/Pages/DamGraph01.aspx';
@@ -161,39 +162,29 @@ export function naharigawaReading(html: string, name: string): Reading {
   return { state: 'values', observations: graph.readings };
 }
 
-/** One ダムグラフ page by `no`, as text. Throws on an HTTP error. */
-export type Fetcher = (no: string) => Promise<string>;
+/** One ダムグラフ page by `no`, for the hour `value` (see graphValue). */
+export const graphUrl = (value: string, no: string): string =>
+  `${BASE_URL}?value=${encodeURIComponent(value)}&no=${no}`;
 
 /**
- * The three dams, each read from its own page. Matched exactly, never by
- * prefix: a 久木 must not land on some 久木野.
+ * The three dams, each read from its own page for the hour `value`. Matched
+ * exactly, never by prefix: a 久木 must not land on some 久木野.
  */
-export function naharigawaEntries(get: Fetcher): Entry[] {
+export function naharigawaEntries(upstream: Upstream, value: string): Entry[] {
   return STATIONS.map(({ no, name }) => ({
     key: name,
     name,
     pref: PREF_CODE,
     bind: { exact: true },
-    reading: async () => naharigawaReading(await get(no), name),
+    reading: async () =>
+      naharigawaReading((await upstream.fetch(graphUrl(value, no))).text(), name),
   }));
 }
 
 // --- task -------------------------------------------------------------------
 
-export default ingestTask(SOURCE_ID, async (log) => {
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
   const value = graphValue(new Date());
   log(`${SOURCE_ID}: value=${value}`);
-  const userAgent =
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
-  return {
-    entries: naharigawaEntries(async (no) => {
-      const r = await fetch(`${BASE_URL}?value=${encodeURIComponent(value)}&no=${no}`, {
-        headers: { 'user-agent': userAgent },
-        signal: AbortSignal.timeout(20_000),
-      });
-      if (r.status !== 200) throw new Error(`HTTP ${r.status}`);
-      return r.text();
-    }),
-  };
+  return { entries: naharigawaEntries(upstream, value) };
 });

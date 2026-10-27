@@ -1,3 +1,15 @@
+/**
+ * The user agent every upstream request of ours sends: HTTP_USER_AGENT when
+ * set, else this project's identity with a contact. Read per call so a
+ * deployment can override it without a rebuild.
+ */
+export function userAgent(): string {
+  return (
+    process.env.HTTP_USER_AGENT ??
+    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)'
+  );
+}
+
 export interface HttpClientOptions {
   userAgent: string;
   minIntervalMs?: number;
@@ -9,6 +21,13 @@ export interface HttpClientOptions {
 export interface GetOptions {
   ifNoneMatch?: string | undefined;
   headers?: Record<string, string>;
+  /** Overrides the client's timeoutMs for this request. */
+  timeoutMs?: number;
+}
+
+export interface RequestOptions extends GetOptions {
+  method?: 'GET' | 'POST';
+  body?: string;
 }
 
 export interface HttpResponse {
@@ -35,22 +54,32 @@ export class HttpClient {
     };
   }
 
-  async get(url: string, options: GetOptions = {}): Promise<HttpResponse> {
+  get(url: string, options: GetOptions = {}): Promise<HttpResponse> {
+    return this.request(url, options);
+  }
+
+  async request(url: string, options: RequestOptions = {}): Promise<HttpResponse> {
     await this.throttle();
     const headers: Record<string, string> = {
       'user-agent': this.opts.userAgent,
       ...(options.headers ?? {}),
     };
     if (options.ifNoneMatch) headers['if-none-match'] = options.ifNoneMatch;
+    const timeoutMs = options.timeoutMs ?? this.opts.timeoutMs;
 
     let attempt = 0;
     while (true) {
       // The timeout covers the body too: a server that sends headers and then
       // stalls would otherwise hang the task until the job runner kills it.
       const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), this.opts.timeoutMs);
+      const t = setTimeout(() => ctrl.abort(), timeoutMs);
       try {
-        const res = await fetch(url, { headers, signal: ctrl.signal });
+        const res = await fetch(url, {
+          method: options.method ?? 'GET',
+          headers,
+          ...(options.body === undefined ? {} : { body: options.body }),
+          signal: ctrl.signal,
+        });
         if (res.status === 304) {
           return {
             status: 304,

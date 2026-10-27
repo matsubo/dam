@@ -29,6 +29,7 @@
 import { type Cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
 import { ingestTask } from '../ingest/run.ts';
 import type { Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const BASE_URL =
   process.env.WWW1_RIVER_DAM_BASE ?? 'http://www1.river.go.jp/cgi-bin/DspDamData.exe';
@@ -136,32 +137,18 @@ export function hijiIframeUrl(outerHtml: string): string | null {
 }
 
 /** Both dams, each read from its own outer page and IFRAME once the run reaches it. */
-export function hijiEntries(fetchPage: (url: string) => Promise<string>): Entry[] {
+export function hijiEntries(upstream: Upstream): Entry[] {
   return DAM_CONFIG.map((cfg) => ({
     key: cfg.obsId,
     name: cfg.name,
     pref: cfg.prefCode,
     reading: async () => {
-      const iframeUrl = hijiIframeUrl(await fetchPage(`${BASE_URL}?ID=${cfg.obsId}&KIND=3&PAGE=0`));
+      const outer = await upstream.fetch(`${BASE_URL}?ID=${cfg.obsId}&KIND=3&PAGE=0`);
+      const iframeUrl = hijiIframeUrl(outer.text('euc-jp'));
       if (!iframeUrl) return { state: 'unreadable', why: 'no IFRAME src on the outer page' };
-      return hijiReading(await fetchPage(iframeUrl));
+      return hijiReading((await upstream.fetch(iframeUrl)).text('euc-jp'));
     },
   }));
 }
 
-// --- HTTP helpers ------------------------------------------------------------
-
-async function fetchEucJp(url: string): Promise<string> {
-  const r = await fetch(url, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) throw new Error(`HTTP ${r.status} for ${url}`);
-  return new TextDecoder('euc-jp').decode(await r.arrayBuffer());
-}
-
-export default ingestTask(SOURCE_ID, async () => ({ entries: hijiEntries(fetchEucJp) }));
+export default ingestTask(SOURCE_ID, async ({ upstream }) => ({ entries: hijiEntries(upstream) }));

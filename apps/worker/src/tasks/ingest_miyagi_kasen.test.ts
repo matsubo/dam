@@ -6,6 +6,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { fixtureUpstream } from '../ingest/upstream.ts';
 import {
   earlierTableUrl,
   fetchEarlierRows,
@@ -410,10 +411,10 @@ describe('fetchEarlierRows', () => {
     const rows = await fetchEarlierRows(
       latest,
       (s) => logs.push(s),
-      async (url) => {
+      fixtureUpstream(async (url) => {
         urls.push(url);
         throw new TypeError('fetch failed');
-      },
+      }),
     );
     expect(rows).toEqual([]);
     expect(urls).toHaveLength(1);

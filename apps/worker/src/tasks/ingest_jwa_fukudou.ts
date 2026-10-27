@@ -132,23 +132,10 @@ export function fukudouEntry(html: string, log: Log = () => {}): Entry {
   };
 }
 
-async function fetchPage(): Promise<string> {
-  const r = await fetch(PAGE_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) throw new Error(`HTTP ${r.status} for ${PAGE_URL}`);
-  return new TextDecoder('shift_jis').decode(await r.arrayBuffer());
-}
-
-export default ingestTask(SOURCE_ID, async (log) => {
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
   let html: string;
   try {
-    html = await fetchPage();
+    html = (await upstream.fetch(PAGE_URL)).text('shift_jis');
   } catch (err) {
     // The pond is known in advance: a dead page leaves it unreadable, and the
     // run fails the job so it is retried.

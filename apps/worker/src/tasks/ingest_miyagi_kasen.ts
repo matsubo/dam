@@ -26,6 +26,7 @@
 
 import { ingestTask } from '../ingest/run.ts';
 import type { Entry } from '../ingest/types.ts';
+import { type Upstream, UpstreamError } from '../ingest/upstream.ts';
 
 const DATA_URL =
   process.env.MIYAGI_KASEN_URL ??
@@ -153,17 +154,14 @@ export function parseMiyagiTable(html: string): ParsedRow[] {
 
 // --- task -------------------------------------------------------------------
 
-async function fetchTable(url: string): Promise<string | null> {
-  const r = await fetch(url, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) return null;
-  return new TextDecoder('shift_jis').decode(await r.arrayBuffer());
+/** A table page, or null when it answers with a non-2xx status; a network failure throws. */
+async function fetchTable(upstream: Upstream, url: string): Promise<string | null> {
+  try {
+    return (await upstream.fetch(url)).text('shift_jis');
+  } catch (err) {
+    if (err instanceof UpstreamError && err.status !== null) return null;
+    throw err;
+  }
 }
 
 /**
@@ -195,11 +193,11 @@ export function readingsToStore(latest: ParsedRow[], earlier: ParsedRow[]): Pars
 export async function fetchEarlierRows(
   latestHtml: string,
   log: (s: string) => void,
-  fetchText: (url: string) => Promise<string | null> = fetchTable,
+  upstream: Upstream,
 ): Promise<ParsedRow[]> {
   const url = earlierTableUrl(DATA_URL, latestHtml, 1);
   const html = url
-    ? await fetchText(url).catch((err: unknown) => {
+    ? await fetchTable(upstream, url).catch((err: unknown) => {
         log(`${SOURCE_ID}: previous-hour fetch failed: ${String(err)}`);
         return null;
       })
@@ -243,10 +241,10 @@ export function miyagiEntries(latest: ParsedRow[], earlier: ParsedRow[]): Entry[
     });
 }
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const html = await fetchTable(DATA_URL);
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const html = await fetchTable(upstream, DATA_URL);
   if (html === null) throw new Error(`${SOURCE_ID}: latest table fetch failed`);
   const rows = parseMiyagiTable(html);
   log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
-  return { entries: miyagiEntries(rows, await fetchEarlierRows(html, log)) };
+  return { entries: miyagiEntries(rows, await fetchEarlierRows(html, log, upstream)) };
 });

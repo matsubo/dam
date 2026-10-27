@@ -109,17 +109,8 @@ export function osakaEntries(res: OsakaResponse): Entry[] {
   return out;
 }
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const res = await fetch(DATA_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!res.ok) throw new Error(`${SOURCE_ID}: HTTP ${res.status}`);
-  const data = (await res.json()) as OsakaResponse;
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const data = (await upstream.fetch(DATA_URL, { timeoutMs: 15_000 })).json<OsakaResponse>();
   const entries = osakaEntries(data);
   log(`${SOURCE_ID}: ${entries.length} dams at ${data.displayDt}`);
   return { entries };

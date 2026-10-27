@@ -137,21 +137,12 @@ export function toukanEntries(page: { html: string } | { error: string }): Entry
   }));
 }
 
-async function fetchPage(): Promise<{ html: string } | { error: string }> {
+export default ingestTask(SOURCE_ID, async ({ upstream }) => {
+  let page: { html: string } | { error: string };
   try {
-    const r = await fetch(DATA_URL, {
-      headers: {
-        'user-agent':
-          process.env.HTTP_USER_AGENT ??
-          'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-      },
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (r.status !== 200) return { error: `HTTP ${r.status}` };
-    return { html: await r.text() };
+    page = { html: (await upstream.fetch(DATA_URL)).text() };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : String(err) };
+    page = { error: err instanceof Error ? err.message : String(err) };
   }
-}
-
-export default ingestTask(SOURCE_ID, async () => ({ entries: toukanEntries(await fetchPage()) }));
+  return { entries: toukanEntries(page) };
+});

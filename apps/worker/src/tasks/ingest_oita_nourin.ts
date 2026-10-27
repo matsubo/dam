@@ -282,30 +282,17 @@ export function oitaNourinEntries(text: string): Entry[] {
   });
 }
 
-async function fetchOk(url: string, timeoutMs: number): Promise<Response> {
-  const res = await fetch(url, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  if (res.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${res.status} for ${url}`);
-  return res;
-}
-
 // A parser that silently yields nothing is the failure mode this source is
 // most exposed to: it is line-oriented over PDF-extracted text, so a layout
 // change (numbers before the name, two table rows merged onto one line) makes
 // every row unreadable while the fetch still succeeds. The run then fails the
 // job, which puts it in /api/v1/admin/jobs `failing_jobs` — exactly how #31
 // would have surfaced.
-export default ingestTask(SOURCE_ID, async (log) => {
-  const pdfUrl = findLatestPdfUrl(await (await fetchOk(INDEX_URL, 20_000)).text());
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const pdfUrl = findLatestPdfUrl((await upstream.fetch(INDEX_URL)).text());
   if (!pdfUrl) throw new Error(`${SOURCE_ID}: no survey PDF linked from ${INDEX_URL}`);
-  const pdf = await fetchOk(pdfUrl, 30_000);
-  const text = await pdfToText(new Uint8Array(await pdf.arrayBuffer()));
+  const pdf = await upstream.fetch(pdfUrl, { timeoutMs: 30_000 });
+  const text = await pdfToText(pdf.bytes);
   const entries = oitaNourinEntries(text);
   log(`${SOURCE_ID}: ${entries.length} dam rows in ${pdfUrl}`);
   return { entries, dated: true };

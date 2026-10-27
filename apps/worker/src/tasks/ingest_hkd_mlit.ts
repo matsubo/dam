@@ -19,6 +19,7 @@
 import { type Cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
 import { ingestTask } from '../ingest/run.ts';
 import type { Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const BASE_URL = process.env.HKD_MLIT_DAM_BASE ?? 'https://info-dam.hdb.hkd.mlit.go.jp/dam';
 
@@ -128,26 +129,18 @@ export function hkdReading(html: string): Reading {
 }
 
 /** The 18 dams, each read from its own page once the run reaches it. */
-export function hkdEntries(fetchPage: (url: string) => Promise<string>): Entry[] {
+export function hkdEntries(upstream: Upstream): Entry[] {
   return DAMS.map((c) => ({
     key: c.slug,
     name: c.pageName,
     pref: PREF_CODE,
-    reading: async () => hkdReading(await fetchPage(`${BASE_URL}/dam_${c.slug}.htm`)),
+    reading: async () =>
+      hkdReading(
+        (await upstream.fetch(`${BASE_URL}/dam_${c.slug}.htm`, { timeoutMs: 12_000 })).text(),
+      ),
   }));
 }
 
-async function fetchPage(url: string): Promise<string> {
-  const r = await fetch(url, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(12_000),
-  });
-  if (r.status !== 200) throw new Error(`HTTP ${r.status}`);
-  return r.text();
-}
-
-export default ingestTask(SOURCE_ID, async () => ({ entries: hkdEntries(fetchPage) }));
+export default ingestTask(SOURCE_ID, async ({ upstream }) => ({
+  entries: hkdEntries(upstream),
+}));

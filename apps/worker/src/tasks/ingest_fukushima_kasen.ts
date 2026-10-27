@@ -167,19 +167,11 @@ export function fukushimaEntries(json: FukushimaJson | null, why = 'feed not fet
   ];
 }
 
-export default ingestTask(SOURCE_ID, async (log) => {
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
   const url = buildFukushimaUrl(new Date(), BASE_URL);
   try {
-    const r = await fetch(url, {
-      headers: {
-        'user-agent':
-          process.env.HTTP_USER_AGENT ??
-          'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-      },
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (r.status !== 200) throw new Error(`HTTP ${r.status} for ${url}`);
-    return { entries: fukushimaEntries((await r.json()) as FukushimaJson) };
+    const r = await upstream.fetch(url);
+    return { entries: fukushimaEntries(r.json<FukushimaJson>()) };
   } catch (err) {
     // The catalogue is known in advance: a failed fetch still records it.
     const why = err instanceof Error ? err.message : String(err);

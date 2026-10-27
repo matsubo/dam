@@ -24,6 +24,7 @@
 import { type Cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
 import { ingestTask } from '../ingest/run.ts';
 import type { Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const BASE_URL =
   process.env.QSR_RYUMON_BASE_URL ??
@@ -94,8 +95,11 @@ export function ryumonReading(v: Record<RyumonKey, string>): Reading {
   };
 }
 
+/** One key's endpoint. */
+export const keyUrl = (key: RyumonKey): string => `${BASE_URL}?key=${key}`;
+
 /** The one dam, read once the run reaches it; a failed key makes it unreadable. */
-export function ryumonEntries(fetchKey: (key: RyumonKey) => Promise<string>): Entry[] {
+export function ryumonEntries(upstream: Upstream): Entry[] {
   return [
     {
       key: DAM_NAME,
@@ -103,7 +107,11 @@ export function ryumonEntries(fetchKey: (key: RyumonKey) => Promise<string>): En
       pref: PREF_CODE,
       reading: async () => {
         // Fetch all keys in parallel
-        const answers = await Promise.all(KEYS.map(fetchKey));
+        const answers = await Promise.all(
+          KEYS.map(async (k) =>
+            (await upstream.fetch(keyUrl(k), { timeoutMs: 12_000 })).text().trim(),
+          ),
+        );
         return ryumonReading(
           Object.fromEntries(KEYS.map((k, i) => [k, answers[i] ?? ''])) as Record<
             RyumonKey,
@@ -115,17 +123,6 @@ export function ryumonEntries(fetchKey: (key: RyumonKey) => Promise<string>): En
   ];
 }
 
-async function fetchKey(key: RyumonKey): Promise<string> {
-  const r = await fetch(`${BASE_URL}?key=${key}`, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(12_000),
-  });
-  if (r.status !== 200) throw new Error(`HTTP ${r.status} for ${key}`);
-  return (await r.text()).trim();
-}
-
-export default ingestTask(SOURCE_ID, async () => ({ entries: ryumonEntries(fetchKey) }));
+export default ingestTask(SOURCE_ID, async ({ upstream }) => ({
+  entries: ryumonEntries(upstream),
+}));

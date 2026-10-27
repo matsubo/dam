@@ -111,7 +111,8 @@ the file for detail.
 | `src/task_list.ts` | `TASK_LIST`: every task the worker runs, by name |
 | `src/task_list.test.ts` | every scheduled task is in `TASK_LIST`, and every `ingest:*` task belongs to a declared source |
 | `src/crontab.test.ts` | the schedule itself is `packages/core/src/crontab.ts`. Checks each ingest line's key and that its retries (default 25 attempts) outlast its longest gap between runs, so no dead job is left behind per tick, and that `INGEST_INTERVAL_HOURS` agrees with graphile-worker for every declared ingest task |
-| `src/ingest/run.ts` | `ingestTask(sourceId, scan)`: the ingest run. Contract check, one master query, binding, reading each entry outside any transaction (a throwing reading → unreadable), then universe → stamps → observations in one transaction; fails the job (`IngestRunError('nothing-read')`) after the commit when nothing could be read |
+| `src/ingest/run.ts` | `ingestTask(sourceId, scan)`: the ingest run. `scan({ log, upstream })` gets the live upstream. Contract check, one master query, binding, reading each entry outside any transaction (a throwing reading → unreadable), then universe → stamps → observations in one transaction; fails the job (`IngestRunError('nothing-read')`) after the commit when nothing could be read |
+| `src/ingest/upstream.ts` | The provider port: `Upstream.fetch(url, { method, body, headers, timeoutMs (20 s), allow })` → `{ status, headers, bytes, text(charset), json() }`; any non-2xx outside `allow`, network error or timeout throws `UpstreamError` `<source>: HTTP <status> for <url>`. `liveUpstream(sourceId)` (core `HttpClient`, `userAgent()`), `fixtureUpstream(routes)` for tests (same status rule; unknown URL is a test bug) |
 | `src/ingest/types.ts` | `Scan`, `Entry` (key, name, pref scope, `bind`, `dontWrite`, `reading`), `Reading` (`values` / `empty` / `unreadable`), `Bind` (`{ndi}` pin, `{name?, exact?}`, `'never'`), `BoundDam`, `IngestRunError` |
 | `src/ingest/bind.ts` | `bindEntry`: pin → stamp in scope → exact name → stem → stem+ダム → prefix → contains; a non-twin tie leaves the entry unbound; a `not_dam_reason` key binds only by stamp. `stemOf` (NFKC, annotations, ダム, 槇→槙) |
 | `src/ingest/plan.ts` | `planWrites`: universe rows (has_data from state, published_at for dated scans), stamps (first entry per dam), observations (valueless dropped); duplicate keys merge values > empty > unreadable |
@@ -249,7 +250,7 @@ the file for detail.
 | `src/slug.ts` | `toSlug`, `suffixedSlug` |
 | `src/prefectures.ts` | `PREFECTURES` array, `prefNameToCode` |
 | `src/source_adapter.ts` | `SourceAdapter`, `FetchTarget`, `RawBytes`, `ParsedReading`, `FetchContext` |
-| `src/http_client.ts` | `HttpClient` (throttle + retry + ETag) |
+| `src/http_client.ts` | `HttpClient` (throttle + retry + ETag; `request` with method/body/per-call timeout, `get`), `userAgent()` (HTTP_USER_AGENT else our identity — the one user agent every worker request sends) |
 | `src/hateoas.ts` | `buildLinks`, `Link`, `LinksInput` |
 | `src/similarity.ts` | `trigramSimilarity`, `normalizeJaName` |
 | `src/dam_binding.ts` | `BindableMaster`, `twinOf`, `preferMaster`, `stampedMaster`, `chooseRanked` (station → master: a stamped row keeps it, then lowest SQL rank, （元）/（再） tie-break) |

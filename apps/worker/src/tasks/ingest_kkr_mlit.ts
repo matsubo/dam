@@ -132,17 +132,8 @@ export function kkrEntries(raw: unknown): Entry[] {
 
 // --- task -------------------------------------------------------------------
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const r = await fetch(DATA_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status}`);
-  const entries = kkrEntries(await r.json());
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const entries = kkrEntries((await upstream.fetch(DATA_URL)).json<unknown>());
   log(`${SOURCE_ID}: ${entries.length} dams`);
   return { entries };
 });

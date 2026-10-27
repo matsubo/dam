@@ -117,18 +117,9 @@ export function tochigiEntries(csv: string): Entry[] {
   return out;
 }
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const res = await fetch(CSV_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(15_000),
-    redirect: 'follow',
-  });
-  if (res.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${res.status}`);
-  const entries = tochigiEntries(await res.text());
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const res = await upstream.fetch(CSV_URL, { timeoutMs: 15_000 });
+  const entries = tochigiEntries(res.text());
   log(`${SOURCE_ID}: ${entries.length} dams`);
   return { entries };
 });

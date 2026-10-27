@@ -5,6 +5,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import type { Reading } from '../ingest/types.ts';
+import { fixtureUpstream } from '../ingest/upstream.ts';
 import { hijiEntries, hijiIframeUrl, hijiReading, parseHijiTimestamp } from './ingest_skr_hiji.ts';
 
 const SAMPLE_IFRAME_HTML = `
@@ -135,10 +136,12 @@ describe('hijiReading', () => {
 describe('hijiEntries', () => {
   test('lists 野村 and 鹿野川 by 観測所 id in 愛媛, each read via its outer page and IFRAME', async () => {
     const urls: string[] = [];
-    const entries = hijiEntries(async (url) => {
-      urls.push(url);
-      return url.includes('DspDamData.exe') ? OUTER_HTML : SAMPLE_IFRAME_HTML;
-    });
+    const entries = hijiEntries(
+      fixtureUpstream((url) => {
+        urls.push(url);
+        return url.includes('DspDamData.exe') ? OUTER_HTML : SAMPLE_IFRAME_HTML;
+      }),
+    );
     expect(entries.map((e) => [e.key, e.name, e.pref])).toEqual([
       ['1368080276020', '野村ダム', '38'],
       ['1368080255010', '鹿野川ダム', '38'],
@@ -153,13 +156,13 @@ describe('hijiEntries', () => {
   });
 
   test('an outer page without an IFRAME is unreadable', async () => {
-    const [nomura] = hijiEntries(async () => '<HTML></HTML>');
+    const [nomura] = hijiEntries(fixtureUpstream(() => '<HTML></HTML>'));
     if (typeof nomura?.reading !== 'function') throw new Error('expected a reading function');
     expect((await nomura.reading(null)).state).toBe('unreadable');
   });
 
   test('a page that fails to load makes the reading throw (the run records it unreadable)', async () => {
-    const [nomura] = hijiEntries(() => Promise.reject(new Error('HTTP 503')));
+    const [nomura] = hijiEntries(fixtureUpstream(() => ({ status: 503 })));
     if (typeof nomura?.reading !== 'function') throw new Error('expected a reading function');
     await expect(Promise.resolve(nomura.reading(null))).rejects.toThrow('HTTP 503');
   });

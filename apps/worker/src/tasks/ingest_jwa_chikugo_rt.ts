@@ -40,6 +40,7 @@
 
 import { ingestTask } from '../ingest/run.ts';
 import type { Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const BASE_URL =
   process.env.JWA_CHIKUGO_RT_BASE_URL ?? 'http://chikugo.ec-net.jp/chikugo/kyoku/pc/new';
@@ -179,21 +180,8 @@ export function chikugoRtReading(page: ParsedPage): Reading {
 
 // --- fetching ---------------------------------------------------------------
 
-export type FetchPage = (code: string) => Promise<string>;
-
-const fetchPage: FetchPage = async (code) => {
-  const url = `${BASE_URL}/rep${code}_I60.html`;
-  const r = await fetch(url, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) throw new Error(`HTTP ${r.status} for ${url}`);
-  return new TextDecoder('shift_jis').decode(await r.arrayBuffer());
-};
+/** One station's hourly page, by its screen id. */
+export const pageUrl = (code: string): string => `${BASE_URL}/rep${code}_I60.html`;
 
 /**
  * The site's menu is the universe: one entry per station, each read from its
@@ -201,14 +189,19 @@ const fetchPage: FetchPage = async (code) => {
  * match would only ever find a different dam (大山 → 大山川), so the ladder
  * stops at the stem.
  */
-export function chikugoRtEntries(fetcher: FetchPage = fetchPage): Entry[] {
+export function chikugoRtEntries(upstream: Upstream): Entry[] {
   return STATIONS.map((s) => ({
     key: s.code,
     name: s.name,
     pref: s.prefCode,
     bind: { exact: true },
-    reading: async () => chikugoRtReading(parseChikugoRtPage(await fetcher(s.code))),
+    reading: async () =>
+      chikugoRtReading(
+        parseChikugoRtPage((await upstream.fetch(pageUrl(s.code))).text('shift_jis')),
+      ),
   }));
 }
 
-export default ingestTask(SOURCE_ID, async () => ({ entries: chikugoRtEntries() }));
+export default ingestTask(SOURCE_ID, async ({ upstream }) => ({
+  entries: chikugoRtEntries(upstream),
+}));

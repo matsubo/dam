@@ -40,6 +40,7 @@
 import { extractText, getDocumentProxy } from 'unpdf';
 import { ingestTask, type Log } from '../ingest/run.ts';
 import type { Entry, Reading } from '../ingest/types.ts';
+import { type Upstream, UpstreamError } from '../ingest/upstream.ts';
 
 const PAGE_URL = process.env.DAINICHIGAWA_LID_URL ?? 'http://dainichigawa-lid.com/dam.html';
 
@@ -50,9 +51,6 @@ const STATION = '大日川ダム';
 const NDI = '1594';
 /** The current month plus the previous one, for rows uploaded late. */
 const MONTHS_PER_RUN = 2;
-
-/** A URL's response; the caller checks the status. */
-export type Fetcher = (url: string, timeoutMs: number) => Promise<Response>;
 
 // --- parsing ----------------------------------------------------------------
 
@@ -120,21 +118,24 @@ export function dailyReading(rows: DailyReading[]): Reading {
 // --- entries ----------------------------------------------------------------
 
 /** The page and its newest monthly PDFs, read into one reading. */
-async function readDam(fetcher: Fetcher, log: Log): Promise<Reading> {
-  const page = await fetcher(PAGE_URL, 20_000);
-  if (page.status !== 200) throw new Error(`HTTP ${page.status} on ${PAGE_URL}`);
-  const links = parseDailyLinks(await page.text(), PAGE_URL).slice(0, MONTHS_PER_RUN);
+async function readDam(upstream: Upstream, log: Log): Promise<Reading> {
+  const page = await upstream.fetch(PAGE_URL);
+  const links = parseDailyLinks(page.text(), PAGE_URL).slice(0, MONTHS_PER_RUN);
   if (links.length === 0) throw new Error(`no monthly PDF linked from ${PAGE_URL}`);
 
   const rows: DailyReading[] = [];
   for (const link of links) {
-    const r = await fetcher(link.url, 30_000);
-    if (r.status !== 200) {
-      log(`${SOURCE_ID}: HTTP ${r.status} on ${link.url}; skipped`);
+    let bytes: Uint8Array;
+    try {
+      bytes = (await upstream.fetch(link.url, { timeoutMs: 30_000 })).bytes;
+    } catch (err) {
+      // A month the server answers with an error status is skipped; a network
+      // failure still fails the reading.
+      if (!(err instanceof UpstreamError) || err.status === null) throw err;
+      log(`${err.message}; skipped`);
       continue;
     }
-    const text = await pdfToText(new Uint8Array(await r.arrayBuffer()));
-    rows.push(...parseDailyText(text, link.year, link.month));
+    rows.push(...parseDailyText(await pdfToText(bytes), link.year, link.month));
   }
   return dailyReading(rows);
 }
@@ -144,26 +145,16 @@ async function readDam(fetcher: Fetcher, log: Log): Promise<Reading> {
  * a failed fetch leaves it unreadable, never unrecorded, so /coverage can
  * tell "published, not linked" from "nobody publishes it". Pinned to NDI 1594.
  */
-export function dainichigawaEntry(fetcher: Fetcher, log: Log): Entry {
+export function dainichigawaEntry(upstream: Upstream, log: Log): Entry {
   return {
     key: STATION,
     name: STATION,
     pref: PREF_CODE,
     bind: { ndi: NDI },
-    reading: () => readDam(fetcher, log),
+    reading: () => readDam(upstream, log),
   };
 }
 
-const fetchWithUa: Fetcher = (url, timeoutMs) =>
-  fetch(url, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-
-export default ingestTask(SOURCE_ID, async (log) => ({
-  entries: [dainichigawaEntry(fetchWithUa, log)],
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => ({
+  entries: [dainichigawaEntry(upstream, log)],
 }));

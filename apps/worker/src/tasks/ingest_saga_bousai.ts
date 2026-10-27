@@ -218,21 +218,12 @@ export function sagaEntries(rows: ParsedRow[]): Entry[] {
 
 // --- task -------------------------------------------------------------------
 
-async function fetchPage(page: number): Promise<string> {
-  const r = await fetch(`${BASE_URL}?dk=4&sv=3&pg=${page}`, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status} on page ${page}`);
-  return new TextDecoder('shift_jis').decode(await r.arrayBuffer());
-}
-
-export default ingestTask(SOURCE_ID, async (log) => {
-  const pages = await Promise.all(Array.from({ length: PAGE_COUNT }, (_, i) => fetchPage(i + 1)));
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const pages = await Promise.all(
+    Array.from({ length: PAGE_COUNT }, async (_, i) =>
+      (await upstream.fetch(`${BASE_URL}?dk=4&sv=3&pg=${i + 1}`)).text('shift_jis'),
+    ),
+  );
   const rows = pages.flatMap((html) => parseSagaPage(html));
   log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
   return { entries: sagaEntries(rows) };

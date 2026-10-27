@@ -25,6 +25,7 @@
 import { type Cell, cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
 import { ingestTask } from '../ingest/run.ts';
 import type { Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const BASE_URL =
   process.env.EHIME_BOUSAI_URL ??
@@ -32,10 +33,6 @@ const BASE_URL =
 
 const PREF_CODE = '38';
 const SOURCE_ID = 'ehime-bousai';
-
-const USER_AGENT =
-  process.env.HTTP_USER_AGENT ??
-  'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
 
 const DAMS = [
   { myMenuId: 'U1001_MMENU001', name: '鹿森ダム' },
@@ -186,28 +183,21 @@ export function ehimeReading(html: string, now: Date = new Date()): Reading {
 }
 
 /** One dam's page, by myMenuId. */
-export type PageFetcher = (myMenuId: string) => Promise<string>;
-
-const fetchPage: PageFetcher = async (myMenuId) => {
-  const resp = await fetch(`${BASE_URL}&myMenuId=${myMenuId}`, {
-    headers: { 'user-agent': USER_AGENT },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (resp.status !== 200) throw new Error(`HTTP ${resp.status}`);
-  return resp.text();
-};
+export const pageUrl = (myMenuId: string): string => `${BASE_URL}&myMenuId=${myMenuId}`;
 
 /**
  * The 12-dam catalogue, keyed by myMenuId; each dam reads its own page, and a
  * page that fails leaves only that dam unreadable.
  */
-export function ehimeEntries(page: PageFetcher = fetchPage): Entry[] {
+export function ehimeEntries(upstream: Upstream): Entry[] {
   return DAMS.map(({ myMenuId, name }) => ({
     key: myMenuId,
     name,
     pref: PREF_CODE,
-    reading: async () => ehimeReading(await page(myMenuId)),
+    reading: async () => ehimeReading((await upstream.fetch(pageUrl(myMenuId))).text()),
   }));
 }
 
-export default ingestTask(SOURCE_ID, async () => ({ entries: ehimeEntries() }));
+export default ingestTask(SOURCE_ID, async ({ upstream }) => ({
+  entries: ehimeEntries(upstream),
+}));

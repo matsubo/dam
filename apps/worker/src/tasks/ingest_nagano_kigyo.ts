@@ -51,6 +51,7 @@
 import { type Cell, cell, cellState, numberIn } from '../ingest/cells.ts';
 import { ingestTask } from '../ingest/run.ts';
 import type { Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const BASE_URL = process.env.NAGANO_KIGYO_JSON_BASE ?? 'https://naganoken-kigyokyoku.jp/json';
 
@@ -171,39 +172,26 @@ export function naganoReading(json: string, cfg: DamCfg, lastModified: Date): Re
 
 // --- entries ----------------------------------------------------------------
 
-/** A dam's file as served: its body and Last-Modified header. */
-export type FetchFile = (url: string) => Promise<{ body: string; lastModified: string | null }>;
-
 /**
- * Both dams, known in advance; each reads its own file. Binds only the master
- * of the same name (the live twin of a （元）/（再） pair).
+ * Both dams, known in advance; each reads its own file, dated by its
+ * Last-Modified header. Binds only the master of the same name (the live twin
+ * of a （元）/（再） pair).
  */
-export function naganoKigyoEntries(fetchFile: FetchFile): Entry[] {
+export function naganoKigyoEntries(upstream: Upstream): Entry[] {
   return DAMS.map((cfg) => ({
     key: cfg.key,
     name: cfg.name,
     pref: PREF_CODE,
     bind: { exact: true },
     reading: async () => {
-      const { body, lastModified } = await fetchFile(`${BASE_URL}/${cfg.key}_new.json`);
-      const at = new Date(lastModified ?? '');
+      const res = await upstream.fetch(`${BASE_URL}/${cfg.key}_new.json`);
+      const at = new Date(res.headers.get('last-modified') ?? '');
       if (Number.isNaN(at.getTime())) throw new Error('no Last-Modified; cannot date its rows');
-      return naganoReading(body, cfg, at);
+      return naganoReading(res.text(), cfg, at);
     },
   }));
 }
 
-const fetchFile: FetchFile = async (url) => {
-  const r = await fetch(url, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) throw new Error(`HTTP ${r.status} for ${url}`);
-  return { body: await r.text(), lastModified: r.headers.get('last-modified') };
-};
-
-export default ingestTask(SOURCE_ID, async () => ({ entries: naganoKigyoEntries(fetchFile) }));
+export default ingestTask(SOURCE_ID, async ({ upstream }) => ({
+  entries: naganoKigyoEntries(upstream),
+}));

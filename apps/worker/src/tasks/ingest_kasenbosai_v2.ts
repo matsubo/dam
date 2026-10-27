@@ -48,6 +48,7 @@ import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverseHasData } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
+import { liveUpstream, type Upstream, type UpstreamRequest } from '../ingest/upstream.ts';
 
 const BASE_URL =
   process.env.KASENBOSAI_TM_BASE ?? 'https://www.river.go.jp/kawabou/file/files/tmlist/dam';
@@ -85,14 +86,6 @@ interface DamTarget {
   obsFcd: string;
   /** 有効貯水容量, used to sanity-check a published 'eff' rate. */
   effectiveCapacityM3: number | null;
-}
-
-function userAgent(): string {
-  return (
-    process.env.HTTP_USER_AGENT ??
-    process.env.KASENBOSAI_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)'
-  );
 }
 
 function jstNowParts(): { date: string; time: string } {
@@ -287,20 +280,17 @@ async function loadTargets(): Promise<DamTarget[]> {
 type ObsInput = Parameters<typeof upsertObservations>[0][number];
 
 async function fetchOne(
+  upstream: Upstream,
+  request: UpstreamRequest,
   target: DamTarget,
   date: string,
   time: string,
-  ua: string,
 ): Promise<{ obs: ObsInput | null; hasData: boolean | null }> {
   const none = { obs: null, hasData: null };
   const url = `${BASE_URL}/${date}/${time}/${target.obsFcd}.json`;
-  const r = await fetch(url, {
-    headers: { 'user-agent': ua },
-    signal: AbortSignal.timeout(PER_REQUEST_TIMEOUT_MS),
-  });
+  const r = await upstream.fetch(url, request);
   if (r.status === 404) return none; // dam may have no current value
-  if (r.status !== 200) throw new Error(`HTTP ${r.status}`);
-  const text = await r.text();
+  const text = r.text();
   if (!text || text.length < 5) return none;
   let payload: ApiResponse;
   try {
@@ -335,7 +325,15 @@ const task: Task = async (_payload, helpers) => {
   }
   const { date, time } = jstNowParts();
   log(`${SOURCE_ID}: fetching ${targets.length} dams for ${date} ${time}`);
-  const ua = userAgent();
+  const upstream = liveUpstream(SOURCE_ID);
+  // KASENBOSAI_USER_AGENT stands in for the user agent unless HTTP_USER_AGENT is set.
+  const ua =
+    process.env.HTTP_USER_AGENT === undefined ? process.env.KASENBOSAI_USER_AGENT : undefined;
+  const request: UpstreamRequest = {
+    timeoutMs: PER_REQUEST_TIMEOUT_MS,
+    allow: [404],
+    ...(ua === undefined ? {} : { headers: { 'user-agent': ua } }),
+  };
 
   // Process in small concurrent batches so an upstream slowdown on a few
   // dams doesn't serialise the entire run.
@@ -354,7 +352,7 @@ const task: Task = async (_payload, helpers) => {
   for (const group of batch) {
     const results = await Promise.all(
       group.map((t) =>
-        fetchOne(t, date, time, ua).then(
+        fetchOne(upstream, request, t, date, time).then(
           (res) => ({ t, res }),
           () => ({ t, res: null }),
         ),

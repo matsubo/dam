@@ -5,8 +5,10 @@
 
 import { describe, expect, test } from 'bun:test';
 import type { Observed } from '../ingest/types.ts';
+import { fixtureUpstream } from '../ingest/upstream.ts';
 import {
   extractDataMap,
+  pageUrl,
   parseTndamTimestamp,
   tndamEntries,
   tndamReading,
@@ -180,11 +182,16 @@ describe('tndamReading', () => {
 
 describe('tndamEntries', () => {
   test('the six pages, keyed by PSNO, each read from its own page', async () => {
-    const asked: number[] = [];
-    const entries = tndamEntries(async (psno) => {
-      asked.push(psno);
-      return psno === 2 ? OFFLINE_HTML : makeHtml({});
-    });
+    const asked: string[] = [];
+    const entries = tndamEntries(
+      fixtureUpstream((url) => {
+        asked.push(url);
+        return {
+          body: url === pageUrl(2) ? OFFLINE_HTML : makeHtml({}),
+          charset: 'shift_jis',
+        };
+      }),
+    );
     expect(entries.map((e) => [e.key, e.name, e.pref])).toEqual([
       ['1', '鍔市ダム', '28'],
       ['2', '八幡谷ダム', '28'],
@@ -196,6 +203,6 @@ describe('tndamEntries', () => {
     const [, yawata] = entries;
     if (typeof yawata?.reading !== 'function') throw new Error('expected a page reading');
     expect((await yawata.reading(null)).state).toBe('empty');
-    expect(asked).toEqual([2]);
+    expect(asked).toEqual([pageUrl(2)]);
   });
 });

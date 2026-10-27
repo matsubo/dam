@@ -112,28 +112,15 @@ export function okayamaEntries(items: OkayamaItem[]): Entry[] {
   }));
 }
 
-async function fetchJson<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (res.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${res.status} for ${path}`);
-  return (await res.json()) as T;
-}
-
-export default ingestTask(SOURCE_ID, async (log) => {
-  const { latestDateTimestamp: latest } = await fetchJson<{ latestDateTimestamp: string }>(
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const json = async <T>(path: string) =>
+    (await upstream.fetch(`${BASE_URL}${path}`, { timeoutMs: 15_000 })).json<T>();
+  const { latestDateTimestamp: latest } = await json<{ latestDateTimestamp: string }>(
     `/data/damQuantities/data.json?request.preventCache=${Date.now()}`,
   );
   // 「2026-05-25 11:30:00」 → list/2026-05-25-11-30.json
   const slug = latest.slice(0, 16).replace(/[ :]/g, '-');
-  const { items } = await fetchJson<{ items: OkayamaItem[] }>(
-    `/data/damQuantities/list/${slug}.json`,
-  );
+  const { items } = await json<{ items: OkayamaItem[] }>(`/data/damQuantities/list/${slug}.json`);
   log(`${SOURCE_ID}: ${items.length} dams at ${latest}`);
   return { entries: okayamaEntries(items) };
 });

@@ -18,6 +18,7 @@
 import { type Cell, cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
 import { ingestTask } from '../ingest/run.ts';
 import type { Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const BASE_URL =
   process.env.GUNMA_KASEN_BASE_URL ?? 'https://www.river-gunma.jp/gunmaT/m4101/60/_0_{idx}_0.html';
@@ -120,32 +121,21 @@ export function gunmaReading(html: string, now: Date = new Date()): Reading {
 }
 
 /** One station's page, by its index. */
-export type PageFetcher = (idx: number) => Promise<string>;
-
-const fetchPage: PageFetcher = async (idx) => {
-  const r = await fetch(BASE_URL.replace('{idx}', String(idx)), {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) throw new Error(`idx=${idx} HTTP ${r.status}`);
-  return new TextDecoder('shift_jis').decode(await r.arrayBuffer());
-};
+export const pageUrl = (idx: number): string => BASE_URL.replace('{idx}', String(idx));
 
 /**
  * The provider's whole catalogue; each dam reads its own page, and a page
  * that fails leaves only that dam unreadable.
  */
-export function gunmaEntries(page: PageFetcher = fetchPage): Entry[] {
+export function gunmaEntries(upstream: Upstream): Entry[] {
   return STATIONS.map(({ idx, name }) => ({
     key: name,
     name,
     pref: PREF_CODE,
-    reading: async () => gunmaReading(await page(idx)),
+    reading: async () => gunmaReading((await upstream.fetch(pageUrl(idx))).text('shift_jis')),
   }));
 }
 
-export default ingestTask(SOURCE_ID, async () => ({ entries: gunmaEntries() }));
+export default ingestTask(SOURCE_ID, async ({ upstream }) => ({
+  entries: gunmaEntries(upstream),
+}));

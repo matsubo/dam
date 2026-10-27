@@ -134,23 +134,15 @@ export function shimonosekiEntries(observedAt: Date, rows: ParsedRow[]): Entry[]
   );
 }
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const r = await fetch(PAGE_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const r = await upstream.fetch(PAGE_URL, { allow: [404] });
   // The page is a 渇水 notice, taken down when the drought ends: nothing listed.
   if (r.status === 404) {
     log(`${SOURCE_ID}: HTTP 404 from ${PAGE_URL} (no drought notice)`);
     return { entries: [] };
   }
-  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status} from ${PAGE_URL}`);
 
-  const { observedAt, rows } = parseShimonosekiSuigen(await r.text());
+  const { observedAt, rows } = parseShimonosekiSuigen(r.text());
   if (!observedAt) {
     throw new Error(`${SOURCE_ID}: no 「令和…日現在」 line on ${PAGE_URL} — layout change?`);
   }

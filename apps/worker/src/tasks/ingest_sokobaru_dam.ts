@@ -50,8 +50,9 @@
 // Priority 291: no other source carries these dams except mudam (280), which
 // holds 真栄里's 1-2 year old daily figures; 291 is unused. Cron hourly at :05.
 
-import { ingestTask } from '../ingest/run.ts';
+import { ingestTask, type Log } from '../ingest/run.ts';
 import type { BoundDam, Entry, Reading } from '../ingest/types.ts';
+import { type Upstream, UpstreamError } from '../ingest/upstream.ts';
 
 const BASE_URL = process.env.SOKOBARU_DAM_URL ?? 'http://www.cosmos.ne.jp/~sokobaru/';
 
@@ -209,8 +210,16 @@ export function usableVolumeM3(
 
 // --- entries ----------------------------------------------------------------
 
-/** A page by path under BASE_URL, decoded; null on an HTTP error. */
-export type Fetcher = (path: string) => Promise<string | null>;
+/** A page by path under BASE_URL, decoded; null (logged) on an HTTP error. */
+async function getPage(upstream: Upstream, path: string, log: Log): Promise<string | null> {
+  try {
+    return (await upstream.fetch(new URL(path, BASE_URL).href)).text('shift_jis');
+  } catch (err) {
+    if (!(err instanceof UpstreamError) || err.status === null) throw err;
+    log(`${SOURCE_ID}: HTTP ${err.status} for ${path}`);
+    return null;
+  }
+}
 
 /**
  * One dam's reading from its 水文量 page and every hourly page it links to.
@@ -218,14 +227,15 @@ export type Fetcher = (path: string) => Promise<string | null>;
  */
 export async function readStation(
   page: string,
-  get: Fetcher,
+  upstream: Upstream,
   dam: BoundDam | null,
+  log: Log,
 ): Promise<Reading> {
-  const html = await get(page);
+  const html = await getPage(upstream, page, log);
   const links = html ? parseFieldLinks(html).filter((l) => l.label in FIELDS) : [];
   const series: (HourlySeries | null)[] = [];
   for (const l of links) {
-    const hourly = await get(l.href);
+    const hourly = await getPage(upstream, l.href, log);
     series.push(hourly ? parseHourlyPage(hourly) : null);
   }
   const hasData = hasDataOf(series);
@@ -245,7 +255,7 @@ export async function readStation(
   };
 }
 
-export function sokobaruEntries(get: Fetcher): Entry[] {
+export function sokobaruEntries(upstream: Upstream, log: Log): Entry[] {
   return STATIONS.map(
     ({ key, page, ndi }): Entry => ({
       key,
@@ -253,7 +263,7 @@ export function sokobaruEntries(get: Fetcher): Entry[] {
       pref: PREF_CODE,
       bind: ndi ? { ndi } : 'never',
       reading: page
-        ? (dam: BoundDam | null) => readStation(page, get, dam)
+        ? (dam: BoundDam | null) => readStation(page, upstream, dam, log)
         : { state: 'unreadable', why: 'a weir: no 水文量 page' },
     }),
   );
@@ -261,22 +271,7 @@ export function sokobaruEntries(get: Fetcher): Entry[] {
 
 // --- task -------------------------------------------------------------------
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const get: Fetcher = async (path) => {
-    const r = await fetch(new URL(path, BASE_URL), {
-      headers: {
-        'user-agent':
-          process.env.HTTP_USER_AGENT ??
-          'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-      },
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (r.status !== 200) {
-      log(`${SOURCE_ID}: HTTP ${r.status} for ${path}`);
-      return null;
-    }
-    return new TextDecoder('shift_jis').decode(await r.arrayBuffer());
-  };
-  // No page parsed for any dam reads nothing, and the run fails the job.
-  return { entries: sokobaruEntries(get) };
-});
+// No page parsed for any dam reads nothing, and the run fails the job.
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => ({
+  entries: sokobaruEntries(upstream, log),
+}));

@@ -5,6 +5,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import type { Reading } from '../ingest/types.ts';
+import { fixtureUpstream } from '../ingest/upstream.ts';
 import {
   parseShimokuboTimestamp,
   type ShimokuboJson,
@@ -140,7 +141,7 @@ describe('shimokuboReading', () => {
 
 describe('shimokuboEntries', () => {
   test('lists 下久保ダム by name, searched in 群馬 and 埼玉', async () => {
-    const [entry, ...rest] = shimokuboEntries(async () => TYPICAL);
+    const [entry, ...rest] = shimokuboEntries(fixtureUpstream(() => JSON.stringify(TYPICAL)));
     expect(rest).toEqual([]);
     expect(entry).toMatchObject({ key: '下久保ダム', name: '下久保ダム', pref: ['10', '11'] });
     if (typeof entry?.reading !== 'function') throw new Error('expected a reading function');
@@ -148,7 +149,7 @@ describe('shimokuboEntries', () => {
   });
 
   test('a feed that fails to load makes the reading throw (the run records it unreadable)', async () => {
-    const [entry] = shimokuboEntries(() => Promise.reject(new Error('HTTP 503')));
+    const [entry] = shimokuboEntries(fixtureUpstream(() => ({ status: 503 })));
     if (typeof entry?.reading !== 'function') throw new Error('expected a reading function');
     await expect(Promise.resolve(entry.reading(null))).rejects.toThrow('HTTP 503');
   });

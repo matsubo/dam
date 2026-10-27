@@ -14,8 +14,8 @@ import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { BoundDam, Reading } from '../ingest/types.ts';
+import { type Fixture, fixtureUpstream, type Upstream } from '../ingest/upstream.ts';
 import {
-  type Fetcher,
   hasDataOf,
   parseFieldLinks,
   parseHourlyPage,
@@ -242,18 +242,21 @@ const MAEZATO: BoundDam = {
   activeCapacityM3: 2_100_000,
 };
 
-/** The captured site; a path the capture lacks answers like an HTTP error. */
-const fixtures: Fetcher = (path) => page(path).catch(() => null);
+/** The captured site, by file name; a file the capture lacks answers HTTP 404. */
+const served = (url: string): Promise<Fixture> =>
+  readFile(join(DIR, url.slice(url.lastIndexOf('/') + 1))).catch(() => ({ status: 404 }));
+const fixtures = fixtureUpstream(served);
+const noLog = () => {};
 
-async function read(key: string, get: Fetcher, dam: BoundDam | null): Promise<Reading> {
-  const e = sokobaruEntries(get).find((x) => x.key === key);
+async function read(key: string, upstream: Upstream, dam: BoundDam | null): Promise<Reading> {
+  const e = sokobaruEntries(upstream, noLog).find((x) => x.key === key);
   if (!e) throw new Error(`${key}: not listed`);
   return typeof e.reading === 'function' ? e.reading(dam) : e.reading;
 }
 
 describe('sokobaruEntries', () => {
   test('lists the three dams pinned by NDI and the two weirs, which bind no dam', () => {
-    expect(sokobaruEntries(fixtures).map((e) => [e.key, e.pref, e.bind])).toEqual([
+    expect(sokobaruEntries(fixtures, noLog).map((e) => [e.key, e.pref, e.bind])).toEqual([
       ['底原ダム', '47', { ndi: '2752' }],
       ['真栄里ダム', '47', { ndi: '2753' }],
       ['石垣ダム', '47', { ndi: '2751' }],
@@ -307,16 +310,17 @@ describe('sokobaruEntries', () => {
   });
 
   test('a dam whose hourly page fails is unreadable', async () => {
-    const broken: Fetcher = (path) =>
-      path === '00005003.html' ? Promise.resolve(null) : fixtures(path);
-    expect(await readStation('00005001.html', broken, null)).toEqual({
+    const broken = fixtureUpstream((url) =>
+      url.endsWith('/00005003.html') ? { status: 503 } : served(url),
+    );
+    expect(await readStation('00005001.html', broken, null, noLog)).toEqual({
       state: 'unreadable',
       why: 'a page failed to load or parse',
     });
   });
 
   test('a dam whose 水文量 page fails is unreadable', async () => {
-    expect(await readStation('00009001.html', fixtures, null)).toEqual({
+    expect(await readStation('00009001.html', fixtures, null, noLog)).toEqual({
       state: 'unreadable',
       why: '00009001.html failed',
     });

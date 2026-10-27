@@ -24,15 +24,12 @@
 
 import { ingestTask } from '../ingest/run.ts';
 import type { Entry } from '../ingest/types.ts';
+import { UpstreamError } from '../ingest/upstream.ts';
 
 const PAGE_URL = process.env.YONEZAWA_HEIYA_URL ?? 'https://www.yonezawa-heiya.or.jp/pages/150/';
 
 const PREF_CODE = '06';
 const SOURCE_ID = 'yonezawa-heiya';
-
-const USER_AGENT =
-  process.env.HTTP_USER_AGENT ??
-  'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
 
 // --- parsing ----------------------------------------------------------------
 
@@ -113,19 +110,18 @@ export function yonezawaEntry(current: string, archive: string | null): Entry {
   };
 }
 
-async function fetchHtml(url: string): Promise<string | null> {
-  const r = await fetch(url, {
-    headers: { 'user-agent': USER_AGENT },
-    signal: AbortSignal.timeout(20_000),
-  });
-  return r.status === 200 ? await r.text() : null;
-}
-
-export default ingestTask(SOURCE_ID, async (log) => {
-  const html = await fetchHtml(PAGE_URL);
-  if (html === null) throw new Error(`${SOURCE_ID}: ${PAGE_URL} did not return 200`);
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const html = (await upstream.fetch(PAGE_URL)).text();
   const archiveUrl = findArchiveUrl(html, PAGE_URL);
-  const archive = archiveUrl ? await fetchHtml(archiveUrl) : null;
+  // An archive answering with an error status is skipped; a network failure fails the run.
+  let archive: string | null = null;
+  if (archiveUrl) {
+    try {
+      archive = (await upstream.fetch(archiveUrl)).text();
+    } catch (err) {
+      if (!(err instanceof UpstreamError && err.status !== null)) throw err;
+    }
+  }
   if (archive === null) log(`${SOURCE_ID}: archive ${archiveUrl ?? '(no link)'} not read`);
   return { entries: [yonezawaEntry(html, archive)], dated: true };
 });

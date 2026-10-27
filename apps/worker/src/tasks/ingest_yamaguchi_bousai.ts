@@ -35,6 +35,7 @@
 import { type Cell, cell, cellState, numberIn } from '../ingest/cells.ts';
 import { ingestTask } from '../ingest/run.ts';
 import type { Entry, Observed, Reading } from '../ingest/types.ts';
+import { UpstreamError } from '../ingest/upstream.ts';
 
 const BASE_URL =
   process.env.YAMAGUCHI_BOUSAI_URL ??
@@ -163,28 +164,20 @@ export function yamaguchiEntries(readings: ReadonlyMap<string, Reading>): Entry[
 
 // --- task -------------------------------------------------------------------
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const ua =
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
-
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
   // Fetch all stations in parallel; a page that fails is that station's
   // unreadable reading, never a dropped entry.
   const readings = new Map<string, Reading>(
     await Promise.all(
       STATIONS.map(async ({ code }): Promise<[string, Reading]> => {
         try {
-          const r = await fetch(`${BASE_URL}?stncd=${code}`, {
-            headers: { 'user-agent': ua },
-            signal: AbortSignal.timeout(20_000),
-            redirect: 'follow',
-          });
-          if (r.status !== 200) {
-            log(`${SOURCE_ID}: stncd=${code} HTTP ${r.status}`);
-            return [code, { state: 'unreadable', why: `HTTP ${r.status}` }];
-          }
-          return [code, yamaguchiReading(await r.text())];
+          const r = await upstream.fetch(`${BASE_URL}?stncd=${code}`);
+          return [code, yamaguchiReading(r.text())];
         } catch (err) {
+          if (err instanceof UpstreamError && err.status !== null) {
+            log(`${SOURCE_ID}: stncd=${code} HTTP ${err.status}`);
+            return [code, { state: 'unreadable', why: `HTTP ${err.status}` }];
+          }
           return [
             code,
             { state: 'unreadable', why: err instanceof Error ? err.message : String(err) },

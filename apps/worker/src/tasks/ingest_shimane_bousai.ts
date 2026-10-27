@@ -39,6 +39,7 @@
 import { type Cell, cell, cellState, numberIn } from '../ingest/cells.ts';
 import { ingestTask } from '../ingest/run.ts';
 import type { Entry, Observed, Reading } from '../ingest/types.ts';
+import { UpstreamError } from '../ingest/upstream.ts';
 
 const BASE_URL = process.env.SHIMANE_BOUSAI_URL ?? 'https://www.suibou-shimane.jp';
 
@@ -189,28 +190,20 @@ export function dayFileDates(now: Date): string[] {
 
 // --- task -------------------------------------------------------------------
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const ua =
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
-
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
   const files: Record<string, unknown>[] = [];
   const failures: string[] = [];
   for (const day of dayFileDates(new Date())) {
     const url = `${BASE_URL}/dyn/dps/json/${day}/dam60.json`;
     try {
-      const res = await fetch(url, {
-        headers: { 'user-agent': ua },
-        signal: AbortSignal.timeout(20_000),
-      });
+      files.push((await upstream.fetch(url)).json<Record<string, unknown>>());
+    } catch (err) {
       // Today's file does not exist until the first snapshot after 00:00 JST.
-      if (res.status !== 200) {
-        failures.push(`HTTP ${res.status} for ${day}`);
-        log(`${SOURCE_ID}: HTTP ${res.status} for ${url}; skipping`);
+      if (err instanceof UpstreamError && err.status !== null) {
+        failures.push(`HTTP ${err.status} for ${day}`);
+        log(`${SOURCE_ID}: HTTP ${err.status} for ${url}; skipping`);
         continue;
       }
-      files.push((await res.json()) as Record<string, unknown>);
-    } catch (err) {
       failures.push(`${day}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }

@@ -136,18 +136,8 @@ export function kudamatsuEntries(dams: ParsedDam[]): Entry[] {
   });
 }
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const r = await fetch(PAGE_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status} from ${PAGE_URL}`);
-
-  const dams = parseKudamatsuSuigen(await r.text());
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const dams = parseKudamatsuSuigen((await upstream.fetch(PAGE_URL)).text());
   log(`${SOURCE_ID}: parsed ${dams.length} dams (${dams.map((d) => d.name).join(', ')})`);
   if (dams.length === 0) {
     throw new Error(`${SOURCE_ID}: no 「…ダムの状況」 section on ${PAGE_URL} — layout change?`);

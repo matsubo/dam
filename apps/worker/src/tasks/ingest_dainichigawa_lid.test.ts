@@ -13,10 +13,10 @@ import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Reading } from '../ingest/types.ts';
+import { fixtureUpstream, type Upstream } from '../ingest/upstream.ts';
 import {
   dailyReading,
   dainichigawaEntry,
-  type Fetcher,
   parseDailyLinks,
   parseDailyText,
   pdfToText,
@@ -30,16 +30,16 @@ async function septemberText(): Promise<string> {
 }
 
 /** The page and September's PDF; every other month's PDF answers 404. */
-const fixtureFetcher: Fetcher = async (url) => {
-  if (url === PAGE_URL) return new Response(await readFile(join(DIR, 'dam_2026-09-28.html')));
+const site = fixtureUpstream(async (url) => {
+  if (url === PAGE_URL) return readFile(join(DIR, 'dam_2026-09-28.html'));
   if (url.endsWith('/R8sepday-dam.pdf')) {
-    return new Response(await readFile(join(DIR, 'R8sepday-dam_2026-09-28.pdf')));
+    return readFile(join(DIR, 'R8sepday-dam_2026-09-28.pdf'));
   }
-  return new Response('not found', { status: 404 });
-};
+  return { status: 404, body: 'not found' };
+});
 
-async function read(fetcher: Fetcher): Promise<Reading> {
-  const r = dainichigawaEntry(fetcher, () => {}).reading;
+async function read(upstream: Upstream): Promise<Reading> {
+  const r = dainichigawaEntry(upstream, () => {}).reading;
   return typeof r === 'function' ? r(null) : r;
 }
 
@@ -98,20 +98,20 @@ describe('parseDailyText', () => {
 describe('dainichigawaEntry', () => {
   test('is the one dam, pinned to NDI 1594 (南あわじ市), not a same-named 大日川', () => {
     // Two masters are named 大日川: NDI 1594 (兵庫) and NDI 1242 (石川).
-    const e = dainichigawaEntry(fixtureFetcher, () => {});
+    const e = dainichigawaEntry(site, () => {});
     expect(e).toMatchObject({ key: '大日川ダム', name: '大日川ダム', pref: '28' });
     expect(e.bind).toEqual({ ndi: '1594' });
   });
 
   test('reads every measured day of the months it could fetch', async () => {
     // 8月's PDF answers 404 here: September's 28 days still stand.
-    const r = await read(fixtureFetcher);
+    const r = await read(site);
     if (r.state !== 'values') throw new Error(r.state);
     expect(r.observations).toHaveLength(28);
   });
 
   test('a page that cannot be fetched throws, so the run records it unreadable', async () => {
-    const down: Fetcher = async () => new Response('', { status: 503 });
+    const down = fixtureUpstream(() => ({ status: 503 }));
     await expect(read(down)).rejects.toThrow('HTTP 503');
   });
 

@@ -114,19 +114,10 @@ export function okinawaEbEntries(csv: string, now: Date = new Date()): Entry[] {
 
 // --- task -------------------------------------------------------------------
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const ua =
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
-
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
   let csv: string;
   try {
-    const r = await fetch(CSV_URL, {
-      headers: { 'user-agent': ua },
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (r.status !== 200) throw new Error(`HTTP ${r.status}`);
-    csv = await r.text();
+    csv = (await upstream.fetch(CSV_URL)).text();
   } catch (err) {
     // Both columns are known in advance: record them unreadable.
     const why = err instanceof Error ? err.message : String(err);

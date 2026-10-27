@@ -38,10 +38,6 @@ const PAGE_URL = process.env.SANNOUKAI_URL ?? 'https://sannoukai.jp/condition/';
 const PREF_CODE = '03';
 const SOURCE_ID = 'sannoukai';
 
-const USER_AGENT =
-  process.env.HTTP_USER_AGENT ??
-  'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
-
 // --- parsing ----------------------------------------------------------------
 
 export interface ParsedDam {
@@ -117,21 +113,12 @@ export function sannoukaiEntries(html: string, observedAt: Date | null): Entry[]
   }));
 }
 
-async function fetchOk(url: string): Promise<Response> {
-  const r = await fetch(url, {
-    headers: { 'user-agent': USER_AGENT },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status} for ${url}`);
-  return r;
-}
-
-export default ingestTask(SOURCE_ID, async (log) => {
-  const html = await (await fetchOk(PAGE_URL)).text();
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const html = (await upstream.fetch(PAGE_URL)).text();
   const restUrl = findRestUrl(html);
   let observedAt: Date | null = null;
   try {
-    if (restUrl) observedAt = observedAtFromRest(await (await fetchOk(restUrl)).json());
+    if (restUrl) observedAt = observedAtFromRest((await upstream.fetch(restUrl)).json<unknown>());
   } catch (err) {
     log(`${SOURCE_ID}: REST record unreadable: ${err instanceof Error ? err.message : err}`);
   }

@@ -247,23 +247,10 @@ export function chubuEntries(html: string): Entry[] {
   return entries;
 }
 
-async function fetchReport(): Promise<string> {
-  const r = await fetch(PAGE_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) throw new Error(`HTTP ${r.status} for ${PAGE_URL}`);
-  return r.text();
-}
-
-export default ingestTask(SOURCE_ID, async (log) => {
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
   let html: string;
   try {
-    html = await fetchReport();
+    html = (await upstream.fetch(PAGE_URL)).text();
   } catch (err) {
     // The six dams are known in advance: record them unreadable, and the run
     // fails the job so it is retried.

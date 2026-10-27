@@ -89,17 +89,8 @@ export function hyogoEntries(csv: string): Entry[] {
   return out;
 }
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const res = await fetch(CSV_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (res.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${res.status}`);
-  const entries = hyogoEntries(await res.text());
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const entries = hyogoEntries((await upstream.fetch(CSV_URL, { timeoutMs: 15_000 })).text());
   log(`${SOURCE_ID}: ${entries.length} stations`);
   return { entries };
 });

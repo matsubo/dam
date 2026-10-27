@@ -31,6 +31,7 @@
 import { type Cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
 import { ingestTask } from '../ingest/run.ts';
 import type { Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const PAGE_URL =
   process.env.KTR_KINU_DAM_URL ?? 'https://www.ktr.mlit.go.jp/kinudamu/daminfo/jp/realDM.html';
@@ -158,21 +159,14 @@ export function kinuEntries(page: { html: string } | { error: string }): Entry[]
   }));
 }
 
-async function fetchPage(): Promise<{ html: string } | { error: string }> {
+async function fetchPage(upstream: Upstream): Promise<{ html: string } | { error: string }> {
   try {
-    const r = await fetch(PAGE_URL, {
-      headers: {
-        'user-agent':
-          process.env.HTTP_USER_AGENT ??
-          'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-      },
-      signal: AbortSignal.timeout(12_000),
-    });
-    if (r.status !== 200) return { error: `HTTP ${r.status}` };
-    return { html: await r.text() };
+    return { html: (await upstream.fetch(PAGE_URL, { timeoutMs: 12_000 })).text() };
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
   }
 }
 
-export default ingestTask(SOURCE_ID, async () => ({ entries: kinuEntries(await fetchPage()) }));
+export default ingestTask(SOURCE_ID, async ({ upstream }) => ({
+  entries: kinuEntries(await fetchPage(upstream)),
+}));

@@ -76,17 +76,8 @@ export function kisoEntries(facilities: readonly RealtimeFacility[], observedAt:
   });
 }
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const r = await fetch(PAGE_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status} for ${PAGE_URL}`);
-  const { observedAt, facilities } = parseJwaChubuRealtime(await r.text());
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const { observedAt, facilities } = parseJwaChubuRealtime((await upstream.fetch(PAGE_URL)).text());
   if (!observedAt || facilities.length === 0) {
     throw new Error(
       `${SOURCE_ID}: no 観測時刻 or no facility blocks on ${PAGE_URL} — layout change?`,

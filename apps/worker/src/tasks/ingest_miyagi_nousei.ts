@@ -255,29 +255,16 @@ export function miyagiNouseiEntries(lines: string[]): Entry[] {
   }));
 }
 
-async function fetchOk(url: string, timeoutMs: number): Promise<Response> {
-  const res = await fetch(url, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  if (res.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${res.status} for ${url}`);
-  return res;
-}
-
 // Positional line rebuilding is what a layout change breaks first; a run that
 // finds names but no figures reads every entry as unreadable, and the run
 // fails the job instead of exiting green.
-export default ingestTask(SOURCE_ID, async (log) => {
-  const reportUrl = findLatestReportUrl(await (await fetchOk(INDEX_URL, 20_000)).text());
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const reportUrl = findLatestReportUrl((await upstream.fetch(INDEX_URL)).text());
   if (!reportUrl) throw new Error(`${SOURCE_ID}: no survey page linked from ${INDEX_URL}`);
-  const pdfUrl = findReportPdfUrl(await (await fetchOk(reportUrl, 20_000)).text());
+  const pdfUrl = findReportPdfUrl((await upstream.fetch(reportUrl)).text());
   if (!pdfUrl) throw new Error(`${SOURCE_ID}: no PDF on ${reportUrl}`);
-  const pdf = await fetchOk(pdfUrl, 30_000);
-  const entries = miyagiNouseiEntries(await pdfToLines(new Uint8Array(await pdf.arrayBuffer())));
+  const pdf = await upstream.fetch(pdfUrl, { timeoutMs: 30_000 });
+  const entries = miyagiNouseiEntries(await pdfToLines(pdf.bytes));
   log(`${SOURCE_ID}: ${entries.length} rows in ${pdfUrl}`);
   return { entries, dated: true };
 });

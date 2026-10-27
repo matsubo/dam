@@ -27,6 +27,7 @@ import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
 import { numberIn } from '../ingest/cells.ts';
+import { liveUpstream } from '../ingest/upstream.ts';
 import { JUNPO_DAMS, parseJwaJunpoHtml } from './ingest_jwa_junpo.ts';
 
 const ARCHIVE_URL_BASE =
@@ -132,6 +133,7 @@ function urlFor(date: Date): string {
 
 const task: Task = async (rawPayload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
+  const upstream = liveUpstream('jwa-junpo');
   const payload = (rawPayload ?? {}) as BackfillPayload;
   const months = Math.max(1, Math.min(60, payload.months ?? 12));
 
@@ -148,21 +150,8 @@ const task: Task = async (rawPayload, helpers) => {
   for (const date of dates) {
     const url = urlFor(date);
     try {
-      const r = await fetch(url, {
-        headers: {
-          'user-agent':
-            process.env.HTTP_USER_AGENT ??
-            'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-        },
-        signal: AbortSignal.timeout(20_000),
-      });
-      if (r.status !== 200) {
-        log(`backfill:jwa-junpo: ${url} HTTP ${r.status}; skip`);
-        pagesFail += 1;
-        await sleep(SLEEP_BETWEEN_FETCHES_MS);
-        continue;
-      }
-      const html = await r.text();
+      // A non-2xx page throws; the catch below counts it failed and moves on.
+      const html = (await upstream.fetch(url)).text();
       const page = parseJwaJunpoHtml(html);
       const reportDate = page.reportDate;
       // Only rows printing 利水容量, 貯水量 and 貯水率 are written.

@@ -31,18 +31,13 @@ import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
 import { unzipSync } from 'fflate';
 import type { Task } from 'graphile-worker';
+import { liveUpstream } from '../ingest/upstream.ts';
 
 const BODIK_PACKAGE_ID = '1b0c5baf-e309-4ad3-8c31-a4dc3cc9781f';
 const BODIK_API_BASE = process.env.BODIK_API_BASE ?? 'https://data.bodik.jp';
 
 const PREF_CODE = '46';
 const SOURCE_ID = 'kagoshima-bodik';
-
-const HEADERS = {
-  'user-agent':
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-};
 
 // --- types ------------------------------------------------------------------
 
@@ -199,37 +194,25 @@ async function resolveDamIds(
   return out;
 }
 
-// --- fetch helpers ----------------------------------------------------------
+// --- task -------------------------------------------------------------------
 
 interface BodikResource {
   name: string;
   url: string;
 }
 
-async function fetchResourceList(): Promise<BodikResource[]> {
-  const url = `${BODIK_API_BASE}/api/3/action/package_show?id=${BODIK_PACKAGE_ID}`;
-  const r = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(20_000) });
-  if (r.status !== 200) throw new Error(`BODIK package API: HTTP ${r.status}`);
-  const data = (await r.json()) as { result: { resources: BodikResource[] } };
-  return data.result.resources.filter((res) => res.url.endsWith('.zip'));
-}
-
-async function downloadZip(url: string): Promise<Uint8Array> {
-  const r = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(60_000) });
-  if (r.status !== 200) throw new Error(`ZIP download: HTTP ${r.status} ${url}`);
-  const buf = await r.arrayBuffer();
-  return new Uint8Array(buf);
-}
-
-// --- task -------------------------------------------------------------------
-
 const BATCH_SIZE = 1_000;
 
 const task: Task = async (payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
   const { fromYear } = (payload ?? {}) as BackfillPayload;
+  const upstream = liveUpstream(SOURCE_ID);
 
-  const resources = await fetchResourceList();
+  const packageUrl = `${BODIK_API_BASE}/api/3/action/package_show?id=${BODIK_PACKAGE_ID}`;
+  const data = (await upstream.fetch(packageUrl)).json<{
+    result: { resources: BodikResource[] };
+  }>();
+  const resources = data.result.resources.filter((res) => res.url.endsWith('.zip'));
   log(`${SOURCE_ID}: found ${resources.length} ZIP resources`);
 
   let totalWritten = 0;
@@ -250,7 +233,7 @@ const task: Task = async (payload, helpers) => {
     log(`${SOURCE_ID}: downloading ${res.name}`);
     let zipBytes: Uint8Array;
     try {
-      zipBytes = await downloadZip(res.url);
+      zipBytes = (await upstream.fetch(res.url, { timeoutMs: 60_000 })).bytes;
     } catch (err) {
       log(`${SOURCE_ID}: failed to download "${res.name}": ${err}`);
       continue;

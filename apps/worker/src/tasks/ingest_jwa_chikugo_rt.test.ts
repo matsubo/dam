@@ -13,10 +13,11 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { bindEntry, type Master } from '../ingest/bind.ts';
 import type { Entry, Reading } from '../ingest/types.ts';
+import { fixtureUpstream } from '../ingest/upstream.ts';
 import {
   chikugoRtEntries,
   chikugoRtReading,
-  type FetchPage,
+  pageUrl,
   parseChikugoRtPage,
 } from './ingest_jwa_chikugo_rt.ts';
 
@@ -26,7 +27,7 @@ const FIXTURE_DATE: Record<string, string> = {
   CO: '2026-09-28',
 };
 
-async function page(code: string): Promise<string> {
+function pageBytes(code: string): Promise<Uint8Array> {
   const path = join(
     import.meta.dir,
     '..',
@@ -35,14 +36,18 @@ async function page(code: string): Promise<string> {
     '..',
     `tests/fixtures/jwa_chikugo_rt/rep${code}_I60_${FIXTURE_DATE[code]}.shiftjis.html`,
   );
-  return new TextDecoder('shift_jis').decode(await readFile(path));
+  return readFile(path);
+}
+
+async function page(code: string): Promise<string> {
+  return new TextDecoder('shift_jis').decode(await pageBytes(code));
 }
 
 /** Serves the captured pages; a station without a capture answers like a dead page. */
-const fixtures: FetchPage = async (code) => {
-  if (!FIXTURE_DATE[code]) throw new Error(`HTTP 503 for rep${code}_I60.html`);
-  return page(code);
-};
+const fixtures = fixtureUpstream((url) => {
+  const code = Object.keys(FIXTURE_DATE).find((c) => url === pageUrl(c));
+  return code ? pageBytes(code) : { status: 503 };
+});
 
 async function readingOf(e: Entry | undefined): Promise<Reading> {
   if (!e) throw new Error('no entry');

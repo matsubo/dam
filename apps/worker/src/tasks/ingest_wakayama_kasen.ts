@@ -144,23 +144,10 @@ export function wakayamaEntries(text: string): Entry[] {
 
 // --- task -------------------------------------------------------------------
 
-async function fetchCsv(): Promise<string> {
-  const r = await fetch(DATA_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) throw new Error(`HTTP ${r.status}`);
-  return new TextDecoder('euc-jp').decode(await r.arrayBuffer());
-}
-
-export default ingestTask(SOURCE_ID, async (log) => {
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
   let text: string;
   try {
-    text = await fetchCsv();
+    text = (await upstream.fetch(DATA_URL)).text('euc-jp');
   } catch (err) {
     // STATION_MAP is known in advance: record it unreadable rather than nothing.
     const why = err instanceof Error ? err.message : String(err);

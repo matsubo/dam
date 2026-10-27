@@ -12,6 +12,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Reading } from '../ingest/types.ts';
+import { fixtureUpstream } from '../ingest/upstream.ts';
 import { ashidaSekiEntries, ashidaSekiReading } from './ingest_cgr_ashida_seki.ts';
 
 const FIXTURE = join(
@@ -33,7 +34,7 @@ function observed(r: Reading) {
 
 describe('ashidaSekiEntries', () => {
   test('lists the one weir under its printed name, read from the page', async () => {
-    const [entry, ...rest] = ashidaSekiEntries(page);
+    const [entry, ...rest] = ashidaSekiEntries(fixtureUpstream(() => readFile(FIXTURE)));
     expect(rest).toEqual([]);
     expect(entry?.key).toBe('芦田川河口堰');
     expect(entry?.name).toBe('芦田川河口堰');
@@ -43,7 +44,7 @@ describe('ashidaSekiEntries', () => {
   });
 
   test('a page that fails to load makes the reading throw (the run records it unreadable)', async () => {
-    const [entry] = ashidaSekiEntries(() => Promise.reject(new Error('HTTP 503')));
+    const [entry] = ashidaSekiEntries(fixtureUpstream(() => ({ status: 503 })));
     if (typeof entry?.reading !== 'function') throw new Error('expected a reading function');
     await expect(Promise.resolve(entry.reading(null))).rejects.toThrow('HTTP 503');
   });

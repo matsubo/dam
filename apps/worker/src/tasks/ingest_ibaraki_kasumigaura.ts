@@ -114,17 +114,10 @@ export function kasumigauraEntry(reading: Reading): Entry {
   };
 }
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const ua =
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
   try {
-    const res = await fetch(PAGE_URL, {
-      headers: { 'user-agent': ua },
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
-    const html = new TextDecoder('shift_jis').decode(await res.arrayBuffer());
+    const res = await upstream.fetch(PAGE_URL, { timeoutMs: 15_000 });
+    const html = res.text('shift_jis');
     return { entries: [kasumigauraEntry(dejimaReading(html))] };
   } catch (err) {
     const why = err instanceof Error ? err.message : String(err);

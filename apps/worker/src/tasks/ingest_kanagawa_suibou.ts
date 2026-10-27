@@ -30,6 +30,7 @@
 
 import { ingestTask } from '../ingest/run.ts';
 import type { Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const BASE_URL =
   process.env.KANAGAWA_SUIBOU_BASE_URL ??
@@ -42,6 +43,9 @@ const PREF_CODE = '14';
 const IIZUMI = { key: '3585_4_1601', name: '飯泉取水堰', page: 'p10202_18_3585_4_1601.html' };
 /** The other 取水堰 station the system publishes: no master dam (0209). */
 const KUSHIKAWA = { key: '3585_4_1507', name: '串川取水堰' };
+
+/** 飯泉's 水位グラフ page. */
+export const IIZUMI_URL = `${BASE_URL}/${IIZUMI.page}`;
 
 export interface SuibouStage {
   station: string;
@@ -106,8 +110,8 @@ export function iizumiReading(html: string): Reading {
   return { state: 'unreadable', why: 'no 水位表 row' };
 }
 
-/** Both 取水堰 stations; only 飯泉's page is read, through `fetchPage`. */
-export function suibouEntries(fetchPage: (page: string) => Promise<string>): Entry[] {
+/** Both 取水堰 stations; only 飯泉's page is read. */
+export function suibouEntries(upstream: Upstream): Entry[] {
   return [
     {
       key: IIZUMI.key,
@@ -115,7 +119,8 @@ export function suibouEntries(fetchPage: (page: string) => Promise<string>): Ent
       pref: PREF_CODE,
       // The master row carries the published name; nothing looser may bind.
       bind: { exact: true },
-      reading: async () => iizumiReading(await fetchPage(IIZUMI.page)),
+      reading: async () =>
+        iizumiReading((await upstream.fetch(IIZUMI_URL, { timeoutMs: 15_000 })).text()),
     },
     {
       key: KUSHIKAWA.key,
@@ -127,17 +132,6 @@ export function suibouEntries(fetchPage: (page: string) => Promise<string>): Ent
   ];
 }
 
-async function fetchPage(page: string): Promise<string> {
-  const res = await fetch(`${BASE_URL}/${page}`, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (res.status !== 200) throw new Error(`HTTP ${res.status} for ${page}`);
-  return res.text();
-}
-
-export default ingestTask(SOURCE_ID, async () => ({ entries: suibouEntries(fetchPage) }));
+export default ingestTask(SOURCE_ID, async ({ upstream }) => ({
+  entries: suibouEntries(upstream),
+}));

@@ -35,6 +35,7 @@
 import { type Cell, cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
 import { ingestTask } from '../ingest/run.ts';
 import type { Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const SOURCE_ID = 'aomori-dam';
 const BASE_URL =
@@ -152,40 +153,32 @@ export function aomoriReading(html: string): Reading {
   return { state, observations: [toRow(latest)] };
 }
 
-const headers = {
-  'user-agent':
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-};
-
-async function fetchShiftJis(url: string): Promise<string> {
-  const r = await fetch(url, { headers, signal: AbortSignal.timeout(15_000) });
-  if (r.status !== 200) throw new Error(`HTTP ${r.status}`);
-  return new TextDecoder('shift_jis').decode(await r.arrayBuffer());
-}
+const TIMEOUT_MS = 15_000;
 
 /** One dam's graph page, by 局番号. */
-export type GraphFetcher = (stationNo: number) => Promise<string>;
-
-const fetchGraph: GraphFetcher = (sn) =>
-  fetchShiftJis(`${GRAPH_URL}?style=dam_graph10m&dk=4&it=0&sn=${sn}&nw=1`);
+export const graphUrl = (stationNo: number): string =>
+  `${GRAPH_URL}?style=dam_graph10m&dk=4&it=0&sn=${stationNo}&nw=1`;
 
 /**
  * Every listed dam; each reads its own page once the run has bound it, and a
  * page that fails leaves only that dam unreadable.
  */
-export function aomoriEntries(dams: DamCfg[], graph: GraphFetcher = fetchGraph): Entry[] {
+export function aomoriEntries(dams: DamCfg[], upstream: Upstream): Entry[] {
   return dams.map((c) => ({
     key: c.aomoriName,
     name: c.aomoriName,
     pref: PREF_CODE,
-    reading: async () => aomoriReading(await graph(c.stationNo)),
+    reading: async () =>
+      aomoriReading(
+        (await upstream.fetch(graphUrl(c.stationNo), { timeoutMs: TIMEOUT_MS })).text('shift_jis'),
+      ),
   }));
 }
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const dams = parseAomoriDamList(await fetchShiftJis(LIST_URL));
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const list = await upstream.fetch(LIST_URL, { timeoutMs: TIMEOUT_MS });
+  const dams = parseAomoriDamList(list.text('shift_jis'));
   if (dams.length === 0) throw new Error(`${SOURCE_ID}: ダム諸量現況表 lists no dams`);
   log(`${SOURCE_ID}: ${dams.length} dams listed`);
-  return { entries: aomoriEntries(dams) };
+  return { entries: aomoriEntries(dams, upstream) };
 });

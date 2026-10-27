@@ -173,23 +173,10 @@ export function aichiEntries(html: string): Entry[] {
   }));
 }
 
-async function fetchPage(): Promise<string> {
-  const r = await fetch(DATA_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) throw new Error(`HTTP ${r.status}`);
-  return r.text();
-}
-
-export default ingestTask(SOURCE_ID, async (log) => {
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
   let html: string;
   try {
-    html = await fetchPage();
+    html = (await upstream.fetch(DATA_URL)).text();
   } catch (err) {
     // Both columns are known in advance: a failed fetch still records them.
     const why = err instanceof Error ? err.message : String(err);

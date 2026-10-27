@@ -30,6 +30,7 @@
 
 import { ingestTask } from '../ingest/run.ts';
 import type { Entry, Observed, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const DATA_URL = process.env.JWA_BIWAKO_URL ?? 'http://www.biwako-mizukanri.jp/daminfo1_h.json';
 
@@ -111,25 +112,16 @@ export function biwakoEntries(page: { text: string } | { failed: string }): Entr
   ];
 }
 
-async function fetchFeed(): Promise<{ text: string } | { failed: string }> {
+async function fetchFeed(upstream: Upstream): Promise<{ text: string } | { failed: string }> {
   try {
-    const r = await fetch(DATA_URL, {
-      headers: {
-        'user-agent':
-          process.env.HTTP_USER_AGENT ??
-          'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-      },
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (r.status !== 200) return { failed: `HTTP ${r.status} for ${DATA_URL}` };
-    return { text: await r.text() };
+    return { text: (await upstream.fetch(DATA_URL)).text() };
   } catch (err) {
     return { failed: err instanceof Error ? err.message : String(err) };
   }
 }
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const page = await fetchFeed();
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const page = await fetchFeed(upstream);
   if ('failed' in page) log(`${SOURCE_ID}: ${page.failed}`);
   return { entries: biwakoEntries(page) };
 });

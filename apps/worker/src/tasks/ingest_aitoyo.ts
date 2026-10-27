@@ -190,19 +190,10 @@ export function aitoyoEntries(html: string): Entry[] {
   return entries;
 }
 
-export default ingestTask(SOURCE_ID, async (log) => {
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
   let html: string;
   try {
-    const r = await fetch(PAGE_URL, {
-      headers: {
-        'user-agent':
-          process.env.HTTP_USER_AGENT ??
-          'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-      },
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (r.status !== 200) throw new Error(`HTTP ${r.status} from ${PAGE_URL}`);
-    html = await r.text();
+    html = (await upstream.fetch(PAGE_URL)).text();
   } catch (err) {
     // The seven dams are known in advance: record them unreadable, and the
     // run fails the job so it is retried.

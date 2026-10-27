@@ -39,6 +39,7 @@
 
 import { ingestTask, type Log } from '../ingest/run.ts';
 import type { Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 import { pdfToText } from './ingest_oita_nourin.ts';
 
 const INDEX_URL =
@@ -48,9 +49,7 @@ const ORIGIN = 'https://www.pref.kagawa.lg.jp';
 const PREF_CODE = '37';
 const SOURCE_ID = 'kagawa-tameike';
 
-const USER_AGENT =
-  process.env.HTTP_USER_AGENT ??
-  'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
+const TIMEOUT_MS = 30_000;
 
 /** 宝山湖 as the page names it — its stamp and universe key. */
 const HOZANKO = '宝山湖';
@@ -67,8 +66,6 @@ export interface PondRow {
   /** The rate cell as printed: a whole percent, or the PDF's 「－」 marker. */
   cell: string;
 }
-
-export type Fetcher = (url: string) => Promise<Response>;
 
 // --- parsing ----------------------------------------------------------------
 
@@ -218,7 +215,7 @@ export function pondEntries(text: string): Entry[] {
  * not linked, not served, times out or cannot be read — so 宝山湖, read from
  * the page itself, is still written.
  */
-export async function readPonds(indexHtml: string, fetcher: Fetcher, log: Log): Promise<Entry[]> {
+export async function readPonds(indexHtml: string, upstream: Upstream, log: Log): Promise<Entry[]> {
   const pdfUrl = findLatestPdfUrl(indexHtml);
   if (!pdfUrl) {
     log(`${SOURCE_ID}: no chosui PDF linked from the index`);
@@ -226,12 +223,7 @@ export async function readPonds(indexHtml: string, fetcher: Fetcher, log: Log): 
   }
   let text: string;
   try {
-    const pdfRes = await fetcher(pdfUrl);
-    if (pdfRes.status !== 200) {
-      log(`${SOURCE_ID}: PDF HTTP ${pdfRes.status} for ${pdfUrl}`);
-      return [];
-    }
-    text = await pdfToText(new Uint8Array(await pdfRes.arrayBuffer()));
+    text = await pdfToText((await upstream.fetch(pdfUrl, { timeoutMs: TIMEOUT_MS })).bytes);
   } catch (err) {
     log(`${SOURCE_ID}: PDF unreadable at ${pdfUrl}: ${err instanceof Error ? err.message : err}`);
     return [];
@@ -241,18 +233,11 @@ export async function readPonds(indexHtml: string, fetcher: Fetcher, log: Log): 
   return ponds;
 }
 
-const fetchWithUa: Fetcher = (url) =>
-  fetch(url, { headers: { 'user-agent': USER_AGENT }, signal: AbortSignal.timeout(30_000) });
-
-export default ingestTask(SOURCE_ID, async (log) => {
-  const indexRes = await fetchWithUa(INDEX_URL);
-  if (indexRes.status !== 200) {
-    throw new Error(`${SOURCE_ID}: index HTTP ${indexRes.status} for ${INDEX_URL}`);
-  }
-  const indexHtml = await indexRes.text();
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const indexHtml = (await upstream.fetch(INDEX_URL, { timeoutMs: TIMEOUT_MS })).text();
   // Both blocks are located by fixed labels (the 宝山湖 heading has been on the
   // page since at least 2024); a layout change that breaks one makes its
   // entries unreadable while the fetch succeeds.
-  const entries = [hozankoEntry(indexHtml), ...(await readPonds(indexHtml, fetchWithUa, log))];
+  const entries = [hozankoEntry(indexHtml), ...(await readPonds(indexHtml, upstream, log))];
   return { entries, dated: true };
 });

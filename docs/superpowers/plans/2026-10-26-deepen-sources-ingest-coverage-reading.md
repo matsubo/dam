@@ -117,3 +117,22 @@ an E2E smoke run. Nothing is pushed without the owner's go-ahead.
   - 全国貯水率 on the local copy: 43.6 % → 49.7 % (effective capacity).
   - The hourly chart source needs a value: 高遠 now charts `nagano-kigyo`, not kasenbosai's
     empty rows.
+
+## 5. Upstream port — `apps/worker/src/ingest/upstream.ts`
+
+Review candidate 5, taken after 1–4 (2026-10-27). A survey found 114 task files calling global
+`fetch`: the user-agent literal copied into 111, timeouts 10–60 s, status checks, error texts
+and charset decoding each written per task, and 21 task-specific fetcher seams for tests.
+
+- One port: `Upstream.fetch(url, { method, body, headers, timeoutMs, allow })` →
+  `{ status, headers, bytes, text(charset), json() }`. Any non-2xx outside `allow`, a network
+  error or a timeout throws `<source>: HTTP <status> for <url>`. What a failure means (job
+  fails, entry unreadable) stays the task's decision.
+- Two adapters: `liveUpstream(sourceId)` on core's `HttpClient` (gains method/body/per-call
+  timeout) with core's `userAgent()`; `fixtureUpstream(routes)` for tests, same status rule.
+- The run hands it to every scan: `ingestTask(id, async ({ log, upstream }) => …)`. Seams take
+  an `Upstream`, so tests inject bytes, not functions.
+- Behaviour is preserved per task: timeouts, decoding, status special cases, concurrency.
+- Not moved: `quality_freshness` (Discord webhook, not an upstream), `refresh_dam_elevation` /
+  `refresh_dam_images_wikipedia` (third-party APIs with a contact-email user agent),
+  `backfill_mudam` (curl).

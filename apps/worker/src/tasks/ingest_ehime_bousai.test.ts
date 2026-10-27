@@ -5,7 +5,8 @@
 
 import { describe, expect, test } from 'bun:test';
 import type { Observed, Reading } from '../ingest/types.ts';
-import { ehimeEntries, ehimeReading, parseEhimeTimestamp } from './ingest_ehime_bousai.ts';
+import { fixtureUpstream } from '../ingest/upstream.ts';
+import { ehimeEntries, ehimeReading, pageUrl, parseEhimeTimestamp } from './ingest_ehime_bousai.ts';
 
 const NOW = new Date('2026-06-22T10:30:00.000Z');
 
@@ -151,10 +152,9 @@ describe('ehimeReading', () => {
 describe('ehimeEntries', () => {
   test('the 12-dam catalogue, keyed by myMenuId; a failed page throws for the run', async () => {
     const page = makeHtml([makeRow('06/22 19:00', '216.39', '2.61', '2.78', '295', '33.7')]);
-    const entries = ehimeEntries(async (id) => {
-      if (id === 'U1001_MMENU001') return page;
-      throw new Error('HTTP 500');
-    });
+    const entries = ehimeEntries(
+      fixtureUpstream((url) => (url === pageUrl('U1001_MMENU001') ? page : { status: 500 })),
+    );
     expect(entries).toHaveLength(12);
     expect(entries.map((e) => [e.key, e.name, e.pref]).slice(8, 9)).toEqual([
       ['U1001_MMENU009', '鹿野川ダム', '38'],

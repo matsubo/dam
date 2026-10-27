@@ -21,6 +21,7 @@
 
 import { ingestTask } from '../ingest/run.ts';
 import type { Bind, Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const BASE_URL = process.env.NAGASAKI_KASEN_BASE_URL ?? 'https://dam.pref.nagasaki.jp';
 
@@ -186,33 +187,21 @@ export function nagasakiEntries(catalogue: DamMaster[], snapshot: AllDamsJson | 
 
 // --- task -------------------------------------------------------------------
 
-const HEADERS = {
-  'user-agent':
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-};
-
-async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(20_000) });
-  if (res.status !== 200) throw new Error(`HTTP ${res.status} for ${url}`);
-  return (await res.json()) as T;
-}
-
 /** This run's all-dams snapshot, or why it could not be read. */
-async function fetchSnapshot(): Promise<AllDamsJson | string> {
+async function fetchSnapshot(upstream: Upstream): Promise<AllDamsJson | string> {
   try {
-    const range = await fetchJson<DtRange>(`${BASE_URL}/data/dt_range.json`);
+    const range = (await upstream.fetch(`${BASE_URL}/data/dt_range.json`)).json<DtRange>();
     const snapshotUrl = buildSnapshotUrl(BASE_URL, range.max_dt);
     if (!snapshotUrl) return `cannot build snapshot URL from max_dt="${range.max_dt}"`;
-    return await fetchJson<AllDamsJson>(snapshotUrl);
+    return (await upstream.fetch(snapshotUrl)).json<AllDamsJson>();
   } catch (err) {
     return err instanceof Error ? err.message : String(err);
   }
 }
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const catalogue = await fetchJson<DamMaster[]>(`${BASE_URL}/data/dam_m.json`);
-  const snapshot = await fetchSnapshot();
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const catalogue = (await upstream.fetch(`${BASE_URL}/data/dam_m.json`)).json<DamMaster[]>();
+  const snapshot = await fetchSnapshot(upstream);
   log(
     typeof snapshot === 'string'
       ? `${SOURCE_ID}: snapshot unreadable: ${snapshot}`

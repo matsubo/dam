@@ -5,7 +5,8 @@
 
 import { describe, expect, test } from 'bun:test';
 import type { Observed, Reading } from '../ingest/types.ts';
-import { gunmaEntries, gunmaReading, parseGunmaTimestamp } from './ingest_gunma_kasen.ts';
+import { fixtureUpstream } from '../ingest/upstream.ts';
+import { gunmaEntries, gunmaReading, pageUrl, parseGunmaTimestamp } from './ingest_gunma_kasen.ts';
 
 const NOW = new Date('2026-06-05T12:00:00Z');
 
@@ -173,10 +174,10 @@ describe('gunmaReading', () => {
 
 describe('gunmaEntries', () => {
   test('the 7-station catalogue keyed by name; a failed page throws for the run', async () => {
-    const entries = gunmaEntries(async (idx) => {
-      if (idx === 1) return SAMPLE_HTML;
-      throw new Error(`idx=${idx} HTTP 500`);
-    });
+    const page = { body: SAMPLE_HTML, charset: 'shift_jis' } as const;
+    const entries = gunmaEntries(
+      fixtureUpstream((url) => (url === pageUrl(1) ? page : { status: 500 })),
+    );
     expect(entries.map((e) => e.key)).toEqual([
       '坂本ダム',
       '霧積ダム',
@@ -193,6 +194,6 @@ describe('gunmaEntries', () => {
       return r(null);
     };
     expect((await read(0)).state).toBe('values');
-    await expect(read(1)).rejects.toThrow('idx=2 HTTP 500');
+    await expect(read(1)).rejects.toThrow(`HTTP 500 for ${pageUrl(2)}`);
   });
 });

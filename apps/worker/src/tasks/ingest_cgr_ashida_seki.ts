@@ -29,6 +29,7 @@
 import { type Cell, cell, cellState, numberIn } from '../ingest/cells.ts';
 import { ingestTask } from '../ingest/run.ts';
 import type { Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const PAGE_URL =
   process.env.CGR_ASHIDA_SEKI_URL ??
@@ -93,28 +94,18 @@ export function ashidaSekiReading(html: string): Reading {
  * The one facility the page publishes, read once the run reaches it: a page
  * that fails to load leaves the weir unreadable rather than unlisted.
  */
-export function ashidaSekiEntries(fetchPage: () => Promise<string>): Entry[] {
+export function ashidaSekiEntries(upstream: Upstream): Entry[] {
   return [
     {
       key: STATION,
       name: STATION,
       pref: PREF_CODE,
-      reading: async () => ashidaSekiReading(await fetchPage()),
+      reading: async () =>
+        ashidaSekiReading((await upstream.fetch(PAGE_URL, { timeoutMs: 15_000 })).text()),
     },
   ];
 }
 
-async function fetchPage(): Promise<string> {
-  const res = await fetch(PAGE_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
-  return res.text();
-}
-
-export default ingestTask(SOURCE_ID, async () => ({ entries: ashidaSekiEntries(fetchPage) }));
+export default ingestTask(SOURCE_ID, async ({ upstream }) => ({
+  entries: ashidaSekiEntries(upstream),
+}));

@@ -186,19 +186,10 @@ export function yamanashiEntries(html: string, warn: (s: string) => void): Entry
 
 // --- task -------------------------------------------------------------------
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const ua =
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
-
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
   let html: string;
   try {
-    const r = await fetch(STATUS_URL, {
-      headers: { 'user-agent': ua },
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (r.status !== 200) throw new Error(`HTTP ${r.status}`);
-    html = new TextDecoder('shift_jis').decode(await r.arrayBuffer());
+    html = (await upstream.fetch(STATUS_URL)).text('shift_jis');
   } catch (e) {
     // The catalogue is still recorded, as it was when per-dam fetches failed.
     const why = e instanceof Error ? e.message : String(e);

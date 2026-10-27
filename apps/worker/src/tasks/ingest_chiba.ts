@@ -122,17 +122,8 @@ export function chibaEntries(html: string): Entry[] {
   }));
 }
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const ua =
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
-
-  const r = await fetch(PAGE_URL, {
-    headers: { 'user-agent': ua },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status}`);
-  const html = await r.text();
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const html = (await upstream.fetch(PAGE_URL, { timeoutMs: 15_000 })).text();
   const entries = chibaEntries(html);
   log(`${SOURCE_ID}: ${entries.length} dams at ${parseChibaTimestamp(html)?.toISOString()}`);
   return { entries, dated: true };

@@ -153,27 +153,16 @@ export function tonekakoEntry(reading: Reading): Entry {
   return { key: STATION, name: STATION, pref: PREF_CODES, reading };
 }
 
-async function fetchText(file: string): Promise<string> {
-  const r = await fetch(`${BASE_URL}/${file}?time=${Date.now()}`, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status} for ${file}`);
-  return r.text();
-}
-
 // --- task -------------------------------------------------------------------
 
-export default ingestTask(SOURCE_ID, async (log) => {
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
   // The station is known in advance: a failed table fetch leaves it
   // unreadable, still listed.
+  const table = async (file: string) =>
+    (await upstream.fetch(`${BASE_URL}/${file}?time=${Date.now()}`)).text();
   let reading: Reading;
   try {
-    const [suii, ryuryo] = await Promise.all([fetchText(SUII_FILE), fetchText(RYURYO_FILE)]);
+    const [suii, ryuryo] = await Promise.all([table(SUII_FILE), table(RYURYO_FILE)]);
     reading = tonekakoReading(suii, ryuryo);
   } catch (err) {
     reading = { state: 'unreadable', why: err instanceof Error ? err.message : String(err) };

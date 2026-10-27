@@ -32,15 +32,14 @@
 
 import { ingestTask } from '../ingest/run.ts';
 import type { Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const BASE_URL = process.env.SHIGA_BOUSAI_BASE ?? 'https://shiga-bousai.jp';
 
 const SOURCE_ID = 'shiga-bousai';
 const PREF_CODE = '25';
 
-const USER_AGENT =
-  process.env.HTTP_USER_AGENT ??
-  'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
+const TIMEOUT_MS = 15_000;
 
 export interface Station {
   id: string;
@@ -121,12 +120,11 @@ export function shigaReading(html: string, now: Date): Reading {
   return { state: 'values', observations: parseShigaDamData(html, now) };
 }
 
-/** Every listed station; its page is read through `fetchPage` once it is bound. */
-export function shigaEntries(
-  stations: Station[],
-  fetchPage: (id: string) => Promise<string>,
-  now: Date,
-): Entry[] {
+/** One station's page, by its ID. */
+export const stationUrl = (id: string): string => `${BASE_URL}/mobile/dam/dam_data.php?ID=${id}`;
+
+/** Every listed station; its page is read once it is bound. */
+export function shigaEntries(stations: Station[], upstream: Upstream, now: Date): Entry[] {
   return stations.map(
     (s): Entry => ({
       key: s.name,
@@ -135,31 +133,20 @@ export function shigaEntries(
       bind: { exact: true },
       reading: async (dam) =>
         dam
-          ? shigaReading(await fetchPage(s.id), now)
+          ? shigaReading(
+              (await upstream.fetch(stationUrl(s.id), { timeoutMs: TIMEOUT_MS })).text('shift_jis'),
+              now,
+            )
           : { state: 'unreadable', why: 'no master dam; page not read' },
     }),
   );
 }
 
-async function fetchShiftJis(url: string): Promise<string> {
-  const r = await fetch(url, {
-    headers: { 'user-agent': USER_AGENT },
-    signal: AbortSignal.timeout(15_000),
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const list = await upstream.fetch(`${BASE_URL}/mobile/dam/dam_select.php`, {
+    timeoutMs: TIMEOUT_MS,
   });
-  if (r.status !== 200) throw new Error(`HTTP ${r.status} for ${url}`);
-  return new TextDecoder('shift_jis').decode(await r.arrayBuffer());
-}
-
-export default ingestTask(SOURCE_ID, async (log) => {
-  const stations = parseShigaStationList(
-    await fetchShiftJis(`${BASE_URL}/mobile/dam/dam_select.php`),
-  );
+  const stations = parseShigaStationList(list.text('shift_jis'));
   log(`${SOURCE_ID}: ${stations.length} stations listed`);
-  return {
-    entries: shigaEntries(
-      stations,
-      (id) => fetchShiftJis(`${BASE_URL}/mobile/dam/dam_data.php?ID=${id}`),
-      new Date(),
-    ),
-  };
+  return { entries: shigaEntries(stations, upstream, new Date()) };
 });

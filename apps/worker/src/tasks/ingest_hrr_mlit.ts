@@ -102,17 +102,8 @@ export function hrrEntries(text: string): Entry[] {
   return entries;
 }
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const r = await fetch(CSV_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(12_000),
-  });
-  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status}`);
-  const entries = hrrEntries(await r.text());
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const entries = hrrEntries((await upstream.fetch(CSV_URL, { timeoutMs: 12_000 })).text());
   log(`${SOURCE_ID}: ${entries.length} rows`);
   return { entries };
 });

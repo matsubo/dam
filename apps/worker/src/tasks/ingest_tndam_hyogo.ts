@@ -21,13 +21,11 @@
 import { type Cell, cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
 import { ingestTask } from '../ingest/run.ts';
 import type { Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const BASE_URL = process.env.TNDAM_HYOGO_URL ?? 'http://tndam.pref.hyogo.lg.jp/dam/DamData.jsp';
 const PREF_CODE = '28';
 const SOURCE_ID = 'tndam-hyogo';
-const USER_AGENT =
-  process.env.HTTP_USER_AGENT ??
-  'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
 
 // The 6 DamData.jsp pages are the published catalogue; PSNO is the key.
 const DAMS = [
@@ -118,28 +116,19 @@ export function tndamReading(html: string): Reading {
   };
 }
 
-/** One DamData.jsp page by PSNO, decoded. Throws on an HTTP error. */
-export type Fetcher = (psno: number) => Promise<string>;
+/** One DamData.jsp page, by PSNO. */
+export const pageUrl = (psno: number): string => `${BASE_URL}?PSNO=${psno}`;
 
 /** All six pages, each read from its own page; one that fails is unreadable. */
-export function tndamEntries(get: Fetcher): Entry[] {
+export function tndamEntries(upstream: Upstream): Entry[] {
   return DAMS.map(({ psno, name }) => ({
     key: String(psno),
     name,
     pref: PREF_CODE,
-    reading: async () => tndamReading(await get(psno)),
+    reading: async () => tndamReading((await upstream.fetch(pageUrl(psno))).text('shift_jis')),
   }));
 }
 
 // --- task --------------------------------------------------------------------
 
-export default ingestTask(SOURCE_ID, async () => ({
-  entries: tndamEntries(async (psno) => {
-    const resp = await fetch(`${BASE_URL}?PSNO=${psno}`, {
-      headers: { 'user-agent': USER_AGENT },
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (resp.status !== 200) throw new Error(`PSNO=${psno} HTTP ${resp.status}`);
-    return new TextDecoder('shift_jis').decode(await resp.arrayBuffer());
-  }),
-}));
+export default ingestTask(SOURCE_ID, async ({ upstream }) => ({ entries: tndamEntries(upstream) }));

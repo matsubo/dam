@@ -19,7 +19,9 @@
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { fixtureUpstream } from '../ingest/upstream.ts';
 import {
+  graphUrl,
   graphValue,
   naharigawaEntries,
   naharigawaReading,
@@ -173,7 +175,12 @@ describe('naharigawaEntries', () => {
   // Real pref-39 rows (prod, 2026-09-28): 魚梁瀬 (NDI 2080), 久木 (2081),
   // 平鍋 (2082), all 電源開発.
   test('the three dams, keyed by name, matched exactly so 久木 never lands on 久木野', async () => {
-    const entries = naharigawaEntries((no) => fixture(`damgraph_${no}_2026-09-28T16.html`));
+    const value = '2026/09/28 16:00';
+    const upstream = fixtureUpstream(async (url) => {
+      const no = ['71100', '71200', '71300'].find((n) => url === graphUrl(value, n));
+      return no ? fixture(`damgraph_${no}_2026-09-28T16.html`) : undefined;
+    });
+    const entries = naharigawaEntries(upstream, value);
     expect(entries.map((e) => [e.key, e.pref, e.bind])).toEqual([
       ['魚梁瀬ダム', '39', { exact: true }],
       ['久木ダム', '39', { exact: true }],

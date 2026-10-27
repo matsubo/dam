@@ -1,7 +1,7 @@
 // The ingest run: everything a scheduled `ingest:*` task does after it has
 // read the provider (docs/superpowers/plans/2026-10-26-…, §2). A task file is
 //
-//   export default ingestTask(SOURCE_ID, async (log) => ({ entries }));
+//   export default ingestTask(SOURCE_ID, async ({ log, upstream }) => ({ entries }));
 //
 // and the run owns, for every source alike:
 //   1. contract check of the scan (nothing written on a task bug)
@@ -22,9 +22,15 @@ import type { Task } from 'graphile-worker';
 import { type Binding, bindEntry, type Master } from './bind.ts';
 import { type Plan, planWrites, type ReadEntry } from './plan.ts';
 import { type Entry, IngestRunError, type Reading, type Scan } from './types.ts';
+import { liveUpstream, type Upstream } from './upstream.ts';
 
 export type Log = (line: string) => void;
-export type ScanFn = (log: Log) => Promise<Scan>;
+/** What a scan gets: the job's log and the provider port (./upstream.ts). */
+export interface ScanContext {
+  readonly log: Log;
+  readonly upstream: Upstream;
+}
+export type ScanFn = (ctx: ScanContext) => Promise<Scan>;
 
 const SOURCE_OF = new WeakMap<Task, string>();
 
@@ -109,8 +115,13 @@ async function write(sourceId: string, plan: Plan): Promise<void> {
 }
 
 /** One scan of one source. Exported for the run suite; tasks use ingestTask. */
-export async function runScan(sourceId: string, scan: ScanFn, log: Log): Promise<Plan | null> {
-  const { entries, dated } = await scan(log);
+export async function runScan(
+  sourceId: string,
+  scan: ScanFn,
+  log: Log,
+  upstream: Upstream = liveUpstream(sourceId),
+): Promise<Plan | null> {
+  const { entries, dated } = await scan({ log, upstream });
   if (entries.length === 0) {
     if (sourceById(sourceId)?.universeEnumerable === false) {
       log(`${sourceId}: nothing listed (expected at times for this source)`);

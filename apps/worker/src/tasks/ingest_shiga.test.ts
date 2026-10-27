@@ -17,12 +17,14 @@ import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { BoundDam } from '../ingest/types.ts';
+import { fixtureUpstream } from '../ingest/upstream.ts';
 import {
   parseShigaDamData,
   parseShigaStationList,
   shigaEntries,
   shigaPageHasData,
   shigaReading,
+  stationUrl,
 } from './ingest_shiga.ts';
 
 const FIXTURE_DIR = join(import.meta.dir, '..', '..', '..', '..', 'tests/fixtures/shiga_bousai');
@@ -177,7 +179,11 @@ describe('shigaEntries', () => {
     const stations = parseShigaStationList(
       await fixture('mobile_dam_select_2026-09-27.shiftjis.html'),
     );
-    const list = shigaEntries(stations, async () => '', REFERENCE);
+    const list = shigaEntries(
+      stations,
+      fixtureUpstream(() => ''),
+      REFERENCE,
+    );
     expect(list).toHaveLength(11);
     // 日野川 must not fall through to 日野川脇: no prefix or substring rung.
     expect(list.find((e) => e.key === '日野川ダム')).toMatchObject({
@@ -189,16 +195,19 @@ describe('shigaEntries', () => {
 
   test("reads a bound station's page by its ID; an unbound one is not fetched", async () => {
     const asked: string[] = [];
-    const page = await fixture('mobile_dam_data_34196_2026-09-27.shiftjis.html');
+    const page = await readFile(
+      join(FIXTURE_DIR, 'mobile_dam_data_34196_2026-09-27.shiftjis.html'),
+    );
+    const upstream = fixtureUpstream((url) => {
+      asked.push(url);
+      return page;
+    });
     const [yasugawa, yogo] = shigaEntries(
       [
         { id: '34196', name: '野洲川ダム' },
         { id: '38191', name: '余呉湖' },
       ],
-      async (id) => {
-        asked.push(id);
-        return page;
-      },
+      upstream,
       REFERENCE,
     );
     if (typeof yasugawa?.reading !== 'function' || typeof yogo?.reading !== 'function') {
@@ -209,6 +218,6 @@ describe('shigaEntries', () => {
       state: 'unreadable',
       why: 'no master dam; page not read',
     });
-    expect(asked).toEqual(['34196']);
+    expect(asked).toEqual([stationUrl('34196')]);
   });
 });

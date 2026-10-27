@@ -134,28 +134,15 @@ export function saseboEntries(reportDate: Date, rows: ParsedRow[], published: st
   });
 }
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const headers = {
-    'user-agent':
-      process.env.HTTP_USER_AGENT ??
-      'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-  };
-
-  const indexRes = await fetch(INDEX_URL, { headers, signal: AbortSignal.timeout(20_000) });
-  if (indexRes.status !== 200) {
-    throw new Error(`${SOURCE_ID}: index HTTP ${indexRes.status} from ${INDEX_URL}`);
-  }
-  const pdfUrl = findLatestPdfUrl(await indexRes.text());
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const indexRes = await upstream.fetch(INDEX_URL);
+  const pdfUrl = findLatestPdfUrl(indexRes.text());
   if (!pdfUrl) {
     throw new Error(`${SOURCE_ID}: no suiryounippou PDF linked from ${INDEX_URL} — layout change?`);
   }
 
-  const pdfRes = await fetch(pdfUrl, { headers, signal: AbortSignal.timeout(30_000) });
-  if (pdfRes.status !== 200) {
-    throw new Error(`${SOURCE_ID}: PDF HTTP ${pdfRes.status} for ${pdfUrl}`);
-  }
-
-  const text = await pdfToText(new Uint8Array(await pdfRes.arrayBuffer()));
+  const pdfRes = await upstream.fetch(pdfUrl, { timeoutMs: 30_000 });
+  const text = await pdfToText(pdfRes.bytes);
   const { reportDate, rows, published } = parseSaseboPdfText(text);
   if (!reportDate) {
     throw new Error(`${SOURCE_ID}: no 令和 date in ${pdfUrl} — layout change?`);

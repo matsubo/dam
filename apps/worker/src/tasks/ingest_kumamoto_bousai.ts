@@ -157,18 +157,8 @@ export function kumamotoEntries(html: string): Entry[] {
 
 // --- task -------------------------------------------------------------------
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const r = await fetch(DATA_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status}`);
-
-  const html = new TextDecoder('shift_jis').decode(await r.arrayBuffer());
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const html = (await upstream.fetch(DATA_URL)).text('shift_jis');
   const entries = kumamotoEntries(html);
   log(`${SOURCE_ID}: parsed ${entries.length} dam rows`);
   return { entries };

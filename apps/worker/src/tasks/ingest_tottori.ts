@@ -7,7 +7,7 @@
 //   賀祥 (kasho), 朝鍋 (asanabe), 佐治川 (sajigawa),
 //   東郷 (togo),  百谷 (momodani).
 //
-// Page is EUC-JP encoded; we decode via TextDecoder. One row per dam:
+// Page is EUC-JP encoded; we decode it explicitly. One row per dam:
 //
 //   佐治川ダム | 時間雨量 0 | 累計雨量 0 | ダム水位 382.57 | 流入量 1.04 |
 //   放流量 0.12 | 有効貯水量 111 | 有効貯水容量 1880 | 貯水率 6 | 空容量 1663 | …
@@ -210,24 +210,11 @@ export function tottoriEntries(html: string): Entry[] {
   return entries;
 }
 
-async function fetchPage(): Promise<string> {
-  const r = await fetch(PAGE_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (r.status !== 200) throw new Error(`HTTP ${r.status}`);
-  // Page is EUC-JP — decode explicitly.
-  return new TextDecoder('euc-jp').decode(await r.arrayBuffer());
-}
-
-export default ingestTask(SOURCE_ID, async (log) => {
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
   let html: string;
   try {
-    html = await fetchPage();
+    // Page is EUC-JP — decode explicitly.
+    html = (await upstream.fetch(PAGE_URL, { timeoutMs: 15_000 })).text('euc-jp');
   } catch (err) {
     const why = err instanceof Error ? err.message : String(err);
     log(`${SOURCE_ID}: ${why}`);

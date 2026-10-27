@@ -201,20 +201,9 @@ export function toneEntries(json: ToneDamJson): Entry[] {
 
 // --- task --------------------------------------------------------------------
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const r = await fetch(DATA_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status}`);
-
-  // Strip UTF-8 BOM if present before JSON parsing
-  const raw = await r.text();
-  const entries = toneEntries(JSON.parse(raw.replace(/^\uFEFF/, '')) as ToneDamJson);
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  // The file may start with a UTF-8 BOM; json() decodes past it.
+  const entries = toneEntries((await upstream.fetch(DATA_URL)).json<ToneDamJson>());
   log(`${SOURCE_ID}: ${entries.length} rows`);
   return { entries };
 });

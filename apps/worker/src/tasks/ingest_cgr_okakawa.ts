@@ -177,17 +177,9 @@ export async function pdfToText(bytes: Uint8Array): Promise<string> {
 
 // --- task -------------------------------------------------------------------
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const res = await fetch(PDF_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (res.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${res.status}`);
-  const entries = okakawaEntries(await pdfToText(new Uint8Array(await res.arrayBuffer())));
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const res = await upstream.fetch(PDF_URL, { timeoutMs: 30_000 });
+  const entries = okakawaEntries(await pdfToText(res.bytes));
   log(`${SOURCE_ID}: ${entries.length} names printed`);
   return { entries };
 });

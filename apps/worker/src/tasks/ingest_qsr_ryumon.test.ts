@@ -6,7 +6,9 @@
 // LIVE holds the six key answers as captured 2026-10-27 00:40 JST.
 
 import { describe, expect, test } from 'bun:test';
+import { fixtureUpstream } from '../ingest/upstream.ts';
 import {
+  keyUrl,
   parseRyumonTimestamp,
   type RyumonKey,
   ryumonEntries,
@@ -21,6 +23,17 @@ const LIVE: Record<RyumonKey, string> = {
   dam_chosuii: '249.13m',
   dam_chosuiritsu: '37.00％',
 };
+
+/** The six endpoints answering LIVE, except `failing`, which answers 500. */
+const live = (failing?: RyumonKey) =>
+  fixtureUpstream(
+    Object.fromEntries(
+      (Object.keys(LIVE) as RyumonKey[]).map((k) => [
+        keyUrl(k),
+        k === failing ? { status: 500 } : LIVE[k],
+      ]),
+    ),
+  );
 
 describe('parseRyumonTimestamp', () => {
   test('parses JST timestamp to UTC', () => {
@@ -80,7 +93,7 @@ describe('ryumonReading', () => {
 
 describe('ryumonEntries', () => {
   test('lists 竜門ダム by name in 福岡 and reads it from the six keys', async () => {
-    const [entry, ...rest] = ryumonEntries(async (k) => LIVE[k]);
+    const [entry, ...rest] = ryumonEntries(live());
     expect(rest).toEqual([]);
     expect(entry).toMatchObject({ key: '竜門ダム', name: '竜門ダム', pref: '40' });
     if (typeof entry?.reading !== 'function') throw new Error('expected a reading function');
@@ -88,9 +101,7 @@ describe('ryumonEntries', () => {
   });
 
   test('a key that fails to load makes the reading throw (the run records it unreadable)', async () => {
-    const [entry] = ryumonEntries((k) =>
-      k === 'dam_houryu' ? Promise.reject(new Error('HTTP 500')) : Promise.resolve(LIVE[k]),
-    );
+    const [entry] = ryumonEntries(live('dam_houryu'));
     if (typeof entry?.reading !== 'function') throw new Error('expected a reading function');
     await expect(Promise.resolve(entry.reading(null))).rejects.toThrow('HTTP 500');
   });

@@ -143,24 +143,11 @@ export function kanagawaUnreadable(why: string): Entry[] {
   );
 }
 
-async function fetchSummary(): Promise<ApiResponse> {
-  const r = await fetch(API_URL, {
-    headers: {
-      accept: 'application/json',
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) throw new Error(`HTTP ${r.status}`);
-  return (await r.json()) as ApiResponse;
-}
-
-export default ingestTask(SOURCE_ID, async (log) => {
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
   let body: ApiResponse;
   try {
-    body = await fetchSummary();
+    const res = await upstream.fetch(API_URL, { headers: { accept: 'application/json' } });
+    body = res.json<ApiResponse>();
   } catch (err) {
     const why = `summary.php: ${err instanceof Error ? err.message : String(err)}`;
     log(`${SOURCE_ID}: ${why}`);

@@ -460,27 +460,14 @@ export function kyushuNouseiEntries(text: string): Entry[] {
   });
 }
 
-async function fetchOk(url: string, timeoutMs: number): Promise<Response> {
-  const res = await fetch(url, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  if (res.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${res.status} for ${url}`);
-  return res;
-}
-
 // The R8.9.15 PDF dropped its leading 利水容量 column and this adapter parsed
 // 0 of 59 rows while exiting green. Every row is now an entry, so a layout
 // change makes them unreadable and the run fails the job (failing_jobs).
-export default ingestTask(SOURCE_ID, async (log) => {
-  const pdfUrl = findLatestPdfUrl(await (await fetchOk(INDEX_URL, 20_000)).text(), INDEX_URL);
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const pdfUrl = findLatestPdfUrl((await upstream.fetch(INDEX_URL)).text(), INDEX_URL);
   if (!pdfUrl) throw new Error(`${SOURCE_ID}: no survey PDF linked from ${INDEX_URL}`);
-  const pdf = await fetchOk(pdfUrl, 30_000);
-  const entries = kyushuNouseiEntries(await pdfToText(new Uint8Array(await pdf.arrayBuffer())));
+  const pdf = await upstream.fetch(pdfUrl, { timeoutMs: 30_000 });
+  const entries = kyushuNouseiEntries(await pdfToText(pdf.bytes));
   log(`${SOURCE_ID}: ${entries.length} dam rows in ${pdfUrl}`);
   return { entries, dated: true };
 });

@@ -13,7 +13,8 @@ import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Observed, Reading } from '../ingest/types.ts';
-import { DAMS, type FetchFile, naganoKigyoEntries, naganoReading } from './ingest_nagano_kigyo.ts';
+import { fixtureUpstream } from '../ingest/upstream.ts';
+import { DAMS, naganoKigyoEntries, naganoReading } from './ingest_nagano_kigyo.ts';
 
 const DIR = join(import.meta.dir, '..', '..', '..', '..', 'tests/fixtures/nagano_kigyo');
 const LAST_MODIFIED = new Date('2026-09-27T12:40:33Z');
@@ -119,15 +120,14 @@ describe('naganoReading', () => {
 });
 
 describe('naganoKigyoEntries', () => {
-  const files: FetchFile = async (url) => {
-    if (url.endsWith('/takato_new.json')) {
-      return {
-        body: await fixture('takato_new_2026-09-27.json'),
-        lastModified: 'Sun, 27 Sep 2026 12:40:33 GMT',
-      };
-    }
-    return { body: await fixture('sugadaira_new_2026-09-27.json'), lastModified: null };
-  };
+  const files = fixtureUpstream(async (url) =>
+    url.endsWith('/takato_new.json')
+      ? {
+          body: await fixture('takato_new_2026-09-27.json'),
+          headers: { 'last-modified': 'Sun, 27 Sep 2026 12:40:33 GMT' },
+        }
+      : await fixture('sugadaira_new_2026-09-27.json'),
+  );
   const entries = naganoKigyoEntries(files);
 
   async function read(key: string): Promise<Reading> {

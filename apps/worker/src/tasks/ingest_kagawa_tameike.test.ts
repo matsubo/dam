@@ -8,8 +8,8 @@
 
 import { describe, expect, test } from 'bun:test';
 import type { Entry, Reading } from '../ingest/types.ts';
+import { fixtureUpstream } from '../ingest/upstream.ts';
 import {
-  type Fetcher,
   findLatestPdfUrl,
   hozankoEntry,
   parseHozankoHtml,
@@ -162,16 +162,16 @@ describe('readPonds — a broken PDF must not cost 宝山湖 its write', () => {
   const html = '<a href="/documents/5847/chosui20260925.pdf">b</a>';
 
   test('a fetch that times out is logged and lists no pond', async () => {
-    const timeout: Fetcher = async () => {
+    const timeout = fixtureUpstream(() => {
       throw new DOMException('The operation timed out.', 'TimeoutError');
-    };
+    });
     const logs: string[] = [];
     expect(await readPonds(html, timeout, (s) => logs.push(s))).toEqual([]);
     expect(logs.join('\n')).toContain('timed out');
   });
 
   test('bytes that are not a PDF are logged and list no pond', async () => {
-    const maintenance: Fetcher = async () => new Response('<html>メンテナンス中</html>');
+    const maintenance = fixtureUpstream(() => '<html>メンテナンス中</html>');
     const logs: string[] = [];
     expect(await readPonds(html, maintenance, (s) => logs.push(s))).toEqual([]);
     expect(logs.join('\n')).toContain('PDF unreadable');

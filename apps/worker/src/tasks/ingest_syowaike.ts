@@ -97,20 +97,10 @@ export function syowaikeEntries(html: string): Entry[] {
   return [entry(syowaikeReading(html))];
 }
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const ua =
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
-
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
   try {
-    const res = await fetch(PAGE_URL, {
-      headers: { 'user-agent': ua },
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
-    return {
-      entries: syowaikeEntries(new TextDecoder('shift_jis').decode(await res.arrayBuffer())),
-    };
+    const res = await upstream.fetch(PAGE_URL, { timeoutMs: 15_000 });
+    return { entries: syowaikeEntries(res.text('shift_jis')) };
   } catch (err) {
     // The system publishes the reservoir whether or not this run's page loads.
     const why = err instanceof Error ? err.message : String(err);

@@ -26,6 +26,7 @@
 import { type Cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
 import { ingestTask } from '../ingest/run.ts';
 import type { Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const DATA_URL =
   process.env.QSR_TURUTA_URL ?? 'https://www.qsr.mlit.go.jp/turuta/cgi-bin/ajax_gethtml.cgi?type=2';
@@ -117,28 +118,17 @@ export function turutaReading(html: string): Reading {
 }
 
 /** The one dam, read once the run reaches it: a failed fetch leaves it unreadable. */
-export function turutaEntries(fetchPage: () => Promise<string>): Entry[] {
+export function turutaEntries(upstream: Upstream): Entry[] {
   return [
     {
       key: DAM_NAME,
       name: DAM_NAME,
       pref: PREF_CODE,
-      reading: async () => turutaReading(await fetchPage()),
+      reading: async () => turutaReading((await upstream.fetch(DATA_URL)).text('euc-jp')),
     },
   ];
 }
 
-async function fetchPage(): Promise<string> {
-  const r = await fetch(DATA_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) throw new Error(`HTTP ${r.status}`);
-  return new TextDecoder('euc-jp').decode(await r.arrayBuffer());
-}
-
-export default ingestTask(SOURCE_ID, async () => ({ entries: turutaEntries(fetchPage) }));
+export default ingestTask(SOURCE_ID, async ({ upstream }) => ({
+  entries: turutaEntries(upstream),
+}));

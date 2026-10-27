@@ -151,18 +151,8 @@ export function kitakyushuEntries(observedAt: Date, rows: ParsedRow[]): Entry[] 
   });
 }
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const r = await fetch(PAGE_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status} from ${PAGE_URL}`);
-
-  const { observedAt, rows } = parseKitakyushuSuigen(await r.text());
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const { observedAt, rows } = parseKitakyushuSuigen((await upstream.fetch(PAGE_URL)).text());
   if (!observedAt) {
     throw new Error(`${SOURCE_ID}: no 「…時現在」 caption on ${PAGE_URL} — layout change?`);
   }

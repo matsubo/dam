@@ -6,10 +6,12 @@
 import { describe, expect, test } from 'bun:test';
 import { bindEntry, type Master } from '../ingest/bind.ts';
 import type { Observed, Reading } from '../ingest/types.ts';
+import { fixtureUpstream } from '../ingest/upstream.ts';
 import {
   extractYear,
   iwateEntries,
   iwateReading,
+  pageUrl,
   parseIwateTimestamp,
 } from './ingest_iwate_kasen.ts';
 
@@ -219,10 +221,9 @@ describe('iwateEntries', () => {
       '0.69',
       '0.00',
     ]);
-    const entries = iwateEntries(async (idx) => {
-      if (idx === 0) return page;
-      throw new Error(`station=${idx} HTTP 500`);
-    });
+    const entries = iwateEntries(
+      fixtureUpstream((url) => (url === pageUrl(0) ? page : { status: 500 })),
+    );
     expect(entries).toHaveLength(10);
     expect([entries[0]?.key, entries[0]?.name, entries[0]?.pref]).toEqual([
       '103007003',
@@ -235,7 +236,7 @@ describe('iwateEntries', () => {
       return r(null);
     };
     expect((await read(0)).state).toBe('values');
-    await expect(read(1)).rejects.toThrow('station=1 HTTP 500');
+    await expect(read(1)).rejects.toThrow(`HTTP 500 for ${pageUrl(1)}`);
   });
 
   // The two 岩手県 masters as the prod dams table names them (ndi 240 / 257):
@@ -263,7 +264,7 @@ describe('iwateEntries', () => {
     },
   ];
   const entry = (name: string) => {
-    const e = iwateEntries().find((x) => x.name === name);
+    const e = iwateEntries(fixtureUpstream({})).find((x) => x.name === name);
     if (!e) throw new Error(`no entry ${name}`);
     return e;
   };

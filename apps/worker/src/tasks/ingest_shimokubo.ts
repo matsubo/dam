@@ -17,6 +17,7 @@
 import { type Cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
 import { ingestTask } from '../ingest/run.ts';
 import type { Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const DATA_URL = process.env.SHIMOKUBO_DATA_URL ?? 'http://shimokubo.kannet.ne.jp/data/table.json';
 
@@ -106,30 +107,18 @@ export function shimokuboReading(json: ShimokuboJson): Reading {
 }
 
 /** The one dam, read once the run reaches it: a failed fetch leaves it unreadable. */
-export function shimokuboEntries(fetchJson: () => Promise<ShimokuboJson>): Entry[] {
+export function shimokuboEntries(upstream: Upstream): Entry[] {
   return [
     {
       key: DAM_NAME,
       name: DAM_NAME,
       pref: PREF_CODES,
-      reading: async () => shimokuboReading(await fetchJson()),
+      // The file's UTF-8 BOM is dropped by the decode.
+      reading: async () => shimokuboReading((await upstream.fetch(DATA_URL)).json<ShimokuboJson>()),
     },
   ];
 }
 
-async function fetchJson(): Promise<ShimokuboJson> {
-  const r = await fetch(DATA_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) throw new Error(`HTTP ${r.status}`);
-  // The file uses a UTF-8 BOM; strip it before parsing.
-  const text = new TextDecoder('utf-8').decode(await r.arrayBuffer()).replace(/^\uFEFF/, '');
-  return JSON.parse(text) as ShimokuboJson;
-}
-
-export default ingestTask(SOURCE_ID, async () => ({ entries: shimokuboEntries(fetchJson) }));
+export default ingestTask(SOURCE_ID, async ({ upstream }) => ({
+  entries: shimokuboEntries(upstream),
+}));

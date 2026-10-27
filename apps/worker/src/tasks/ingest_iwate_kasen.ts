@@ -22,6 +22,7 @@
 import { type Cell, cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
 import { ingestTask } from '../ingest/run.ts';
 import type { Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const BASE_URL =
   process.env.IWATE_KASEN_URL ?? 'http://kasen.pref.iwate.jp/iwate/servlet/Gamen32Servlet';
@@ -131,32 +132,21 @@ export function iwateReading(html: string): Reading {
 }
 
 /** One station's page, by its dropdown index. */
-export type PageFetcher = (idx: number) => Promise<string>;
-
-const fetchPage: PageFetcher = async (idx) => {
-  const r = await fetch(`${BASE_URL}?param=station=${idx}`, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) throw new Error(`station=${idx} HTTP ${r.status}`);
-  return new TextDecoder('shift_jis').decode(await r.arrayBuffer());
-};
+export const pageUrl = (idx: number): string => `${BASE_URL}?param=station=${idx}`;
 
 /**
  * The 10-station catalogue, keyed by stationNo; each dam reads its own page,
  * and a page that fails leaves only that dam unreadable.
  */
-export function iwateEntries(page: PageFetcher = fetchPage): Entry[] {
+export function iwateEntries(upstream: Upstream): Entry[] {
   return STATIONS.map((stn) => ({
     key: stn.stationNo,
     name: stn.name,
     pref: PREF_CODE,
-    reading: async () => iwateReading(await page(stn.idx)),
+    reading: async () => iwateReading((await upstream.fetch(pageUrl(stn.idx))).text('shift_jis')),
   }));
 }
 
-export default ingestTask(SOURCE_ID, async () => ({ entries: iwateEntries() }));
+export default ingestTask(SOURCE_ID, async ({ upstream }) => ({
+  entries: iwateEntries(upstream),
+}));

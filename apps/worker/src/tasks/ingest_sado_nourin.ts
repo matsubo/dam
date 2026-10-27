@@ -24,6 +24,7 @@
 
 import { ingestTask } from '../ingest/run.ts';
 import type { Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const INDEX_URL =
   process.env.SADO_NOURIN_URL ??
@@ -32,13 +33,6 @@ const INDEX_URL =
 const ORIGIN = 'https://www.pref.niigata.lg.jp';
 const PREF_CODE = '15';
 const SOURCE_ID = 'sado-nourin';
-
-const USER_AGENT =
-  process.env.HTTP_USER_AGENT ??
-  'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
-
-/** A per-dam page's HTML; throws when the page cannot be fetched. */
-export type FetchPage = (url: string) => Promise<string>;
 
 // --- parsing ----------------------------------------------------------------
 
@@ -96,29 +90,20 @@ export function sadoDamReading(html: string): Reading {
  * each reads its own page. Exact stem only: 新穂 must not take 新穂第2's
  * page, nor the reverse.
  */
-export function sadoNourinEntries(indexHtml: string, fetchPage: FetchPage): Entry[] {
+export function sadoNourinEntries(indexHtml: string, upstream: Upstream): Entry[] {
   return parseSadoDamLinks(indexHtml).map((link) => ({
     key: link.name,
     name: link.name,
     pref: PREF_CODE,
     bind: { exact: true },
-    reading: async () => sadoDamReading(await fetchPage(link.url)),
+    reading: async () => sadoDamReading((await upstream.fetch(link.url)).text()),
   }));
-}
-
-async function fetchHtml(url: string): Promise<string> {
-  const res = await fetch(url, {
-    headers: { 'user-agent': USER_AGENT },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (res.status !== 200) throw new Error(`HTTP ${res.status} for ${url}`);
-  return res.text();
 }
 
 // A page template change reads as unreadable on every dam while every fetch
 // succeeds; the run then fails the job instead of exiting green.
-export default ingestTask(SOURCE_ID, async (log) => {
-  const entries = sadoNourinEntries(await fetchHtml(INDEX_URL), fetchHtml);
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const entries = sadoNourinEntries((await upstream.fetch(INDEX_URL)).text(), upstream);
   log(`${SOURCE_ID}: ${entries.length} dam pages linked`);
   // The survey date is the newest value a page publishes: holding it keeps
   // the dam covered between the twice-monthly surveys.

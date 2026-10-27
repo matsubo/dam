@@ -11,7 +11,13 @@
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { iizumiReading, parseSuibouStage, suibouEntries } from './ingest_kanagawa_suibou.ts';
+import { fixtureUpstream } from '../ingest/upstream.ts';
+import {
+  IIZUMI_URL,
+  iizumiReading,
+  parseSuibouStage,
+  suibouEntries,
+} from './ingest_kanagawa_suibou.ts';
 
 const FIXTURE = join(
   import.meta.dir,
@@ -100,7 +106,7 @@ describe('iizumiReading', () => {
 
 describe('suibouEntries', () => {
   test('lists both 取水堰; 飯泉 binds by its exact name, 串川 never', () => {
-    const [iizumi, kushikawa] = suibouEntries(async () => '');
+    const [iizumi, kushikawa] = suibouEntries(fixtureUpstream({}));
     expect([iizumi?.key, iizumi?.name, iizumi?.bind]).toEqual([
       '3585_4_1601',
       '飯泉取水堰',
@@ -113,15 +119,18 @@ describe('suibouEntries', () => {
     ]);
   });
 
-  test("reads 飯泉's page through the fetcher", async () => {
+  test("reads 飯泉's page through the upstream", async () => {
     const pages: string[] = [];
-    const [iizumi] = suibouEntries(async (page) => {
-      pages.push(page);
-      return readFile(FIXTURE, 'utf8');
-    });
+    const html = await readFile(FIXTURE, 'utf8');
+    const [iizumi] = suibouEntries(
+      fixtureUpstream((url) => {
+        pages.push(url);
+        return html;
+      }),
+    );
     if (typeof iizumi?.reading !== 'function') throw new Error('not a page reading');
     const r = await iizumi.reading(null);
-    expect(pages).toEqual(['p10202_18_3585_4_1601.html']);
+    expect(pages).toEqual([IIZUMI_URL]);
     expect(r.state).toBe('values');
   });
 });

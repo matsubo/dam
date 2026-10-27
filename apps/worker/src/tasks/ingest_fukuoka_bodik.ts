@@ -88,17 +88,8 @@ export function fukuokaEntries(csvText: string): Entry[] {
   return out;
 }
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const res = await fetch(DATA_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (!res.ok) throw new Error(`${SOURCE_ID}: HTTP ${res.status}`);
-  const csvText = new TextDecoder('shift-jis').decode(await res.arrayBuffer());
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const csvText = (await upstream.fetch(DATA_URL)).text('shift_jis');
   const entries = fukuokaEntries(csvText);
   log(`${SOURCE_ID}: ${entries.length} dams`);
   return { entries };

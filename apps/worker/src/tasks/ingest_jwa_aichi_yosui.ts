@@ -29,6 +29,7 @@
 import { type Cell, cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
 import { ingestTask } from '../ingest/run.ts';
 import type { Bind, Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const PAGE_URL =
   process.env.JWA_AICHI_YOSUI_URL ??
@@ -169,25 +170,16 @@ export function aichiYosuiEntries(page: Page): Entry[] {
   }));
 }
 
-async function fetchPage(): Promise<Page> {
+async function fetchPage(upstream: Upstream): Promise<Page> {
   try {
-    const r = await fetch(PAGE_URL, {
-      headers: {
-        'user-agent':
-          process.env.HTTP_USER_AGENT ??
-          'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-      },
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (r.status !== 200) return { failed: `HTTP ${r.status} for ${PAGE_URL}` };
-    return { html: await r.text() };
+    return { html: (await upstream.fetch(PAGE_URL)).text() };
   } catch (err) {
     return { failed: err instanceof Error ? err.message : String(err) };
   }
 }
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const page = await fetchPage();
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const page = await fetchPage(upstream);
   if ('failed' in page) log(`${SOURCE_ID}: ${page.failed}`);
   return { entries: aichiYosuiEntries(page) };
 });

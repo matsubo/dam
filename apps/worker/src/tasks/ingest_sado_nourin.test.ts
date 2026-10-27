@@ -7,12 +7,8 @@
 
 import { describe, expect, test } from 'bun:test';
 import type { Reading } from '../ingest/types.ts';
-import {
-  type FetchPage,
-  parseSadoDamLinks,
-  sadoDamReading,
-  sadoNourinEntries,
-} from './ingest_sado_nourin.ts';
+import { fixtureUpstream } from '../ingest/upstream.ts';
+import { parseSadoDamLinks, sadoDamReading, sadoNourinEntries } from './ingest_sado_nourin.ts';
 
 const DIR = new URL('../../../../tests/fixtures/sado_nourin/', import.meta.url).pathname;
 const index = await Bun.file(`${DIR}index_20260927.html`).text();
@@ -70,12 +66,11 @@ describe('sadoNourinEntries', () => {
     'https://www.pref.niigata.lg.jp/site/sado-nourinsuisan-nouson/1122070000.html':
       '1122070000_hamochi_20260927.html',
   };
-  const fetchPage: FetchPage = async (url) => {
+  const upstream = fixtureUpstream(async (url) => {
     const file = pages[url];
-    if (!file) throw new Error(`HTTP 404 for ${url}`);
-    return Bun.file(`${DIR}${file}`).text();
-  };
-  const entries = sadoNourinEntries(index, fetchPage);
+    return file ? Bun.file(`${DIR}${file}`).text() : { status: 404 };
+  });
+  const entries = sadoNourinEntries(index, upstream);
 
   async function read(name: string): Promise<Reading> {
     const r = entries.find((e) => e.name === name)?.reading;

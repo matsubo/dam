@@ -12,6 +12,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Reading } from '../ingest/types.ts';
+import { fixtureUpstream } from '../ingest/upstream.ts';
 import { hkdEntries, hkdReading, parseHkdTimestamp } from './ingest_hkd_mlit.ts';
 
 const FIXTURE = join(
@@ -67,10 +68,12 @@ describe('hkdReading', () => {
 describe('hkdEntries', () => {
   test('lists all 18 dams by page slug, each read from its own page', async () => {
     const urls: string[] = [];
-    const entries = hkdEntries(async (url) => {
-      urls.push(url);
-      return page();
-    });
+    const entries = hkdEntries(
+      fixtureUpstream(async (url) => {
+        urls.push(url);
+        return page();
+      }),
+    );
     expect(entries).toHaveLength(18);
     expect(entries.every((e) => e.pref === '01')).toBe(true);
     const chubetsu = entries.find((e) => e.key === 'chubetsu');
@@ -81,7 +84,7 @@ describe('hkdEntries', () => {
   });
 
   test('a page that fails to load makes that reading throw (the run records it unreadable)', async () => {
-    const [first] = hkdEntries(() => Promise.reject(new Error('HTTP 503')));
+    const [first] = hkdEntries(fixtureUpstream(() => ({ status: 503 })));
     if (typeof first?.reading !== 'function') throw new Error('expected a reading function');
     await expect(Promise.resolve(first.reading(null))).rejects.toThrow('HTTP 503');
   });

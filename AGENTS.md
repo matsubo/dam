@@ -154,7 +154,11 @@ bun run apps/web/bin/seed_synthetic_observations.ts     --hourly-days 30 --years
    `apps/worker/src/task_list.ts`; the crontab, cadence and `source_priorities`
    row follow from the declaration. Write the task on the ingest run
    (`apps/worker/src/ingest/`): `export default ingestTask(SOURCE_ID, scan)`.
-   `scan` fetches and parses, never touches the database, and returns one
+   `scan({ log, upstream })` reads the provider only through `upstream.fetch`
+   (`ingest/upstream.ts`: our user agent, 20 s default timeout, one error for
+   any non-2xx; `res.text('shift_jis')`, `res.json()`, `res.bytes`) — never
+   global `fetch`, so tests run it on `fixtureUpstream` bytes. It parses,
+   never touches the database, and returns one
    entry per row the provider LISTS — the listed-but-unmatched rows are the
    point, since they separate "they publish it, we failed to link it" from
    "nobody publishes it". Each entry carries a required state:

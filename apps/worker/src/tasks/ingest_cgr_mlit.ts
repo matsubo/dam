@@ -28,6 +28,7 @@
 import { type Cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
 import { ingestTask } from '../ingest/run.ts';
 import type { Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const API_URL =
   process.env.CGR_MLIT_DAM_URL ??
@@ -171,23 +172,19 @@ export function cgrEntries(payload: ApiResponse | { error: string }): Entry[] {
   return entries;
 }
 
-async function fetchPayload(): Promise<ApiResponse | { error: string }> {
+async function fetchPayload(upstream: Upstream): Promise<ApiResponse | { error: string }> {
   try {
-    const r = await fetch(API_URL, {
+    const r = await upstream.fetch(API_URL, {
       method: 'POST',
       headers: {
-        'user-agent':
-          process.env.HTTP_USER_AGENT ??
-          'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
         'content-type': 'application/json',
         'content-length': '0',
         referer: 'http://www.cgr.mlit.go.jp/cginfo/syokai/busyo/kasen/dam_bousai/index.php',
       },
       body: '',
-      signal: AbortSignal.timeout(12_000),
+      timeoutMs: 12_000,
     });
-    if (r.status !== 200) return { error: `HTTP ${r.status}` };
-    const text = await r.text();
+    const text = r.text();
     try {
       return JSON.parse(text) as ApiResponse;
     } catch {
@@ -198,4 +195,6 @@ async function fetchPayload(): Promise<ApiResponse | { error: string }> {
   }
 }
 
-export default ingestTask(SOURCE_ID, async () => ({ entries: cgrEntries(await fetchPayload()) }));
+export default ingestTask(SOURCE_ID, async ({ upstream }) => ({
+  entries: cgrEntries(await fetchPayload(upstream)),
+}));

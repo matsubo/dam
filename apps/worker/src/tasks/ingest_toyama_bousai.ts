@@ -187,20 +187,8 @@ export function toyamaEntries(stations: ToyamaStation[], dataCsv: string | Error
 
 // --- task -------------------------------------------------------------------
 
-async function fetchCsv(file: string): Promise<string> {
-  const r = await fetch(`${DATA_BASE}/${file}`, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) throw new Error(`${file} HTTP ${r.status}`);
-  return r.text();
-}
-
-export default ingestTask(SOURCE_ID, async (log) => {
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const fetchCsv = async (file: string) => (await upstream.fetch(`${DATA_BASE}/${file}`)).text();
   const stations = parseToyamaStations(await fetchCsv('damname_data.csv'));
   const dataCsv = await fetchCsv('dam_data.csv').catch((err: unknown) =>
     err instanceof Error ? err : new Error(String(err)),

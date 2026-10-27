@@ -106,24 +106,17 @@ export function sayamaikeEntries(reading: Reading | (() => Reading)): Entry[] {
   return [{ key: NAME, name: NAME, pref: PREF_CODE, bind: { exact: true }, reading }];
 }
 
-export default ingestTask(SOURCE_ID, async (log) => {
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
   let csv: string;
   let lastModified: string | null;
   try {
-    const r = await fetch(CSV_URL, {
-      headers: {
-        'user-agent':
-          process.env.HTTP_USER_AGENT ??
-          'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-      },
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (r.status !== 200) throw new Error(`HTTP ${r.status}`);
-    csv = await r.text();
+    const r = await upstream.fetch(CSV_URL);
+    csv = r.text();
     lastModified = r.headers.get('last-modified');
   } catch (err) {
+    // The error already names the source and URL.
     const why = err instanceof Error ? err.message : String(err);
-    log(`${SOURCE_ID}: ${why}`);
+    log(why);
     return { entries: sayamaikeEntries({ state: 'unreadable', why }) };
   }
   return { entries: sayamaikeEntries(() => sayamaikeReading(csv, lastModified)) };

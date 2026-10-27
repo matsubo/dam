@@ -168,17 +168,8 @@ export function saitamaEntries(text: string): Entry[] {
 
 // --- task -------------------------------------------------------------------
 
-export default ingestTask(SOURCE_ID, async (log) => {
-  const r = await fetch(DATA_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) throw new Error(`${SOURCE_ID}: HTTP ${r.status}`);
-  const entries = saitamaEntries(await r.text());
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const entries = saitamaEntries((await upstream.fetch(DATA_URL)).text());
   log(`${SOURCE_ID}: ${entries.length} stations`);
   return { entries };
 });

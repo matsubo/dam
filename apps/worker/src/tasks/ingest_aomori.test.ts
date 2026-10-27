@@ -16,9 +16,11 @@ import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Reading } from '../ingest/types.ts';
+import { fixtureUpstream } from '../ingest/upstream.ts';
 import {
   aomoriEntries,
   aomoriReading,
+  graphUrl,
   parseAomoriDamGraph,
   parseAomoriDamList,
 } from './ingest_aomori.ts';
@@ -147,12 +149,13 @@ describe('aomoriReading', () => {
 describe('aomoriEntries', () => {
   test('every listed dam is an entry keyed by its name; each reads its own 局番号 page', async () => {
     const dams = parseAomoriDamList(await fixtureHtml('dam_table_status_2026-09-27.shiftjis.html'));
-    const asked: number[] = [];
-    const entries = aomoriEntries(dams, async (sn) => {
-      asked.push(sn);
-      if (sn === 7) return fixtureHtml('dam_graph10m_sn7_2026-09-27.shiftjis.html');
-      throw new Error('HTTP 503');
+    const asked: string[] = [];
+    const page = await readFile(join(FIXTURE_DIR, 'dam_graph10m_sn7_2026-09-27.shiftjis.html'));
+    const upstream = fixtureUpstream((url) => {
+      asked.push(url);
+      return url === graphUrl(7) ? page : { status: 503 };
     });
+    const entries = aomoriEntries(dams, upstream);
     expect(entries.map((e) => [e.key, e.pref])).toContainEqual(['遠部ダム', '02']);
     expect(entries).toHaveLength(11);
     const read = async (name: string): Promise<Reading> => {
@@ -163,6 +166,6 @@ describe('aomoriEntries', () => {
     expect((await read('遠部ダム')).state).toBe('values');
     // A page that fails throws; the run records that dam unreadable.
     await expect(read('下湯ダム')).rejects.toThrow('HTTP 503');
-    expect(asked).toEqual([7, 1]);
+    expect(asked).toEqual([graphUrl(7), graphUrl(1)]);
   });
 });

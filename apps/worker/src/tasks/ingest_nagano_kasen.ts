@@ -169,19 +169,10 @@ export function naganoEntries(json: NaganoJson | null, why = 'hour file unreadab
 
 // --- task -------------------------------------------------------------------
 
-export default ingestTask(SOURCE_ID, async (log) => {
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
   const url = buildNaganoUrl(new Date(), BASE_URL);
   try {
-    const r = await fetch(url, {
-      headers: {
-        'user-agent':
-          process.env.HTTP_USER_AGENT ??
-          'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-      },
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (r.status !== 200) throw new Error(`HTTP ${r.status}`);
-    return { entries: naganoEntries((await r.json()) as NaganoJson) };
+    return { entries: naganoEntries((await upstream.fetch(url)).json<NaganoJson>()) };
   } catch (err) {
     const why = `${url}: ${err instanceof Error ? err.message : String(err)}`;
     log(`${SOURCE_ID}: ${why}`);
