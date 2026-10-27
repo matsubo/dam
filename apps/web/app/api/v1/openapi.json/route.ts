@@ -564,6 +564,105 @@ const components = {
       },
     },
 
+    SourceSummary: {
+      type: 'object',
+      description:
+        'データソース 1 件。宣言 (提供元・ライセンス・取得頻度・優先度) と直近 30 日の取込実績。`/sources` HTML と同じ内容。',
+      required: [
+        'sourceId',
+        'label',
+        'description',
+        'upstream',
+        'what',
+        'cadence',
+        'license',
+        'status',
+        'priority',
+        'providesObservations',
+        'trustedRateBasis',
+        'rows30d',
+        'dams30d',
+        'latestObservedAt',
+        'earliestObservedAt',
+      ],
+      properties: {
+        sourceId: { type: 'string', example: 'okayama-bousai' },
+        label: { type: 'string', example: '岡山県 河川防災情報' },
+        description: { type: 'string' },
+        upstream: { type: 'string', description: '提供元の組織・システム・ページ。' },
+        what: { type: 'string', description: '対象ダムと項目。' },
+        cadence: { type: 'string', description: '提供元の更新頻度と取得タイミング。' },
+        license: {
+          type: 'string',
+          nullable: true,
+          description: '提供元の利用条件。null は未確認。',
+        },
+        status: {
+          type: 'string',
+          enum: ['active', 'retired', 'historical'],
+          description:
+            'active = 定期取得中、retired = 取得終了 (過去の観測値は残る)、historical = 一度きりの過去データ。',
+        },
+        priority: {
+          type: 'integer',
+          description: '同じダム・時刻に複数ソースがあるとき大きい方を採用。',
+        },
+        providesObservations: { type: 'boolean' },
+        trustedRateBasis: {
+          type: 'boolean',
+          description: '貯水率が管理者自身の基準 (利水容量など) による値。',
+        },
+        rows30d: { type: 'integer', description: '直近 30 日の観測件数。' },
+        dams30d: { type: 'integer', description: '直近 30 日に観測値があるダム数。' },
+        latestObservedAt: { type: 'string', format: 'date-time', nullable: true },
+        earliestObservedAt: {
+          type: 'string',
+          format: 'date-time',
+          nullable: true,
+          description: '直近 30 日の観測のうち最も古い時刻。',
+        },
+      },
+    },
+
+    SourceListResponse: {
+      type: 'object',
+      required: ['items', '_links'],
+      properties: {
+        items: { type: 'array', items: { $ref: '#/components/schemas/SourceSummary' } },
+        _links: { $ref: '#/components/schemas/HalLinks' },
+      },
+    },
+
+    SourceDetailResponse: {
+      allOf: [
+        { $ref: '#/components/schemas/SourceSummary' },
+        {
+          type: 'object',
+          required: ['dams', '_links'],
+          properties: {
+            dams: {
+              type: 'array',
+              description: 'このソースが直近 30 日に値を出したダム (新しい順、最大 200)。',
+              items: {
+                type: 'object',
+                required: ['id', 'slug', 'name', 'prefCode', 'latestObservedAt'],
+                properties: {
+                  id: { type: 'string' },
+                  slug: { type: 'string' },
+                  name: { type: 'string' },
+                  prefCode: { type: 'string' },
+                  latestObservedAt: { type: 'string', format: 'date-time' },
+                  latestStorageVolumeM3: { type: 'string', nullable: true },
+                  latestStorageRate: { type: 'number', nullable: true },
+                },
+              },
+            },
+            _links: { $ref: '#/components/schemas/HalLinks' },
+          },
+        },
+      ],
+    },
+
     CoverageResponse: {
       type: 'object',
       required: ['summary', 'items', 'count', '_links'],
@@ -800,32 +899,40 @@ const paths = {
       tags: ['system'],
       security: [],
       description:
-        '稼働中のデータ取込ソースとそれぞれの最終取得時刻を返します。`/sources` HTML ページの内訳と同じ。',
+        '宣言済みの全データソース (優先度の高い順)。提供元・ライセンス・取得頻度と直近 30 日の取込実績。`/sources` HTML ページと同じ内容。',
       responses: {
         '200': {
           description: 'OK',
           content: {
             'application/hal+json': {
-              example: {
-                items: [
-                  {
-                    sourceId: 'ndi',
-                    description: '国土数値情報 (master location/code)',
-                    priority: 80,
-                    active: true,
-                    lastFetchedAt: '2026-04-01T03:00:00Z',
-                  },
-                  {
-                    sourceId: 'damnet',
-                    description: 'ダム便覧 (master attributes)',
-                    priority: 50,
-                    active: true,
-                    lastFetchedAt: '2026-05-04T03:00:00Z',
-                  },
-                ],
-                _links: { self: { href: '/api/v1/sources' } },
-              },
+              schema: { $ref: '#/components/schemas/SourceListResponse' },
             },
+          },
+        },
+      },
+    },
+  },
+
+  '/api/v1/sources/{sourceId}': {
+    get: {
+      summary: 'データソース詳細',
+      tags: ['system'],
+      security: [],
+      description: 'データソース 1 件の要約と、直近 30 日に値を出したダム。',
+      parameters: [{ name: 'sourceId', in: 'path', required: true, schema: { type: 'string' } }],
+      responses: {
+        '200': {
+          description: 'OK',
+          content: {
+            'application/hal+json': {
+              schema: { $ref: '#/components/schemas/SourceDetailResponse' },
+            },
+          },
+        },
+        '404': {
+          description: '宣言されていない sourceId',
+          content: {
+            'application/problem+json': { schema: { $ref: '#/components/schemas/Problem' } },
           },
         },
       },

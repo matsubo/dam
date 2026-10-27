@@ -136,3 +136,18 @@ and charset decoding each written per task, and 21 task-specific fetcher seams f
 - Not moved: `quality_freshness` (Discord webhook, not an upstream), `refresh_dam_elevation` /
   `refresh_dam_images_wikipedia` (third-party APIs with a contact-email user agent),
   `backfill_mudam` (curl).
+
+## 6. Source summary — `packages/db/src/repo/source_summary.ts`
+
+Review candidate 6 (2026-10-27). Four SQL copies served /sources, /sources/[id] and
+/api/v1/sources; the API's shape (`sources[].source_id`) contradicted its OpenAPI
+(`items[].sourceId`) and every other endpoint; the pages and API joined `raw_snapshots`, unwritten
+since 2026-09; /md/sources listed 6 of 116 sources by hand.
+
+- One summary: a declared source's facts (`sourceFacts`, `@dam/core/sources`) plus 30-day
+  rows / dams / latest / earliest. Only declared sources are described (ADR 0001).
+- Owner's decisions: the API follows the documented shape (`items`, camelCase; detail is the
+  summary plus `dams`) — a breaking change for clients reading `sources[].source_id`; the dead
+  `last_fetched_at` / `last_status` go and license plus the declaration's details come in.
+- /md/sources builds its table from the facts alone (no database; stays static).
+- `apps/web/app/api/v1/sources/route.test.ts` checks both routes against the OpenAPI schema.

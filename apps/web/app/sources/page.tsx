@@ -1,5 +1,5 @@
-import { sourceById } from '@dam/core/sources';
 import { sql } from '@dam/db/client';
+import { sourceSummaries } from '@dam/db/repo/source_summary';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
@@ -14,15 +14,6 @@ export const metadata: Metadata = {
     '使用している外部データソース、ダム名寄せの方法、ER 図、欠損データの分布、観測値の粒度。',
   alternates: { canonical: '/sources', types: { 'text/markdown': '/md/sources' } },
 };
-
-interface SourceRow {
-  source_id: string;
-  description: string | null;
-  priority: number;
-  active: boolean;
-  last_fetched_at: Date | null;
-  last_status: string | null;
-}
 
 interface CoverageRow {
   total: bigint;
@@ -44,27 +35,9 @@ interface ObsCadenceRow {
   last_24h: bigint;
   distinct_dams: bigint;
 }
-
-interface ObsBySourceRow {
-  source_id: string;
-  rows_30d: bigint;
-  distinct_dams_30d: bigint;
-  latest_observed_at: Date | null;
-}
-
 async function loadAll() {
-  const [sources, coverage, cadence, bucketRows, redevRows, obsBySource] = await Promise.all([
-    sql<SourceRow[]>`
-      SELECT sp.source_id, sp.description, sp.priority, sp.active,
-             lf.last_fetched_at, lf.last_status
-      FROM source_priorities sp
-      LEFT JOIN LATERAL (
-        SELECT fetched_at AS last_fetched_at, parse_status AS last_status
-        FROM raw_snapshots WHERE source_id = sp.source_id
-        ORDER BY fetched_at DESC LIMIT 1
-      ) lf ON TRUE
-      ORDER BY sp.priority DESC
-    `,
+  const [sources, coverage, cadence, bucketRows, redevRows] = await Promise.all([
+    sourceSummaries(),
     sql<CoverageRow[]>`
       SELECT
         COUNT(*)                                                   AS total,
@@ -110,22 +83,6 @@ async function loadAll() {
       FROM dams
       WHERE name ~ '[（(](?:再|元|新)[）)]'
     `,
-    // Distinct dams via a (source_id, dam_id) hash aggregate, not
-    // COUNT(DISTINCT), which sorted the whole 30-day window to disk (#108).
-    sql<ObsBySourceRow[]>`
-      SELECT
-        source_id,
-        SUM(n)::BIGINT                              AS rows_30d,
-        COUNT(*)::BIGINT                            AS distinct_dams_30d,
-        MAX(latest)                                 AS latest_observed_at
-      FROM (
-        SELECT source_id, dam_id, COUNT(*) AS n, MAX(observed_at) AS latest
-        FROM observations
-        WHERE observed_at > NOW() - INTERVAL '30 days'
-        GROUP BY source_id, dam_id
-      ) per_dam
-      GROUP BY source_id
-    `,
   ]);
   const cov = coverage[0];
   const cad = cadence[0];
@@ -136,7 +93,6 @@ async function loadAll() {
     cadence: cad,
     buckets: bucketRows,
     redevCount: Number(redevRows[0]?.count ?? 0n),
-    obsBySource: new Map(obsBySource.map((r) => [r.source_id, r])),
   };
 }
 
@@ -196,55 +152,42 @@ export default async function SourcesPage() {
                 <th>ライセンス</th>
                 <th className="text-right">優先度</th>
                 <th className="text-right">直近30日</th>
-                <th>最終取得</th>
+                <th>最新観測</th>
               </tr>
             </thead>
             <tbody>
-              {data.sources.map((s) => {
-                const detail = sourceById(s.source_id)?.details;
-                const obs = data.obsBySource.get(s.source_id);
-                return (
-                  <tr key={s.source_id}>
-                    <td>
-                      <Link
-                        href={`/sources/${encodeURIComponent(s.source_id)}`}
-                        className="font-semibold hover:text-primary"
-                      >
-                        {s.source_id}
-                      </Link>
-                      {detail ? (
-                        <div className="text-xs text-on-surface-variant max-w-xs">
-                          {detail.upstream}
+              {data.sources.map((s) => (
+                <tr key={s.sourceId}>
+                  <td>
+                    <Link
+                      href={`/sources/${encodeURIComponent(s.sourceId)}`}
+                      className="font-semibold hover:text-primary"
+                    >
+                      {s.sourceId}
+                    </Link>
+                    <div className="text-xs text-on-surface-variant max-w-xs">{s.upstream}</div>
+                  </td>
+                  <td className="text-xs max-w-md">{s.what}</td>
+                  <td className="text-xs">{s.cadence}</td>
+                  <td className="text-xs">{s.license ?? '未確認'}</td>
+                  <td className="text-right tabular-nums">{s.priority}</td>
+                  <td className="text-right text-xs tabular-nums">
+                    {s.rows30d > 0 ? (
+                      <>
+                        <div>{fmt(s.rows30d)} 件</div>
+                        <div className="text-[10px] text-on-surface-variant">
+                          {fmt(s.dams30d)} 基
                         </div>
-                      ) : null}
-                    </td>
-                    <td className="text-xs max-w-md">{detail?.what ?? s.description ?? '—'}</td>
-                    <td className="text-xs">{detail?.cadence ?? '—'}</td>
-                    <td className="text-xs">{detail ? (detail.license ?? '未確認') : '—'}</td>
-                    <td className="text-right tabular-nums">{s.priority}</td>
-                    <td className="text-right text-xs tabular-nums">
-                      {obs ? (
-                        <>
-                          <div>{fmt(obs.rows_30d)} 件</div>
-                          <div className="text-[10px] text-on-surface-variant">
-                            {fmt(obs.distinct_dams_30d)} 基
-                          </div>
-                        </>
-                      ) : (
-                        <span className="text-on-surface-variant">—</span>
-                      )}
-                    </td>
-                    <td className="text-xs text-on-surface-variant">
-                      {obs?.latest_observed_at
-                        ? fmtDate(obs.latest_observed_at)
-                        : fmtDate(s.last_fetched_at)}
-                      {s.last_status ? (
-                        <span className="block text-[10px]">{s.last_status}</span>
-                      ) : null}
-                    </td>
-                  </tr>
-                );
-              })}
+                      </>
+                    ) : (
+                      <span className="text-on-surface-variant">—</span>
+                    )}
+                  </td>
+                  <td className="text-xs text-on-surface-variant">
+                    {s.latestObservedAt ? fmtDate(s.latestObservedAt) : '—'}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

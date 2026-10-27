@@ -1,6 +1,6 @@
 import { PREFECTURES } from '@dam/core/prefectures';
 import { sourceById } from '@dam/core/sources';
-import { sql } from '@dam/db/client';
+import { sourceDams, sourceSummary } from '@dam/db/repo/source_summary';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -14,27 +14,6 @@ const PREF_NAME = new Map(PREFECTURES.map((p) => [p.code, p.name]));
 
 interface PageProps {
   params: Promise<{ id: string }>;
-}
-
-interface SourceRow {
-  source_id: string;
-  description: string | null;
-  priority: number;
-  active: boolean;
-  rows_30d: bigint;
-  distinct_dams_30d: bigint;
-  latest_observed_at: Date | null;
-  earliest_observed_at: Date | null;
-}
-
-interface DamRow {
-  id: bigint;
-  slug: string;
-  name: string;
-  pref_code: string;
-  latest_observed_at: Date | null;
-  latest_storage_volume_m3: string | null;
-  latest_storage_rate: number | null;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -51,60 +30,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function SourceDetailPage({ params }: PageProps) {
   const { id: raw } = await params;
   const id = decodeURIComponent(raw);
-  const detail = sourceById(id)?.details;
-
-  const sourceRows = await sql<SourceRow[]>`
-    SELECT
-      sp.source_id,
-      sp.description,
-      sp.priority,
-      sp.active,
-      COALESCE(o.rows_30d, 0)::BIGINT          AS rows_30d,
-      COALESCE(o.distinct_dams_30d, 0)::BIGINT AS distinct_dams_30d,
-      o.latest_observed_at,
-      o.earliest_observed_at
-    FROM source_priorities sp
-    -- Per dam first, then count the dams: COUNT(DISTINCT dam_id) sorted the
-    -- source's 30-day rows to disk (#108).
-    LEFT JOIN LATERAL (
-      SELECT
-        SUM(n)::BIGINT                  AS rows_30d,
-        COUNT(*)::BIGINT                AS distinct_dams_30d,
-        MAX(latest)                     AS latest_observed_at,
-        MIN(earliest)                   AS earliest_observed_at
-      FROM (
-        SELECT dam_id, COUNT(*) AS n, MAX(observed_at) AS latest, MIN(observed_at) AS earliest
-        FROM observations
-        WHERE source_id = sp.source_id
-          AND observed_at > NOW() - INTERVAL '30 days'
-        GROUP BY dam_id
-      ) per_dam
-    ) o ON TRUE
-    WHERE sp.source_id = ${id}
-    LIMIT 1
-  `;
-  const source = sourceRows[0];
+  const [source, dams] = await Promise.all([sourceSummary(id), sourceDams(id)]);
   if (!source) notFound();
-
-  const dams = await sql<DamRow[]>`
-    SELECT
-      d.id, d.slug, d.name, d.pref_code,
-      latest.observed_at  AS latest_observed_at,
-      latest.storage_volume_m3::TEXT AS latest_storage_volume_m3,
-      latest.storage_rate::FLOAT8    AS latest_storage_rate
-    FROM dams d
-    JOIN LATERAL (
-      SELECT observed_at, storage_volume_m3, storage_rate
-      FROM observations o
-      WHERE o.dam_id = d.id
-        AND o.source_id = ${id}
-        AND o.observed_at > NOW() - INTERVAL '30 days'
-      ORDER BY o.observed_at DESC
-      LIMIT 1
-    ) latest ON TRUE
-    ORDER BY latest.observed_at DESC, d.id
-    LIMIT 200
-  `;
 
   return (
     <div className="max-w-5xl mx-auto px-5 md:px-10 py-8">
@@ -112,39 +39,31 @@ export default async function SourceDetailPage({ params }: PageProps) {
         items={[
           { label: 'ホーム', href: '/' },
           { label: 'データソース', href: '/sources' },
-          { label: detail?.label ?? id },
+          { label: source.label },
         ]}
       />
-      <h1 className="text-2xl font-semibold mb-2">{detail?.label ?? id}</h1>
-      <p className="text-sm text-on-surface-variant mb-6 max-w-3xl">
-        {detail?.what ?? source.description ?? '—'}
-      </p>
+      <h1 className="text-2xl font-semibold mb-2">{source.label}</h1>
+      <p className="text-sm text-on-surface-variant mb-6 max-w-3xl">{source.what}</p>
 
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-        <Stat label="ID" value={source.source_id} mono />
+        <Stat label="ID" value={source.sourceId} mono />
         <Stat label="優先度" value={String(source.priority)} />
-        <Stat
-          label="ダム"
-          value={`${Number(source.distinct_dams_30d).toLocaleString('ja-JP')} 基`}
-          sub="直近30日"
-        />
+        <Stat label="ダム" value={`${source.dams30d.toLocaleString('ja-JP')} 基`} sub="直近30日" />
         <Stat
           label="観測件数"
-          value={`${Number(source.rows_30d).toLocaleString('ja-JP')} 件`}
+          value={`${source.rows30d.toLocaleString('ja-JP')} 件`}
           sub="直近30日"
         />
       </section>
 
-      {detail ? (
-        <dl className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-8">
-          <Field label="提供元">{detail.upstream}</Field>
-          <Field label="ライセンス">{detail.license ?? '未確認'}</Field>
-          <Field label="取得頻度">{detail.cadence}</Field>
-          <Field label="最新観測">
-            {source.latest_observed_at ? fmtDate(source.latest_observed_at) : '—'}
-          </Field>
-        </dl>
-      ) : null}
+      <dl className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-8">
+        <Field label="提供元">{source.upstream}</Field>
+        <Field label="ライセンス">{source.license ?? '未確認'}</Field>
+        <Field label="取得頻度">{source.cadence}</Field>
+        <Field label="最新観測">
+          {source.latestObservedAt ? fmtDate(source.latestObservedAt) : '—'}
+        </Field>
+      </dl>
 
       <h2 className="text-lg font-semibold mb-3">このソースが提供するダム ({dams.length})</h2>
       {dams.length > 0 ? (
@@ -167,18 +86,16 @@ export default async function SourceDetailPage({ params }: PageProps) {
                       {d.name}
                     </Link>
                   </td>
-                  <td>{PREF_NAME.get(d.pref_code) ?? d.pref_code}</td>
+                  <td>{PREF_NAME.get(d.prefCode) ?? d.prefCode}</td>
                   <td className="text-right tabular-nums">
-                    {d.latest_storage_rate != null ? fmtPct(d.latest_storage_rate) : '—'}
+                    {d.latestStorageRate != null ? fmtPct(d.latestStorageRate) : '—'}
                   </td>
                   <td className="text-right tabular-nums">
-                    {d.latest_storage_volume_m3
-                      ? Number(d.latest_storage_volume_m3).toLocaleString('ja-JP')
+                    {d.latestStorageVolumeM3
+                      ? Number(d.latestStorageVolumeM3).toLocaleString('ja-JP')
                       : '—'}
                   </td>
-                  <td className="text-xs text-on-surface-variant">
-                    {d.latest_observed_at ? fmtDate(d.latest_observed_at) : '—'}
-                  </td>
+                  <td className="text-xs text-on-surface-variant">{fmtDate(d.latestObservedAt)}</td>
                 </tr>
               ))}
             </tbody>

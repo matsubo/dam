@@ -35,13 +35,14 @@ the file for detail.
 | `app/prefectures/[code]/page.tsx` | prefecture-scoped dam list |
 | `app/prefectures/[code]/opengraph-image.tsx` | per-prefecture share card: dam count, capacities, dams with data in the last 30 days (`twitter-image.tsx` re-exports it) |
 | `app/map/page.tsx` | server fetches all coords, JapanMap renders client-side |
-| `app/sources/page.tsx` | data-source transparency table |
+| `app/sources/page.tsx` | data-source transparency table (`sourceSummaries()`), name matching, ERD, gaps; `app/sources/[id]/page.tsx` one source (`sourceSummary` + `sourceDams`) |
+| `app/api/v1/sources/route.ts`, `[id]/route.ts` | `{ items: SourceSummary[] }` and one summary plus `dams`; `route.test.ts` checks both against the OpenAPI `SourceSummary` schema |
 | `app/contribute/page.tsx` | contributor recruitment: history, live scale figures, stack, terms, credits |
 | `app/api/docs/page.tsx` | server-rendered h1 + intro, then Redoc (`components/redoc-viewer.tsx`, client-only) on `/api/v1/openapi.json` |
 | `app/sitemap.ts` | dynamic sitemap: static pages, /stats, every dam (minus canonicalised twins, `sitemapDams`), watersheds, prefectures, /sources/* — slugs percent-encoded, lastmod only where a real change date exists |
 | `app/robots.txt/route.ts` | allows everything except `/api/` (re-allows `/api/docs` and `/api/v1/openapi.json`); Content-Signal + per-AI-bot groups |
 | `app/llms.txt/route.ts` | llmstxt.org summary: overview, endpoints, sources, link lists of pages and Markdown views |
-| `app/md/**/route.ts` | Markdown twins of `/`, `/sources`, `/legal/*` (hand-written) and `/dams/[slug]` (from the DB); each page links its twin via `<link rel="alternate" type="text/markdown">`. All answer through `lib/markdown-response.ts` (`private`: Cloudflare ignores `Vary: Accept`) |
+| `app/md/**/route.ts` | Markdown twins of `/`, `/legal/*` (hand-written), `/sources` (prose hand-written, the source table from the declarations' `allSourceFacts()`) and `/dams/[slug]` (from the DB); each page links its twin via `<link rel="alternate" type="text/markdown">`. All answer through `lib/markdown-response.ts` (`private`: Cloudflare ignores `Vary: Accept`) |
 | `proxy.ts` | Next 16 proxy (ex-middleware): agent `Link` header, `Accept: text/markdown` → `/md/*` rewrite, legacy `watershed-` 308 |
 | `app/not-found.tsx` | 404 page |
 | `app/error.tsx` | client error boundary |
@@ -314,6 +315,7 @@ the file for detail.
 | `src/repo/coverage.ts` | Coverage triage, one module. `triageDams(ids?)` / `triageDam(id)`: the one definition of a dam's coverage status (`covered` = a value in 30 days OR a scan from the last 7 days whose `published_at` we hold a value at). `coverageSnapshot()`: one triage of every dam plus `headline` (`realtimeCoveragePct` etc.: `covered` ÷ dams minus 提供元なし and 提供元に値なし), `summary` (`unmatchedStations` = unresolved AND `not_dam_reason IS NULL`; `notDamStations`; `pendingScanSources`, each `no_recent_observations` / `ingesting_without_list`) and `prefectures`; one call per page. Vocabulary: `COVERAGE_STATUSES`, `COVERAGE_STATUS` (label + meaning, used by the pages, the API's `statusMeanings` and OpenAPI), `PROVIDER_AVAILABILITY_LABEL`, `providerAvailability`, `isUnobtainable` |
 | `src/repo/real_data.test.ts` | a dam whose recent observations carry no value is real data in no view (list filters, `realSourceId`, triage) |
 | `src/repo/source_freshness.ts` | `staleSources` (threshold = 3 × cadence + publication lag; cadence = the longer of the cron gap and the 90th-percentile spacing of the last 20 stamps, lag = median `created_at − observed_at`; a declared `freshnessOverrideHours` replaces it, `null` = silent by design). Feeds `stale_sources` in `/api/v1/admin/jobs` and `quality:freshness-check` |
+| `src/repo/source_summary.ts` | The source summary: a declared source's facts (`@dam/core/sources` `sourceFacts`) plus 30-day rows/dams/latest/earliest from one grouped query (#108). `sourceSummaries()`, `sourceSummary(id)` (null if undeclared), `sourceDams(id)`. /sources, /sources/[id] and /api/v1/sources project it; /md/sources uses the facts alone |
 | `src/repo/observations.ts` | `upsertObservations`, `findSeries{Hourly,Daily,Monthly}` |
 | `src/repo/source_priorities.ts` | `syncSourcePriorities` (declared rows overwrite every column; undeclared rows left alone and reported), `preferredSource`, `windowSource` (the hourly chart's source, `window_source()`), `priorityMap` |
 | `src/sources_cli.ts` | `bun run --filter @dam/db sources sync` (bootstrap, after migrations) / `kick` (enqueue every active ingest task) |
