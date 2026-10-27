@@ -4,12 +4,11 @@
 // page — specs, location, latest reading and its source — without the chart,
 // map and navigation an agent would otherwise have to strip.
 import { PREFECTURES } from '@dam/core/prefectures';
-import { providerAvailability, triageDam } from '@dam/db/repo/coverage';
-import { canonicalTwin, findDamBySlug, latestObservation } from '@dam/db/repo/dams';
+import { findDamBySlug } from '@dam/db/repo/dams';
 import { damDisplayName } from '../../../../lib/dam-name.ts';
+import { loadDamReading } from '../../../../lib/dam-reading-state.ts';
 import { fmtCapacityMcm, fmtDate, fmtN, fmtPct } from '../../../../lib/format.ts';
 import { markdownResponse } from '../../../../lib/markdown-response.ts';
-import { displayRate } from '../../../../lib/rate-basis.ts';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,9 +36,7 @@ export async function GET(
 
   const dn = damDisplayName(d.name);
   const pref = PREF_NAME.get(d.prefCode) ?? d.prefCode;
-  const [latest, triage] = await Promise.all([latestObservation(d.id), triageDam(d.id)]);
-  const twin = latest ? null : await canonicalTwin(d.id);
-  const notPublished = providerAvailability(triage?.status ?? 'unknown') === 'none';
+  const { state } = await loadDamReading(d.id);
   const path = encodeURIComponent(slug);
   const page = `${SITE_URL}/dams/${path}`;
 
@@ -72,9 +69,8 @@ export async function GET(
   ]);
 
   let reading: string;
-  if (latest && !notPublished) {
-    const cap = latest.effectiveActiveCapacityM3 ? Number(latest.effectiveActiveCapacityM3) : null;
-    const rate = displayRate(cap, latest.storageVolumeM3 ? Number(latest.storageVolumeM3) : null);
+  if (state.kind === 'reading') {
+    const { latest, rate, capacityM3: cap } = state;
     reading = facts([
       ['観測日時', fmtDate(latest.observedAt)],
       ['貯水量', latest.storageVolumeM3 ? fmtCapacityMcm(latest.storageVolumeM3) : null],
@@ -91,9 +87,9 @@ export async function GET(
       ['水位', latest.waterLevelM ? `${fmtN(latest.waterLevelM)} m` : null],
       ['出典', `${latest.sourceId}（${SITE_URL}/sources/${encodeURIComponent(latest.sourceId)}）`],
     ]);
-  } else if (twin) {
-    reading = `このダムの観測値は [${damDisplayName(twin.name)}](${SITE_URL}/dams/${encodeURIComponent(twin.slug)}) に掲載しています。`;
-  } else if (notPublished) {
+  } else if (state.kind === 'twin') {
+    reading = `このダムの観測値は [${damDisplayName(state.twin.name)}](${SITE_URL}/dams/${encodeURIComponent(state.twin.slug)}) に掲載しています。`;
+  } else if (state.kind === 'not_published') {
     reading = 'このダムの観測値を公開しているデータ提供元はありません（提供元なし）。';
   } else {
     reading = '観測値（貯水率・貯水量）は未提供です。';

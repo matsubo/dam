@@ -27,7 +27,7 @@ the file for detail.
 | `app/layout.tsx` | nav + footer + metadata defaults |
 | `app/page.tsx` | home: counts + 6 largest dams + map CTA |
 | `app/dams/page.tsx` | dam list table with pref/watershed filter |
-| `app/dams/[slug]/page.tsx` | dam detail (stat block, ObservationChart, watershed section, nearby); no-reading dams get 諸元-focused title/H1, an empty （元）/（再） twin canonicalises to the twin with data (`canonicalTwin`), dams with readings emit Dataset JSON-LD |
+| `app/dams/[slug]/page.tsx` | dam detail (stat block, ObservationChart, watershed section, nearby). Metadata, body, `md/dams/[slug]` and the share card all switch on `lib/dam-reading-state.ts` (`loadDamReading` → `reading` with display rate + effective capacity / `twin` / `not_published` / `none`): no-reading dams get 諸元-focused title/H1, an empty （元）/（再） twin canonicalises to the twin with data, 提供元なし shows no reading or chart, dams with readings emit Dataset JSON-LD |
 | `app/dams/[slug]/opengraph-image.tsx` | per-dam 1200×630 share card: name, 都道府県・水系, 貯水量/容量, latest 貯水率 bucket (`twitter-image.tsx` re-exports it) |
 | `app/watersheds/page.tsx` | watershed list grouped by kind; one `<table>` restyled into cards below `md` by `page.module.css` (icons/bars are CSS, keeps the HTML small) |
 | `app/watersheds/[slug]/page.tsx` | watershed detail with aggregate + dam list |

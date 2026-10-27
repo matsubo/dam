@@ -151,3 +151,17 @@ since 2026-09; /md/sources listed 6 of 116 sources by hand.
   `last_fetched_at` / `last_status` go and license plus the declaration's details come in.
 - /md/sources builds its table from the facts alone (no database; stays static).
 - `apps/web/app/api/v1/sources/route.test.ts` checks both routes against the OpenAPI schema.
+
+## 7. Dam reading state — `apps/web/lib/dam-reading-state.ts`
+
+Review candidate 7 (2026-10-28). The dam page's metadata and body, its Markdown twin and its
+share card each combined the reading, the triage and the （元）/（再） twin themselves: 提供元なし was
+tested two ways, the page body still showed an old mudam reading under a "no data" heading, and
+the share card drew a 貯水率 for a 提供元なし dam and computed the rate a third time.
+
+- `damReadingState(latest, status, twin)` → `reading` (with the display rate and its effective
+  capacity) | `twin` | `not_published` | `none`, in the order the views already used: reading >
+  twin > 提供元なし > nothing. `loadDamReading(damId)` loads it (the twin only without a
+  reading). The four views switch on it; wording stays per view.
+- Not moved: `/api/v1/dams/{slug}`, which reports the raw reading and `coverageStatus` and
+  leaves the decision to the client.
