@@ -3,9 +3,6 @@
 // Builds deploy/seed/master_upsert.sql, which bootstrap.sh applies on every
 // web boot. Pure so the statements can be run against a test database.
 
-/** Retired sources the seed must not re-create (0045 dropped synthetic). */
-const EXCLUDED_SOURCES = new Set(['synthetic']);
-
 export interface SeedWatershed {
   code: string;
   slug: string;
@@ -43,12 +40,6 @@ export interface SeedDam {
   location: string; // hex EWKB
   external_ids: Record<string, string>;
 }
-export interface SeedSource {
-  source_id: string;
-  description: string;
-  priority: number;
-  active: boolean;
-}
 
 function quote(v: string | number | boolean | null | undefined): string {
   if (v == null) return 'NULL';
@@ -68,11 +59,9 @@ function geoLit(hex: string | null): string {
 }
 
 export function buildMasterUpsertSql({
-  sources,
   watersheds,
   dams,
 }: {
-  sources: SeedSource[];
   watersheds: SeedWatershed[];
   dams: SeedDam[];
 }): string {
@@ -81,16 +70,6 @@ export function buildMasterUpsertSql({
   lines.push('-- Safe to re-run; never TRUNCATEs observations / raw_snapshots / match_review.');
   lines.push('BEGIN;');
   lines.push('SET LOCAL search_path = public;');
-  lines.push('');
-
-  // ─── source_priorities ───────────────────────────────────────────────
-  lines.push('-- source_priorities: insert missing rows only. Migrations and ingest tasks own');
-  lines.push('-- the live values; a stale snapshot must not overwrite them.');
-  for (const s of sources.filter((x) => !EXCLUDED_SOURCES.has(x.source_id))) {
-    lines.push(
-      `INSERT INTO source_priorities (source_id, description, priority, active) VALUES (${quote(s.source_id)}, ${quote(s.description)}, ${quote(s.priority)}, ${quote(s.active)}) ON CONFLICT (source_id) DO NOTHING;`,
-    );
-  }
   lines.push('');
 
   // ─── watersheds ──────────────────────────────────────────────────────

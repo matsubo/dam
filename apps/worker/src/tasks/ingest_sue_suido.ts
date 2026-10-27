@@ -21,12 +21,8 @@
 //
 // Priority 293: nothing else publishes 須恵. Cron daily 06:17 UTC (15:17 JST).
 
-import { type BindableMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry } from '../ingest/types.ts';
 
 const PAGE_URL =
   process.env.SUE_SUIDO_URL ??
@@ -79,121 +75,34 @@ export function parseSueRates(html: string): ParsedPage {
   return { observedAt, rows: rows.filter((r) => r.name) };
 }
 
-// --- matching ---------------------------------------------------------------
-
-export type SueMaster = BindableMaster;
-
-/** The stamped row, else the one master row named like the page's ダム. */
-export function chooseMaster(name: string, masters: SueMaster[]): bigint | null {
-  const stamped = stampedMaster(masters, name);
-  if (stamped) return stamped.id;
-  const stem = name.replace(/ダム$/, '');
-  const hits = masters.filter((m) => m.name.normalize('NFKC') === stem);
-  return hits.length === 1 ? (hits[0]?.id ?? null) : null;
-}
-
-export interface SuePlan {
-  universe: UniverseRow[];
-  writes: { damId: bigint; row: ParsedRow }[];
-}
-
 /**
- * The whole list for the universe; the rate for every matched row that has
- * one. A written row carries the page's 更新日 as its `publishedAt`: it is the
- * newest value the town publishes, so the dam stays covered between issues.
+ * Every name of the 現在 table, bound by exact name (the page's ダム名 is the
+ * master name plus ダム); the three 溜池/貯水池 stay unresolved.
  */
-export function planSue(rows: ParsedRow[], masters: SueMaster[], observedAt: Date): SuePlan {
-  const universe: UniverseRow[] = [];
-  const writes: SuePlan['writes'] = [];
-  for (const row of rows) {
-    const damId = chooseMaster(row.name, masters);
-    const written = damId !== null && row.storageRate !== null;
-    universe.push({
-      externalId: row.name,
+export function sueEntries(observedAt: Date, rows: ParsedRow[]): Entry[] {
+  return rows.map(
+    (row): Entry => ({
+      key: row.name,
       name: row.name,
-      prefCode: PREF_CODE,
-      resolvedDamId: damId,
-      hasData: row.storageRate === null ? null : true,
-      publishedAt: written ? observedAt : null,
-    });
-    if (damId && row.storageRate !== null) writes.push({ damId, row });
-  }
-  return { universe, writes };
+      pref: PREF_CODE,
+      bind: { exact: true },
+      reading:
+        row.storageRate === null
+          ? { state: 'unreadable', why: 'no 貯水率' }
+          : { state: 'values', observations: [{ observedAt, storageRate: row.storageRate }] },
+    }),
+  );
 }
 
-// --- DB helpers -------------------------------------------------------------
-
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 293,
-            '須恵町上下水道課 貯水率 — 須恵ダム (月次, 貯水率のみ)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-// --- task -------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
-  const r = await fetch(PAGE_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
-  }
-
-  const { observedAt, rows } = parseSueRates(await r.text());
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const { observedAt, rows } = parseSueRates((await upstream.fetch(PAGE_URL)).text());
   log(`${SOURCE_ID}: parsed ${rows.length} rows, 更新日 ${observedAt?.toISOString() ?? 'missing'}`);
   if (!observedAt || rows.length === 0) {
     throw new Error(
       `${SOURCE_ID}: ${rows.length} rows / date ${observedAt ? 'found' : 'missing'} on ${PAGE_URL} — layout change?`,
     );
   }
-
-  const masters = await sql<SueMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const plan = planSue(rows, masters, observedAt);
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  await recordUniverse(SOURCE_ID, plan.universe);
-  for (const u of plan.universe) {
-    if (!u.resolvedDamId) log(`${SOURCE_ID}: no master match for "${u.name}"`);
-  }
-  for (const w of plan.writes) await bindExternalId(w.damId, SOURCE_ID, w.row.name);
-
-  const written = await upsertObservations(
-    plan.writes.map(({ damId, row }) => ({
-      observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: null,
-      storageRate: row.storageRate,
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: null,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    })),
-  );
-  log(
-    `${SOURCE_ID} done: parsed=${rows.length} matched=${plan.universe.filter((u) => u.resolvedDamId).length} written=${written}`,
-  );
-};
-
-export default task;
+  // The 更新日 is the newest value the town publishes, about monthly: holding
+  // it keeps the dam covered between issues.
+  return { entries: sueEntries(observedAt, rows), dated: true };
+});

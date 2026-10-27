@@ -23,17 +23,16 @@
 //
 // Year inferred from "YYYY年" pattern in the page header.
 //
-// A column that is 「***」 (欠測) or blank in every value row is recorded as
-// has_data = FALSE: on 2026-09-28 天ヶ瀬 and 河内 printed 「***」, and 深浦 was
-// blank under a 07/06 観測時刻.
+// A column that is 「***」 (欠測) or blank in every value row is provider-marked
+// empty: on 2026-09-28 天ヶ瀬 and 河内 printed 「***」, and 深浦 was blank under
+// a 07/06 観測時刻. The 現況表 carries no station ids, so the printed name is
+// the key. A page that cannot be fetched fails the run: the list is the three
+// pages together.
 //
 // Priority 308. Cron hourly at :40.
 
-import { type BindableMaster, preferMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const BASE_URL =
   process.env.SAGA_BOUSAI_URL ??
@@ -54,12 +53,11 @@ export interface ParsedRow {
   inflowM3s: number | null;
   outflowM3s: number | null;
   /**
-   * source_universe.has_data: true = the task stores the row (a 貯水位 or a
-   * 貯水量); false = every value cell is 「***」 (欠測) or blank, as 天ヶ瀬 /
-   * 河内 / 深浦 print it; null = something we could not read, or a page
-   * missing the 貯水位 row, which may be our parser rather than the provider.
+   * Every value cell is 「***」 (欠測) or blank, as 天ヶ瀬 / 河内 / 深浦 print
+   * it — on a page that has its 貯水位 row, so a page without one cannot say
+   * a dam is empty.
    */
-  hasData: boolean | null;
+  marked: boolean;
 }
 
 // --- parsing ----------------------------------------------------------------
@@ -154,171 +152,79 @@ export function parseSagaPage(html: string, now: Date = new Date()): ParsedRow[]
     const ratePct = parseNum(rateRow[i] ?? '');
     const volRaw = parseNum(volRow[i] ?? '');
 
-    const waterLevelM = parseNum(levelRow[i] ?? '');
-    const storageVolumeM3 = volRaw != null ? volRaw * 1000 : null;
-    // 「***」 is the provider's 欠測; blank is a quantity it does not publish.
-    const empty =
-      rowMap.has('貯水位 EL [m]') && valueRows.every((row) => /^\**$/.test(row[i] ?? ''));
-
     rows.push({
       sagaName,
       observedAt,
       storageRate: ratePct != null ? Math.max(0, Math.min(1, ratePct / 100)) : null,
-      storageVolumeM3,
-      waterLevelM,
+      storageVolumeM3: volRaw != null ? volRaw * 1000 : null,
+      waterLevelM: parseNum(levelRow[i] ?? ''),
       inflowM3s: parseNum(inflowRow[i] ?? ''),
       outflowM3s: parseNum(outflowRow[i] ?? ''),
-      hasData: waterLevelM !== null || storageVolumeM3 !== null ? true : empty ? false : null,
+      // 「***」 is the provider's 欠測; blank is a quantity it does not publish.
+      marked: rowMap.has('貯水位 EL [m]') && valueRows.every((row) => /^\**$/.test(row[i] ?? '')),
     });
   }
 
   return rows;
 }
 
-// --- DB helpers -------------------------------------------------------------
-
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 308,
-            '佐賀県河川砂防情報システム ダム現況表 — 19 県管理ダム hourly (3-page Shift_JIS)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/貯水池$/, '')
-    .trim();
-}
-
-interface DamMatch {
-  sagaName: string;
-  damId: bigint;
-}
-
-async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear"
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const out: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing. The 現況表
-  // carries no station ids, so the published name is the key.
-  const universe: UniverseRow[] = [];
-
-  for (const r of rows) {
-    const stem = normalizeName(r.sagaName);
-
-    let best: { m: BindableMaster; rank: number } | null = null;
-    if (stem) {
-      for (const m of masters) {
-        const mStem = normalizeName(m.name);
-        let rank: number;
-        if (m.name === r.sagaName) rank = 0;
-        else if (mStem === stem) rank = 1;
-        else if (m.name === `${stem}ダム`) rank = 2;
-        else if (mStem.startsWith(stem)) rank = 3;
-        else if (stem.startsWith(mStem) && mStem.length >= 2) rank = 4;
-        else if (mStem.includes(stem)) rank = 5;
-        else continue;
-        if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-          best = { m, rank };
-        }
-      }
-    }
-
-    universe.push({
-      externalId: r.sagaName,
-      name: r.sagaName,
-      prefCode: PREF_CODE,
-      resolvedDamId: best?.m.id ?? null,
-      hasData: r.hasData,
-    });
-
-    if (!best) {
-      log(`${SOURCE_ID}: no master match for "${r.sagaName}"`);
-      continue;
-    }
-    out.push({ sagaName: r.sagaName, damId: best.m.id });
+/**
+ * A column with a 貯水位 or a 貯水量 has values; one 「***」 or blank in every
+ * value row is provider-marked empty; anything else may be our parser.
+ */
+export function sagaReading(p: ParsedRow): Reading {
+  if (p.waterLevelM !== null || p.storageVolumeM3 !== null) {
+    if (!p.observedAt) return { state: 'unreadable', why: 'no 観測時刻' };
+    return {
+      state: 'values',
+      observations: [
+        {
+          observedAt: p.observedAt,
+          storageVolumeM3: p.storageVolumeM3,
+          storageRate: p.storageRate,
+          inflowM3s: p.inflowM3s,
+          outflowM3s: p.outflowM3s,
+          waterLevelM: p.waterLevelM,
+        },
+      ],
+    };
   }
+  if (p.marked) return { state: 'empty', mark: '「***」 or blank in every value row' };
+  return { state: 'unreadable', why: 'no 貯水位 or 貯水量' };
+}
 
-  await recordUniverse(SOURCE_ID, universe);
-  return out;
+/**
+ * Names the ladder cannot reach. The master lists 狩立 (NDI 2515) and 日ノ峯
+ * (NDI 2510) as two rows; 狩立日ノ峯ダム's column has always bound 狩立, the row
+ * kasenbosai's station is stamped on too.
+ */
+const BIND_NAMES: Readonly<Record<string, string>> = {
+  狩立日ノ峯ダム: '狩立',
+};
+
+/** Every dam column of the pages, in page order. */
+export function sagaEntries(rows: ParsedRow[]): Entry[] {
+  return rows.map((p) => {
+    const bindName = BIND_NAMES[p.sagaName];
+    return {
+      key: p.sagaName,
+      name: p.sagaName,
+      pref: PREF_CODE,
+      ...(bindName ? { bind: { name: bindName } } : {}),
+      reading: sagaReading(p),
+    };
+  });
 }
 
 // --- task -------------------------------------------------------------------
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
-  const ua =
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
-
-  // Fetch all 3 pages in parallel
-  const pageResults = await Promise.allSettled(
-    Array.from({ length: PAGE_COUNT }, (_, i) =>
-      fetch(`${BASE_URL}?dk=4&sv=3&pg=${i + 1}`, {
-        headers: { 'user-agent': ua },
-        signal: AbortSignal.timeout(20_000),
-      }),
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const pages = await Promise.all(
+    Array.from({ length: PAGE_COUNT }, async (_, i) =>
+      (await upstream.fetch(`${BASE_URL}?dk=4&sv=3&pg=${i + 1}`)).text('shift_jis'),
     ),
   );
-
-  const rows: ParsedRow[] = [];
-  for (const result of pageResults) {
-    if (result.status !== 'fulfilled') continue;
-    const r = result.value;
-    if (r.status !== 200) {
-      log(`${SOURCE_ID}: HTTP ${r.status} on page fetch; skipping`);
-      continue;
-    }
-    const raw = await r.arrayBuffer();
-    const html = new TextDecoder('shift_jis').decode(raw);
-    rows.push(...parseSagaPage(html));
-  }
-
+  const rows = pages.flatMap((html) => parseSagaPage(html));
   log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
-
-  const matches = await matchMaster(rows, log);
-  const damByName = new Map(matches.map((m) => [m.sagaName, m.damId]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = damByName.get(p.sagaName);
-    if (!damId) continue;
-    if (!p.observedAt) {
-      log(`${SOURCE_ID}: missing timestamp for "${p.sagaName}"; skipping`);
-      continue;
-    }
-    if (p.waterLevelM === null && p.storageVolumeM3 === null) continue;
-
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: p.storageRate,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+  return { entries: sagaEntries(rows) };
+});

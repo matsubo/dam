@@ -5,11 +5,14 @@
 // taken 2026-09-27 21:47 JST: 48 hourly rows, 2026-09-25 22:00 … 2026-09-27
 // 21:00 JST, each with 貯水位 / 流入量 / 放流量 / 雨量 / 累計雨量 for 吉野ダム
 // then 杉田ダム.
+//
+// Fixture → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
 
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { chooseMaster, parseKochiKigyoTable } from './ingest_kochi_kigyo.ts';
+import { kochiKigyoEntries, parseKochiKigyoTable } from './ingest_kochi_kigyo.ts';
 
 const FIXTURE = join(
   import.meta.dir,
@@ -97,28 +100,38 @@ describe('parseKochiKigyoTable', () => {
   });
 });
 
-describe('chooseMaster', () => {
-  const m = (id: number, name: string, stamp: string | null = null) => ({
-    id: BigInt(id),
-    name,
-    completedYear: null,
-    stamp,
-  });
-
+describe('kochiKigyoEntries', () => {
   // Real pref-39 rows: 吉野 (NDI 2096, 高知県公営企業局) and the unrelated
   // agricultural 吉野溜池 (NDI 2085), which shares the 吉野 prefix.
-  test('binds 吉野ダム to 吉野, not the prefix-sharing 吉野溜池', () => {
-    const masters = [m(10369, '吉野'), m(10370, '杉田'), m(10398, '吉野溜池')];
-    expect(chooseMaster('吉野ダム', masters)).toBe(10369n);
-    expect(chooseMaster('杉田ダム', masters)).toBe(10370n);
+  test('both dams, matched exactly so 吉野 never lands on 吉野溜池', async () => {
+    const entries = kochiKigyoEntries(await fixtureHtml());
+    expect(entries.map((e) => [e.key, e.name, e.pref, e.bind])).toEqual([
+      ['吉野ダム', '吉野ダム', '39', { exact: true }],
+      ['杉田ダム', '杉田ダム', '39', { exact: true }],
+    ]);
+    const sugita = entries[1]?.reading;
+    if (!sugita || typeof sugita === 'function' || sugita.state !== 'values') {
+      throw new Error('no values');
+    }
+    expect(sugita.observations).toHaveLength(48);
+    expect(sugita.observations[47]).toEqual({
+      observedAt: new Date('2026-09-27T12:00:00.000Z'),
+      waterLevelM: 76.82,
+      inflowM3s: 28.1,
+      outflowM3s: 21.6,
+      rainfallMm: 0,
+    });
   });
 
-  test('leaves a station unbound rather than fall back to a prefix hit', () => {
-    expect(chooseMaster('吉野ダム', [m(10398, '吉野溜池')])).toBeNull();
-  });
-
-  test('keeps the row already stamped with the station', () => {
-    const masters = [m(10, '杉田'), m(20, '杉田', '杉田ダム')];
-    expect(chooseMaster('杉田ダム', masters)).toBe(20n);
+  test('a dam with no hour carrying a value is unreadable, still listed', async () => {
+    const html = (await fixtureHtml()).replace(
+      /(<td[^>]*class="col_time"[^>]*>[^<]*<\/td>\s*)((?:<td class="info">[^<]*<\/td>\s*){5})(?:<td class="info">[^<]*<\/td>\s*){3}/g,
+      '$1$2<td class="info">***</td><td class="info">***</td><td class="info">***</td>',
+    );
+    const sugita = kochiKigyoEntries(html).find((e) => e.key === '杉田ダム');
+    expect(sugita?.reading).toEqual({
+      state: 'unreadable',
+      why: 'no hour with a level, inflow or outflow',
+    });
   });
 });

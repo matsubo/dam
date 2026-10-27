@@ -23,29 +23,30 @@
 //       blocks with a single-row <table> carrying 貯水率 / 貯水位 / 貯水量.
 // License: 水資源機構 published; 出典明示で再配布可.
 
-import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const PAGE_URL =
   process.env.JWA_CHIKUGO_URL ?? 'https://www.water.go.jp/chikugo/chikugo/water-source.html';
 
-const NAME_MAP: Array<{ chikugoName: string; masterName: string; prefCodes: string[] }> = [
+const SOURCE_ID = 'jwa-chikugo';
+
+// The page's whole dam list. A multi-code entry (下筌 is on the 熊本/大分
+// border) is a lookup scope, not an attribution.
+const NAME_MAP: ReadonlyArray<{ chikugoName: string; pref: string | readonly string[] }> = [
   // Pattern-A blocks (top-level ws_box):
-  { chikugoName: '松原ダム', masterName: '松原', prefCodes: ['44'] }, // 大分
-  { chikugoName: '下筌ダム', masterName: '下筌', prefCodes: ['43', '44'] }, // 熊本/大分
-  { chikugoName: '大山ダム', masterName: '大山', prefCodes: ['44'] },
-  { chikugoName: '合所ダム', masterName: '合所', prefCodes: ['40'] }, // 福岡
+  { chikugoName: '松原ダム', pref: '44' }, // 大分
+  { chikugoName: '下筌ダム', pref: ['43', '44'] }, // 熊本/大分
+  { chikugoName: '大山ダム', pref: '44' },
+  { chikugoName: '合所ダム', pref: '40' }, // 福岡
   // Pattern-B blocks (inside 3ダム合計):
-  { chikugoName: '江川ダム', masterName: '江川', prefCodes: ['40'] },
-  { chikugoName: '寺内ダム', masterName: '寺内', prefCodes: ['40'] },
-  { chikugoName: '小石原川ダム', masterName: '小石原川', prefCodes: ['40'] },
+  { chikugoName: '江川ダム', pref: '40' },
+  { chikugoName: '寺内ダム', pref: '40' },
+  { chikugoName: '小石原川ダム', pref: '40' },
 ];
 
-interface ParsedRow {
+export interface ParsedRow {
   chikugoName: string;
   storageRatePct: number;
   storageVolumeThouM3: number;
@@ -131,114 +132,51 @@ export function parseJwaChikugoHtml(html: string): ParsedPage | null {
   return { observedAt, rows: out };
 }
 
-interface DamMatch {
-  chikugoName: string;
-  damId: bigint;
+type Page = { html: string } | { failed: string };
+
+function pageReadings(page: Page): (chikugoName: string) => Reading {
+  if ('failed' in page) return () => ({ state: 'unreadable', why: page.failed });
+  const parsed = parseJwaChikugoHtml(page.html);
+  if (!parsed) return () => ({ state: 'unreadable', why: 'no dated 水源情報 heading on the page' });
+  const { observedAt, rows } = parsed;
+  return (chikugoName) => {
+    const row = rows.find((r) => r.chikugoName === chikugoName);
+    if (!row)
+      return { state: 'unreadable', why: `no 貯水率/貯水量 block parsed for ${chikugoName}` };
+    return {
+      state: 'values',
+      observations: [
+        {
+          observedAt,
+          storageVolumeM3: row.storageVolumeThouM3 * 1_000,
+          storageRate: Math.max(0, Math.min(1, row.storageRatePct / 100)),
+        },
+      ],
+    };
+  };
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES ('jwa-chikugo', 297,
-            '水資源機構 筑後川ダム統合管理事務所 — daily 0時, 7 dams',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
+/** Every dam on the page, known in advance: a page that failed leaves them unreadable, never unlisted. */
+export function jwaChikugoEntries(page: Page): Entry[] {
+  const readingOf = pageReadings(page);
+  return NAME_MAP.map((m) => ({
+    key: m.chikugoName,
+    name: m.chikugoName,
+    pref: m.pref,
+    reading: readingOf(m.chikugoName),
+  }));
 }
 
-async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
-  const matches: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  for (const m of NAME_MAP) {
-    // （元） and （再） rank alike so chooseRanked binds the current twin.
-    const candidates = await sql<(BindableMaster & { rank: number })[]>`
-      SELECT id, name, completed_year AS "completedYear",
-             external_ids->>'jwa-chikugo' AS stamp,
-             CASE
-               WHEN name = ${`${m.masterName}ダム`} THEN 0
-               WHEN name = ${m.masterName} THEN 1
-               WHEN name LIKE ${`${m.masterName}（再）%`} THEN 2
-               WHEN name LIKE ${`${m.masterName}（元）%`} THEN 2
-               ELSE 5
-             END AS rank
-      FROM dams
-      WHERE pref_code = ANY(${m.prefCodes}::text[])
-        AND name LIKE ${`%${m.masterName}%`}
-    `;
-    const r = chooseRanked(candidates, m.chikugoName);
-    universe.push({
-      externalId: m.chikugoName,
-      name: m.chikugoName,
-      // A multi-code entry (下筌 is on the 熊本/大分 border) is a
-      // LIKE-narrowing hint, not an attribution, and pref_code is
-      // COALESCE-sticky once written.
-      prefCode: m.prefCodes.length === 1 ? (m.prefCodes[0] ?? null) : null,
-      resolvedDamId: r?.id ?? null,
-    });
-    if (!r) {
-      log(`jwa-chikugo: no master match for "${m.chikugoName}" (${m.masterName})`);
-      continue;
-    }
-    matches.push({ chikugoName: m.chikugoName, damId: r.id });
-    await bindExternalId(r.id, 'jwa-chikugo', m.chikugoName);
+async function fetchPage(upstream: Upstream): Promise<Page> {
+  try {
+    return { html: (await upstream.fetch(PAGE_URL)).text() };
+  } catch (err) {
+    return { failed: err instanceof Error ? err.message : String(err) };
   }
-  await recordUniverse('jwa-chikugo', universe);
-  return matches;
 }
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-  const matches = await ensureExternalIds(log);
-  log(`jwa-chikugo: matched ${matches.length}/${NAME_MAP.length} master dams`);
-
-  const r = await fetch(PAGE_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) {
-    log(`jwa-chikugo: HTTP ${r.status}; aborting`);
-    return;
-  }
-  const html = await r.text();
-  const page = parseJwaChikugoHtml(html);
-  if (!page) {
-    log('jwa-chikugo: no dated 水源情報 heading on the page; aborting');
-    return;
-  }
-  log(`jwa-chikugo: parsed ${page.rows.length} dam rows for ${page.observedAt.toISOString()}`);
-
-  const { observedAt } = page;
-  const matchByName = new Map(matches.map((m) => [m.chikugoName, m.damId]));
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const row of page.rows) {
-    const damId = matchByName.get(row.chikugoName);
-    if (!damId) continue;
-    inputs.push({
-      observedAt,
-      damId,
-      sourceId: 'jwa-chikugo',
-      storageVolumeM3: row.storageVolumeThouM3 * 1_000,
-      storageRate: Math.max(0, Math.min(1, row.storageRatePct / 100)),
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: null,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-  const written = await upsertObservations(inputs);
-  log(`jwa-chikugo done: parsed=${page.rows.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const page = await fetchPage(upstream);
+  if ('failed' in page) log(`${SOURCE_ID}: ${page.failed}`);
+  return { entries: jwaChikugoEntries(page) };
+});

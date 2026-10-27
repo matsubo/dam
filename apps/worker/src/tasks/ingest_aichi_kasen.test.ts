@@ -1,7 +1,19 @@
 // apps/worker/src/tasks/ingest_aichi_kasen.test.ts
+//
+// Page → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
 
 import { describe, expect, test } from 'bun:test';
-import { parseAichiPage, parseAichiRefYear, parseAichiRowTimestamp } from './ingest_aichi_kasen.ts';
+import type { Entry, Observed } from '../ingest/types.ts';
+import { aichiEntries, parseAichiRefYear, parseAichiRowTimestamp } from './ingest_aichi_kasen.ts';
+
+function observations(e: Entry | undefined): readonly Observed[] {
+  const r = e?.reading;
+  if (!r || typeof r === 'function' || r.state !== 'values') throw new Error('no values');
+  return r.observations;
+}
+const state = (e: Entry | undefined) =>
+  e && typeof e.reading !== 'function' ? e.reading.state : undefined;
 
 describe('parseAichiRefYear', () => {
   test('extracts year from <span id="timestamp"> element', () => {
@@ -146,21 +158,32 @@ const SAMPLE_PAGE = `<!DOCTYPE html>
 </div>
 </body></html>`;
 
-describe('parseAichiPage', () => {
-  test('parses 3 rows × 2 dams, skipping fully-null row → 3 results', () => {
-    const rows = parseAichiPage(SAMPLE_PAGE);
-    // Row 0: both dams have data (2 rows)
-    // Row 1: 雨山 all **(null) but 木瀬 has data (1 row)
-    // Row 2: all -- → both dams fully null → skipped (0 rows)
-    expect(rows).toHaveLength(3);
+describe('aichiEntries', () => {
+  const [amayama, kise] = aichiEntries(SAMPLE_PAGE);
+  const at = (os: readonly Observed[], iso: string) =>
+    os.find((o) => o.observedAt.toISOString() === iso);
+
+  test('both fixed columns are entries, keyed by name', () => {
+    expect(aichiEntries(SAMPLE_PAGE).map((e) => [e.key, e.pref])).toEqual([
+      ['雨山ダム', '23'],
+      ['木瀬ダム', '23'],
+    ]);
+  });
+
+  test('a row is an observation only where it carries a value: 3 in all', () => {
+    // Row 0: both dams have data; row 1: 雨山 all ** but 木瀬 has data;
+    // row 2: all -- for both.
+    expect(observations(amayama).map((o) => o.observedAt.toISOString())).toEqual([
+      '2026-06-05T07:00:00.000Z',
+    ]);
+    expect(observations(kise).map((o) => o.observedAt.toISOString())).toEqual([
+      '2026-06-05T07:00:00.000Z',
+      '2026-06-05T06:50:00.000Z',
+    ]);
   });
 
   test('row 0 雨山ダム: all fields present with correct timestamp', () => {
-    const rows = parseAichiPage(SAMPLE_PAGE);
-    const r = rows.find(
-      (x) => x.damName === '雨山ダム' && x.observedAt.toISOString() === '2026-06-05T07:00:00.000Z',
-    );
-    expect(r).toBeDefined();
+    const r = at(observations(amayama), '2026-06-05T07:00:00.000Z');
     expect(r?.waterLevelM).toBeCloseTo(269.42);
     expect(r?.storageVolumeM3).toBe(81_100);
     expect(r?.inflowM3s).toBeCloseTo(0.183);
@@ -168,40 +191,32 @@ describe('parseAichiPage', () => {
   });
 
   test('converts 貯水量 千m³ → m³ (× 1000)', () => {
-    const rows = parseAichiPage(SAMPLE_PAGE);
-    const r = rows.find(
-      (x) => x.damName === '木瀬ダム' && x.observedAt.toISOString() === '2026-06-05T07:00:00.000Z',
-    );
-    expect(r?.storageVolumeM3).toBe(195_700);
-  });
-
-  test('row 1 雨山ダム all ** → skipped entirely', () => {
-    const rows = parseAichiPage(SAMPLE_PAGE);
-    const ts = '2026-06-05T06:50:00.000Z'; // 15:50 JST
-    expect(
-      rows.find((x) => x.damName === '雨山ダム' && x.observedAt.toISOString() === ts),
-    ).toBeUndefined();
+    expect(at(observations(kise), '2026-06-05T07:00:00.000Z')?.storageVolumeM3).toBe(195_700);
   });
 
   test('row 1 木瀬ダム has data (partial row is kept)', () => {
-    const rows = parseAichiPage(SAMPLE_PAGE);
-    const ts = '2026-06-05T06:50:00.000Z';
-    const r = rows.find((x) => x.damName === '木瀬ダム' && x.observedAt.toISOString() === ts);
-    expect(r).toBeDefined();
-    expect(r?.storageVolumeM3).toBe(195_400);
+    expect(at(observations(kise), '2026-06-05T06:50:00.000Z')?.storageVolumeM3).toBe(195_400);
   });
 
-  test('row 2 all -- → both dams skipped', () => {
-    const rows = parseAichiPage(SAMPLE_PAGE);
-    const ts = '2026-06-05T06:40:00.000Z'; // 15:40 JST
-    expect(rows.find((x) => x.observedAt.toISOString() === ts)).toBeUndefined();
+  test('a dam marked ** / -- in every row is provider-marked empty', () => {
+    // Drop row 0, the only row where 雨山 carries values.
+    const page = SAMPLE_PAGE.replace(/<tr class="even">\s*<th>06\/05 16:00[\s\S]*?<\/tr>/, '');
+    const [a, k] = aichiEntries(page);
+    expect(state(a)).toBe('empty');
+    expect(state(k)).toBe('values');
   });
 
-  test('returns empty array when no timestamp element found', () => {
-    expect(parseAichiPage('<html><body>no data</body></html>')).toHaveLength(0);
+  test('an unparsed cell is not a mark: the dam is unreadable', () => {
+    const page = SAMPLE_PAGE.replace(
+      /<tr class="even">\s*<th>06\/05 16:00[\s\S]*?<\/tr>/,
+      '',
+    ).replace('<span>**</span>', '<span>?</span>');
+    expect(state(aichiEntries(page)[0])).toBe('unreadable');
   });
 
-  test('returns empty array for empty string', () => {
-    expect(parseAichiPage('')).toHaveLength(0);
+  test('a page without its timestamp leaves both dams unreadable', () => {
+    for (const html of ['<html><body>no data</body></html>', '']) {
+      expect(aichiEntries(html).map(state)).toEqual(['unreadable', 'unreadable']);
+    }
   });
 });

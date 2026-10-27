@@ -18,38 +18,29 @@
 
 import { applyDamnetCaptures, type DamInfo } from '@dam/adapters-damnet';
 import type { Task } from 'graphile-worker';
+import { liveUpstream, type Upstream } from '../ingest/upstream.ts';
 
+const SOURCE_ID = 'damnet';
 const BASE = process.env.DAMNET_V2_BASE_URL ?? 'https://dambinran.damnet.or.jp';
 const MAX_PAGES = Number(process.env.DAMNET_V2_MAX_PAGES ?? '200');
 const ENUMERATE_DELAY_MS = Number(process.env.DAMNET_V2_LIST_DELAY_MS ?? '250');
 const FETCH_DELAY_MS = Number(process.env.DAMNET_V2_FETCH_DELAY_MS ?? '120');
 const CONCURRENCY = Math.max(1, Math.min(8, Number(process.env.DAMNET_V2_CONCURRENCY ?? '4')));
-const UA =
-  process.env.HTTP_USER_AGENT ??
-  `DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: ${process.env.HTTP_CONTACT_EMAIL ?? 'https://discord.gg/UbWqspWbAk'})`;
 
-async function fetchText(url: string): Promise<string | null> {
+async function fetchText(upstream: Upstream, url: string): Promise<string | null> {
   try {
-    const r = await fetch(url, {
-      headers: { 'user-agent': UA },
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (r.status !== 200) return null;
-    return await r.text();
+    return (await upstream.fetch(url)).text();
   } catch {
     return null;
   }
 }
 
-async function fetchDamInfo(postId: number): Promise<DamInfo | null> {
+async function fetchDamInfo(upstream: Upstream, postId: number): Promise<DamInfo | null> {
   try {
-    const r = await fetch(`${BASE}/wp-json/dmap/dam-info/${postId}`, {
-      headers: { 'user-agent': UA },
-      signal: AbortSignal.timeout(15_000),
+    const r = await upstream.fetch(`${BASE}/wp-json/dmap/dam-info/${postId}`, {
+      timeoutMs: 15_000,
     });
-    if (r.status !== 200) return null;
-    const text = await r.text();
-    const data = JSON.parse(text) as DamInfo | { code?: string };
+    const data = JSON.parse(r.text()) as DamInfo | { code?: string };
     if ('code' in data && data.code) return null;
     return data as DamInfo;
   } catch {
@@ -71,10 +62,10 @@ function extractPostIdsFromPage(html: string): number[] {
   return [...ids];
 }
 
-async function enumeratePostIds(log: (s: string) => void): Promise<number[]> {
+async function enumeratePostIds(upstream: Upstream, log: (s: string) => void): Promise<number[]> {
   const all = new Set<number>();
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const html = await fetchText(`${BASE}/dams/japan/?page=${page}`);
+    const html = await fetchText(upstream, `${BASE}/dams/japan/?page=${page}`);
     if (!html) {
       log(`page ${page}: fetch failed, stopping`);
       break;
@@ -103,8 +94,9 @@ async function enumeratePostIds(log: (s: string) => void): Promise<number[]> {
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
+  const upstream = liveUpstream(SOURCE_ID);
   log(`damnet-v2: enumerating post IDs from ${BASE}/dams/japan/`);
-  const postIds = await enumeratePostIds(log);
+  const postIds = await enumeratePostIds(upstream, log);
   log(`damnet-v2: enumerated ${postIds.length} post IDs`);
 
   if (postIds.length === 0) {
@@ -120,7 +112,7 @@ const task: Task = async (_payload, helpers) => {
     while (queue.length > 0) {
       const id = queue.shift();
       if (id === undefined) return;
-      const info = await fetchDamInfo(id);
+      const info = await fetchDamInfo(upstream, id);
       if (info) captures.push(info);
       if (captures.length > 0 && captures.length % 200 === 0) {
         log(`damnet-v2: fetched=${captures.length}/${postIds.length}`);

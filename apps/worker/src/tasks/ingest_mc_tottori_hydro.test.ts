@@ -5,11 +5,14 @@
 // 時刻 reads 21:42 (it advances every minute). Eight modal blocks: four 発電所
 // (出力 / 使用水量) and four dams (茗荷谷ダム / 三朝調整池 / 中津ダム / 菅沢ダム),
 // each a two-column 年月日 / 時刻 / value table.
+//
+// Fixture → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
 
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { chooseMaster, parseMcTottoriHydro } from './ingest_mc_tottori_hydro.ts';
+import { mcTottoriEntries, parseMcTottoriHydro } from './ingest_mc_tottori_hydro.ts';
 
 const FIXTURE = join(
   import.meta.dir,
@@ -55,27 +58,34 @@ describe('parseMcTottoriHydro', () => {
   });
 });
 
-describe('chooseMaster', () => {
-  const m = (id: number, name: string, stamp: string | null = null) => ({
-    id: BigInt(id),
-    name,
-    completedYear: null,
-    stamp,
-  });
-  // Real pref-31 ids from the master.
-  const masters = [m(10963, '茗荷谷'), m(10967, '三朝'), m(10968, '中津'), m(10979, '菅沢')];
-
-  test('binds 調整池 and ダム names to their master stems', () => {
-    expect(chooseMaster('三朝調整池', masters)).toBe(10967n);
-    expect(chooseMaster('茗荷谷ダム', masters)).toBe(10963n);
-    expect(chooseMaster('中津ダム', masters)).toBe(10968n);
+describe('mcTottoriEntries', () => {
+  test('binds 調整池 and ダム names by their exact stems, never a 中津川', async () => {
+    const entries = mcTottoriEntries(await fixtureHtml());
+    expect(entries.map((e) => [e.key, e.pref, e.bind])).toEqual([
+      ['茗荷谷ダム', '31', { name: '茗荷谷ダム', exact: true }],
+      ['三朝調整池', '31', { name: '三朝', exact: true }],
+      ['中津ダム', '31', { name: '中津ダム', exact: true }],
+      ['菅沢ダム', '31', { name: '菅沢ダム', exact: true }],
+    ]);
   });
 
-  test('keeps the row already stamped with the station', () => {
-    expect(chooseMaster('中津ダム', [m(1, '中津'), m(2, '中津', '中津ダム')])).toBe(2n);
+  test('reads 中津 as values at the JST observation time', async () => {
+    const nakatsu = mcTottoriEntries(await fixtureHtml()).find((e) => e.key === '中津ダム');
+    expect(nakatsu?.reading).toEqual({
+      state: 'values',
+      observations: [
+        { observedAt: new Date('2026-09-27T12:42:00.000Z'), inflowM3s: 0.87, outflowM3s: 0 },
+      ],
+    });
   });
 
-  test('does not bind to a master that merely contains the stem', () => {
-    expect(chooseMaster('中津ダム', [m(1, '中津川')])).toBeNull();
+  test('a dam without its 時刻 is unreadable, still listed', async () => {
+    const html = (await fixtureHtml()).replace(
+      /(<td class="th">時刻<\/td>\s*<td[^>]*>)[^<]*/g,
+      '$1',
+    );
+    for (const e of mcTottoriEntries(html)) {
+      expect(e.reading).toEqual({ state: 'unreadable', why: 'no 年月日 / 時刻' });
+    }
   });
 });

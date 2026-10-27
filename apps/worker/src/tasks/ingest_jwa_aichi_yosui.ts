@@ -26,12 +26,10 @@
 // publishes it; priority 294 keeps it below every other 牧尾 feed (aitoyo 295,
 // jwa-chubu 296, jwa-kiso-rt 297, kasenbosai 310) and above jwa-junpo 290.
 
-import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Bind, Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const PAGE_URL =
   process.env.JWA_AICHI_YOSUI_URL ??
@@ -41,36 +39,29 @@ const SOURCE_ID = 'jwa-aichi-yosui';
 
 // The page's whole station list. 前山池 is ダム便覧's 前山 (常滑市, ダム湖名
 // 前山池, 目的「愛知用水の調整池」, 有効 972 千m³ — the page's own footnote).
-const STATIONS: Array<{ name: string; masterName: string; prefCode: string }> = [
-  { name: '牧尾ダム', masterName: '牧尾', prefCode: '20' }, // 長野 (木曽郡王滝村)
-  { name: '東郷調整池', masterName: '東郷調整池', prefCode: '23' },
-  { name: '前山池', masterName: '前山', prefCode: '23' },
+const STATIONS: ReadonlyArray<{ name: string; prefCode: string; bind?: Bind }> = [
+  { name: '牧尾ダム', prefCode: '20' }, // 長野 (木曽郡王滝村)
+  { name: '東郷調整池', prefCode: '23' },
+  { name: '前山池', prefCode: '23', bind: { name: '前山' } },
 ];
 
 export interface ParsedRow {
   name: string;
-  waterLevelM: number | null;
-  storageVolumeM3: number | null;
-  storageRate: number | null;
+  waterLevelM: Cell;
+  storageVolumeM3: Cell;
+  storageRate: Cell;
 }
 
-/** Cell text → number; 欠測 / blank / any non-numeric → null. */
-function parseNum(s: string | undefined): number | null {
+/** Cell text → number; 欠測 is the page's own mark; blank / other text → null. */
+function readCell(s: string | undefined, unit: (n: number) => number = (n) => n): Cell {
   const cleaned = (s ?? '').replace(/,/g, '');
+  if (cleaned === '欠測') return MARKED;
   if (!cleaned) return null;
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? n : null;
+  return cell(unit(Number(cleaned)), false);
 }
 
-function thousandM3(s: string | undefined): number | null {
-  const n = parseNum(s);
-  return n == null ? null : n * 1000;
-}
-
-function percent(s: string | undefined): number | null {
-  const n = parseNum(s);
-  return n == null ? null : n / 100;
-}
+const thousandM3 = (n: number): number => n * 1000;
+const percent = (n: number): number => n / 100;
 
 // Every cell value is one whitespace-free token once tags are flattened.
 const V = '(\\S+)';
@@ -107,9 +98,9 @@ export function parseAichiYosuiPage(html: string): {
   if (makio) {
     rows.push({
       name: '牧尾ダム',
-      waterLevelM: parseNum(makio[1]),
-      storageVolumeM3: thousandM3(makio[2]),
-      storageRate: percent(makio[3]),
+      waterLevelM: readCell(makio[1]),
+      storageVolumeM3: readCell(makio[2], thousandM3),
+      storageRate: readCell(makio[3], percent),
     });
   }
   const ponds = text.match(PONDS_RE);
@@ -117,120 +108,78 @@ export function parseAichiYosuiPage(html: string): {
     rows.push(
       {
         name: '東郷調整池',
-        waterLevelM: parseNum(ponds[1]),
-        storageVolumeM3: thousandM3(ponds[3]),
-        storageRate: percent(ponds[5]),
+        waterLevelM: readCell(ponds[1]),
+        storageVolumeM3: readCell(ponds[3], thousandM3),
+        storageRate: readCell(ponds[5], percent),
       },
       {
         name: '前山池',
-        waterLevelM: parseNum(ponds[2]),
-        storageVolumeM3: thousandM3(ponds[4]),
-        storageRate: percent(ponds[6]),
+        waterLevelM: readCell(ponds[2]),
+        storageVolumeM3: readCell(ponds[4], thousandM3),
+        storageRate: readCell(ponds[6], percent),
       },
     );
   }
   return { observedAt, rows };
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 294,
-            '水資源機構 愛知用水総合管理所 水情報 — daily 0時, 3 施設 (牧尾/東郷調整池/前山池)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
+function rowReading(row: ParsedRow, observedAt: Date): Reading {
+  const state = cellState([row.waterLevelM, row.storageVolumeM3, row.storageRate]);
+  if (state === 'empty') return { state, mark: '欠測 in every column' };
+  if (state === 'unreadable') return { state, why: `no value parsed for ${row.name}` };
+  return {
+    state: 'values',
+    observations: [
+      {
+        observedAt,
+        waterLevelM: numberIn(row.waterLevelM),
+        storageVolumeM3: numberIn(row.storageVolumeM3),
+        storageRate: numberIn(row.storageRate),
+        // 牧尾's printed flows are previous-day means, not 0時 values: not stored.
+      },
+    ],
+  };
 }
 
-async function ensureExternalIds(log: (s: string) => void): Promise<Map<string, bigint>> {
-  const damByName = new Map<string, bigint>();
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  for (const s of STATIONS) {
-    // （元） and （再） rank alike so chooseRanked binds the current twin.
-    const candidates = await sql<(BindableMaster & { rank: number })[]>`
-      SELECT id, name, completed_year AS "completedYear",
-             external_ids->>${SOURCE_ID} AS stamp,
-             CASE
-               WHEN name = ${`${s.masterName}ダム`}       THEN 0
-               WHEN name = ${s.masterName}                 THEN 1
-               WHEN name LIKE ${`${s.masterName}（再）%`}  THEN 2
-               WHEN name LIKE ${`${s.masterName}（元）%`}  THEN 2
-               ELSE 5
-             END AS rank
-      FROM dams
-      WHERE pref_code = ${s.prefCode}
-        AND name LIKE ${`%${s.masterName}%`}
-    `;
-    const r = chooseRanked(candidates, s.name);
-    universe.push({
-      externalId: s.name,
-      name: s.name,
-      prefCode: s.prefCode,
-      resolvedDamId: r?.id ?? null,
-    });
-    if (!r) {
-      log(`${SOURCE_ID}: no master match for "${s.name}" (${s.masterName})`);
-      continue;
-    }
-    damByName.set(s.name, r.id);
-    await bindExternalId(r.id, SOURCE_ID, s.name);
-  }
-  await recordUniverse(SOURCE_ID, universe);
-  return damByName;
+type Page = { html: string } | { failed: string };
+
+function pageReadings(page: Page): (name: string) => Reading {
+  if ('failed' in page) return () => ({ state: 'unreadable', why: page.failed });
+  const { observedAt, rows } = parseAichiYosuiPage(page.html);
+  if (!observedAt) return () => ({ state: 'unreadable', why: 'no 「…時現在」 header' });
+  return (name) => {
+    const row = rows.find((r) => r.name === name);
+    return row
+      ? rowReading(row, observedAt)
+      : { state: 'unreadable', why: `no ${name} table on the page` };
+  };
 }
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-  const damByName = await ensureExternalIds(log);
-  log(`${SOURCE_ID}: matched ${damByName.size}/${STATIONS.length} stations to master dams`);
+/**
+ * Every station on the page, known in advance: a page that failed to load or
+ * parse leaves them unreadable, never unlisted.
+ */
+export function aichiYosuiEntries(page: Page): Entry[] {
+  const readingOf = pageReadings(page);
+  return STATIONS.map((s) => ({
+    key: s.name,
+    name: s.name,
+    pref: s.prefCode,
+    ...(s.bind && { bind: s.bind }),
+    reading: readingOf(s.name),
+  }));
+}
 
-  const r = await fetch(PAGE_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
+async function fetchPage(upstream: Upstream): Promise<Page> {
+  try {
+    return { html: (await upstream.fetch(PAGE_URL)).text() };
+  } catch (err) {
+    return { failed: err instanceof Error ? err.message : String(err) };
   }
-  const { observedAt, rows } = parseAichiYosuiPage(await r.text());
-  log(
-    `${SOURCE_ID}: parsed ${rows.length} rows, observedAt=${observedAt?.toISOString() ?? '(missing)'}`,
-  );
-  if (!observedAt) {
-    log(`${SOURCE_ID}: no report time found; aborting`);
-    return;
-  }
+}
 
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const row of rows) {
-    const damId = damByName.get(row.name);
-    if (!damId) continue;
-    inputs.push({
-      observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: row.storageVolumeM3,
-      storageRate: row.storageRate,
-      inflowM3s: null, // 牧尾's printed flows are previous-day means, not 0時 values
-      outflowM3s: null,
-      waterLevelM: row.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${damByName.size} written=${written}`);
-};
-
-export default task;
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const page = await fetchPage(upstream);
+  if ('failed' in page) log(`${SOURCE_ID}: ${page.failed}`);
+  return { entries: aichiYosuiEntries(page) };
+});

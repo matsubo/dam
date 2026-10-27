@@ -28,32 +28,51 @@
 // cadence vs jwa-junpo's 10-day. aitoyo has same 5 overlap dams at priority 295,
 // so jwa-chubu (296) becomes preferredSource for them when both present.
 
-import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const PAGE_URL = process.env.JWA_CHUBU_URL ?? 'https://www.water.go.jp/mizu/chubu/report/';
+const SOURCE_ID = 'jwa-chubu';
 
-const NAME_MAP: Array<{ chubuName: string; masterName: string; prefCodes: string[] }> = [
-  { chubuName: '牧尾ダム', masterName: '牧尾', prefCodes: ['20'] }, // 長野
-  { chubuName: '阿木川ダム', masterName: '阿木川', prefCodes: ['21'] }, // 岐阜
-  { chubuName: '味噌川ダム', masterName: '味噌川', prefCodes: ['20'] },
-  { chubuName: '岩屋ダム', masterName: '岩屋', prefCodes: ['21'] },
-  { chubuName: '中里ダム', masterName: '中里', prefCodes: ['24'] }, // 三重 (三重用水)
-  { chubuName: '徳山ダム', masterName: '徳山', prefCodes: ['21'] },
-];
+/** The six dams jwa-chubu stores, by printed name (also the stamp and universe key). */
+const DAMS: Record<string, string> = {
+  牧尾ダム: '20', // 長野
+  阿木川ダム: '21', // 岐阜
+  味噌川ダム: '20',
+  岩屋ダム: '21',
+  中里ダム: '24', // 三重 (三重用水)
+  徳山ダム: '21',
+};
+
+/**
+ * The page's other rows: recorded, never written. 宇連/大島 belong to 豊川用水,
+ * which aitoyo and jwa-toyokawa carry; the rest are pond groups and a
+ * conduit, not one dam.
+ */
+const OTHER_ROWS: Record<string, Pick<Entry, 'pref' | 'bind' | 'dontWrite'>> = {
+  宇連ダム: { pref: '23', dontWrite: 'not one of jwa-chubu’s six dams (豊川用水)' },
+  大島ダム: { pref: '23', dontWrite: 'not one of jwa-chubu’s six dams (豊川用水)' },
+  地区内調整池: { pref: '23', bind: 'never' },
+  長良導水: { pref: null, bind: 'never' },
+  '調整池(宮川・菰野・加佐登)': { pref: '24', bind: 'never' },
+};
+
+/**
+ * A 「(…合計)」 row sums the rows listed under it (豊川用水 37,476 = 宇連
+ * 18,293 + 大島 7,558 + 地区内調整池 11,625; 三重用水 6,429 = 中里 1,760 +
+ * 調整池 4,669 千m³), so it is not an entry of its own.
+ */
+const TOTAL_ROW = /合計\)$/;
 
 export interface ParsedRow {
-  chubuName: string;
+  /** The row's printed name: its dam-name spans joined ("三重用水(中里ダム・調整池合計)"). */
+  name: string;
   /** Label of the capacity printed under the name: 利水容量 or 有効貯水量 (徳山). */
   capacityBasis: '利水' | '有効' | null;
   capacityThouM3: number | null;
   /** 貯水量 at 午前0時 — storage within `capacityBasis`, not necessarily 有効. */
-  storageVolumeThouM3: number;
-  storageRatePct: number;
+  storageVolumeThouM3: number | null;
+  storageRatePct: number | null;
   /** The current 有効貯水量 a few blocks print below the 利水 figures (阿木川, 味噌川). */
   effectiveVolumeThouM3: number | null;
   waterLevelM: number | null;
@@ -80,23 +99,6 @@ export function parseChubuDate(text: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
- * The block headed by <span class="dam-name…">NAME</span>, up to the next
- * dam-name span or the end of its table. Matching the whole span keeps
- * 中里ダム off 「(中里ダム・調整池合計)」, the 三重用水 total printed first.
- */
-function damBlock(html: string, damName: string): string {
-  const head = new RegExp(`<span class="dam-name[^"]*">${escapeRegExp(damName)}</span>`).exec(html);
-  if (!head) return '';
-  const rest = html.slice(head.index + head[0].length);
-  const next = rest.search(/<span class="dam-name|<\/table>/);
-  return next < 0 ? rest : rest.slice(0, next);
-}
-
 /** The first <div class="databox"> value after `marker`. */
 function databoxAfter(block: string, marker: RegExp): number | null {
   const m = marker.exec(block);
@@ -105,33 +107,47 @@ function databoxAfter(block: string, marker: RegExp): number | null {
   return box ? parseNum(box[1] ?? '') : null;
 }
 
-export function parseChubuHtml(html: string): { reportDate: Date | null; rows: ParsedRow[] } {
-  const reportDate = parseChubuDate(html);
-  const rows: ParsedRow[] = [];
-
-  for (const m of NAME_MAP) {
-    const block = damBlock(html, m.chubuName);
-    if (!block) continue;
-
-    const capacity = /^(?:\s|<br\s*>)*(利水容量|有効貯水量)<br>/.exec(block);
+function parseBlock(name: string, block: string): ParsedRow {
+  const capacity = /^(?:\s|<br\s*>)*(利水容量|有効貯水量)<br>/.exec(block);
+  const rateAt = block.indexOf('貯水率');
+  return {
+    name,
+    capacityBasis: capacity ? (capacity[1] === '利水容量' ? '利水' : '有効') : null,
+    capacityThouM3: capacity ? databoxAfter(block, /^/) : null,
     // 貯水量<br>&lt;午前0時&gt; is the storage; the 有効貯水量<br> label above
     // it (徳山) is the capacity, and 前日貯水量との増減 the day's change.
-    const volume = databoxAfter(block, /(?<!有効)貯水量<br>/);
-    const rate = databoxAfter(block, /貯水率(?=<div)/);
-    if (volume == null || rate == null) continue;
-    const afterRate = block.slice(block.indexOf('貯水率'));
-    rows.push({
-      chubuName: m.chubuName,
-      capacityBasis: capacity ? (capacity[1] === '利水容量' ? '利水' : '有効') : null,
-      capacityThouM3: capacity ? databoxAfter(block, /^/) : null,
-      storageVolumeThouM3: volume,
-      storageRatePct: rate,
-      effectiveVolumeThouM3: databoxAfter(afterRate, /有効貯水量<br>/),
-      waterLevelM: databoxAfter(block, /\[EL\s*/),
-      inflowM3s: databoxAfter(block, /流入量(?=<div)/),
-      outflowM3s: databoxAfter(block, /(?<!利水)放流量(?=<div)/),
-    });
-  }
+    storageVolumeThouM3: databoxAfter(block, /(?<!有効)貯水量<br>/),
+    storageRatePct: databoxAfter(block, /貯水率(?=<div)/),
+    effectiveVolumeThouM3: rateAt < 0 ? null : databoxAfter(block.slice(rateAt), /有効貯水量<br>/),
+    waterLevelM: databoxAfter(block, /\[EL\s*/),
+    inflowM3s: databoxAfter(block, /流入量(?=<div)/),
+    outflowM3s: databoxAfter(block, /(?<!利水)放流量(?=<div)/),
+  };
+}
+
+/**
+ * Every row of the report, in page order. A row is headed by one or more
+ * <span class="dam-name…"> (a group name and its 合計 note, "調整池" and its
+ * ponds) and runs to the next heading or the end of its table. Matching
+ * whole spans keeps 中里ダム off 「(中里ダム・調整池合計)」, the 三重用水 total
+ * printed first.
+ */
+export function parseChubuHtml(html: string): { reportDate: Date | null; rows: ParsedRow[] } {
+  const reportDate = parseChubuDate(html);
+  const heads = [...html.matchAll(/<span class="dam-name[^"]*">([^<]*)<\/span>/g)];
+  const rows: ParsedRow[] = [];
+  let name = '';
+  heads.forEach((head, i) => {
+    name += (head[1] ?? '').trim();
+    const from = head.index + head[0].length;
+    const rest = html.slice(from, heads[i + 1]?.index ?? html.length);
+    const end = rest.indexOf('</table>');
+    const block = end < 0 ? rest : rest.slice(0, end);
+    // A heading followed straight by another names the same row.
+    if (/^(?:\s|<br\s*\/?>)*$/.test(block) && heads[i + 1]) return;
+    rows.push(parseBlock(name, block));
+    name = '';
+  });
   return { reportDate, rows };
 }
 
@@ -148,8 +164,8 @@ export function parseChubuHtml(html: string): { reportDate: Date | null; rows: P
  *   seasonal pool (257,400 / 366,400 千m³ per the page footer), not the master.
  * - Otherwise (岩屋: 利水 61,900 of a 150,000 千m³ pool) nothing is 有効.
  */
-export function storedStorage(
-  row: ParsedRow,
+function storedStorage(
+  row: ParsedRow & { storageVolumeThouM3: number; storageRatePct: number },
   masterActiveM3: number | null,
 ): { storageVolumeM3: number | null; storageRate: number | null } {
   const pool = row.capacityThouM3 === null ? null : row.capacityThouM3 * 1_000;
@@ -172,122 +188,77 @@ export function storedStorage(
   return { storageVolumeM3: null, storageRate: null };
 }
 
-interface DamMatch {
-  chubuName: string;
-  damId: bigint;
-  activeCapacityM3: number | null;
+/** A row's reading at the report date, against its master's 有効 capacity. */
+export function chubuReading(
+  row: ParsedRow,
+  reportDate: Date,
+  masterActiveM3: number | null,
+): Reading {
+  const { storageVolumeThouM3: volume, storageRatePct: rate } = row;
+  if (volume === null || rate === null) {
+    return { state: 'unreadable', why: '貯水量 or 貯水率 is not a number' };
+  }
+  return {
+    state: 'values',
+    observations: [
+      {
+        observedAt: reportDate,
+        ...storedStorage(
+          { ...row, storageVolumeThouM3: volume, storageRatePct: rate },
+          masterActiveM3,
+        ),
+        inflowM3s: row.inflowM3s,
+        outflowM3s: row.outflowM3s,
+        waterLevelM: row.waterLevelM,
+      },
+    ],
+  };
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES ('jwa-chubu', 296,
-            '水資源機構 中部支社 木曽川水系 — daily, 6 dams with inflow/outflow',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
+/** The six dams alone, unreadable: what is recorded when the report cannot be read. */
+function unreadableDams(why: string): Entry[] {
+  return Object.entries(DAMS).map(([name, pref]) => ({
+    key: name,
+    name,
+    pref,
+    reading: { state: 'unreadable', why },
+  }));
 }
 
-export async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
-  const matches: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  for (const m of NAME_MAP) {
-    // （元） and （再） rank alike so chooseRanked binds the current twin.
-    const candidates = await sql<
-      (BindableMaster & { rank: number; activeCapacityM3: string | null })[]
-    >`
-      SELECT id, name, completed_year AS "completedYear",
-             external_ids->>'jwa-chubu' AS stamp,
-             active_capacity_m3 AS "activeCapacityM3",
-             CASE
-               WHEN name = ${`${m.masterName}ダム`}       THEN 0
-               WHEN name = ${m.masterName}                 THEN 1
-               WHEN name LIKE ${`${m.masterName}（再）%`}  THEN 2
-               WHEN name LIKE ${`${m.masterName}（元）%`}  THEN 2
-               ELSE 5
-             END AS rank
-      FROM dams
-      WHERE pref_code = ANY(${m.prefCodes}::text[])
-        AND name LIKE ${`%${m.masterName}%`}
-    `;
-    const r = chooseRanked(candidates, m.chubuName);
-    universe.push({
-      externalId: m.chubuName,
-      name: m.chubuName,
-      prefCode: m.prefCodes[0] ?? null,
-      resolvedDamId: r?.id ?? null,
-    });
-    if (!r) {
-      log(`jwa-chubu: no master match for "${m.chubuName}" (${m.masterName})`);
-      continue;
-    }
-    matches.push({
-      chubuName: m.chubuName,
-      damId: r.id,
-      activeCapacityM3: r.activeCapacityM3 === null ? null : Number(r.activeCapacityM3),
-    });
-    await bindExternalId(r.id, 'jwa-chubu', m.chubuName);
-  }
-  await recordUniverse('jwa-chubu', universe);
-  return matches;
+/**
+ * Every row of the report but the totals, then any of the six dams it no
+ * longer prints (unreadable). A row new on the page is recorded, not written.
+ */
+export function chubuEntries(html: string): Entry[] {
+  const { reportDate, rows } = parseChubuHtml(html);
+  if (!reportDate) return unreadableDams('no 「YYYY年MM月DD日」 report date on the page');
+  const entries: Entry[] = rows
+    .filter((row) => !TOTAL_ROW.test(row.name))
+    .map((row) => ({
+      key: row.name,
+      name: row.name,
+      ...(DAMS[row.name]
+        ? { pref: DAMS[row.name] as string }
+        : (OTHER_ROWS[row.name] ?? { pref: null, dontWrite: 'new on the report' })),
+      reading: (dam) => chubuReading(row, reportDate, dam?.activeCapacityM3 ?? null),
+    }));
+  const printed = new Set(rows.map((r) => r.name));
+  for (const e of unreadableDams('not on the report')) if (!printed.has(e.key)) entries.push(e);
+  return entries;
 }
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-  const matches = await ensureExternalIds(log);
-  log(`jwa-chubu: matched ${matches.length}/${NAME_MAP.length} master dams`);
-
-  const r = await fetch(PAGE_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) {
-    log(`jwa-chubu: HTTP ${r.status}; aborting`);
-    return;
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  let html: string;
+  try {
+    html = (await upstream.fetch(PAGE_URL)).text();
+  } catch (err) {
+    // The six dams are known in advance: record them unreadable, and the run
+    // fails the job so it is retried.
+    const why = err instanceof Error ? err.message : String(err);
+    log(`${SOURCE_ID}: ${why}`);
+    return { entries: unreadableDams(why) };
   }
-  const html = await r.text();
-  const { reportDate, rows: parsed } = parseChubuHtml(html);
-  log(
-    `jwa-chubu: parsed ${parsed.length} rows, reportDate=${reportDate?.toISOString() ?? '(missing)'}`,
-  );
-
-  if (!reportDate) {
-    log('jwa-chubu: no reportDate found; aborting to avoid wrong timestamps');
-    return;
-  }
-
-  const matchByName = new Map(matches.map((m) => [m.chubuName, m]));
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const row of parsed) {
-    const match = matchByName.get(row.chubuName);
-    if (!match) continue;
-    const { storageVolumeM3, storageRate } = storedStorage(row, match.activeCapacityM3);
-    inputs.push({
-      observedAt: reportDate,
-      damId: match.damId,
-      sourceId: 'jwa-chubu',
-      storageVolumeM3,
-      storageRate,
-      inflowM3s: row.inflowM3s,
-      outflowM3s: row.outflowM3s,
-      waterLevelM: row.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-  const written = await upsertObservations(inputs);
-  log(`jwa-chubu done: parsed=${parsed.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+  const entries = chubuEntries(html);
+  log(`${SOURCE_ID}: ${entries.length} rows`);
+  return { entries };
+});

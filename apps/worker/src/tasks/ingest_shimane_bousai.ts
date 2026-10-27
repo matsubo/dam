@@ -18,6 +18,10 @@
 //   September 2026). Each run therefore reads every key of today's AND
 //   yesterday's file; the upsert makes the overlap idempotent.
 //
+// The station list below is the universe: a station the day files omit is
+// unreadable, and one whose every item is 未収集 (st ≠ 0) in every snapshot
+// is provider-marked empty.
+//
 // JSON structure:
 //   { "YYYY-MM-DD-HH-MM": { "8193_7_N": { "7_10": {dt, st}, ... } }, …, "update": "..." }
 //
@@ -32,12 +36,10 @@
 // Priority 313 (lower than cgr-mlit-dam 304, so CGR wins for 尾原/志津見).
 // Cron: hourly at :37.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Observed, Reading } from '../ingest/types.ts';
+import { UpstreamError } from '../ingest/upstream.ts';
 
 const BASE_URL = process.env.SHIMANE_BOUSAI_URL ?? 'https://www.suibou-shimane.jp';
 
@@ -73,15 +75,10 @@ interface StationData {
   [itemCode: string]: { dt: string; st: number };
 }
 
-export interface ParsedRow {
-  stationId: string;
-  shimaneName: string;
+interface Snapshot {
+  ts: string;
   observedAt: Date;
-  waterLevelM: number | null;
-  storageVolumeM3: number | null;
-  storageRate: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
+  stations: Record<string, StationData>;
 }
 
 // --- parsing ----------------------------------------------------------------
@@ -108,94 +105,77 @@ export function isFloodSeason(ts: string): boolean {
   return monthDay >= FLOOD_SEASON.from && monthDay <= FLOOD_SEASON.to;
 }
 
-/** Extract numeric value if station item is valid (st == 0). */
-function getItem(station: StationData, code: string): number | null {
-  const item = station[code];
-  if (item?.st !== 0) return null;
-  const n = Number(item.dt);
-  return Number.isFinite(n) ? n : null;
+/** One item: a value when st == 0, the provider's mark otherwise. */
+function item(station: StationData, code: string): Cell {
+  const it = station[code];
+  if (!it) return null;
+  return cell(Number(it.dt), it.st !== 0);
 }
 
-/** Every hourly snapshot in a day file, oldest first, one row per station. */
-export function parseShimaneDayFile(data: Record<string, unknown>): ParsedRow[] {
-  const rows: ParsedRow[] = [];
+/** Every hourly snapshot in a day file, oldest first. */
+function snapshotsOf(data: Record<string, unknown>): Snapshot[] {
+  const out: Snapshot[] = [];
   for (const ts of Object.keys(data)
     .filter((k) => k !== 'update')
     .sort()) {
     const observedAt = parseShimaneTimestamp(ts);
     if (!observedAt) continue;
-    rows.push(...parseSnapshot(ts, observedAt, data[ts] as Record<string, StationData>));
+    out.push({ ts, observedAt, stations: data[ts] as Record<string, StationData> });
   }
-  return rows;
+  return out;
 }
 
-function parseSnapshot(
-  ts: string,
-  observedAt: Date,
-  snapshot: Record<string, StationData>,
-): ParsedRow[] {
-  const rateItem = isFloodSeason(ts) ? '7_41' : '7_42';
-  const rows: ParsedRow[] = [];
-
-  for (const { stationId, name } of STATIONS) {
-    const st = snapshot[stationId];
+function stationReading(stationId: string, snapshots: Snapshot[], absentWhy: string): Reading {
+  const observations: Observed[] = [];
+  let listed = 0;
+  let allMarked = true;
+  for (const { ts, observedAt, stations } of snapshots) {
+    const st = stations[stationId];
     if (!st) continue;
-
-    const waterLevelM = getItem(st, '7_10');
-    const storageThouM3 = getItem(st, '7_20');
-    const storageVolM3 = storageThouM3 !== null ? storageThouM3 * 1_000 : null;
+    listed += 1;
+    const level = item(st, '7_10');
+    const storageThou = item(st, '7_20');
     // No cross-season fallback: for 布部/八戸 the other column is a different
     // denominator, and a wrong-basis rate is worse than none.
-    const ratePct = getItem(st, rateItem);
-    const storageRate = ratePct !== null ? Math.max(0, Math.min(1, ratePct / 100)) : null;
-    const inflowM3s = getItem(st, '7_50');
-    const outflowM3s = getItem(st, '7_70');
-
-    if (
-      waterLevelM === null &&
-      storageVolM3 === null &&
-      storageRate === null &&
-      inflowM3s === null &&
-      outflowM3s === null
-    )
-      continue;
-
-    rows.push({
-      stationId,
-      shimaneName: name,
+    const rate = item(st, isFloodSeason(ts) ? '7_41' : '7_42');
+    const inflow = item(st, '7_50');
+    const outflow = item(st, '7_70');
+    const state = cellState([level, storageThou, rate, inflow, outflow]);
+    if (state !== 'empty') allMarked = false;
+    if (state !== 'values') continue;
+    const thou = numberIn(storageThou);
+    const ratePct = numberIn(rate);
+    observations.push({
       observedAt,
-      waterLevelM,
-      storageVolumeM3: storageVolM3,
-      storageRate,
-      inflowM3s,
-      outflowM3s,
+      waterLevelM: numberIn(level),
+      storageVolumeM3: thou !== null ? thou * 1_000 : null,
+      storageRate: ratePct !== null ? Math.max(0, Math.min(1, ratePct / 100)) : null,
+      inflowM3s: numberIn(inflow),
+      outflowM3s: numberIn(outflow),
     });
   }
-
-  return rows;
+  if (observations.length > 0) return { state: 'values', observations };
+  if (listed === 0) return { state: 'unreadable', why: absentWhy };
+  if (allMarked) return { state: 'empty', mark: '未収集 (st ≠ 0) on every item, every hour' };
+  return { state: 'unreadable', why: 'no st-0 value' };
 }
 
-// --- DB helpers -------------------------------------------------------------
-
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 313,
-            '島根県水防情報システム (suibou-shimane.jp) — 19ダム hourly JSON',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-export function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/貯水池$/, '')
-    .trim();
+/**
+ * One entry per station, reading every hourly key of the day files given
+ * (oldest first). `absentWhy` is why a station missing from them is
+ * unreadable.
+ */
+export function shimaneEntries(
+  dayFiles: readonly Record<string, unknown>[],
+  absentWhy = 'not in the day files',
+): Entry[] {
+  const snapshots = dayFiles.flatMap(snapshotsOf);
+  return STATIONS.map(({ stationId, name }) => ({
+    key: stationId,
+    name,
+    pref: PREF_CODE,
+    reading: stationReading(stationId, snapshots, absentWhy),
+  }));
 }
 
 /** YYYYMMDD of yesterday and today in JST — the day files one run reads. */
@@ -208,127 +188,27 @@ export function dayFileDates(now: Date): string[] {
   return [jst(-1), jst(0)];
 }
 
-interface DamMatch {
-  stationId: string;
-  damId: bigint;
-}
-
-async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const out: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing. Seeded
-  // from the station list rather than from this run's rows, so a station the
-  // snapshot omits today still counts as published; the resolved rows pushed
-  // below supersede these (recordUniverse keeps the last entry per id).
-  const universe: UniverseRow[] = STATIONS.map(({ stationId, name }) => ({
-    externalId: stationId,
-    name,
-    prefCode: PREF_CODE,
-    resolvedDamId: null,
-  }));
-
-  // Rows span up to 48 hours per station; bind each station once.
-  const published = new Set(rows.map((r) => r.stationId));
-  for (const { stationId, name } of STATIONS) {
-    if (!published.has(stationId)) continue;
-    const stem = normalizeName(name);
-
-    // A row already stamped with this station keeps it (#57).
-    const stamped = stampedMaster(masters, stationId);
-    let best: { m: BindableMaster; rank: number } | null = stamped
-      ? { m: stamped, rank: -1 }
-      : null;
-    if (stem && !stamped) {
-      for (const m of masters) {
-        const mStem = normalizeName(m.name);
-        let rank: number;
-        if (m.name === name) rank = 0;
-        else if (mStem === stem) rank = 1;
-        else if (m.name === `${stem}ダム`) rank = 2;
-        else if (mStem.startsWith(stem)) rank = 3;
-        else if (mStem.includes(stem)) rank = 4;
-        else continue;
-        if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-          best = { m, rank };
-        }
-      }
-    }
-
-    universe.push({
-      externalId: stationId,
-      name,
-      prefCode: PREF_CODE,
-      resolvedDamId: best?.m.id ?? null,
-    });
-
-    if (!best) {
-      log(`${SOURCE_ID}: no master match for "${name}" (${stationId})`);
-      continue;
-    }
-
-    out.push({ stationId, damId: best.m.id });
-    await bindExternalId(best.m.id, SOURCE_ID, stationId);
-  }
-
-  await recordUniverse(SOURCE_ID, universe);
-  return out;
-}
-
 // --- task -------------------------------------------------------------------
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
-  const ua =
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
-
-  const rows: ParsedRow[] = [];
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const files: Record<string, unknown>[] = [];
+  const failures: string[] = [];
   for (const day of dayFileDates(new Date())) {
     const url = `${BASE_URL}/dyn/dps/json/${day}/dam60.json`;
-    const res = await fetch(url, {
-      headers: { 'user-agent': ua },
-      signal: AbortSignal.timeout(20_000),
-    });
-    // Today's file does not exist until the first snapshot after 00:00 JST.
-    if (res.status !== 200) {
-      log(`${SOURCE_ID}: HTTP ${res.status} for ${url}; skipping`);
-      continue;
+    try {
+      files.push((await upstream.fetch(url)).json<Record<string, unknown>>());
+    } catch (err) {
+      // Today's file does not exist until the first snapshot after 00:00 JST.
+      if (err instanceof UpstreamError && err.status !== null) {
+        failures.push(`HTTP ${err.status} for ${day}`);
+        log(`${SOURCE_ID}: HTTP ${err.status} for ${url}; skipping`);
+        continue;
+      }
+      failures.push(`${day}: ${err instanceof Error ? err.message : String(err)}`);
     }
-    rows.push(...parseShimaneDayFile((await res.json()) as Record<string, unknown>));
   }
-  log(`${SOURCE_ID}: parsed ${rows.length} station-hour rows`);
-  if (!rows.length) return;
-
-  const matches = await matchMaster(rows, log);
-  const damByStation = new Map(matches.map((m) => [m.stationId, m.damId]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = damByStation.get(p.stationId);
-    if (!damId) continue;
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: p.storageRate,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+  // The station list is known in advance: when no day file could be read,
+  // every station is still listed, as unreadable.
+  const absentWhy = files.length === 0 ? failures.join('; ') : 'not in the day files';
+  return { entries: shimaneEntries(files, absentWhy) };
+});

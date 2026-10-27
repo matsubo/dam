@@ -34,18 +34,17 @@
 //
 // Priority 287. Cron daily 01:17 UTC (10:17 JST).
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Bind, Entry, Reading } from '../ingest/types.ts';
 
 const PAGE_URL =
   process.env.HYOGO_SUIGEN_URL ?? 'https://web.pref.hyogo.lg.jp/kk05/ac07_000000162.html';
 
 const PREF_CODE = '28';
 const SOURCE_ID = 'hyogo-suigen';
+
+/** The master spells 猪ノ鼻（いのはな）第二ダム as 猪鼻第2. */
+const MASTER_NAMES: Record<string, string> = { 猪ノ鼻第二ダム: '猪鼻第2' };
 
 // Rows whose dam another feed already carries with a storage volume (checked on
 // prod 2026-09-28). Keyed by the page's name, furigana stripped.
@@ -72,8 +71,10 @@ export interface ParsedRow {
   name: string;
   /** The dams the row covers — more than one when a row pairs two dams. */
   damNames: string[];
-  /** 貯水率 as a 0..1 fraction; null for a missing marker. */
+  /** 貯水率 as a 0..1 fraction; null when the cell is not a percentage. */
   storageRate: number | null;
+  /** The 貯水率 cell as printed (folded), for its marker when there is no figure. */
+  rateCell: string;
 }
 
 export interface ParsedPage {
@@ -116,133 +117,58 @@ export function parseHyogoSuigen(html: string): ParsedPage {
       .map((part) => flat(part).replace(/[(（][^)）]*[)）]/g, ''))
       .filter((n) => n !== '');
     if (damNames.length === 0) continue;
-    const pct = flat(cells[3] ?? '').match(/^(\d+(?:\.\d+)?)%$/)?.[1];
+    const rateCell = flat(cells[3] ?? '');
+    const pct = rateCell.match(/^(\d+(?:\.\d+)?)%$/)?.[1];
     rows.push({
       name: damNames.join('・'),
       damNames,
       storageRate: pct === undefined ? null : Number(pct) / 100,
+      rateCell,
     });
   }
   return { observedAt, rows };
 }
 
-// --- matching ---------------------------------------------------------------
+// --- entries ----------------------------------------------------------------
 
-/** 猪ノ鼻（いのはな）第二ダム and master 猪鼻第2 fold to the same 猪鼻第2. */
-function fold(name: string): string {
-  return name
-    .normalize('NFKC')
-    .replace(/[(（][^)）]*[)）]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/[ノの]/g, '')
-    .replace(/第二/g, '第2')
-    .trim();
-}
+/** A cell the page prints in place of a figure. */
+const MARK_RE = /^[－―ー‐—-]+$/;
 
-/** The stamped row, else the master whose folded name is the page's. */
-export function chooseMaster(name: string, masters: BindableMaster[]): bigint | null {
-  const stamped = stampedMaster(masters, name);
-  if (stamped) return stamped.id;
-  const key = fold(name);
-  let best: BindableMaster | null = null;
-  for (const m of masters) {
-    if (fold(m.name) !== key) continue;
-    if (!best || preferMaster(m, best)) best = m;
+function rowReading(row: ParsedRow, observedAt: Date | null): Reading {
+  if (row.storageRate === null) {
+    return MARK_RE.test(row.rateCell)
+      ? { state: 'empty', mark: row.rateCell }
+      : { state: 'unreadable', why: `貯水率 cell 「${row.rateCell}」` };
   }
-  return best?.id ?? null;
+  if (!observedAt) return { state: 'unreadable', why: 'no 【…現在】 caption' };
+  // The 【…現在】 date is the newest value the page publishes: holding it
+  // keeps the dam covered through the month until the next survey.
+  return { state: 'values', observations: [{ observedAt, storageRate: row.storageRate }] };
 }
 
-// --- DB helpers -------------------------------------------------------------
-
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 287,
-            '兵庫県 総合政策課 県内の水源の状況 — 主要水源の貯水率 (月1回程度, HTML)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-// --- task -------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
-  const r = await fetch(PAGE_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
-  }
-
-  const { observedAt, rows } = parseHyogoSuigen(await r.text());
-  log(`${SOURCE_ID}: parsed ${rows.length} rows for ${observedAt?.toISOString() ?? 'no date'}`);
-
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  let matched = 0;
-  for (const p of rows) {
-    // One figure for two dams belongs to neither.
-    const damId = p.damNames.length === 1 ? chooseMaster(p.name, masters) : null;
-    const row: UniverseRow = {
-      externalId: p.name,
+/**
+ * Every row of the table. A row binds only the master whose name is the
+ * page's (live twin of a （元）/（再） pair); one figure for two dams belongs
+ * to neither.
+ */
+export function hyogoSuigenEntries(html: string): Entry[] {
+  const { observedAt, rows } = parseHyogoSuigen(html);
+  return rows.map((p) => {
+    const bind: Bind =
+      p.damNames.length > 1 ? 'never' : { name: MASTER_NAMES[p.name] ?? p.name, exact: true };
+    return {
+      key: p.name,
       name: p.name,
-      prefCode: PREF_CODE,
-      resolvedDamId: damId,
+      pref: PREF_CODE,
+      bind,
+      ...(COVERED_ELSEWHERE[p.name] ? { dontWrite: 'another feed carries its volume' } : {}),
+      reading: rowReading(p, observedAt),
     };
-    universe.push(row);
-    if (!damId) {
-      log(`${SOURCE_ID}: no master for "${p.name}"`);
-      continue;
-    }
-    matched++;
-    await bindExternalId(damId, SOURCE_ID, p.name);
-    if (COVERED_ELSEWHERE[p.name] || p.storageRate === null || !observedAt) continue;
-    // The 【…現在】 date is the newest value the page publishes: holding it
-    // keeps the dam covered through the month until the next survey.
-    row.publishedAt = observedAt;
-    inputs.push({
-      observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: null,
-      storageRate: p.storageRate,
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: null,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-  await recordUniverse(SOURCE_ID, universe);
+  });
+}
 
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${matched} written=${written}`);
-
-  if (rows.length === 0 || !observedAt) {
-    throw new Error(
-      `${SOURCE_ID}: ${rows.length} rows, date ${observedAt ? 'found' : 'missing'} on ${PAGE_URL} — layout change?`,
-    );
-  }
-};
-
-export default task;
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const entries = hyogoSuigenEntries((await upstream.fetch(PAGE_URL)).text());
+  log(`${SOURCE_ID}: ${entries.length} rows`);
+  return { entries, dated: true };
+});

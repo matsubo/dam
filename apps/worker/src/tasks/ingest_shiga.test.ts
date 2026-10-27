@@ -9,11 +9,23 @@
 //                                  every value "*" 欠測 / "-" 未観測 that day)
 //   mobile_dam_data_39999_*        /mobile/dam/dam_data.php?ID=39999 (犬上川ダム,
 //                                  2026-09-28 08:10: listed, but no rows at all)
+//
+// Fixture → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
 
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { parseShigaDamData, parseShigaStationList, shigaPageHasData } from './ingest_shiga.ts';
+import type { BoundDam } from '../ingest/types.ts';
+import { fixtureUpstream } from '../ingest/upstream.ts';
+import {
+  parseShigaDamData,
+  parseShigaStationList,
+  shigaEntries,
+  shigaPageHasData,
+  shigaReading,
+  stationUrl,
+} from './ingest_shiga.ts';
 
 const FIXTURE_DIR = join(import.meta.dir, '..', '..', '..', '..', 'tests/fixtures/shiga_bousai');
 
@@ -131,5 +143,81 @@ describe('shigaPageHasData', () => {
       .replaceAll('［流入量］', '流入:')
       .replaceAll('［放流量］', '放流:');
     expect(shigaPageHasData(html)).toBeNull();
+  });
+});
+
+describe('shigaReading', () => {
+  test('a page with readings has values', async () => {
+    const r = shigaReading(
+      await fixture('mobile_dam_data_34196_2026-09-27.shiftjis.html'),
+      REFERENCE,
+    );
+    if (r.state !== 'values') throw new Error(r.state);
+    expect(r.observations).toHaveLength(7);
+  });
+
+  test('犬上川 (no rows) and 姉川 (all 欠測) are provider-marked empty', async () => {
+    for (const file of [
+      'mobile_dam_data_39999_2026-09-28.shiftjis.html',
+      'mobile_dam_data_37191_2026-09-27.shiftjis.html',
+    ]) {
+      expect(shigaReading(await fixture(file), REFERENCE).state).toBe('empty');
+    }
+  });
+
+  test('an unrecognised page is unreadable', () => {
+    expect(shigaReading('<html><body>メンテナンス中</body></html>', REFERENCE).state).toBe(
+      'unreadable',
+    );
+  });
+});
+
+describe('shigaEntries', () => {
+  const dam: BoundDam = { id: 1n, name: '野洲川', totalCapacityM3: null, activeCapacityM3: null };
+
+  test('every listed station is an entry, keyed by its printed name and bound exactly', async () => {
+    const stations = parseShigaStationList(
+      await fixture('mobile_dam_select_2026-09-27.shiftjis.html'),
+    );
+    const list = shigaEntries(
+      stations,
+      fixtureUpstream(() => ''),
+      REFERENCE,
+    );
+    expect(list).toHaveLength(11);
+    // 日野川 must not fall through to 日野川脇: no prefix or substring rung.
+    expect(list.find((e) => e.key === '日野川ダム')).toMatchObject({
+      name: '日野川ダム',
+      pref: '25',
+      bind: { exact: true },
+    });
+  });
+
+  test("reads a bound station's page by its ID; an unbound one is not fetched", async () => {
+    const asked: string[] = [];
+    const page = await readFile(
+      join(FIXTURE_DIR, 'mobile_dam_data_34196_2026-09-27.shiftjis.html'),
+    );
+    const upstream = fixtureUpstream((url) => {
+      asked.push(url);
+      return page;
+    });
+    const [yasugawa, yogo] = shigaEntries(
+      [
+        { id: '34196', name: '野洲川ダム' },
+        { id: '38191', name: '余呉湖' },
+      ],
+      upstream,
+      REFERENCE,
+    );
+    if (typeof yasugawa?.reading !== 'function' || typeof yogo?.reading !== 'function') {
+      throw new Error('not page readings');
+    }
+    expect((await yasugawa.reading(dam)).state).toBe('values');
+    expect(await yogo.reading(null)).toEqual({
+      state: 'unreadable',
+      why: 'no master dam; page not read',
+    });
+    expect(asked).toEqual([stationUrl('34196')]);
   });
 });

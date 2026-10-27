@@ -1,5 +1,19 @@
+// apps/worker/src/tasks/ingest_gunma_kasen.test.ts
+//
+// Page → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
+
 import { describe, expect, test } from 'bun:test';
-import { parseGunmaHtml, parseGunmaTimestamp } from './ingest_gunma_kasen.ts';
+import type { Observed, Reading } from '../ingest/types.ts';
+import { fixtureUpstream } from '../ingest/upstream.ts';
+import { gunmaEntries, gunmaReading, pageUrl, parseGunmaTimestamp } from './ingest_gunma_kasen.ts';
+
+const NOW = new Date('2026-06-05T12:00:00Z');
+
+function observed(r: Reading): Observed | undefined {
+  if (r.state !== 'values') throw new Error(r.state);
+  return r.observations[0];
+}
 
 describe('parseGunmaTimestamp', () => {
   const now = new Date('2026-06-05T12:00:00Z');
@@ -61,11 +75,10 @@ const SAMPLE_HTML = `
 </HTML>
 `;
 
-describe('parseGunmaHtml', () => {
+describe('gunmaReading', () => {
   test('parses all fields correctly', () => {
-    const row = parseGunmaHtml(SAMPLE_HTML, '坂本ダム');
-    expect(row).not.toBeNull();
-    expect(row?.gunmaName).toBe('坂本ダム');
+    const row = observed(gunmaReading(SAMPLE_HTML, NOW));
+    expect(row?.observedAt.toISOString()).toBe('2026-06-05T12:00:00.000Z');
     expect(row?.waterLevelM).toBeCloseTo(520.6);
     expect(row?.storageVolumeM3).toBe(506 * 1000);
     expect(row?.inflowM3s).toBeCloseTo(1.39);
@@ -82,7 +95,7 @@ describe('parseGunmaHtml', () => {
         <TR><TD>放流量 (m3/s)</TD><TD>4.50←</TD></TR>
       </TABLE>
     `;
-    const row = parseGunmaHtml(html, 'テストダム');
+    const row = observed(gunmaReading(html, NOW));
     expect(row?.waterLevelM).toBeCloseTo(100.0);
     expect(row?.storageVolumeM3).toBe(200 * 1000);
     expect(row?.inflowM3s).toBeCloseTo(5.0);
@@ -90,7 +103,7 @@ describe('parseGunmaHtml', () => {
   });
 
   test('storageVolumeM3 multiplied by 1000', () => {
-    const row = parseGunmaHtml(SAMPLE_HTML, '坂本ダム');
+    const row = observed(gunmaReading(SAMPLE_HTML, NOW));
     expect(row?.storageVolumeM3).toBe(506_000);
   });
 
@@ -104,7 +117,7 @@ describe('parseGunmaHtml', () => {
         <TR><TD>放流量 (m3/s)</TD><TD>1.39</TD></TR>
       </TABLE>
     `;
-    const row = parseGunmaHtml(html, '坂本ダム');
+    const row = observed(gunmaReading(html, NOW));
     expect(row?.waterLevelM).toBeCloseTo(520.6);
     expect(row?.storageVolumeM3).toBeNull();
     expect(row?.inflowM3s).toBeNull();
@@ -121,16 +134,18 @@ describe('parseGunmaHtml', () => {
         <TR><TD>放流量 (m3/s)</TD><TD>1.00</TD></TR>
       </TABLE>
     `;
-    const row = parseGunmaHtml(html, '坂本ダム');
+    const row = observed(gunmaReading(html, NOW));
     expect(row?.waterLevelM).toBeNull();
     expect(row?.storageVolumeM3).toBeNull();
   });
 
-  test('returns null when no timestamp', () => {
-    expect(parseGunmaHtml('<TABLE></TABLE>', '坂本ダム')).toBeNull();
+  test('a value without its timestamp is unreadable', () => {
+    expect(gunmaReading('<TABLE></TABLE>', NOW).state).toBe('unreadable');
+    const html = SAMPLE_HTML.replace('06月05日21時00分現在', '');
+    expect(gunmaReading(html, NOW).state).toBe('unreadable');
   });
 
-  test('returns null when all measurements are null', () => {
+  test('"-" in every value is provider-marked empty', () => {
     const html = `
       06月05日21時00分現在
       <TABLE>
@@ -139,7 +154,7 @@ describe('parseGunmaHtml', () => {
         <TR><TD>放流量 (m3/s)</TD><TD>-</TD></TR>
       </TABLE>
     `;
-    expect(parseGunmaHtml(html, '坂本ダム')).toBeNull();
+    expect(gunmaReading(html, NOW).state).toBe('empty');
   });
 
   test('commas in numbers are stripped', () => {
@@ -152,7 +167,33 @@ describe('parseGunmaHtml', () => {
         <TR><TD>放流量 (m3/s)</TD><TD>1.39</TD></TR>
       </TABLE>
     `;
-    const row = parseGunmaHtml(html, '坂本ダム');
+    const row = observed(gunmaReading(html, NOW));
     expect(row?.storageVolumeM3).toBe(1_506_000);
+  });
+});
+
+describe('gunmaEntries', () => {
+  test('the 7-station catalogue keyed by name; a failed page throws for the run', async () => {
+    const page = { body: SAMPLE_HTML, charset: 'shift_jis' } as const;
+    const entries = gunmaEntries(
+      fixtureUpstream((url) => (url === pageUrl(1) ? page : { status: 500 })),
+    );
+    expect(entries.map((e) => e.key)).toEqual([
+      '坂本ダム',
+      '霧積ダム',
+      '塩沢ダム',
+      '四万川ダム',
+      '道平川ダム',
+      '大仁田ダム',
+      '桐生川ダム',
+    ]);
+    expect(entries[0]?.pref).toBe('10');
+    const read = (i: number) => {
+      const r = entries[i]?.reading;
+      if (typeof r !== 'function') throw new Error('expected a page reading');
+      return r(null);
+    };
+    expect((await read(0)).state).toBe('values');
+    await expect(read(1)).rejects.toThrow(`HTTP 500 for ${pageUrl(2)}`);
   });
 });

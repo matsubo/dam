@@ -5,7 +5,7 @@
 // for the 7 dams that supply 愛知 / 木曽川 / 豊川 / 矢作川 systems:
 //
 //   木曽川水系 4 dams: 牧尾 / 阿木川 / 味噌川 / 岩屋
-//   豊川水系   1 dam:  宇連 (+ 豊川用水全体 aggregate, skipped)
+//   豊川水系   1 dam:  宇連 (+ 豊川用水全体 aggregate, recorded but never bound)
 //   矢作川水系 2 dams: 矢作 / 羽布
 //
 // Source: https://www.aitoyo.or.jp/fountainhead/dam/
@@ -20,43 +20,38 @@
 // Priority 295 (below tokyo-waterworks 300 since tokyo is fresher by ~1 day,
 // but above jwa-junpo 290 since aitoyo is fresher than jwa-junpo for overlap).
 
-import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const PAGE_URL = process.env.AITOYO_URL ?? 'https://www.aitoyo.or.jp/fountainhead/dam/';
+const SOURCE_ID = 'aitoyo';
 
 // readingHourJst: the page's 当日 hour for the system — 24 (木曽川/豊川) or 9 (矢作川).
-const NAME_MAP: Array<{
-  aitoyoName: string;
-  masterName: string;
-  prefCodes: string[];
-  readingHourJst: 24 | 9;
-}> = [
+const DAMS: Record<string, { pref: string | readonly string[]; readingHourJst: 24 | 9 }> = {
   // 木曽川水系 (all overlap with jwa-junpo)
-  { aitoyoName: '牧尾ダム', masterName: '牧尾', prefCodes: ['20'], readingHourJst: 24 }, // 長野
-  { aitoyoName: '阿木川ダム', masterName: '阿木川', prefCodes: ['21'], readingHourJst: 24 }, // 岐阜
-  { aitoyoName: '味噌川ダム', masterName: '味噌川', prefCodes: ['20'], readingHourJst: 24 },
-  { aitoyoName: '岩屋ダム', masterName: '岩屋', prefCodes: ['21'], readingHourJst: 24 },
+  牧尾ダム: { pref: '20', readingHourJst: 24 }, // 長野
+  阿木川ダム: { pref: '21', readingHourJst: 24 }, // 岐阜
+  味噌川ダム: { pref: '20', readingHourJst: 24 },
+  岩屋ダム: { pref: '21', readingHourJst: 24 },
   // 豊川水系 (overlap)
-  { aitoyoName: '宇連ダム', masterName: '宇連', prefCodes: ['23'], readingHourJst: 24 }, // 愛知
+  宇連ダム: { pref: '23', readingHourJst: 24 }, // 愛知
   // 矢作川水系 (NEW vs jwa-junpo / tokyo-waterworks)
-  { aitoyoName: '矢作ダム', masterName: '矢作', prefCodes: ['23', '20'], readingHourJst: 9 }, // 愛知/長野 boundary
-  { aitoyoName: '羽布ダム', masterName: '羽布', prefCodes: ['23'], readingHourJst: 9 }, // 愛知
-];
+  矢作ダム: { pref: ['23', '20'], readingHourJst: 9 }, // 愛知/長野 boundary
+  羽布ダム: { pref: '23', readingHourJst: 9 }, // 愛知
+};
 
-// Aggregate rows in the aitoyo table — skip these.
-const SKIP_NAMES = new Set(['豊川用水全体']);
+// The 豊川 system's whole pool: recorded, never bound. Not a total of rows
+// on this page — its 利水容量 51,820 千m³ is 宇連 28,420 + 大島 11,300 +
+// 地区内調整池 12,100 (jwa-chubu's report), and only 宇連 is listed here.
+const AGGREGATE = '豊川用水全体';
+const AGGREGATE_HOUR_JST = 24;
 
-interface ParsedRow {
+export interface ParsedRow {
   aitoyoName: string;
-  observedAt: Date;
-  storageCapacityThouM3: number;
-  storageVolumeThouM3: number;
-  storageRatePct: number;
+  storageCapacityThouM3: Cell;
+  storageVolumeThouM3: Cell;
+  storageRatePct: Cell;
 }
 
 function textOf(s: string): string {
@@ -70,11 +65,11 @@ function textOf(s: string): string {
     .trim();
 }
 
-function parseNum(s: string): number | null {
+/** A number, the page's own "―"/"-" mark, or null when neither. */
+function parseCell(s: string): Cell {
   const cleaned = s.replace(/[,\s　]/g, '');
-  if (!cleaned || cleaned === '―' || cleaned === '-') return null;
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? n : null;
+  const n = cleaned ? Number(cleaned) : Number.NaN;
+  return cell(n, cleaned === '―' || cleaned === '-');
 }
 
 /** 「2026年9月27日現在」 → that calendar date as a UTC-midnight Date. */
@@ -85,17 +80,15 @@ function parseAitoyoDate(text: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-export function parseAitoyoHtml(html: string): ParsedRow[] {
+/** The 「…日現在」 day and every named row of the dam-storage table, in page order. */
+export function parseAitoyoHtml(html: string): { day: Date | null; rows: ParsedRow[] } {
   const day = parseAitoyoDate(html);
-  const out: ParsedRow[] = [];
-  if (!day) return out;
-  const hourByName = new Map(NAME_MAP.map((m) => [m.aitoyoName, m.readingHourJst]));
+  const rows: ParsedRow[] = [];
 
   // Restrict to the dam-storage table. The page has multiple tables; this
   // one is the only one with column-3..column-7 storage cells.
   const tableMatch = html.match(/<table[^>]*tablepress-id-top[^>]*>([\s\S]*?)<\/table>/);
   const tableHtml = tableMatch?.[1] ?? '';
-  if (!tableHtml) return out;
 
   const seen = new Set<string>();
   const rowMatches = tableHtml.match(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g) ?? [];
@@ -110,137 +103,103 @@ export function parseAitoyoHtml(html: string): ParsedRow[] {
       if (cls) cellByClass[cls] = textOf(cm[2] ?? '');
     }
     const name = cellByClass['column-2'];
-    if (!name) continue;
-    const readingHourJst = hourByName.get(name);
-    if (SKIP_NAMES.has(name) || readingHourJst == null) continue;
-    const capacity = parseNum(cellByClass['column-3'] ?? '');
-    const volume = parseNum(cellByClass['column-4'] ?? '');
-    const rate = parseNum(cellByClass['column-5'] ?? '');
-    if (capacity == null || volume == null || rate == null) continue;
-    if (seen.has(name)) continue;
+    if (!name || seen.has(name)) continue;
     seen.add(name);
-    out.push({
+    rows.push({
       aitoyoName: name,
-      // JST hour h of the day = UTC hour h - 9 (24 → 15:00Z the same date).
-      observedAt: new Date(day.getTime() + (readingHourJst - 9) * 3_600_000),
-      storageCapacityThouM3: capacity,
-      storageVolumeThouM3: volume,
-      storageRatePct: rate,
+      storageCapacityThouM3: parseCell(cellByClass['column-3'] ?? ''),
+      storageVolumeThouM3: parseCell(cellByClass['column-4'] ?? ''),
+      storageRatePct: parseCell(cellByClass['column-5'] ?? ''),
     });
   }
-  return out;
+  return { day, rows };
 }
 
-interface DamMatch {
-  aitoyoName: string;
-  damId: bigint;
+/** A row's reading at 当日 `readingHourJst` of the page's day. */
+export function aitoyoReading(row: ParsedRow, day: Date, readingHourJst: number): Reading {
+  const state = cellState([row.storageCapacityThouM3, row.storageVolumeThouM3, row.storageRatePct]);
+  if (state === 'empty') return { state, mark: '― in 利水容量, 貯水量 and 貯水率' };
+  const volume = numberIn(row.storageVolumeThouM3);
+  const rate = numberIn(row.storageRatePct);
+  if (numberIn(row.storageCapacityThouM3) === null || volume === null || rate === null) {
+    return { state: 'unreadable', why: '利水容量, 貯水量 or 貯水率 is not a number' };
+  }
+  return {
+    state: 'values',
+    observations: [
+      {
+        // JST hour h of the day = UTC hour h - 9 (24 → 15:00Z the same date).
+        observedAt: new Date(day.getTime() + (readingHourJst - 9) * 3_600_000),
+        storageVolumeM3: volume * 1_000,
+        storageRate: Math.max(0, Math.min(1, rate / 100)),
+      },
+    ],
+  };
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES ('aitoyo', 295,
-            'あいとよネット (公益財団法人 愛知・豊川用水振興協会) — daily, 7 dams in 木曽川/豊川/矢作川 系',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
+/** The seven dams alone, unreadable: what is recorded when the page cannot be read. */
+function unreadableDams(why: string): Entry[] {
+  return Object.entries(DAMS).map(([name, { pref }]) => ({
+    key: name,
+    name,
+    pref,
+    reading: { state: 'unreadable', why },
+  }));
 }
 
-async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
-  const matches: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  for (const m of NAME_MAP) {
-    // All candidates, ranked by name; chooseRanked keeps a row already
-    // stamped with this station, and lets the （元）/（再） of one dam (牧尾)
-    // tie so the current structure wins rather than a fixed marker order.
-    const rows = await sql<(BindableMaster & { rank: number })[]>`
-      SELECT id, name, completed_year AS "completedYear",
-             external_ids->>'aitoyo' AS stamp,
-             CASE
-               WHEN name = ${`${m.masterName}ダム`} THEN 0
-               WHEN name = ${m.masterName} THEN 1
-               WHEN name LIKE ${`${m.masterName}（再）%`}
-                 OR name LIKE ${`${m.masterName}（元）%`} THEN 2
-               WHEN name = ${`${m.masterName}貯水池`} THEN 3
-               ELSE 5
-             END AS rank
-      FROM dams
-      WHERE pref_code = ANY(${m.prefCodes}::text[])
-        AND name LIKE ${`%${m.masterName}%`}
-    `;
-    const r = chooseRanked(rows, m.aitoyoName);
-    // 矢作 straddles two prefectures; the first is its primary one. prefCode is
-    // metadata here, not part of the (source_id, external_id) key.
-    universe.push({
-      externalId: m.aitoyoName,
-      name: m.aitoyoName,
-      prefCode: m.prefCodes[0] ?? null,
-      resolvedDamId: r?.id ?? null,
-    });
-    if (!r) {
-      log(`aitoyo: no master match for "${m.aitoyoName}" (${m.masterName})`);
-      continue;
+/**
+ * Every row of the table, then any of the seven dams it no longer lists
+ * (unreadable). A row new on the page is recorded, not written: its 当日
+ * hour (24 or 9) is unknown until it is added to DAMS.
+ */
+export function aitoyoEntries(html: string): Entry[] {
+  const { day, rows } = parseAitoyoHtml(html);
+  if (!day || rows.length === 0) {
+    return unreadableDams('no 「…日現在」 date or no tablepress-id-top table on the page');
+  }
+  const entries: Entry[] = rows.map((row) => {
+    const name = row.aitoyoName;
+    const dam = DAMS[name];
+    if (dam) {
+      return {
+        key: name,
+        name,
+        pref: dam.pref,
+        reading: aitoyoReading(row, day, dam.readingHourJst),
+      };
     }
-    matches.push({ aitoyoName: m.aitoyoName, damId: r.id });
-    await bindExternalId(r.id, 'aitoyo', m.aitoyoName);
-  }
-  await recordUniverse('aitoyo', universe);
-  return matches;
+    if (name === AGGREGATE) {
+      return {
+        key: name,
+        name,
+        pref: '23',
+        bind: 'never',
+        reading: aitoyoReading(row, day, AGGREGATE_HOUR_JST),
+      };
+    }
+    return {
+      key: name,
+      name,
+      pref: null,
+      dontWrite: 'new on the page',
+      reading: { state: 'unreadable', why: 'its 当日 hour is not known' },
+    };
+  });
+  const listed = new Set(rows.map((r) => r.aitoyoName));
+  for (const e of unreadableDams('not on the page')) if (!listed.has(e.key)) entries.push(e);
+  return entries;
 }
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-  const matches = await ensureExternalIds(log);
-  log(`aitoyo: matched ${matches.length}/${NAME_MAP.length} master dams`);
-
-  const r = await fetch(PAGE_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) {
-    log(`aitoyo: HTTP ${r.status} from ${PAGE_URL}; aborting`);
-    return;
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  let html: string;
+  try {
+    html = (await upstream.fetch(PAGE_URL)).text();
+  } catch (err) {
+    // The seven dams are known in advance: record them unreadable, and the
+    // run fails the job so it is retried.
+    const why = err instanceof Error ? err.message : String(err);
+    log(`${SOURCE_ID}: ${why}`);
+    return { entries: unreadableDams(why) };
   }
-  const html = await r.text();
-  const parsed = parseAitoyoHtml(html);
-  if (parsed.length === 0) {
-    log('aitoyo: no rows — the 「…日現在」 date or the tablepress-id-top table is missing');
-    return;
-  }
-
-  const matchByName = new Map(matches.map((m) => [m.aitoyoName, m.damId]));
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const row of parsed) {
-    const damId = matchByName.get(row.aitoyoName);
-    if (!damId) continue;
-    const storageVolumeM3 = row.storageVolumeThouM3 * 1_000;
-    const storageRate = Math.max(0, Math.min(1, row.storageRatePct / 100));
-    inputs.push({
-      observedAt: row.observedAt,
-      damId,
-      sourceId: 'aitoyo',
-      storageVolumeM3,
-      storageRate,
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: null,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-  const written = await upsertObservations(inputs);
-  log(`aitoyo done: parsed=${parsed.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+  return { entries: aitoyoEntries(html) };
+});

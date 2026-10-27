@@ -1,4 +1,4 @@
-import { sql } from '../client.ts';
+import { type Db, sql } from '../client.ts';
 
 /**
  * One station as published by an upstream source, whether or not we managed
@@ -40,7 +40,7 @@ export interface UniverseRow {
 /**
  * Record the full list a source publishes, replacing nothing: rows are
  * upserted so `first_seen_at` survives and `last_seen_at` advances on every
- * scan. Stamping the run is what later lets `classifyDamCoverage` say
+ * scan. Stamping the run is what later lets the coverage triage say
  * "nobody publishes this dam" instead of "we haven't looked yet".
  *
  * Call it with the WHOLE list the provider publishes, matched and unmatched
@@ -54,13 +54,12 @@ export async function recordUniverse(
   rows: UniverseRow[],
   opts: RecordUniverseOptions = {},
 ): Promise<number> {
-  // Fail-safe by design. Every one of the ~70 ingest tasks awaits this BEFORE
-  // upsertObservations, so anything thrown here costs that run its
-  // observations — the actual product — to protect coverage metadata, which
-  // is only ever an explanation of the observations. That trade is never
-  // worth making, so a failure is logged and swallowed. The known crash
-  // (duplicate ON CONFLICT target) is fixed below; this guards the unknown
-  // ones, and the next successful run re-records the same list anyway.
+  // Fail-safe by design, for the callers outside the ingest run
+  // (match:kasenbosai, the backfills), which await this BEFORE writing
+  // observations: anything thrown here would cost that run its observations
+  // to protect coverage metadata. A failure is logged and swallowed; the next
+  // successful run re-records the same list. The ingest run uses
+  // recordUniverseOrThrow inside its transaction instead.
   try {
     return await recordUniverseOrThrow(sourceId, rows, opts.keepHasData ?? false);
   } catch (err) {
@@ -78,24 +77,23 @@ export interface RecordUniverseOptions {
   keepHasData?: boolean;
 }
 
-async function recordUniverseOrThrow(
+/**
+ * The same write without the safety net: a failure throws. The ingest run
+ * (apps/worker/src/ingest) calls it inside the transaction that also writes
+ * the observations, so a universe failure fails the job instead of hiding.
+ */
+export async function recordUniverseOrThrow(
   sourceId: string,
   rows: UniverseRow[],
-  keepHasData: boolean,
+  keepHasData = false,
+  db: Db = sql,
 ): Promise<number> {
   // De-duplicate on the primary key before building the multi-row INSERT.
   // postgres.js emits one statement, and Postgres rejects a duplicate target
   // with `21000: ON CONFLICT DO UPDATE command cannot affect row a second
-  // time`. Several providers legitimately repeat a station — the same dam
-  // under both 水道用 and 工業用水 tables, or the same names in every monthly
-  // ZIP — and callers run this BEFORE upsertObservations, so an exception
-  // here would take the observation write down with it.
-  //
-  // LAST ENTRY WINS, and that is load-bearing: shimane and saitama seed the
-  // full station list with `resolvedDamId: null` and then push the resolved
-  // rows after it, so a station missing from today's snapshot still counts
-  // as published while a matched one keeps its id. Changing this to
-  // first-wins would silently null out those sources' matches.
+  // time`. Several providers legitimately repeat a station (the same names in
+  // every monthly ZIP of a backfill). The last entry wins; the ingest run
+  // merges duplicate keys itself before calling this.
   const deduped = [...new Map(rows.map((r) => [r.externalId, r])).values()];
   if (deduped.length > 0) {
     const values = deduped.map((r) => ({
@@ -109,8 +107,8 @@ async function recordUniverseOrThrow(
       has_data: r.hasData ?? null,
       published_at: r.publishedAt ?? null,
     }));
-    await sql`
-      INSERT INTO source_universe ${sql(values)}
+    await db`
+      INSERT INTO source_universe ${db(values)}
       ON CONFLICT (source_id, source_external_id) DO UPDATE SET
         source_name     = EXCLUDED.source_name,
         pref_code       = COALESCE(EXCLUDED.pref_code, source_universe.pref_code),
@@ -140,7 +138,7 @@ async function recordUniverseOrThrow(
   // and stamping a run for it would let a transient upstream outage close the
   // honesty gate and flip that provider's dams to 提供元なし.
   if (deduped.length === 0) return 0;
-  await sql`
+  await db`
     INSERT INTO source_universe_runs (source_id, last_full_scan_at, row_count)
     VALUES (${sourceId}, NOW(), ${deduped.length})
     ON CONFLICT (source_id) DO UPDATE SET
@@ -174,341 +172,4 @@ export async function recordUniverseHasData(
   } catch (err) {
     console.error(`recordUniverseHasData(${sourceId}) failed:`, err);
   }
-}
-
-export type DamCoverageStatus =
-  /**
-   * An observation landed in the last 30 days, or we hold the newest value a
-   * provider that prints its own date publishes (`source_universe.published_at`).
-   */
-  | 'covered'
-  /** An upstream publishes this dam and we matched it, but nothing arrives. */
-  | 'published_not_ingested'
-  /**
-   * Every source listing this dam marks its row empty (`has_data = FALSE`):
-   * the provider publishes the dam but no value, so there is nothing to fix.
-   */
-  | 'published_no_data'
-  /** No scanned provider publishes it — but some provider is still unscanned. */
-  | 'unknown'
-  /** Every observation-producing provider has been scanned; none publishes it. */
-  | 'not_published';
-
-/**
- * Whether a data provider publishes the dam, as one word for readers and API
- * clients: `available` (a provider publishes it, values or not), `none`
- * (提供元なし: every provider's list was recorded and none carries it) or
- * `unknown` (some provider's list is not recorded yet).
- */
-export type ProviderAvailability = 'available' | 'none' | 'unknown';
-
-export function providerAvailability(status: DamCoverageStatus): ProviderAvailability {
-  if (status === 'not_published') return 'none';
-  if (status === 'unknown') return 'unknown';
-  return 'available';
-}
-
-/**
- * Not data we could be missing: nobody publishes the dam, or everyone who
- * lists it marks it empty. Such dams are in no coverage denominator.
- */
-export function isUnobtainable(status: DamCoverageStatus): boolean {
-  return status === 'not_published' || status === 'published_no_data';
-}
-
-export interface DamCoverageRow {
-  damId: bigint;
-  slug: string;
-  name: string;
-  prefCode: string | null;
-  status: DamCoverageStatus;
-  /** Sources whose published list contains this dam. */
-  publishedBy: string[];
-}
-
-/**
- * Per-dam answer to "is this dam's data published and we're failing to get
- * it, or does nobody publish it?".
- *
- * The `unknown` rung is the point of the whole design. A dam absent from
- * `source_universe` only means "nobody publishes it" once every
- * observation-producing source has recorded a scan; while any source is
- * still uninstrumented, absence proves nothing and the dam reports
- * `unknown`. Collapsing those two would quietly declare hundreds of dams
- * hopeless just because we never looked.
- *
- * Three residual caveats, all surfaced in `coverageSummary()` rather than
- * hidden:
- *  - `sourcesNotEnumerable` — providers that publish no station list at all
- *    (a portal that lists dams only during a flood event). They are excluded
- *    from the gate, so `not_published` stays provisional for their areas.
- *  - `sourcesHistoricalOnly` — one-off dumps and backfill-only sources, which
- *    have no recurring scan to record. Excluded for the same reason, and for
- *    the same price.
- *  - A handful of HTML-scraped providers (nara / miyagi) have no catalogue
- *    constant to iterate, so their universe is whatever parsed on the last
- *    good run. A station that reports even once ever is recorded and
- *    persists; one that has NEVER parsed stays invisible.
- *
- * A retired source (`active = false`, e.g. one whose robots.txt disallows
- * us) counts nowhere: not in the gate, since it will never scan again, and
- * not as a publisher, since a dam only it lists is not an ingestion bug we
- * can fix and its unmatched stations are not work we can do.
- */
-export async function classifyDamCoverage(): Promise<DamCoverageRow[]> {
-  return sql<DamCoverageRow[]>`
-    WITH pending AS (
-      SELECT COUNT(*)::INT AS n
-      FROM source_priorities sp
-      WHERE sp.active
-        AND sp.provides_observations
-        AND sp.universe_enumerable
-        AND NOT sp.historical_only
-        AND NOT EXISTS (
-          SELECT 1 FROM source_universe_runs r WHERE r.source_id = sp.source_id
-        )
-    ),
-    -- A row with every quantity NULL is not data: mudam's blank CSV days and
-    -- kasenbosai's all-欠測 hours were stored that way, and counting them
-    -- called dams covered that have never delivered a value.
-    fresh AS (
-      SELECT dam_id
-      FROM observations
-      WHERE observed_at > NOW() - INTERVAL '30 days'
-        AND source_id <> 'synthetic'
-        AND num_nonnulls(storage_volume_m3, storage_rate, inflow_m3s,
-                         outflow_m3s, water_level_m, rainfall_mm) > 0
-      UNION
-      -- We hold the newest value a dated provider publishes (0221), however
-      -- old: a monthly survey has nothing newer to take. Only a scan from
-      -- the last 7 days vouches for that date.
-      -- A LATERAL ... LIMIT 1 probe, not EXISTS: the planner turned the
-      -- EXISTS into a Hash Semi Join that hashed every observation and
-      -- spilled ~335 MB of temp files per call (#105). The probe hits the
-      -- (dam_id, observed_at) chunk indexes once per universe row.
-      SELECT su.resolved_dam_id
-      FROM source_universe su
-      CROSS JOIN LATERAL (
-        SELECT 1
-        FROM observations o
-        WHERE o.dam_id = su.resolved_dam_id
-          AND o.source_id = su.source_id
-          AND o.observed_at >= su.published_at
-          AND num_nonnulls(o.storage_volume_m3, o.storage_rate, o.inflow_m3s,
-                           o.outflow_m3s, o.water_level_m, o.rainfall_mm) > 0
-        LIMIT 1
-      ) hit
-      WHERE su.resolved_dam_id IS NOT NULL
-        AND su.published_at IS NOT NULL
-        AND su.last_seen_at > NOW() - INTERVAL '7 days'
-    ),
-    published AS (
-      SELECT su.resolved_dam_id AS dam_id,
-             ARRAY_AGG(DISTINCT su.source_id ORDER BY su.source_id) AS sources,
-             -- Every listing row says empty. A single unknown (NULL) row could
-             -- be the source we are failing to ingest, so it keeps the dam out.
-             BOOL_AND(su.has_data IS FALSE) AS no_data
-      FROM source_universe su
-      WHERE su.resolved_dam_id IS NOT NULL
-        AND NOT EXISTS (
-          SELECT 1 FROM source_priorities sp WHERE sp.source_id = su.source_id AND NOT sp.active
-        )
-      GROUP BY su.resolved_dam_id
-    )
-    SELECT d.id                        AS "damId",
-           d.slug                      AS "slug",
-           d.name                      AS "name",
-           d.pref_code                 AS "prefCode",
-           CASE
-             WHEN f.dam_id IS NOT NULL          THEN 'covered'
-             WHEN p.no_data                     THEN 'published_no_data'
-             WHEN p.dam_id IS NOT NULL          THEN 'published_not_ingested'
-             WHEN (SELECT n FROM pending) > 0   THEN 'unknown'
-             ELSE 'not_published'
-           END                         AS "status",
-           COALESCE(p.sources, ARRAY[]::TEXT[]) AS "publishedBy"
-    FROM dams d
-    LEFT JOIN fresh     f ON f.dam_id = d.id
-    LEFT JOIN published p ON p.dam_id = d.id
-    ORDER BY d.id
-  `;
-}
-
-export interface CoverageSummary {
-  covered: number;
-  publishedNotIngested: number;
-  publishedNoData: number;
-  unknown: number;
-  notPublished: number;
-  /**
-   * Published stations we cannot tie to any master dam — the backlog.
-   * Excludes rows a migration marked `not_dam_reason` (a 堰, a 調整池 outside
-   * the NDI master): there is no dam to link them to.
-   */
-  unmatchedStations: number;
-  /**
-   * Unresolved stations carrying a cited `not_dam_reason`. Out of the
-   * backlog; a row that later resolves leaves this count, since a match wins.
-   */
-  notDamStations: number;
-  /** Observation providers still to be instrumented. While > 0, `unknown` is not `not_published`. */
-  sourcesPendingScan: number;
-  /** The providers behind `sourcesPendingScan`, by source id. */
-  pendingScanSources: PendingScanSource[];
-  /**
-   * Providers that publish no enumerable station list (e.g. a portal that
-   * only lists dams during a flood event). They are excluded from the gate,
-   * so `not_published` carries a residual caveat for the areas they cover.
-   */
-  sourcesNotEnumerable: number;
-  /**
-   * One-off historical dumps and backfill-only sources (mudam,
-   * kagoshima-bodik). They have no recurring scan to record, so they are
-   * excluded from the gate rather than holding it open forever; their dams
-   * are reported by the 歴史データ含む metric instead.
-   */
-  sourcesHistoricalOnly: number;
-}
-
-/**
- * Why a provider has not recorded its published list yet, from what the
- * database can see (there is no per-run log). "Recent" is the same 30 days
- * `classifyDamCoverage` calls covered.
- *  - `no_recent_observations` — nothing from it landed recently: its task
- *    has not run yet (a new source awaiting its first cron slot) or is
- *    failing.
- *  - `ingesting_without_list` — observations arrive, but no list was ever
- *    stamped: the task lacks its `recordUniverse` call, or every call passed
- *    an empty list (which deliberately does not count as a scan).
- */
-export type PendingScanReason = 'no_recent_observations' | 'ingesting_without_list';
-
-export interface PendingScanSource {
-  sourceId: string;
-  reason: PendingScanReason;
-}
-
-export async function coverageSummary(): Promise<CoverageSummary> {
-  const rows = await classifyDamCoverage();
-  const count = (s: DamCoverageStatus): number => rows.filter((r) => r.status === s).length;
-  const [extra] = await sql<
-    {
-      unresolved: bigint;
-      not_dam: bigint;
-      not_enumerable: bigint;
-      historical_only: bigint;
-    }[]
-  >`
-    SELECT
-      (SELECT COUNT(*) FROM source_universe su
-        WHERE su.resolved_dam_id IS NULL
-          AND su.not_dam_reason IS NULL
-          AND NOT EXISTS (
-            SELECT 1 FROM source_priorities sp WHERE sp.source_id = su.source_id AND NOT sp.active
-          )
-      )::BIGINT AS unresolved,
-      (SELECT COUNT(*) FROM source_universe su
-        WHERE su.resolved_dam_id IS NULL
-          AND su.not_dam_reason IS NOT NULL
-          AND NOT EXISTS (
-            SELECT 1 FROM source_priorities sp WHERE sp.source_id = su.source_id AND NOT sp.active
-          )
-      )::BIGINT AS not_dam,
-      (SELECT COUNT(*) FROM source_priorities sp
-        WHERE sp.active AND sp.provides_observations AND NOT sp.universe_enumerable
-      )::BIGINT AS not_enumerable,
-      (SELECT COUNT(*) FROM source_priorities sp
-        WHERE sp.active AND sp.provides_observations AND sp.historical_only
-      )::BIGINT AS historical_only
-  `;
-  // Same predicate as the `pending` CTE in classifyDamCoverage. The probe is
-  // windowed on purpose: an unbounded EXISTS for a source with no rows must
-  // visit every chunk, compressed ones included (~125 ms per source on prod
-  // against ~7 ms for 30 days).
-  const pending = await sql<PendingScanSource[]>`
-    SELECT sp.source_id AS "sourceId",
-           CASE WHEN EXISTS (
-                  SELECT 1 FROM observations o
-                  WHERE o.source_id = sp.source_id
-                    AND o.observed_at > NOW() - INTERVAL '30 days'
-                )
-                THEN 'ingesting_without_list'
-                ELSE 'no_recent_observations'
-           END          AS "reason"
-    FROM source_priorities sp
-    WHERE sp.active AND sp.provides_observations AND sp.universe_enumerable
-      AND NOT sp.historical_only
-      AND NOT EXISTS (SELECT 1 FROM source_universe_runs r WHERE r.source_id = sp.source_id)
-    ORDER BY sp.source_id
-  `;
-  return {
-    covered: count('covered'),
-    publishedNotIngested: count('published_not_ingested'),
-    publishedNoData: count('published_no_data'),
-    unknown: count('unknown'),
-    notPublished: count('not_published'),
-    unmatchedStations: Number(extra?.unresolved ?? 0),
-    notDamStations: Number(extra?.not_dam ?? 0),
-    sourcesPendingScan: pending.length,
-    pendingScanSources: [...pending],
-    sourcesNotEnumerable: Number(extra?.not_enumerable ?? 0),
-    sourcesHistoricalOnly: Number(extra?.historical_only ?? 0),
-  };
-}
-
-/** Same triage as `classifyDamCoverage`, for one dam. */
-export async function classifyOneDam(damId: bigint): Promise<DamCoverageRow | null> {
-  const rows = await sql<DamCoverageRow[]>`
-    WITH pending AS (
-      SELECT COUNT(*)::INT AS n
-      FROM source_priorities sp
-      WHERE sp.active
-        AND sp.provides_observations
-        AND sp.universe_enumerable
-        AND NOT sp.historical_only
-        AND NOT EXISTS (
-          SELECT 1 FROM source_universe_runs r WHERE r.source_id = sp.source_id
-        )
-    ),
-    published AS (
-      SELECT ARRAY_AGG(DISTINCT su.source_id ORDER BY su.source_id) AS sources,
-             BOOL_AND(su.has_data IS FALSE) AS no_data
-      FROM source_universe su
-      WHERE su.resolved_dam_id = ${damId}
-        AND NOT EXISTS (
-          SELECT 1 FROM source_priorities sp WHERE sp.source_id = su.source_id AND NOT sp.active
-        )
-    )
-    SELECT d.id       AS "damId",
-           d.slug     AS "slug",
-           d.name     AS "name",
-           d.pref_code AS "prefCode",
-           CASE
-             WHEN EXISTS (
-               SELECT 1 FROM observations o
-               WHERE o.dam_id = d.id AND o.observed_at > NOW() - INTERVAL '30 days'
-                 AND o.source_id <> 'synthetic'
-                 AND num_nonnulls(o.storage_volume_m3, o.storage_rate, o.inflow_m3s,
-                                  o.outflow_m3s, o.water_level_m, o.rainfall_mm) > 0
-             ) OR EXISTS (
-               SELECT 1 FROM source_universe su
-               JOIN observations o
-                 ON o.dam_id = su.resolved_dam_id
-                AND o.source_id = su.source_id
-                AND o.observed_at >= su.published_at
-               WHERE su.resolved_dam_id = d.id
-                 AND su.last_seen_at > NOW() - INTERVAL '7 days'
-                 AND num_nonnulls(o.storage_volume_m3, o.storage_rate, o.inflow_m3s,
-                                  o.outflow_m3s, o.water_level_m, o.rainfall_mm) > 0
-             )                                            THEN 'covered'
-             WHEN (SELECT no_data FROM published)         THEN 'published_no_data'
-             WHEN (SELECT sources FROM published) IS NOT NULL THEN 'published_not_ingested'
-             WHEN (SELECT n FROM pending) > 0             THEN 'unknown'
-             ELSE 'not_published'
-           END        AS "status",
-           COALESCE((SELECT sources FROM published), ARRAY[]::TEXT[]) AS "publishedBy"
-    FROM dams d
-    WHERE d.id = ${damId}
-  `;
-  return rows[0] ?? null;
 }

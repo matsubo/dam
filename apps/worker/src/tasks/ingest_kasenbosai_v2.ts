@@ -48,6 +48,7 @@ import { sql } from '@dam/db/client';
 import { upsertObservations } from '@dam/db/repo/observations';
 import { recordUniverseHasData } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
+import { liveUpstream, type Upstream, type UpstreamRequest } from '../ingest/upstream.ts';
 
 const BASE_URL =
   process.env.KASENBOSAI_TM_BASE ?? 'https://www.river.go.jp/kawabou/file/files/tmlist/dam';
@@ -85,14 +86,6 @@ interface DamTarget {
   obsFcd: string;
   /** 有効貯水容量, used to sanity-check a published 'eff' rate. */
   effectiveCapacityM3: number | null;
-}
-
-function userAgent(): string {
-  return (
-    process.env.HTTP_USER_AGENT ??
-    process.env.KASENBOSAI_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)'
-  );
 }
 
 function jstNowParts(): { date: string; time: string } {
@@ -212,8 +205,9 @@ export function parseKasenbosaiObsValue(ov: ApiObsValue): ParsedKasenbosaiObs | 
   const waterLevelM = validOrNull(ov.storLvl, ov.storLvlCcd);
   // A station whose every quantity is flagged invalid (高遠: Ccd 140/160 on
   // all six since 2026-07) still publishes an obsTime each hour. Stored, that
-  // empty row is the dam's newest observation and display_observation(dam,
-  // FALSE) shows it over other sources' real values — so it is no reading.
+  // empty row was the dam's newest observation and the reading showed it
+  // over other sources' real values; dam_reading() now skips rows without a
+  // value, and this keeps them out of storage too.
   if (
     storageVolumeM3 == null &&
     storageRate == null &&
@@ -267,19 +261,6 @@ export function kasenbosaiHasData(payload: ApiResponse): boolean | null {
   return codes.length > 0 && allFlagged ? false : null;
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 310,
-            '国土交通省 川の防災情報 (MLIT SCC) — 全国 800+ ダム / 10-min cadence per-dam JSON',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 async function loadTargets(): Promise<DamTarget[]> {
   const rows = await sql<{ id: bigint; obs_fcd: string; effective_capacity_m3: string | null }[]>`
     SELECT id, external_ids->>'kasenbosai' AS obs_fcd,
@@ -299,20 +280,17 @@ async function loadTargets(): Promise<DamTarget[]> {
 type ObsInput = Parameters<typeof upsertObservations>[0][number];
 
 async function fetchOne(
+  upstream: Upstream,
+  request: UpstreamRequest,
   target: DamTarget,
   date: string,
   time: string,
-  ua: string,
 ): Promise<{ obs: ObsInput | null; hasData: boolean | null }> {
   const none = { obs: null, hasData: null };
   const url = `${BASE_URL}/${date}/${time}/${target.obsFcd}.json`;
-  const r = await fetch(url, {
-    headers: { 'user-agent': ua },
-    signal: AbortSignal.timeout(PER_REQUEST_TIMEOUT_MS),
-  });
+  const r = await upstream.fetch(url, request);
   if (r.status === 404) return none; // dam may have no current value
-  if (r.status !== 200) throw new Error(`HTTP ${r.status}`);
-  const text = await r.text();
+  const text = r.text();
   if (!text || text.length < 5) return none;
   let payload: ApiResponse;
   try {
@@ -340,7 +318,6 @@ async function fetchOne(
 
 const task: Task = async (_payload, helpers) => {
   const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
   const targets = await loadTargets();
   if (targets.length === 0) {
     log(`${SOURCE_ID}: no targets (run match:kasenbosai first)`);
@@ -348,7 +325,15 @@ const task: Task = async (_payload, helpers) => {
   }
   const { date, time } = jstNowParts();
   log(`${SOURCE_ID}: fetching ${targets.length} dams for ${date} ${time}`);
-  const ua = userAgent();
+  const upstream = liveUpstream(SOURCE_ID);
+  // KASENBOSAI_USER_AGENT stands in for the user agent unless HTTP_USER_AGENT is set.
+  const ua =
+    process.env.HTTP_USER_AGENT === undefined ? process.env.KASENBOSAI_USER_AGENT : undefined;
+  const request: UpstreamRequest = {
+    timeoutMs: PER_REQUEST_TIMEOUT_MS,
+    allow: [404],
+    ...(ua === undefined ? {} : { headers: { 'user-agent': ua } }),
+  };
 
   // Process in small concurrent batches so an upstream slowdown on a few
   // dams doesn't serialise the entire run.
@@ -367,7 +352,7 @@ const task: Task = async (_payload, helpers) => {
   for (const group of batch) {
     const results = await Promise.all(
       group.map((t) =>
-        fetchOne(t, date, time, ua).then(
+        fetchOne(upstream, request, t, date, time).then(
           (res) => ({ t, res }),
           () => ({ t, res: null }),
         ),

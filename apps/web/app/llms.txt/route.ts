@@ -113,15 +113,15 @@ and water agencies rather than exposed by a single national API. Developers
 through GitHub Sponsors.
 
 - Recruitment page: ${SITE_URL}/contribute
-- Applications and questions both go through Discord (below) — there is no
-  form and no email address
 - Live coverage figures: ${SITE_URL}/coverage
 - Sponsor: https://github.com/sponsors/matsubo
 
 ## Contact
 
-- Contact: https://discord.gg/UbWqspWbAk (operator runs a Discord; no
-  direct email)
+- Bug reports, data corrections, missing sources, feature requests:
+  https://github.com/matsubo/dam/issues
+- Questions and discussion (including applications to help):
+  https://discord.gg/UbWqspWbAk (no direct email)
 - Terms: ${SITE_URL}/legal/terms
 - Privacy: ${SITE_URL}/legal/privacy
 - Account / API keys: ${SITE_URL}/account/keys

@@ -1,11 +1,31 @@
 // apps/worker/src/tasks/ingest_kumamoto_bousai.test.ts
+//
+// Fixture → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
+//
+// tests/fixtures/kumamoto_bousai holds a verbatim Shift_JIS capture of
+// GmnDspD.exe?52A0 at the 2026/10/26 24:00 JST update (all 6 dams).
 
 import { describe, expect, test } from 'bun:test';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import type { Entry, Observed } from '../ingest/types.ts';
 import {
+  kumamotoEntries,
   parseDspDatEntry,
   parseKumamotoDatetime,
-  parseKumamotoPage,
 } from './ingest_kumamoto_bousai.ts';
+
+const FIXTURE = join(
+  import.meta.dir,
+  '../../../../tests/fixtures/kumamoto_bousai/GmnDspD_52A0_2026-10-27T0000.shiftjis.html',
+);
+
+function observation(e: Entry | undefined): Observed | undefined {
+  const r = e?.reading;
+  if (!r || typeof r === 'function' || r.state !== 'values') throw new Error('no values');
+  return r.observations[0];
+}
 
 describe('parseKumamotoDatetime', () => {
   test('parses "YYYY/MM/DD HH:MM" JST → UTC (subtract 9h)', () => {
@@ -108,7 +128,7 @@ describe('parseDspDatEntry', () => {
   });
 });
 
-describe('parseKumamotoPage', () => {
+describe('kumamotoEntries', () => {
   function makePage(entries: string[]): string {
     return entries.map((e, i) => `DspDat[${i}] = '${e}';`).join('\n');
   }
@@ -127,29 +147,55 @@ describe('parseKumamotoPage', () => {
     '1310→,1310→,0→,' +
     '22.20→,93.57→,0.00→';
 
-  test('parses multiple DspDat entries', () => {
-    const html = makePage([ICHIFUSA_ENTRY, HIKAWA_ENTRY]);
-    const rows = parseKumamotoPage(html);
-    expect(rows).toHaveLength(2);
-    expect(rows.map((r) => r.kumamotoName)).toEqual(['市房ダム', '氷川ダム']);
+  test('one entry per DspDat entry, keyed by the printed name', () => {
+    const list = kumamotoEntries(makePage([ICHIFUSA_ENTRY, HIKAWA_ENTRY]));
+    expect(list.map((e) => [e.key, e.name, e.pref])).toEqual([
+      ['市房ダム', '市房ダム', '43'],
+      ['氷川ダム', '氷川ダム', '43'],
+    ]);
   });
 
-  test('returns empty array for page with no DspDat entries', () => {
-    expect(parseKumamotoPage('<html></html>')).toHaveLength(0);
+  test('returns nothing for a page with no DspDat entries', () => {
+    expect(kumamotoEntries('<html></html>')).toHaveLength(0);
   });
 
-  test('skips malformed entries without throwing', () => {
-    const html = makePage(['no-u-tag,river,2026/06/05 15:00,1,2,3,4,5,6,7,8,9', ICHIFUSA_ENTRY]);
-    const rows = parseKumamotoPage(html);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.kumamotoName).toBe('市房ダム');
+  test('skips an entry without a name; one with a bad time is listed unreadable', () => {
+    const list = kumamotoEntries(
+      makePage([
+        'no-u-tag,river,2026/06/05 15:00,1,2,3,4,5,6,7,8,9',
+        ICHIFUSA_ENTRY.replace('2026/06/05 15:00', 'BAD DATE'),
+        HIKAWA_ENTRY,
+      ]),
+    );
+    expect(
+      list.map((e) => [e.key, typeof e.reading === 'function' ? '' : e.reading.state]),
+    ).toEqual([
+      ['市房ダム', 'unreadable'],
+      ['氷川ダム', 'values'],
+    ]);
   });
 
   test('氷川ダム storage volume = 1310 × 1000 = 1,310,000 m³', () => {
-    const html = makePage([HIKAWA_ENTRY]);
-    const rows = parseKumamotoPage(html);
-    expect(rows[0]?.storageVolumeM3).toBe(1_310_000);
+    const o = observation(kumamotoEntries(makePage([HIKAWA_ENTRY]))[0]);
+    expect(o?.storageVolumeM3).toBe(1_310_000);
     // field[10] 貯水率(利水容量) = 93.57, not field[9] 貯水率(有効容量) = 22.20.
-    expect(rows[0]?.storageRate).toBeCloseTo(0.9357);
+    expect(o?.storageRate).toBeCloseTo(0.9357);
+  });
+
+  test('the live page lists all six dams with a 24:00 time read as the next midnight', async () => {
+    const html = new TextDecoder('shift_jis').decode(await readFile(FIXTURE));
+    const list = kumamotoEntries(html);
+    expect(list.map((e) => e.key)).toEqual([
+      '市房ダム',
+      '氷川ダム',
+      '石打ダム',
+      '上津浦ダム',
+      '亀川ダム',
+      '路木ダム',
+    ]);
+    const ichifusa = observation(list[0]);
+    expect(ichifusa?.observedAt.toISOString()).toBe('2026-10-26T15:00:00.000Z');
+    expect(ichifusa?.storageVolumeM3).toBe(4_034_000);
+    expect(ichifusa?.storageRate).toBeCloseTo(0.1401, 6);
   });
 });

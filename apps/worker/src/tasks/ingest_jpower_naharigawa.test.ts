@@ -12,11 +12,21 @@
 //     16:35 JST with the plain DamDataPlatform user agent: ASP.NET serves
 //     downlevel markup (x_name wraps the name in <font><b>, width= attributes)
 //     and the 16:00 column is filled by then.
+//
+// Fixtures → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
 
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { chooseMaster, graphValue, parseNaharigawaGraph } from './ingest_jpower_naharigawa.ts';
+import { fixtureUpstream } from '../ingest/upstream.ts';
+import {
+  graphUrl,
+  graphValue,
+  naharigawaEntries,
+  naharigawaReading,
+  parseNaharigawaGraph,
+} from './ingest_jpower_naharigawa.ts';
 
 const DIR = join(import.meta.dir, '..', '..', '..', '..', 'tests/fixtures/jpower_naharigawa');
 
@@ -141,28 +151,44 @@ describe('graphValue', () => {
   });
 });
 
-describe('chooseMaster', () => {
-  const m = (id: number, name: string, stamp: string | null = null) => ({
-    id: BigInt(id),
-    name,
-    completedYear: null,
-    stamp,
+describe('naharigawaReading', () => {
+  test('a page with readings has values', async () => {
+    const r = naharigawaReading(await fixture('damgraph_71100_2026-09-28T16.html'), '魚梁瀬ダム');
+    expect(r.state === 'values' && r.observations).toHaveLength(11);
   });
+
+  test('a page naming another dam is unreadable', async () => {
+    expect(
+      naharigawaReading(await fixture('damgraph_71100_2026-09-28T16.html'), '久木ダム'),
+    ).toEqual({ state: 'unreadable', why: 'page shows "魚梁瀬ダム"' });
+  });
+
+  test('a page without readings is unreadable, not empty', () => {
+    expect(naharigawaReading('<html></html>', '久木ダム')).toEqual({
+      state: 'unreadable',
+      why: 'page shows "null"',
+    });
+  });
+});
+
+describe('naharigawaEntries', () => {
   // Real pref-39 rows (prod, 2026-09-28): 魚梁瀬 (NDI 2080), 久木 (2081),
   // 平鍋 (2082), all 電源開発.
-  const masters = [m(10359, '魚梁瀬'), m(10360, '久木'), m(10361, '平鍋')];
-
-  test('binds each published dam to its own master row', () => {
-    expect(chooseMaster('魚梁瀬ダム', masters)).toBe(10359n);
-    expect(chooseMaster('久木ダム', masters)).toBe(10360n);
-    expect(chooseMaster('平鍋ダム', masters)).toBe(10361n);
-  });
-
-  test('leaves a station unbound rather than fall back to a prefix hit', () => {
-    expect(chooseMaster('久木ダム', [m(1, '久木野')])).toBeNull();
-  });
-
-  test('keeps the row already stamped with the station', () => {
-    expect(chooseMaster('平鍋ダム', [m(10361, '平鍋'), m(99, '平鍋', '平鍋ダム')])).toBe(99n);
+  test('the three dams, keyed by name, matched exactly so 久木 never lands on 久木野', async () => {
+    const value = '2026/09/28 16:00';
+    const upstream = fixtureUpstream(async (url) => {
+      const no = ['71100', '71200', '71300'].find((n) => url === graphUrl(value, n));
+      return no ? fixture(`damgraph_${no}_2026-09-28T16.html`) : undefined;
+    });
+    const entries = naharigawaEntries(upstream, value);
+    expect(entries.map((e) => [e.key, e.pref, e.bind])).toEqual([
+      ['魚梁瀬ダム', '39', { exact: true }],
+      ['久木ダム', '39', { exact: true }],
+      ['平鍋ダム', '39', { exact: true }],
+    ]);
+    for (const e of entries) {
+      if (typeof e.reading !== 'function') throw new Error('expected a page reading');
+      expect((await e.reading(null)).state).toBe('values');
+    }
   });
 });

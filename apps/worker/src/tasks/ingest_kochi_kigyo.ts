@@ -24,12 +24,8 @@
 // Priority 308, the prefectural tier; no other source covers either dam.
 // Cron hourly at :44.
 
-import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry } from '../ingest/types.ts';
 
 const DATA_URL = process.env.KOCHI_KIGYO_DAM_URL ?? 'http://210.155.220.59/web/crt17/01/01';
 
@@ -139,114 +135,33 @@ export function parseKochiKigyoTable(html: string): KochiKigyoTable {
   return { dams: dams.map((d) => d.name), readings };
 }
 
-// --- matching ---------------------------------------------------------------
-
-function stem(name: string): string {
-  return name
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .trim();
-}
+// --- entries ----------------------------------------------------------------
 
 /**
- * The master row for a published dam name: the row stamped with it, else an
- * exact stem match, with a （元）/（再） pair settled by preferMaster. No
- * prefix fallback — 吉野 would otherwise land on the agricultural 吉野溜池.
+ * Every dam the table heads, keyed by its published name. Matched exactly,
+ * never by prefix: 吉野 would otherwise land on the agricultural 吉野溜池.
  */
-export function chooseMaster(name: string, masters: BindableMaster[]): bigint | null {
-  const target = stem(name);
-  const candidates = masters
-    .filter((m) => m.stamp === name || stem(m.name) === target)
-    .map((m) => ({ ...m, rank: 0 }));
-  return chooseRanked(candidates, name)?.id ?? null;
-}
-
-// --- DB helpers -------------------------------------------------------------
-
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 308,
-            '高知県公営企業局 ダム水文量表 — 吉野/杉田ダム (UTF-8 HTML, 時次)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-async function matchMaster(dams: string[], log: (s: string) => void): Promise<Map<string, bigint>> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const damByName = new Map<string, bigint>();
-  const universe: UniverseRow[] = [];
-
-  for (const name of dams) {
-    const damId = chooseMaster(name, masters);
-    universe.push({ externalId: name, name, prefCode: PREF_CODE, resolvedDamId: damId });
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${name}"`);
-      continue;
-    }
-    damByName.set(name, damId);
-    await bindExternalId(damId, SOURCE_ID, name);
-  }
-
-  await recordUniverse(SOURCE_ID, universe);
-  return damByName;
+export function kochiKigyoEntries(html: string): Entry[] {
+  const { dams, readings } = parseKochiKigyoTable(html);
+  return dams.map((name): Entry => {
+    const observations = readings.filter((r) => r.name === name).map(({ name: _, ...o }) => o);
+    return {
+      key: name,
+      name,
+      pref: PREF_CODE,
+      bind: { exact: true },
+      reading:
+        observations.length > 0
+          ? { state: 'values', observations }
+          : { state: 'unreadable', why: 'no hour with a level, inflow or outflow' },
+    };
+  });
 }
 
 // --- task -------------------------------------------------------------------
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
-  const r = await fetch(DATA_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
-  }
-
-  const { dams, readings } = parseKochiKigyoTable(await r.text());
-  log(`${SOURCE_ID}: parsed ${dams.length} dams, ${readings.length} readings`);
-
-  const damByName = await matchMaster(dams, log);
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of readings) {
-    const damId = damByName.get(p.name);
-    if (!damId) continue;
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: null,
-      storageRate: null,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: p.rainfallMm,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(
-    `${SOURCE_ID} done: parsed=${dams.length} matched=${damByName.size} readings=${readings.length} written=${written}`,
-  );
-};
-
-export default task;
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const entries = kochiKigyoEntries((await upstream.fetch(DATA_URL)).text());
+  log(`${SOURCE_ID}: ${entries.length} dams`);
+  return { entries };
+});

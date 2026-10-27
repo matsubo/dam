@@ -5,7 +5,7 @@ import type postgres from 'postgres';
 // Move one source's observations from the dam row they were wrongly bound to
 // onto the right one (#57: 菅生 on the （元） instead of the （再）, the たつの
 // 長谷 station on 神河's 長谷, …). Fixing the binding only redirects new
-// rows; display_observation() reads the newest row per dam, so the wrong page
+// rows; the reading (dam_reading()) is the newest row per dam, so the wrong page
 // would keep showing a frozen reading and the right one would lack history.
 //
 // - Keyed by NDI id, which is stable across reimports; slugs are not.

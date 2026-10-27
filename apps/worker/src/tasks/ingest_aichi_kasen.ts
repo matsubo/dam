@@ -8,14 +8,13 @@
 //   https://www.kasen-aichi.jp/DamHis_10_0_1.html
 // Format: UTF-8 HTML. Reference datetime in <span id="timestamp">YYYY年MM月DD日 HH時MM分.
 //   Data rows: <tr class="even|odd"><th>MM/DD HH:MM</th> + 8 getData spans (2 dams × 4 fields).
-//   "**" = 欠測, "--" = 未収集 → null. Storage in 千m³.
+//   "**" = 欠測, "--" = 未収集: the page's own marks; a dam with nothing
+//   but those in the whole window is provider-marked empty. Storage in 千m³.
 // Priority 308.
 
-import { type BindableMaster, preferMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Observed, Reading } from '../ingest/types.ts';
 
 const DATA_URL = process.env.AICHI_KASEN_DAM_URL ?? 'https://www.kasen-aichi.jp/DamHis_10_0_1.html';
 
@@ -24,18 +23,6 @@ const SOURCE_ID = 'aichi-kasen';
 
 // Ordered to match column positions in the HTML table (left → right).
 const DAM_NAMES = ['雨山ダム', '木瀬ダム'] as const;
-type DamName = (typeof DAM_NAMES)[number];
-
-// --- types ------------------------------------------------------------------
-
-export interface ParsedRow {
-  damName: DamName;
-  observedAt: Date;
-  waterLevelM: number | null;
-  storageVolumeM3: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
-}
 
 // --- parsing ----------------------------------------------------------------
 
@@ -83,21 +70,28 @@ export function parseAichiRowTimestamp(
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function parseSpanVal(s: string): number | null {
+/** "**" = 欠測, "--" = 未収集: the page's own marks. */
+function spanCell(s: string): Cell {
   const t = s.trim();
-  if (t === '**' || t === '--' || t === '') return null;
-  const n = Number(t);
-  return Number.isFinite(n) ? n : null;
+  if (t === '**' || t === '--') return MARKED;
+  return cell(t === '' ? null : Number(t), false);
 }
 
-export function parseAichiPage(html: string): ParsedRow[] {
+/** One dam's four cells (水位, 貯水量 千m³, 流入量, 放流量) at one row's time. */
+interface DamRow {
+  observedAt: Date;
+  cells: [Cell, Cell, Cell, Cell];
+}
+
+/** Each dam's rows, in DAM_NAMES order; null when the page carries no reference time. */
+export function parseAichiPage(html: string): DamRow[][] | null {
   const refYear = parseAichiRefYear(html);
-  if (!refYear) return [];
+  if (!refYear) return null;
 
   const refDtMatch = html.match(
     /<span id="timestamp">(\d{4})年(\d{2})月(\d{2})日 (\d{2})時(\d{2})分/,
   );
-  if (!refDtMatch) return [];
+  if (!refDtMatch) return null;
   const refDt = new Date(
     Date.UTC(
       Number(refDtMatch[1]),
@@ -108,9 +102,9 @@ export function parseAichiPage(html: string): ParsedRow[] {
       0,
     ),
   );
-  if (Number.isNaN(refDt.getTime())) return [];
+  if (Number.isNaN(refDt.getTime())) return null;
 
-  const rows: ParsedRow[] = [];
+  const dams: DamRow[][] = DAM_NAMES.map(() => []);
   const rowRe = /<tr class="(?:even|odd)">\s*<th>(\d{2}\/\d{2} \d{2}:\d{2})<\/th>([\s\S]*?)<\/tr>/g;
   // Match first span in each getData cell (ignores .label spans for 欠測/未収集).
   const cellRe = /<td class="getData">\s*<span(?:\s[^>]*)?>([^<]*)<\/span>/g;
@@ -125,167 +119,76 @@ export function parseAichiPage(html: string): ParsedRow[] {
     const observedAt = parseAichiRowTimestamp(mmdd, hhmm, refYear, refDt);
     if (!observedAt) continue;
 
-    const vals = [...(rowMatch[2] ?? '').matchAll(cellRe)].map((m) => parseSpanVal(m[1] ?? ''));
+    const vals = [...(rowMatch[2] ?? '').matchAll(cellRe)].map((m) => spanCell(m[1] ?? ''));
     if (vals.length < 8) continue;
 
-    for (let i = 0; i < 2; i++) {
+    dams.forEach((rows, i) => {
       const base = i * 4;
-      const wl = vals[base] ?? null;
-      const st = vals[base + 1] ?? null;
-      const inf = vals[base + 2] ?? null;
-      const out = vals[base + 3] ?? null;
-      if (wl === null && st === null && inf === null && out === null) continue;
-
       rows.push({
-        damName: DAM_NAMES[i] as DamName,
         observedAt,
-        waterLevelM: wl,
-        storageVolumeM3: st !== null ? st * 1_000 : null,
-        inflowM3s: inf,
-        outflowM3s: out,
+        cells: [
+          vals[base] ?? null,
+          vals[base + 1] ?? null,
+          vals[base + 2] ?? null,
+          vals[base + 3] ?? null,
+        ],
       });
-    }
-  }
-
-  return rows;
-}
-
-// --- DB helpers -------------------------------------------------------------
-
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 308,
-            '愛知県川の防災情報 ダム表 — 2 ダム (UTF-8 HTML, 10分更新)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/貯水池$/, '')
-    .trim();
-}
-
-interface DamMatch {
-  damName: string;
-  damId: bigint;
-}
-
-/**
- * Pick the best master dam for a published name: an exact raw-name hit beats a
- * stem hit beats a prefix/substring hit, ties going to the current （元）/（再）
- * twin, else the lower id.
- */
-function chooseMaster(rawName: string, stem: string, masters: BindableMaster[]): bigint | null {
-  let best: { m: BindableMaster; rank: number } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (m.name === rawName) rank = 0;
-    else if (mStem === stem) rank = 1;
-    else if (m.name === `${stem}ダム`) rank = 2;
-    else if (mStem.startsWith(stem)) rank = 3;
-    else if (mStem.includes(stem)) rank = 4;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-      best = { m, rank };
-    }
-  }
-  return best?.m.id ?? null;
-}
-
-async function matchMaster(names: string[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear"
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const out: DamMatch[] = [];
-
-  for (const damName of names) {
-    const stem = normalizeName(damName);
-    if (!stem) continue;
-
-    const damId = chooseMaster(damName, stem, masters);
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${damName}"`);
-      continue;
-    }
-    out.push({ damName, damId });
-  }
-
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing. Built
-  // from DAM_NAMES, the fixed column pair the page always carries, rather
-  // than from `names`: a dam sitting at 欠測 for the whole window parses to
-  // no rows at all, and recording only the parsed subset would eventually
-  // have /coverage claim nobody publishes it.
-  const universe: UniverseRow[] = DAM_NAMES.map((damName) => ({
-    externalId: damName,
-    name: damName,
-    prefCode: PREF_CODE,
-    resolvedDamId: chooseMaster(damName, normalizeName(damName), masters),
-  }));
-  await recordUniverse(SOURCE_ID, universe);
-
-  return out;
-}
-
-// --- task -------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
-  const r = await fetch(DATA_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
-  }
-
-  const html = await r.text();
-  const rows = parseAichiPage(html);
-  log(`${SOURCE_ID}: parsed ${rows.length} observations`);
-
-  const uniqueNames = [...new Set(rows.map((x) => x.damName))];
-  const matches = await matchMaster(uniqueNames, log);
-  const idByName = new Map(matches.map((m) => [m.damName, m.damId]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = idByName.get(p.damName);
-    if (!damId) continue;
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: null,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
     });
   }
 
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${matches.length} written=${written}`);
-};
+  return dams;
+}
 
-export default task;
+/** A dam's reading over the page's window: every row that carries a value. */
+function damReading(rows: DamRow[]): Reading {
+  const state = cellState(rows.flatMap((r) => r.cells));
+  if (state === 'empty') return { state, mark: '"**" (欠測) / "--" (未収集) in every row' };
+  if (state === 'unreadable') return { state, why: 'no numeric cell in the window' };
+  const observations: Observed[] = [];
+  for (const { observedAt, cells } of rows) {
+    if (cellState(cells) !== 'values') continue;
+    const [wl, st, inf, out] = cells;
+    const thou = numberIn(st);
+    observations.push({
+      observedAt,
+      waterLevelM: numberIn(wl),
+      storageVolumeM3: thou != null ? thou * 1_000 : null,
+      inflowM3s: numberIn(inf),
+      outflowM3s: numberIn(out),
+    });
+  }
+  return { state, observations };
+}
+
+/** The page's two fixed columns: the universe, whatever the page reads. */
+export function aichiEntries(html: string): Entry[] {
+  const dams = parseAichiPage(html);
+  return DAM_NAMES.map((name, i) => ({
+    key: name,
+    name,
+    pref: PREF_CODE,
+    reading: dams
+      ? damReading(dams[i] ?? [])
+      : { state: 'unreadable', why: 'no <span id="timestamp"> on the page' },
+  }));
+}
+
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  let html: string;
+  try {
+    html = (await upstream.fetch(DATA_URL)).text();
+  } catch (err) {
+    // Both columns are known in advance: a failed fetch still records them.
+    const why = err instanceof Error ? err.message : String(err);
+    log(`${SOURCE_ID}: ${why}`);
+    return {
+      entries: DAM_NAMES.map((name) => ({
+        key: name,
+        name,
+        pref: PREF_CODE,
+        reading: { state: 'unreadable', why },
+      })),
+    };
+  }
+  return { entries: aichiEntries(html) };
+});

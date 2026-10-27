@@ -17,13 +17,16 @@
 //   [5] outflow m³/s
 //   [6] storage rate % (→ / 100 = ratio)
 //
+// The newest row carrying a storage or flow value is the reading; a table
+// whose every dated row is marked (欠測, 閉局…) in those columns is
+// provider-marked empty.
+//
 // Priority 303 (MLIT-managed dam). Cron hourly at :22.
 
-import { type BindableMaster, preferMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const DATA_URL =
   process.env.QSR_TURUTA_URL ?? 'https://www.qsr.mlit.go.jp/turuta/cgi-bin/ajax_gethtml.cgi?type=2';
@@ -32,17 +35,6 @@ const PREF_CODE = '46';
 const SOURCE_ID = 'qsr-turuta-dam';
 /** The only dam this office publishes; the feed carries no station id. */
 const DAM_NAME = '鶴田ダム';
-
-// --- types ------------------------------------------------------------------
-
-export interface ParsedRow {
-  observedAt: Date;
-  rainfallMm: number | null;
-  storageVolumeM3: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
-  storageRate: number | null;
-}
 
 // --- parsing ----------------------------------------------------------------
 
@@ -54,8 +46,11 @@ function stripTags(raw: string): string {
     .trim();
 }
 
-function parseNum(s: string): number | null {
-  const m = s.match(/-?\d+(?:\.\d+)?/);
+/** 欠測 / 閉局 / 未受信 / a dash run are the table's own "no value" marks. */
+function parseCell(s: string): Cell {
+  const t = s.trim();
+  if (/^(?:欠測|閉局|未受信|調整中|[-－―ー−*＊]+)$/.test(t)) return MARKED;
+  const m = t.match(/-?\d+(?:\.\d+)?/);
   if (!m) return null;
   const n = Number(m[0]);
   return Number.isFinite(n) ? n : null;
@@ -80,154 +75,60 @@ export function parseTurutaTimestamp(date: string, time: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-export function parseTurutaHtml(html: string): ParsedRow | null {
-  // Extract all <TR> blocks, pick first data row (most recent, descending)
-  const trMatches = Array.from(html.matchAll(/<TR[^>]*>([\s\S]*?)<\/TR>/gi));
-
-  for (const tr of trMatches) {
-    const tdMatches = Array.from((tr[1] ?? '').matchAll(/<TD[^>]*>([\s\S]*?)<\/TD>/gi)).map((m) =>
+/** The first (most recent) row carrying a stored value; rows run newest first. */
+export function turutaReading(html: string): Reading {
+  let marked = false;
+  for (const tr of html.matchAll(/<TR[^>]*>([\s\S]*?)<\/TR>/gi)) {
+    const tds = Array.from((tr[1] ?? '').matchAll(/<TD[^>]*>([\s\S]*?)<\/TD>/gi)).map((m) =>
       stripTags(m[1] ?? ''),
     );
+    if (tds.length < 7) continue;
 
-    if (tdMatches.length < 7) continue;
-
-    const observedAt = parseTurutaTimestamp(tdMatches[0] ?? '', tdMatches[1] ?? '');
+    const observedAt = parseTurutaTimestamp(tds[0] ?? '', tds[1] ?? '');
     if (!observedAt) continue;
 
-    const rainfallMm = parseNum(tdMatches[2] ?? '');
-    const storageThousandM3 = parseNum(tdMatches[3] ?? '');
-    const storageVolumeM3 = storageThousandM3 !== null ? storageThousandM3 * 1000 : null;
-    const inflowM3s = parseNum(tdMatches[4] ?? '');
-    const outflowM3s = parseNum(tdMatches[5] ?? '');
-    const ratePct = parseNum(tdMatches[6] ?? '');
-    const storageRate = ratePct !== null ? Math.max(0, Math.min(1, ratePct / 100)) : null;
+    const rain = parseCell(tds[2] ?? '');
+    const storageThou = parseCell(tds[3] ?? '');
+    const inflow = parseCell(tds[4] ?? '');
+    const outflow = parseCell(tds[5] ?? '');
+    const ratePct = numberIn(parseCell(tds[6] ?? ''));
 
-    if (storageVolumeM3 === null && inflowM3s === null && outflowM3s === null) {
-      continue;
-    }
+    const state = cellState([storageThou, inflow, outflow]);
+    if (state === 'empty') marked = true;
+    if (state !== 'values') continue;
 
+    const thou = numberIn(storageThou);
     return {
-      observedAt,
-      rainfallMm,
-      storageVolumeM3,
-      inflowM3s,
-      outflowM3s,
-      storageRate,
+      state: 'values',
+      observations: [
+        {
+          observedAt,
+          rainfallMm: numberIn(rain),
+          storageVolumeM3: thou !== null ? thou * 1000 : null,
+          inflowM3s: numberIn(inflow),
+          outflowM3s: numberIn(outflow),
+          storageRate: ratePct !== null ? Math.max(0, Math.min(1, ratePct / 100)) : null,
+        },
+      ],
     };
   }
-
-  return null;
+  return marked
+    ? { state: 'empty', mark: '欠測 in every stored column of every row' }
+    : { state: 'unreadable', why: 'no row with a stored value' };
 }
 
-// --- DB helpers -------------------------------------------------------------
-
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 303,
-            '国土交通省 九州地方整備局 鶴田ダム管理所 — 鶴田ダム (川内川水系, Kagoshima)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/貯水池$/, '')
-    .trim();
-}
-
-async function findDamId(log: (s: string) => void): Promise<bigint | null> {
-  const targetName = DAM_NAME;
-  const stem = normalizeName(targetName);
-
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear"
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-
-  let best: { m: BindableMaster; rank: number } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (m.name === targetName) rank = 0;
-    else if (mStem === stem) rank = 1;
-    else if (m.name === `${stem}ダム`) rank = 2;
-    else if (mStem.startsWith(stem)) rank = 3;
-    else if (mStem.includes(stem)) rank = 4;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-      best = { m, rank };
-    }
-  }
-
-  if (!best) {
-    log(`${SOURCE_ID}: no master match for "鶴田ダム" in pref ${PREF_CODE}`);
-    return null;
-  }
-  return best.m.id;
-}
-
-// --- task --------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing. Resolved
-  // before the fetch so a bad response still leaves a scan on record.
-  const damId = await findDamId(log);
-  await recordUniverse(SOURCE_ID, [
-    { externalId: DAM_NAME, name: DAM_NAME, prefCode: PREF_CODE, resolvedDamId: damId },
-  ]);
-  if (!damId) return;
-
-  const r = await fetch(DATA_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
-  }
-
-  const raw = await r.arrayBuffer();
-  const html = new TextDecoder('euc-jp').decode(raw);
-  const row = parseTurutaHtml(html);
-
-  if (!row) {
-    log(`${SOURCE_ID}: no data row found; aborting`);
-    return;
-  }
-  log(`${SOURCE_ID}: parsed row at ${row.observedAt.toISOString()}`);
-
-  const written = await upsertObservations([
+/** The one dam, read once the run reaches it: a failed fetch leaves it unreadable. */
+export function turutaEntries(upstream: Upstream): Entry[] {
+  return [
     {
-      observedAt: row.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: row.storageVolumeM3,
-      storageRate: row.storageRate,
-      inflowM3s: row.inflowM3s,
-      outflowM3s: row.outflowM3s,
-      waterLevelM: null,
-      rainfallMm: row.rainfallMm,
-      rawSnapshotId: null,
-      qualityFlag: 0,
+      key: DAM_NAME,
+      name: DAM_NAME,
+      pref: PREF_CODE,
+      reading: async () => turutaReading((await upstream.fetch(DATA_URL)).text('euc-jp')),
     },
-  ]);
-  log(`${SOURCE_ID} done: written=${written}`);
-};
+  ];
+}
 
-export default task;
+export default ingestTask(SOURCE_ID, async ({ upstream }) => ({
+  entries: turutaEntries(upstream),
+}));

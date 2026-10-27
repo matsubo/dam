@@ -7,12 +7,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import {
-  chooseMaster,
-  type HiradoMaster,
-  parseHiradoDams,
-  planHirado,
-} from './ingest_hirado_suido.ts';
+import { hiradoEntries, parseHiradoDams } from './ingest_hirado_suido.ts';
 
 const FIXTURE = join(
   import.meta.dir,
@@ -25,14 +20,11 @@ const FIXTURE = join(
 
 const html = await readFile(FIXTURE, 'utf8');
 
-const MASTERS: HiradoMaster[] = [
-  { id: 11242n, name: '神曽根第2', ndi: '2639', completedYear: 1969, stamp: null },
-  { id: 11214n, name: '箕坪', ndi: '2637', completedYear: 1979, stamp: null },
-  { id: 11241n, name: '阿奈田', ndi: '2635', completedYear: 2009, stamp: null },
-  { id: 11240n, name: '神の川', ndi: '2641', completedYear: 1979, stamp: null },
-  { id: 11229n, name: '桜川', ndi: '2638', completedYear: 1991, stamp: null },
-  { id: 11148n, name: '久吹', ndi: '2562', completedYear: 1989, stamp: null },
-];
+function entries(page: string) {
+  const { observedAt, rows } = parseHiradoDams(page);
+  if (!observedAt) throw new Error('no date');
+  return hiradoEntries(observedAt, rows);
+}
 
 describe('parseHiradoDams', () => {
   test('lists the eight facilities and not the 8か所計 total', () => {
@@ -67,53 +59,38 @@ describe('parseHiradoDams', () => {
   });
 });
 
-describe('chooseMaster', () => {
-  test('神曽根ダム is pinned to 神曽根第2 (NDI 2639)', () => {
-    expect(chooseMaster('神曽根ダム', MASTERS)).toBe(11242n);
-  });
-
-  test('the pin holds when a second 神曽根 row appears in the master', () => {
-    const more = [
-      ...MASTERS,
-      { id: 1n, name: '神曽根', ndi: '9999', completedYear: null, stamp: null },
-    ];
-    expect(chooseMaster('神曽根ダム', more)).toBe(11242n);
-  });
-
-  test('other dams bind by exact name', () => {
-    expect(chooseMaster('神の川ダム', MASTERS)).toBe(11240n);
-    expect(chooseMaster('桜川ダム', MASTERS)).toBe(11229n);
-  });
-
-  test('the pond and the 砂防 dams outside the master bind to nothing', () => {
-    expect(chooseMaster('平床の池', MASTERS)).toBeNull();
-    expect(chooseMaster('轟川砂防ダム', MASTERS)).toBeNull();
-    expect(chooseMaster('東流川砂防ダム', MASTERS)).toBeNull();
-  });
-});
-
-describe('planHirado', () => {
-  test('records all eight and writes the five master dams', () => {
-    const { universe, writes } = planHirado(parseHiradoDams(html).rows, MASTERS);
-    expect(universe).toHaveLength(8);
-    expect(universe.filter((u) => u.resolvedDamId === null).map((u) => u.externalId)).toEqual([
-      '平床の池',
-      '轟川砂防ダム',
-      '東流川砂防ダム',
-    ]);
-    expect(writes.map((w) => [w.damId, w.row.storageVolumeM3])).toEqual([
-      [11242n, 89_000],
-      [11214n, 383_760],
-      [11241n, 120_822],
-      [11240n, 89_328],
-      [11229n, 94_260],
+describe('hiradoEntries', () => {
+  test('lists all eight; 神曽根ダム is pinned to 神曽根第2 (NDI 2639), the rest bind by exact name', () => {
+    expect(entries(html).map((e) => [e.key, e.pref, e.bind])).toEqual([
+      ['神曽根ダム', '42', { ndi: '2639' }],
+      ['箕坪ダム', '42', { exact: true }],
+      ['阿奈田ダム', '42', { exact: true }],
+      ['平床の池', '42', { exact: true }],
+      ['神の川ダム', '42', { exact: true }],
+      ['桜川ダム', '42', { exact: true }],
+      ['轟川砂防ダム', '42', { exact: true }],
+      ['東流川砂防ダム', '42', { exact: true }],
     ]);
   });
 
-  test('a row whose cells are blank is listed but not written', () => {
+  test('every row has values: 貯水量 and the rate on the 現在 date', () => {
+    const volumes = entries(html).map((e) => {
+      const r = e.reading;
+      if (typeof r === 'function' || r.state !== 'values') throw new Error(`${e.key}: no values`);
+      expect(r.observations[0]?.observedAt.toISOString()).toBe('2026-09-23T15:00:00.000Z');
+      return [e.key, r.observations[0]?.storageVolumeM3];
+    });
+    expect(volumes.slice(0, 3)).toEqual([
+      ['神曽根ダム', 89_000],
+      ['箕坪ダム', 383_760],
+      ['阿奈田ダム', 120_822],
+    ]);
+    expect(volumes.find(([k]) => k === '桜川ダム')).toEqual(['桜川ダム', 94_260]);
+  });
+
+  test('a row whose cells are blank is listed and unreadable', () => {
     const blank = html.replace('383,760㎥', '－').replace('73.8％', '－');
-    const { universe, writes } = planHirado(parseHiradoDams(blank).rows, MASTERS);
-    expect(universe.find((u) => u.externalId === '箕坪ダム')?.hasData).toBeNull();
-    expect(writes.map((w) => w.damId)).not.toContain(11214n);
+    const minotsubo = entries(blank).find((e) => e.key === '箕坪ダム');
+    expect(minotsubo?.reading).toEqual({ state: 'unreadable', why: 'no 貯水量 or 貯水率' });
   });
 });

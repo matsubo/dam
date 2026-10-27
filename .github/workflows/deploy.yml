@@ -36,7 +36,7 @@ jobs:
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
-      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -46,7 +46,7 @@ jobs:
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
-          file: deploy/coolify/Dockerfile.web
+          file: deploy/Dockerfile.web
           push: true
           build-args: |
             NEXT_PUBLIC_SITE_URL=https://dam.teraren.com
@@ -60,7 +60,7 @@ jobs:
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
-          file: deploy/coolify/Dockerfile.worker
+          file: deploy/Dockerfile.worker
           push: true
           tags: |
             ${{ env.IMAGE_WORKER }}:${{ github.sha }}
@@ -79,7 +79,7 @@ jobs:
       # Joins as an ephemeral tag:ci node. The tailnet policy lets tag:ci reach
       # only tcp:6443 on t1/t2/t3, so the tailnet's DNS (AdGuard on n4) is out of
       # reach: keep the runner's own resolver with --accept-dns=false.
-      - uses: tailscale/github-action@d1b6cd204f8dceda5b3eaad7f1f767be390056cd # v4.2.0
+      - uses: tailscale/github-action@99a8333667fff04fdd6cffb46dfd409f8329a7bf # v4.3.0
         with:
           oauth-client-id: TNSPGzaJJp11CNTRL-kDFtSUjpDP11CNTRL
           audience: api.tailscale.com/TNSPGzaJJp11CNTRL-kDFtSUjpDP11CNTRL
@@ -104,7 +104,7 @@ jobs:
           kubectl -n dam rollout status deploy/dam-web --timeout=900s
           kubectl -n dam rollout status deploy/dam-worker --timeout=300s
 
-      # Coolify's post-deploy command: drop the CDN copies of the old build.
+      # Drop the CDN copies of the old build.
       - name: Purge the CDN
         run: |
           export KUBECONFIG="$RUNNER_TEMP/kubeconfig"

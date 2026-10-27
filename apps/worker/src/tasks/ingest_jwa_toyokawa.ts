@@ -38,12 +38,10 @@
 // publish daily / every 10 days; below kasenbosai (310) there. The 調整池 and
 // 大野頭首工 have no other source.
 
-import { sql } from '@dam/db/client';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry } from '../ingest/types.ts';
 import {
-  matchFacilities,
+  facilityEntries,
   parseJwaChubuRealtime,
   type RealtimeFacility,
 } from './jwa_chubu_realtime.ts';
@@ -70,101 +68,30 @@ const PREF_BY_NAME: Record<string, string> = {
   寒狭川頭首工: '23',
 };
 
-export interface ToyokawaReading {
-  name: string;
-  waterLevelM: number | null;
-  storageVolumeM3: number | null;
-  inflowM3s: number | null;
-}
-
-/** The stored quantities of each facility; one with none of them is dropped. */
-export function toyokawaReadings(facilities: RealtimeFacility[]): ToyokawaReading[] {
-  const rows: ToyokawaReading[] = [];
-  for (const f of facilities) {
-    const volumeThou = f.values.有効貯水量 ?? null;
-    const row = {
-      name: f.name,
-      waterLevelM: f.values.貯水位 ?? null,
+/** Every facility on the map, with the quantities stored from its table. */
+export function toyokawaEntries(
+  facilities: readonly RealtimeFacility[],
+  observedAt: Date,
+): Entry[] {
+  return facilityEntries(facilities, observedAt, PREF_BY_NAME, (v) => {
+    const volumeThou = v.有効貯水量 ?? null;
+    return {
+      waterLevelM: v.貯水位 ?? null,
+      // no rate on the page; the trigger derives one from the volume
       storageVolumeM3: volumeThou === null ? null : volumeThou * 1000,
-      inflowM3s: f.values.流入量 ?? null,
+      inflowM3s: v.流入量 ?? null,
+      // only 放流量（利水） is published, not the total release: no outflow
     };
-    if (row.waterLevelM === null && row.storageVolumeM3 === null && row.inflowM3s === null) {
-      continue;
-    }
-    rows.push(row);
-  }
-  return rows;
-}
-
-export function matchToyokawa(facilities: RealtimeFacility[], log: (s: string) => void) {
-  return matchFacilities(SOURCE_ID, facilities, PREF_BY_NAME, log);
-}
-
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 298,
-            '水資源機構 中部支社 豊川水系 — real-time (~10 min), 14 facilities (宇連/大島 + 豊川用水 調整池・頭首工)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
-  const r = await fetch(PAGE_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
   });
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
-  }
-  const { observedAt, facilities } = parseJwaChubuRealtime(await r.text());
+}
+
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const { observedAt, facilities } = parseJwaChubuRealtime((await upstream.fetch(PAGE_URL)).text());
   if (!observedAt || facilities.length === 0) {
     throw new Error(
       `${SOURCE_ID}: no 観測時刻 or no facility blocks on ${PAGE_URL} — layout change?`,
     );
   }
-
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const { damByName, universe } = await matchToyokawa(facilities, log);
-  await recordUniverse(SOURCE_ID, universe);
-
-  const readings = toyokawaReadings(facilities);
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const row of readings) {
-    const damId = damByName.get(row.name);
-    if (!damId) continue;
-    inputs.push({
-      observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: row.storageVolumeM3,
-      storageRate: null, // no rate on the page; the trigger derives one from the volume
-      inflowM3s: row.inflowM3s,
-      outflowM3s: null, // only 放流量（利水） is published, not the total release
-      waterLevelM: row.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-  const written = await upsertObservations(inputs);
-  log(
-    `${SOURCE_ID} done at ${observedAt.toISOString()}: parsed=${facilities.length} ` +
-      `matched=${damByName.size} written=${written}`,
-  );
-};
-
-export default task;
+  log(`${SOURCE_ID}: ${facilities.length} facilities at ${observedAt.toISOString()}`);
+  return { entries: toyokawaEntries(facilities, observedAt) };
+});

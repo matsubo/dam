@@ -21,64 +21,72 @@
 // no daily prefectural source publishes. The chart UI smooths missing days
 // from the most recent observed value, so a 10-day step is fine for the
 // storage-volume timeline.
+//
+// The table also prints synthesis rows (上流9ダム, 銅山川3ダム): sums over
+// dams the same table lists, so they are not universe entries.
+// backfill_jwa_junpo.ts walks the past 旬報 archive with the same parser.
 
-import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const PAGE_URL =
   process.env.JWA_JUNPO_URL ?? 'https://www.water.go.jp/honsya/honsya/suigen/junpo/index.html';
+const SOURCE_ID = 'jwa-junpo';
 
-// Manual mapping: JWA junpo listing name → master dam.
-// `prefCodes` narrows the LIKE match for collisions (e.g. 大島 exists in
-// 岐阜 and 愛知; only the 愛知 one is in JWA's 豊川 system).
-const NAME_MAP: Array<{ jwaName: string; masterName: string; prefCodes: string[] }> = [
+/**
+ * Every dam the 旬報 lists, by its printed name: the prefectures its master
+ * may be in (大島 exists in 岐阜 and 愛知; only the 愛知 one is in JWA's 豊川
+ * system) and, where the master spells it differently, the master's name.
+ */
+export const JUNPO_DAMS: Readonly<Record<string, { prefs: string[]; masterName?: string }>> = {
   // 利根川 (overlaps with tokyo-waterworks; serves as cross-source confirmation)
-  { jwaName: '矢木沢ダム', masterName: '矢木沢', prefCodes: ['10'] },
-  { jwaName: '奈良俣ダム', masterName: '奈良俣', prefCodes: ['10'] },
-  { jwaName: '下久保ダム', masterName: '下久保', prefCodes: ['10', '11'] },
-  { jwaName: '草木ダム', masterName: '草木', prefCodes: ['10'] },
+  矢木沢ダム: { prefs: ['10'] },
+  奈良俣ダム: { prefs: ['10'] },
+  下久保ダム: { prefs: ['10', '11'] },
+  草木ダム: { prefs: ['10'] },
   // 荒川 (overlap)
-  { jwaName: '浦山ダム', masterName: '浦山', prefCodes: ['11'] },
-  { jwaName: '滝沢ダム', masterName: '滝沢', prefCodes: ['11'] },
-  // 木曾川 (new)
-  { jwaName: '徳山ダム', masterName: '徳山', prefCodes: ['21'] }, // 岐阜
-  { jwaName: '岩屋ダム', masterName: '岩屋', prefCodes: ['21'] },
-  { jwaName: '阿木川ダム', masterName: '阿木川', prefCodes: ['21'] },
-  { jwaName: '牧尾ダム', masterName: '牧尾', prefCodes: ['20'] }, // 長野
-  { jwaName: '味噌川ダム', masterName: '味噌川', prefCodes: ['20'] },
-  // 豊川 (new)
-  { jwaName: '宇連ダム', masterName: '宇連', prefCodes: ['23'] }, // 愛知
-  { jwaName: '大島ダム', masterName: '大島', prefCodes: ['23'] },
-  // 淀川 (new)
-  { jwaName: '高山ダム', masterName: '高山', prefCodes: ['26'] }, // 京都
-  { jwaName: '青蓮寺ダム', masterName: '青蓮寺', prefCodes: ['24'] }, // 三重
-  { jwaName: '室生ダム', masterName: '室生', prefCodes: ['29'] }, // 奈良
-  { jwaName: '布目ダム', masterName: '布目', prefCodes: ['29'] },
-  { jwaName: '比奈知ダム', masterName: '比奈知', prefCodes: ['24'] },
-  { jwaName: '川上ダム', masterName: '川上', prefCodes: ['24'] },
-  { jwaName: '一庫ダム', masterName: '一庫', prefCodes: ['28'] }, // 兵庫
-  { jwaName: '日吉ダム', masterName: '日吉', prefCodes: ['26'] },
-  // 吉野川 (new)
-  { jwaName: '早明浦ダム', masterName: '早明浦', prefCodes: ['39'] }, // 高知
-  // 筑後川 (new)
-  { jwaName: '江川ダム', masterName: '江川', prefCodes: ['40'] }, // 福岡
-  { jwaName: '小石川原ダム', masterName: '小石原川', prefCodes: ['40'] }, // junpo lists as 小石川原, master is 小石原川
-  { jwaName: '寺内ダム', masterName: '寺内', prefCodes: ['40'] },
-  { jwaName: '大山ダム', masterName: '大山', prefCodes: ['44'] }, // 大分
-];
+  浦山ダム: { prefs: ['11'] },
+  滝沢ダム: { prefs: ['11'] },
+  // 木曾川
+  徳山ダム: { prefs: ['21'] }, // 岐阜
+  岩屋ダム: { prefs: ['21'] },
+  阿木川ダム: { prefs: ['21'] },
+  牧尾ダム: { prefs: ['20'] }, // 長野
+  味噌川ダム: { prefs: ['20'] },
+  // 豊川
+  宇連ダム: { prefs: ['23'] }, // 愛知
+  大島ダム: { prefs: ['23'] },
+  // 淀川
+  高山ダム: { prefs: ['26'] }, // 京都
+  青蓮寺ダム: { prefs: ['24'] }, // 三重
+  室生ダム: { prefs: ['29'] }, // 奈良
+  布目ダム: { prefs: ['29'] },
+  比奈知ダム: { prefs: ['24'] },
+  川上ダム: { prefs: ['24'] },
+  一庫ダム: { prefs: ['28'] }, // 兵庫
+  日吉ダム: { prefs: ['26'] },
+  // 吉野川
+  早明浦ダム: { prefs: ['39'] }, // 高知
+  // 筑後川
+  江川ダム: { prefs: ['40'] }, // 福岡
+  // junpo lists 小石川原, the master is 小石原川
+  小石川原ダム: { prefs: ['40'], masterName: '小石原川' },
+  寺内ダム: { prefs: ['40'] },
+  大山ダム: { prefs: ['44'] }, // 大分
+};
 
-// Synthesis rows in the JWA table (multi-dam aggregates) — skip these.
-const SKIP_NAMES = new Set(['上流9ダム', '銅山川3ダム']);
+/** A synthesis row, a sum over dams the table lists: 上流9ダム, 銅山川3ダム. */
+const SYNTHESIS_ROW = /\dダム$/;
 
-interface ParsedRow {
+/** Cells the page prints instead of a number. */
+const MARKS: Readonly<Record<string, true>> = { '―': true, '-': true, '*': true, '**': true };
+
+export interface JunpoRow {
   jwaName: string;
-  storageCapacityThouM3: number; // 利水容量, 千m³
-  storageVolumeThouM3: number; // 貯水量, 千m³
-  storageRatePct: number; // 貯水率 (current), %
+  storageCapacityThouM3: number | null; // 利水容量, 千m³
+  storageVolumeThouM3: Cell; // 貯水量, 千m³
+  storageRatePct: Cell; // 貯水率 (current), %
 }
 
 function textOf(s: string): string {
@@ -92,13 +100,10 @@ function textOf(s: string): string {
     .trim();
 }
 
-function parseNum(s: string): number | null {
+function parseCell(s: string): Cell {
   const cleaned = s.replace(/[,\s　]/g, '');
-  if (!cleaned || cleaned === '―' || cleaned === '-' || cleaned === '*' || cleaned === '**') {
-    return null;
-  }
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? n : null;
+  const n = cleaned ? Number(cleaned) : null;
+  return cell(n, MARKS[cleaned] === true);
 }
 
 /**
@@ -117,11 +122,10 @@ export function parseReportDate(text: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/** Parse the junpo HTML into one ParsedRow per known JWA dam name. */
-export function parseJwaJunpoHtml(html: string): { reportDate: Date | null; rows: ParsedRow[] } {
+/** Parse the junpo HTML into one row per listed dam, in page order. */
+export function parseJwaJunpoHtml(html: string): { reportDate: Date | null; rows: JunpoRow[] } {
   const reportDate = parseReportDate(html);
-  const out: ParsedRow[] = [];
-  const knownNames = new Set(NAME_MAP.map((m) => m.jwaName));
+  const out: JunpoRow[] = [];
 
   // The page has multiple <table> elements. Only the first one — the
   // 「ダムの状況（利水容量に対する貯水率）」 table — has 貯水量/貯水率 in
@@ -133,160 +137,71 @@ export function parseJwaJunpoHtml(html: string): { reportDate: Date | null; rows
   if (!storageTable) return { reportDate, rows: out };
   const seen = new Set<string>();
 
-  // Walk every <tr> in the storage table, look for a cell whose trimmed
-  // text matches a known JWA dam name; the next cells hold:
-  //   利水容量marker / 利水容量 / 貯水量 / 貯水率(現在) / 貯水率(平年) /
-  //   貯水率(平年比).
+  // Every data row ends with the dam name and six cells:
+  //   ダム名 / 利水容量marker / 利水容量 / 貯水量 / 貯水率(現在) /
+  //   貯水率(平年) / 貯水率(平年比).
+  // With rowspan in the 水系 column the 水系 cell only opens the first row
+  // of a system, so the name is the seventh cell from the end. The two
+  // header rows are shorter.
   const rowMatches = storageTable.match(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g) ?? [];
   for (const row of rowMatches) {
     const cellMatches = row.match(/<t[hd]\b[^>]*>([\s\S]*?)<\/t[hd]>/g) ?? [];
-    if (cellMatches.length < 5) continue;
+    if (cellMatches.length < 7) continue;
     const cells = cellMatches.map((c) => textOf(c.replace(/^<t[hd][^>]*>|<\/t[hd]>$/g, '')));
-    // Find the cell that holds the dam name. With rowspan in the 水系 column
-    // the dam name can be at cells[0] (first row of a system) or cells[1]
-    // (subsequent rows). For synthesis rows or header rows the name may
-    // also appear at cells[0].
-    const nameIdx = cells.findIndex((c) => knownNames.has(c) || SKIP_NAMES.has(c));
-    if (nameIdx < 0) continue;
-    const name = cells[nameIdx];
-    if (!name || SKIP_NAMES.has(name)) continue;
-    // After the name cell: [marker, capacity, volume, rate-current, rate-normal, rate-vs-normal]
-    const capacity = parseNum(cells[nameIdx + 2] ?? '');
-    const volume = parseNum(cells[nameIdx + 3] ?? '');
-    const rate = parseNum(cells[nameIdx + 4] ?? '');
-    if (capacity == null || volume == null || rate == null) continue;
-    if (seen.has(name)) continue;
+    const nameIdx = cells.length - 7;
+    const name = cells[nameIdx] ?? '';
+    if (!name || SYNTHESIS_ROW.test(name) || seen.has(name)) continue;
     seen.add(name);
     out.push({
       jwaName: name,
-      storageCapacityThouM3: capacity,
-      storageVolumeThouM3: volume,
-      storageRatePct: rate,
+      storageCapacityThouM3: numberIn(parseCell(cells[nameIdx + 2] ?? '')),
+      storageVolumeThouM3: parseCell(cells[nameIdx + 3] ?? ''),
+      storageRatePct: parseCell(cells[nameIdx + 4] ?? ''),
     });
   }
   return { reportDate, rows: out };
 }
 
-export interface DamMatch {
-  jwaName: string;
-  damId: bigint;
+/** One row's reading at the report date. */
+export function junpoReading(row: JunpoRow, reportDate: Date | null): Reading {
+  const state = cellState([row.storageVolumeThouM3, row.storageRatePct]);
+  if (state === 'empty') return { state, mark: '貯水量 and 貯水率 printed as ―/*' };
+  if (state === 'unreadable') return { state, why: 'no 貯水量 or 貯水率 number' };
+  if (!reportDate) return { state: 'unreadable', why: 'no 令和N年M月D日 on the page' };
+  const volumeThou = numberIn(row.storageVolumeThouM3);
+  const ratePct = numberIn(row.storageRatePct);
+  return {
+    state: 'values',
+    observations: [
+      {
+        observedAt: reportDate,
+        storageVolumeM3: volumeThou != null ? volumeThou * 1_000 : null,
+        storageRate: ratePct != null ? Math.max(0, Math.min(1, ratePct / 100)) : null,
+      },
+    ],
+  };
 }
 
-export async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES ('jwa-junpo', 290,
-            '水資源機構 旬報 (real, 10-day cadence, statutory open data)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-/**
- * Idempotent: bind each listed station to one master dam and stamp
- * external_ids->>'jwa-junpo' there (and nowhere else). Match by (prefCode IN
- * list) AND name LIKE '%<masterName>%', preferring 「<masterName>ダム」, then
- * the bare name, then 「再」/「元」/「再開発」, then 「貯水池」. A row already
- * stamped keeps the station; a （元）/（再） pair goes to whichever structure
- * is in service (chooseRanked).
- */
-export async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
-  const matches: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  for (const m of NAME_MAP) {
-    const candidates = await sql<(BindableMaster & { rank: number })[]>`
-      SELECT id, name, completed_year AS "completedYear",
-             external_ids->>'jwa-junpo' AS stamp,
-             CASE
-               WHEN name = ${`${m.masterName}ダム`} THEN 0
-               WHEN name = ${m.masterName} THEN 1
-               WHEN name LIKE ${`${m.masterName}（再）%`} THEN 2
-               WHEN name LIKE ${`${m.masterName}（元）%`} THEN 2
-               WHEN name LIKE ${`${m.masterName}（再開発）%`} THEN 2
-               WHEN name = ${`${m.masterName}貯水池`} THEN 3
-               ELSE 5
-             END AS rank
-      FROM dams
-      WHERE pref_code = ANY(${m.prefCodes}::text[])
-        AND name LIKE ${`%${m.masterName}%`}
-    `;
-    const r = chooseRanked(candidates, m.jwaName);
-    universe.push({
-      externalId: m.jwaName,
-      name: m.jwaName,
-      // A multi-code entry (下久保 straddles 群馬/埼玉) is a LIKE-narrowing
-      // hint, not an attribution, and pref_code is COALESCE-sticky once
-      // written.
-      prefCode: m.prefCodes.length === 1 ? (m.prefCodes[0] ?? null) : null,
-      resolvedDamId: r?.id ?? null,
-    });
-    if (!r) {
-      log(`jwa-junpo: no master match for "${m.jwaName}" (${m.masterName})`);
-      continue;
-    }
-    matches.push({ jwaName: m.jwaName, damId: r.id });
-    await bindExternalId(r.id, 'jwa-junpo', m.jwaName);
-  }
-  await recordUniverse('jwa-junpo', universe);
-  return matches;
-}
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-  const matches = await ensureExternalIds(log);
-  log(`jwa-junpo: matched ${matches.length}/${NAME_MAP.length} master dams`);
-
-  const r = await fetch(PAGE_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
+/** Every dam the 旬報 lists, keyed by its printed name. */
+export function junpoEntries(html: string): Entry[] {
+  const { reportDate, rows } = parseJwaJunpoHtml(html);
+  return rows.map((row) => {
+    const dam = JUNPO_DAMS[row.jwaName];
+    const prefs = dam?.prefs ?? [];
+    return {
+      key: row.jwaName,
+      name: row.jwaName,
+      // A multi-code entry (下久保 straddles 群馬/埼玉) is a lookup scope, not
+      // an attribution.
+      pref: prefs.length === 0 ? null : prefs.length === 1 ? (prefs[0] ?? null) : prefs,
+      ...(dam?.masterName ? { bind: { name: dam.masterName } } : {}),
+      reading: junpoReading(row, reportDate),
+    };
   });
-  if (r.status !== 200) {
-    log(`jwa-junpo: HTTP ${r.status} from ${PAGE_URL}; aborting`);
-    return;
-  }
-  const html = await r.text();
-  const { reportDate, rows: parsed } = parseJwaJunpoHtml(html);
-  log(
-    `jwa-junpo: parsed ${parsed.length} dam rows, reportDate=${reportDate?.toISOString() ?? '(missing)'}`,
-  );
-  if (!reportDate) {
-    log('jwa-junpo: could not parse 令和N年M月D日 from page header; aborting');
-    return;
-  }
+}
 
-  const matchByName = new Map(matches.map((m) => [m.jwaName, m.damId]));
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const row of parsed) {
-    const damId = matchByName.get(row.jwaName);
-    if (!damId) continue;
-    const storageVolumeM3 = row.storageVolumeThouM3 * 1_000;
-    const storageRate = Math.max(0, Math.min(1, row.storageRatePct / 100));
-    inputs.push({
-      observedAt: reportDate,
-      damId,
-      sourceId: 'jwa-junpo',
-      storageVolumeM3,
-      storageRate,
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: null,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-  const written = await upsertObservations(inputs);
-  log(`jwa-junpo done: parsed=${parsed.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const entries = junpoEntries((await upstream.fetch(PAGE_URL)).text());
+  log(`${SOURCE_ID}: ${entries.length} dams listed`);
+  return { entries, dated: true };
+});

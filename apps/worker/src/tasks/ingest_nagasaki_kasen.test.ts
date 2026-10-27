@@ -1,16 +1,26 @@
 // apps/worker/src/tasks/ingest_nagasaki_kasen.test.ts
+//
+// Fixture → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
 
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { sql } from '@dam/db/client';
-import type { JobHelpers } from 'graphile-worker';
-import task, {
-  buildNagasakiUniverse,
+import { describe, expect, test } from 'bun:test';
+import type { Entry, Observed } from '../ingest/types.ts';
+import {
+  type AllDamsJson,
   buildSnapshotUrl,
-  chooseMaster,
   type DamMaster,
-  parseAllDamsJson,
+  nagasakiEntries,
   parseNagasakiDatetime,
 } from './ingest_nagasaki_kasen.ts';
+
+function observation(e: Entry | undefined): Observed | undefined {
+  const r = e?.reading;
+  if (!r || typeof r === 'function' || r.state !== 'values') throw new Error('no values');
+  return r.observations[0];
+}
+
+const state = (e: Entry | undefined) =>
+  !e || typeof e.reading === 'function' ? undefined : e.reading.state;
 
 describe('parseNagasakiDatetime', () => {
   test('parses "YYYY/MM/DD" + "HH:MM" JST → UTC (subtract 9h)', () => {
@@ -59,12 +69,12 @@ describe('buildSnapshotUrl', () => {
   });
 });
 
-describe('parseAllDamsJson', () => {
-  const masters = new Map<number, string>([
-    [1928, '永田ダム'],
-    [1927, '勝本ダム'],
-    [1101, '式見ダム'],
-  ]);
+describe('nagasakiEntries — readings', () => {
+  const catalogue = [
+    { dam_cd: 1928, dam_nm: '永田ダム' },
+    { dam_cd: 1927, dam_nm: '勝本ダム' },
+    { dam_cd: 1101, dam_nm: '式見ダム' },
+  ];
 
   const sampleJson = {
     ymd: '2026/06/05',
@@ -121,105 +131,53 @@ describe('parseAllDamsJson', () => {
     ],
   };
 
-  test('parses two dams with all fields', () => {
-    const rows = parseAllDamsJson(sampleJson, masters);
-    expect(rows).toHaveLength(2);
-  });
+  const one = (item: Record<string, unknown>) =>
+    nagasakiEntries(catalogue.slice(0, 1), {
+      ...sampleJson,
+      list: [{ ...sampleJson.list[0], ...item }],
+    } as AllDamsJson)[0];
 
   test('first dam has correct values', () => {
-    const rows = parseAllDamsJson(sampleJson, masters);
-    expect(rows[0]?.damName).toBe('永田ダム');
-    expect(rows[0]?.damCd).toBe(1928);
+    const [e] = nagasakiEntries(catalogue, sampleJson);
+    expect(e).toMatchObject({ key: '1928', name: '永田ダム', pref: '42' });
+    const o = observation(e);
     // 15:30 JST = 06:30 UTC
-    expect(rows[0]?.observedAt.toISOString()).toBe('2026-06-05T06:30:00.000Z');
-    expect(rows[0]?.waterLevelM).toBeCloseTo(64.77);
-    expect(rows[0]?.storageVolumeM3).toBeCloseTo(97 * 1000);
+    expect(o?.observedAt.toISOString()).toBe('2026-06-05T06:30:00.000Z');
+    expect(o?.waterLevelM).toBeCloseTo(64.77);
+    expect(o?.storageVolumeM3).toBeCloseTo(97 * 1000);
     // rate_r is the 利水容量貯水率 the manager publishes; `rate` / rate_y
     // divide by the full 有効貯水容量. Issue #38 §2-2.
-    expect(rows[0]?.storageRate).toBeCloseTo(0.962);
-    expect(rows[0]?.inflowM3s).toBeCloseTo(0.01);
-    expect(rows[0]?.outflowM3s).toBeCloseTo(0.01);
+    expect(o?.storageRate).toBeCloseTo(0.962);
+    expect(o?.inflowM3s).toBeCloseTo(0.01);
+    expect(o?.outflowM3s).toBeCloseTo(0.01);
   });
 
   test('storageVolumeM3 is pondage × 1000 (千m³ → m³)', () => {
-    const rows = parseAllDamsJson(sampleJson, masters);
-    expect(rows[1]?.storageVolumeM3).toBeCloseTo(480 * 1000);
+    const [, katsumoto] = nagasakiEntries(catalogue, sampleJson);
+    expect(observation(katsumoto)?.storageVolumeM3).toBeCloseTo(480 * 1000);
   });
 
-  test('skips dams not in master map', () => {
-    const singleMaster = new Map<number, string>([[1928, '永田ダム']]);
-    const rows = parseAllDamsJson(sampleJson, singleMaster);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.damName).toBe('永田ダム');
+  test('a snapshot item missing from the catalogue is not listed', () => {
+    const list = nagasakiEntries(catalogue.slice(0, 1), sampleJson);
+    expect(list.map((e) => e.key)).toEqual(['1928']);
   });
 
-  test('returns empty array when observedAt is unparseable', () => {
-    const bad = { ymd: 'bad', time: 'bad', list: sampleJson.list };
-    expect(parseAllDamsJson(bad, masters)).toHaveLength(0);
+  test('an unparseable snapshot time leaves every dam unreadable', () => {
+    const list = nagasakiEntries(catalogue, { ymd: 'bad', time: 'bad', list: sampleJson.list });
+    expect(list.map(state)).toEqual(['unreadable', 'unreadable', 'unreadable']);
   });
 
-  test('handles empty string fields as null', () => {
-    const json = {
-      ymd: '2026/06/05',
-      time: '15:30',
-      list: [
-        {
-          dam_cd: 1101,
-          area_cd: 10,
-          lv: '',
-          pondage: '',
-          rate: '',
-          rate_r: '',
-          rate_y: '',
-          rate_c: '',
-          in: '',
-          dis: '',
-          rain_10: '0',
-          rain_h: '0',
-          rain_t: '0',
-          stat: 0,
-          u_lv: '0',
-          u_pondage: '0',
-          u_rate: '0',
-          u_rate_r: '0',
-          u_rate_y: '0',
-          u_rate_c: '0',
-          u_in: '0',
-          u_dis: '0',
-        },
-      ],
-    };
-    const rows = parseAllDamsJson(json, masters);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.waterLevelM).toBeNull();
-    expect(rows[0]?.storageVolumeM3).toBeNull();
-    expect(rows[0]?.storageRate).toBeNull();
-    expect(rows[0]?.inflowM3s).toBeNull();
-    expect(rows[0]?.outflowM3s).toBeNull();
+  test('empty string fields are unreadable, not provider-marked', () => {
+    const e = one({ lv: '', pondage: '', rate: '', rate_r: '', rate_y: '', in: '', dis: '' });
+    expect(e?.reading).toEqual({ state: 'unreadable', why: 'no 貯水位 or 貯水量' });
   });
 
   test('falls back to the 有効容量 rate when 利水 is unpublished', () => {
-    const [base] = sampleJson.list;
-    if (!base) throw new Error('fixture missing');
-    const json = {
-      ymd: '2026/06/05',
-      time: '15:30',
-      list: [{ ...base, rate_r: '-', rate_y: '36.6' }],
-    };
-    const rows = parseAllDamsJson(json, masters);
-    expect(rows[0]?.storageRate).toBeCloseTo(0.366);
+    expect(observation(one({ rate_r: '-', rate_y: '36.6' }))?.storageRate).toBeCloseTo(0.366);
   });
 
   test('parses thousands separators in pondage', () => {
-    const [base] = sampleJson.list;
-    if (!base) throw new Error('fixture missing');
-    const json = {
-      ymd: '2026/06/05',
-      time: '15:30',
-      list: [{ ...base, pondage: '1,938' }],
-    };
-    const rows = parseAllDamsJson(json, masters);
-    expect(rows[0]?.storageVolumeM3).toBeCloseTo(1_938_000);
+    expect(observation(one({ pondage: '1,938' }))?.storageVolumeM3).toBeCloseTo(1_938_000);
   });
 });
 
@@ -228,208 +186,50 @@ describe('parseAllDamsJson', () => {
 const fixture = async (name: string) =>
   Bun.file(`${import.meta.dir}/../../../../tests/fixtures/nagasaki_kasen/${name}`).json();
 const liveCatalogue = (await fixture('dam_m_2026-09-28.json')) as DamMaster[];
-const liveSnapshot = await fixture('all_20260928_1410_d.json');
+const liveSnapshot = (await fixture('all_20260928_1410_d.json')) as AllDamsJson;
 
-describe('parseAllDamsJson hasData', () => {
-  const rows = parseAllDamsJson(
-    liveSnapshot,
-    new Map(liveCatalogue.map((m) => [m.dam_cd, m.dam_nm])),
-  );
+describe('nagasakiEntries — the live catalogue and snapshot', () => {
+  const list = nagasakiEntries(liveCatalogue, liveSnapshot);
 
-  test('marks the dams printed with 「-」 in every field as publishing nothing', () => {
-    expect(rows.filter((r) => r.hasData !== true).map((r) => [r.damName, r.hasData])).toEqual([
-      ['樋口ダム', false],
-      ['つづらダム', false],
-      ['笛吹ダム', false],
+  test('lists the whole published catalogue by dam_cd', () => {
+    expect(list).toHaveLength(35);
+    expect(list.every((e) => e.key === String(Number(e.key)))).toBe(true);
+  });
+
+  test('marks the dams printed with 「-」 in every field as provider-marked empty', () => {
+    expect(list.filter((e) => state(e) !== 'values').map((e) => [e.name, state(e)])).toEqual([
+      ['樋口ダム', 'empty'],
+      ['つづらダム', 'empty'],
+      ['笛吹ダム', 'empty'],
     ]);
-    expect(rows).toHaveLength(35);
   });
 
-  test('an empty or unreadable field is unknown, not "no value"', () => {
-    const [base] = liveSnapshot.list.filter((i: { dam_cd: number }) => i.dam_cd === 1421);
+  test('an empty or unreadable field is unreadable, not "no value"', () => {
+    const base = liveSnapshot.list.find((i) => i.dam_cd === 1421);
+    if (!base) throw new Error('樋口 missing');
     for (const lv of ['', 'x']) {
-      const [row] = parseAllDamsJson(
-        { ...liveSnapshot, list: [{ ...base, lv }] },
-        new Map([[1421, '樋口ダム']]),
-      );
-      expect(row?.hasData).toBeNull();
+      const [e] = nagasakiEntries([{ dam_cd: 1421, dam_nm: '樋口ダム' }], {
+        ...liveSnapshot,
+        list: [{ ...base, lv }],
+      });
+      expect(state(e)).toBe('unreadable');
     }
   });
-});
 
-describe('buildNagasakiUniverse', () => {
-  // dam_m.json is 長崎県's own catalogue, so it is what the source publishes —
-  // not the subset that carried a reading in this run's snapshot.
-  const catalogue = [
-    { dam_cd: 1928, dam_nm: '永田ダム' },
-    { dam_cd: 1927, dam_nm: '勝本ダム' },
-    { dam_cd: 1101, dam_nm: '式見ダム' },
-  ];
-  const resolved = new Map<number, bigint>([
-    [1928, 11n],
-    [1927, 12n],
-  ]);
-  const snapshot = parseAllDamsJson(
-    liveSnapshot,
-    new Map([
-      [1928, '永田ダム'],
-      [1101, '式見ダム'],
-    ]),
-  );
-  const universe = buildNagasakiUniverse(catalogue, (cd) => resolved.get(cd), snapshot);
-
-  test('records the whole published catalogue, matched or not', () => {
-    expect(universe).toHaveLength(3);
+  test('a catalogued dam absent from the snapshot is unreadable, not empty', () => {
+    const [e] = nagasakiEntries([{ dam_cd: 990002, dam_nm: '試験欠測ダム' }], liveSnapshot);
+    expect(e?.reading).toEqual({ state: 'unreadable', why: 'absent from the snapshot' });
   });
 
-  test('uses dam_cd as the external id and tags the prefecture', () => {
-    expect(universe[0]).toEqual({
-      externalId: '1928',
-      name: '永田ダム',
-      prefCode: '42',
-      resolvedDamId: 11n,
-      hasData: true,
-    });
+  test('a snapshot that could not be read lists the catalogue unreadable', () => {
+    const all = nagasakiEntries(liveCatalogue, 'HTTP 503 for dt_range.json');
+    expect(all).toHaveLength(35);
+    expect(all[0]?.reading).toEqual({ state: 'unreadable', why: 'HTTP 503 for dt_range.json' });
   });
 
-  test('a catalogued dam with no parsed snapshot row is unknown, not empty', () => {
-    expect(universe.find((u) => u.externalId === '1927')?.hasData).toBeNull();
-  });
-
-  test('keeps an unmatched dam with resolvedDamId null', () => {
-    // A published dam we cannot tie to a master is the matching backlog —
-    // dropping it would read as "nobody publishes this dam".
-    const shikimi = universe.find((u) => u.externalId === '1101');
-    expect(shikimi?.resolvedDamId).toBeNull();
-  });
-
-  test('records nothing extra for an empty catalogue', () => {
-    // An empty list is how recordUniverse recognises a failed fetch, so the
-    // builder must not invent rows.
-    expect(buildNagasakiUniverse([], () => undefined, [])).toEqual([]);
-  });
-});
-
-describe('chooseMaster', () => {
-  // pref 42 has two 小ヶ倉: NDI 2592 (諫早, 長崎県) and NDI 2609 (長崎市).
-  const kogakura = [
-    { id: 11176n, name: '小ヶ倉', ndi: '2592', stamp: null },
-    { id: 11190n, name: '小ヶ倉', ndi: '2609', stamp: null },
-  ];
-
-  test("binds dam_cd 1106 to 長崎市's 小ヶ倉, not the lower-id namesake", () => {
-    expect(chooseMaster(1106, '小ヶ倉ダム', kogakura)?.id).toBe(11190n);
-  });
-
-  test('the pin outranks a stamp left on the wrong 小ヶ倉', () => {
-    const stale = kogakura.map((m) => (m.ndi === '2592' ? { ...m, stamp: '1106' } : m));
-    expect(chooseMaster(1106, '小ヶ倉ダム', stale)?.id).toBe(11190n);
-  });
-
-  test('an unpinned station keeps the same-name row it is stamped on', () => {
-    const twins = [
-      { id: 1n, name: '宮崎', ndi: '1', stamp: null },
-      { id: 2n, name: '宮崎', ndi: '2', stamp: '1110' },
-    ];
-    expect(chooseMaster(1110, '宮崎ダム', twins)?.id).toBe(2n);
-  });
-});
-
-describe('task: universe resolution for a catalogue dam absent from the snapshot', () => {
-  // Issue #82: a dam listed in dam_m.json that carries no reading this run is
-  // still published. When the master already holds its nagasaki-kasen stamp,
-  // the universe row must resolve to it — otherwise a bound, published dam
-  // shows up as unmatched backlog until it happens to report.
-  const SOURCE = 'nagasaki-kasen';
-  const REPORTING = { slug: 'nagasaki-univ-test-reporting', cd: 990001, name: '試験報告ダム' };
-  const SILENT = { slug: 'nagasaki-univ-test-silent', cd: 990002, name: '試験欠測ダム' };
-  const FIXTURE_CDS = [String(REPORTING.cd), String(SILENT.cd)];
-  const ids = new Map<string, bigint>();
-  const realFetch = globalThis.fetch;
-  let hadRun = false;
-
-  const json = (body: unknown): Response =>
-    new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
-
-  async function cleanup(): Promise<void> {
-    await sql`
-      DELETE FROM source_universe
-      WHERE source_id = ${SOURCE} AND source_external_id IN ${sql(FIXTURE_CDS)}`;
-    await sql`
-      DELETE FROM observations WHERE dam_id IN (
-        SELECT id FROM dams WHERE slug IN (${REPORTING.slug}, ${SILENT.slug}))`;
-    await sql`DELETE FROM dams WHERE slug IN (${REPORTING.slug}, ${SILENT.slug})`;
-  }
-
-  beforeAll(async () => {
-    await cleanup();
-    const [run] = await sql`SELECT 1 FROM source_universe_runs WHERE source_id = ${SOURCE}`;
-    hadRun = run !== undefined;
-    for (const d of [REPORTING, SILENT]) {
-      const [r] = await sql<{ id: bigint }[]>`
-        INSERT INTO dams (slug, name, pref_code, location, external_ids)
-        VALUES (${d.slug}, ${d.name}, '42',
-                ST_SetSRID(ST_MakePoint(129.9, 32.9), 4326)::geography,
-                ${sql.json({ [SOURCE]: String(d.cd) })})
-        RETURNING id`;
-      ids.set(d.slug, r?.id ?? 0n);
-    }
-
-    // The upstream: both dams are catalogued, only one carries a reading.
-    globalThis.fetch = (async (input: string | URL | Request) => {
-      const url = String(input instanceof Request ? input.url : input);
-      if (url.endsWith('/data/dt_range.json')) {
-        return json({ min_dt: '2026/06/01 00:00:00', max_dt: '2026/06/05 15:30:00' });
-      }
-      if (url.endsWith('/data/dam_m.json')) {
-        return json([
-          { dam_cd: REPORTING.cd, dam_nm: REPORTING.name },
-          { dam_cd: SILENT.cd, dam_nm: SILENT.name },
-        ]);
-      }
-      if (url.endsWith('/data/all/202606/20260605/all_20260605_1530_d.json')) {
-        return json({
-          ymd: '2026/06/05',
-          time: '15:30',
-          list: [
-            {
-              dam_cd: REPORTING.cd,
-              lv: '64.77',
-              pondage: '97',
-              rate: '36.7',
-              rate_r: '96.2',
-              rate_y: '36.6',
-              in: '0.01',
-              dis: '0.01',
-            },
-          ],
-        });
-      }
-      return new Response('not found', { status: 404 });
-    }) as typeof fetch;
-
-    const helpers = { logger: { info: () => {} } } as unknown as JobHelpers;
-    await task({}, helpers);
-  });
-
-  afterAll(async () => {
-    globalThis.fetch = realFetch;
-    await cleanup();
-    if (!hadRun) await sql`DELETE FROM source_universe_runs WHERE source_id = ${SOURCE}`;
-  });
-
-  const resolvedFor = async (cd: number): Promise<bigint | null | undefined> => {
-    const [row] = await sql<{ resolved: bigint | null }[]>`
-      SELECT resolved_dam_id AS resolved FROM source_universe
-      WHERE source_id = ${SOURCE} AND source_external_id = ${String(cd)}`;
-    return row?.resolved;
-  };
-
-  test('resolves the dam that reported this run', async () => {
-    expect(await resolvedFor(REPORTING.cd)).toBe(ids.get(REPORTING.slug) as bigint);
-  });
-
-  test('resolves a stamped dam that did not report this run', async () => {
-    expect(await resolvedFor(SILENT.cd)).toBe(ids.get(SILENT.slug) as bigint);
+  test("dam_cd 1106 is pinned to 長崎市's 小ヶ倉 (NDI 2609), not its 諫早 namesake", () => {
+    // pref 42 has two 小ヶ倉: NDI 2592 (諫早, 長崎県) and NDI 2609 (長崎市).
+    expect(list.find((e) => e.key === '1106')?.bind).toEqual({ ndi: '2609' });
+    expect(list.filter((e) => e.bind !== undefined)).toHaveLength(1);
   });
 });

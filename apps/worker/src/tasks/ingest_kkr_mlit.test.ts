@@ -1,7 +1,16 @@
 // apps/worker/src/tasks/ingest_kkr_mlit.test.ts
+//
+// Fixture → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
 
 import { describe, expect, test } from 'bun:test';
-import { parseKkrDatetime, parseKkrJson, toFraction } from './ingest_kkr_mlit.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
+import { kkrEntries, parseKkrDatetime, toFraction } from './ingest_kkr_mlit.ts';
+
+function readingOf(e: Entry | undefined): Reading {
+  if (!e || typeof e.reading === 'function') throw new Error('expected a static reading');
+  return e.reading;
+}
 
 describe('parseKkrDatetime', () => {
   test('parses "YYYY-MM-DD HH:MM:SS" JST → UTC (subtract 9h)', () => {
@@ -26,7 +35,7 @@ describe('parseKkrDatetime', () => {
   });
 });
 
-describe('parseKkrJson', () => {
+describe('kkrEntries', () => {
   const BASE_JSON = {
     datetime: '2026-06-05 15:00:00',
     lake: { biwako: { suii: { today: '7', diff: ['-4', '&darr;'] } } },
@@ -45,44 +54,42 @@ describe('parseKkrJson', () => {
       sarutani: { chosuiritsu: { today: '82.9', diff: ['-0.3', '&darr;'] } },
     },
   };
+  const entry = (json: unknown, key: string) => kkrEntries(json).find((e) => e.key === key);
 
-  test('parses all 12 dams from typical JSON', () => {
-    const rows = parseKkrJson(BASE_JSON);
-    expect(rows).toHaveLength(12);
+  test('lists all 12 dams from typical JSON, keyed by the JSON key', () => {
+    const entries = kkrEntries(BASE_JSON);
+    expect(entries).toHaveLength(12);
+    expect(entry(BASE_JSON, 'amagase')?.name).toBe('天ヶ瀬ダム');
+    expect(entry(BASE_JSON, 'hinati')?.name).toBe('比奈知ダム');
+    expect(entries.every((e) => readingOf(e).state === 'values')).toBe(true);
   });
 
-  test('converts datetime to UTC and attaches to all rows', () => {
-    const rows = parseKkrJson(BASE_JSON);
-    // 15:00 JST = 06:00 UTC
-    expect(rows[0]?.observedAt.toISOString()).toBe('2026-06-05T06:00:00.000Z');
-    expect(rows[11]?.observedAt.toISOString()).toBe('2026-06-05T06:00:00.000Z');
+  test('scopes each dam to the prefecture of its master (高山 is 京都, not 奈良)', () => {
+    expect(entry(BASE_JSON, 'takayama')?.pref).toBe('26');
+    expect(entry(BASE_JSON, 'hitokura')?.pref).toBe('28');
   });
 
-  test('parses storageRate as a 0..1 fraction, not the published percent', () => {
+  test('converts datetime to UTC and reads 貯水率 as a 0..1 fraction, not the published percent', () => {
     // This test used to assert 56.4 — the published percent — and so encoded
     // the #46 bug rather than catching it: observations.storage_rate is a
     // fraction, so every stored rate was 100x too large.
-    const rows = parseKkrJson(BASE_JSON);
-    const managawa = rows.find((r) => r.damName === '真名川ダム');
-    expect(managawa?.storageRate).toBeCloseTo(0.564, 4);
-    const takayama = rows.find((r) => r.damName === '高山ダム');
-    expect(takayama?.storageRate).toBeCloseTo(0.302, 4);
+    const managawa = readingOf(entry(BASE_JSON, 'managawa'));
+    if (managawa.state !== 'values') throw new Error(managawa.state);
+    // 15:00 JST = 06:00 UTC
+    expect(managawa.observations[0]?.observedAt.toISOString()).toBe('2026-06-05T06:00:00.000Z');
+    expect(managawa.observations[0]?.storageRate).toBeCloseTo(0.564, 4);
+    const takayama = readingOf(entry(BASE_JSON, 'takayama'));
+    if (takayama.state !== 'values') throw new Error(takayama.state);
+    expect(takayama.observations[0]?.storageRate).toBeCloseTo(0.302, 4);
   });
 
-  test('key field matches the JSON key', () => {
-    const rows = parseKkrJson(BASE_JSON);
-    const amagase = rows.find((r) => r.damName === '天ヶ瀬ダム');
-    expect(amagase?.key).toBe('amagase');
-    const hinati = rows.find((r) => r.damName === '比奈知ダム');
-    expect(hinati?.key).toBe('hinati');
+  test('an invalid datetime leaves every dam unreadable', () => {
+    const entries = kkrEntries({ ...BASE_JSON, datetime: 'invalid' });
+    expect(entries).toHaveLength(12);
+    expect(entries.every((e) => readingOf(e).state === 'unreadable')).toBe(true);
   });
 
-  test('returns empty array for invalid datetime', () => {
-    const rows = parseKkrJson({ ...BASE_JSON, datetime: 'invalid' });
-    expect(rows).toHaveLength(0);
-  });
-
-  test('skips missing dam entries gracefully', () => {
+  test('a configured dam missing from the JSON is still listed, unreadable', () => {
     const partial = {
       ...BASE_JSON,
       dam: {
@@ -90,35 +97,32 @@ describe('parseKkrJson', () => {
         kuzuryu: { chosuiritsu: { today: '64.1', diff: ['-0.4', '&darr;'] } },
       },
     };
-    const rows = parseKkrJson(partial);
-    expect(rows).toHaveLength(2);
-    expect(rows.map((r) => r.key)).toEqual(['managawa', 'kuzuryu']);
+    const entries = kkrEntries(partial);
+    expect(entries).toHaveLength(12);
+    expect(entries.slice(0, 2).map((e) => e.key)).toEqual(['managawa', 'kuzuryu']);
+    expect(readingOf(entry(partial, 'amagase'))).toEqual({
+      state: 'unreadable',
+      why: "not in today's feed",
+    });
   });
 
-  test('storageRate is null when today value is empty string', () => {
-    const withEmpty = {
+  test('a key the feed adds is listed under the five prefectures', () => {
+    const added = entry({ ...BASE_JSON, dam: { ...BASE_JSON.dam, newdam: {} } }, 'newdam');
+    expect(added?.name).toBe('newdam');
+    expect(added?.pref).toEqual(['18', '26', '29', '24', '28']);
+  });
+
+  test('an empty or missing 貯水率 is unreadable', () => {
+    const json = {
       ...BASE_JSON,
       dam: {
         ...BASE_JSON.dam,
         managawa: { chosuiritsu: { today: '', diff: ['', ''] } },
-      },
-    };
-    const rows = parseKkrJson(withEmpty);
-    const managawa = rows.find((r) => r.key === 'managawa');
-    expect(managawa?.storageRate).toBeNull();
-  });
-
-  test('storageRate is null when chosuiritsu missing', () => {
-    const withMissing = {
-      ...BASE_JSON,
-      dam: {
-        ...BASE_JSON.dam,
         amagase: {},
       },
     };
-    const rows = parseKkrJson(withMissing);
-    const amagase = rows.find((r) => r.key === 'amagase');
-    expect(amagase?.storageRate).toBeNull();
+    expect(readingOf(entry(json, 'managawa')).state).toBe('unreadable');
+    expect(readingOf(entry(json, 'amagase')).state).toBe('unreadable');
   });
 });
 
@@ -138,7 +142,7 @@ describe('toFraction (#46)', () => {
     expect(toFraction(104.5)).toBeCloseTo(1.045, 6);
   });
 
-  test('drops a reading that cannot be a rate rather than clipping it', () => {
+  test('rejects a reading that cannot be a rate rather than clipping it', () => {
     // Clipped values are indistinguishable from real ones downstream, and a
     // stored 0 would recreate the phantom zeros 0038/0039 had to undo.
     expect(toFraction(0)).toBeNull();

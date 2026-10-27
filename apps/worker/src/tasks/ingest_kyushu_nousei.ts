@@ -15,8 +15,8 @@
 // roll-up covering 6 prefectures in one PDF, so unlike every single-prefecture
 // adapter in this codebase, master lookup CANNOT filter on one fixed
 // pref_code — the row's own 県名 cell (printed once per prefecture block, see
-// below) is read and mapped to a JIS code, and chooseMaster() is run against
-// only that prefecture's masters (NDI_PINS reaches the two 大分-listed dams the
+// below) is read and mapped to a JIS code, and the row is bound within only
+// that prefecture's masters (BINDS reaches the two 大分-listed dams the
 // master files under 熊本). 佐賀 appears in the PDF but has none of our
 // 12 target dams — it is skipped implicitly (its rows just won't match).
 //
@@ -65,7 +65,7 @@
 // Priority 279 — deliberately BELOW oita-nourin (282, #27): 石場・深見・日指・
 // 並石(大分) are published by both, and oita-nourin is the more specific
 // single-prefecture source (also the one 九州農政局 itself is presumably
-// rolling up), so it should keep winning preferredSourceForDam() for those 4
+// rolling up), so it should keep winning windowSource() (the chart) for those 4
 // dams. The other 8 target dams (久保白/伊佐ノ浦/教良木/東原調整池/竹山/西京/
 // 金峰/喜界地下) have no competing source at any priority, so this only
 // matters for the 大分 overlap.
@@ -81,12 +81,9 @@
 // number, so the multi-purpose-dam capacity caveat above never changes their
 // denominator.
 
-import { type BindableMaster, preferMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
 import { extractText, getDocumentProxy } from 'unpdf';
+import { ingestTask } from '../ingest/run.ts';
+import type { Bind, Entry, Reading } from '../ingest/types.ts';
 
 const INDEX_URL =
   process.env.KYUSHU_NOUSEI_URL ??
@@ -137,39 +134,40 @@ const SURVEY_HOUR_JST: Readonly<Record<string, number>> = {
 };
 
 /**
- * Rows whose master sits outside the printed prefecture, pinned to its NDI row
- * (keyed by feedKey below).
+ * How a row finds its master when its printed name does not, keyed by
+ * feedKey below.
  *
  * 大蘇ダム and 大谷ダム are on the 大野川 headwaters at the 大分/熊本 line and
  * serve 大分 (竹田市荻町): the PDF lists them in the 大分 block, the master files
  * both under 熊本, as ダム便覧 does (2681 大蘇, 熊本県阿蘇郡産山村, 九州農政局;
  * 2657 大谷, 熊本県阿蘇郡高森町, 荻柏原土地改良区). The PDF's 有効 3,890 and
  * 1,500 千m³ are the master's (and ダム便覧's) 有効貯水容量 exactly.
+ *
+ * 小ヶ倉ダム (長崎市) has two master rows of the same name, NDI 2592 and 2609,
+ * with the same manager, height and capacity; this source has always bound
+ * NDI 2592, so it stays pinned there.
+ *
+ * The rest are spellings: the PDF prints 「花宗ため池」 and 「耶馬渓ダム」, the
+ * master holds 「花宗溜池」 and 「耶馬溪」 (the same name in old kanji).
  */
-export const NDI_PINS: Readonly<Record<string, { prefCode: string; ndi: string }>> = {
-  '44:大蘇ダム': { prefCode: '43', ndi: '2306' },
-  '44:大谷ダム': { prefCode: '43', ndi: '2307' },
+export const BINDS: Readonly<Record<string, Bind>> = {
+  '44:大蘇ダム': { ndi: '2306' },
+  '44:大谷ダム': { ndi: '2307' },
+  '42:小ヶ倉ダム': { ndi: '2592' },
+  '40:花宗ため池': { name: '花宗溜池' },
+  '44:耶馬渓ダム': { name: '耶馬溪ダム' },
 };
 
 /** Upper sanity bound for a published 貯水率, in percent. */
 const MAX_PLAUSIBLE_PCT = 200;
 
-export interface ParsedRow {
+/** One dam row of the table: where it was printed and what we read from it. */
+export interface KyushuRow {
   /** Name exactly as the PDF prints it, e.g. 「石場ダム」. */
-  kyushuName: string;
-  /** JIS code of the prefecture block the row was printed under. */
-  prefCode: string;
-  /** 現貯水量 in m³ (the PDF prints 千m³). */
-  storageVolumeM3: number;
-  /** 貯水率 as a 0..1 fraction. */
-  storageRate: number;
-  /** Survey date at the hour its prefecture block was read (see SURVEY_HOUR_JST). */
-  observedAt: Date;
-}
-
-interface PublishedRow {
   name: string;
+  /** JIS code of the prefecture block the row was printed under. */
   prefCode: string | null;
+  reading: Reading;
 }
 
 // --- parsing ----------------------------------------------------------------
@@ -290,12 +288,10 @@ const NAME_RE = /([^\s\d]+?(?:ダム|調整池|貯水池|溜池|ため池))/;
 
 export function parseKyushuNouseiPdfText(text: string): {
   reportDate: Date | null;
-  rows: ParsedRow[];
-  published: PublishedRow[];
+  rows: KyushuRow[];
 } {
   const reportDate = parseKyushuNouseiDate(text);
-  const rows: ParsedRow[] = [];
-  const published: PublishedRow[] = [];
+  const rows: KyushuRow[] = [];
 
   let currentPrefCode: string | null = null;
 
@@ -352,44 +348,66 @@ export function parseKyushuNouseiPdfText(text: string): {
       secondTok.kind === 'num' && hasWaterRightColumn ? secondTok.value : effCapTok.value;
     if (initialCapacity <= 0) continue;
 
-    // A real row, even if the rest of it turns out unusable below — recorded
-    // now so an unmatched or zero-rate dam still counts as published.
-    published.push({ name, prefCode: currentPrefCode });
-
+    // A real row, even if the rest of it turns out unusable below, so an
+    // unmatched or zero-rate dam still counts as published.
     const pairs = pairDateColumns(tokens.slice(hasWaterRightColumn ? 2 : 1), initialCapacity);
-    // The last pair is always 平年; the one before it is the current survey.
-    // Fewer than 2 pairs means there is no current reading to distinguish
-    // from the 平年 baseline (would only happen on a PDF with a single date
-    // column and no 平年 data at all — not seen in practice).
-    if (pairs.length < 2) continue;
-    const current = pairs[pairs.length - 2];
-    if (!current || current.volume == null || current.rate == null) continue;
-
-    // A published 0% is a drained or out-of-survey reservoir, not an
-    // operating reading — dropping it avoids recreating the phantom-zero
-    // problem migrations 0038/0039 had to undo.
-    if (current.rate <= 0 || current.rate > MAX_PLAUSIBLE_PCT) continue;
-
-    // The row must be internally consistent: the printed rate is
-    // 現貯水量 / 利水容量, using whatever 利水容量 is in effect for this
-    // column (see pairDateColumns). A row that fails this is a layout
-    // misread, not data — drop it rather than publish an unexplained number.
-    const implied = (100 * current.volume) / current.capacity;
-    if (Math.abs(implied - current.rate) > 1.5) continue;
-
-    const prefCode = currentPrefCode ?? 'unknown';
     rows.push({
-      kyushuName: name,
-      prefCode,
-      storageVolumeM3: current.volume * 1000,
-      storageRate: current.rate / 100,
-      observedAt: new Date(
-        (reportDate?.getTime() ?? Number.NaN) + (SURVEY_HOUR_JST[prefCode] ?? 0) * 3_600_000,
-      ),
+      name,
+      prefCode: currentPrefCode,
+      reading: reportDate
+        ? currentReading(pairs, reportDate, currentPrefCode)
+        : { state: 'unreadable', why: 'no 「…現在」 survey date in the PDF' },
     });
   }
 
-  return { reportDate, rows, published };
+  return { reportDate, rows };
+}
+
+/** The current survey column of a row: the pair just before 平年. */
+function currentReading(pairs: DatePair[], reportDate: Date, prefCode: string | null): Reading {
+  // The last pair is always 平年; the one before it is the current survey.
+  // Fewer than 2 pairs means there is no current reading to distinguish
+  // from the 平年 baseline (would only happen on a PDF with a single date
+  // column and no 平年 data at all — not seen in practice).
+  const current = pairs.length < 2 ? undefined : pairs[pairs.length - 2];
+  if (!current) return { state: 'unreadable', why: `${pairs.length} survey columns` };
+  // 「－ －」: the PDF's own mark for a survey the dam was left out of.
+  if (current.volume == null && current.rate == null) return { state: 'empty', mark: '－ －' };
+  if (current.volume == null || current.rate == null) {
+    return { state: 'unreadable', why: 'half a (貯水量, 貯水率) pair' };
+  }
+
+  // A published 0% is a drained or out-of-survey reservoir, not an
+  // operating reading — storing it would recreate the phantom-zero problem
+  // migrations 0038/0039 had to undo.
+  if (current.rate <= 0 || current.rate > MAX_PLAUSIBLE_PCT) {
+    return { state: 'unreadable', why: `貯水率 ${current.rate} % is not an operating reading` };
+  }
+
+  // The row must be internally consistent: the printed rate is
+  // 現貯水量 / 利水容量, using whatever 利水容量 is in effect for this
+  // column (see pairDateColumns). A row that fails this is a layout
+  // misread, not data — unreadable rather than an unexplained number.
+  const implied = (100 * current.volume) / current.capacity;
+  if (Math.abs(implied - current.rate) > 1.5) {
+    return {
+      state: 'unreadable',
+      why: `printed ${current.rate} % is not ${current.volume}/${current.capacity}`,
+    };
+  }
+
+  return {
+    state: 'values',
+    observations: [
+      {
+        observedAt: new Date(
+          reportDate.getTime() + (SURVEY_HOUR_JST[prefCode ?? ''] ?? 0) * 3_600_000,
+        ),
+        storageVolumeM3: current.volume * 1000,
+        storageRate: current.rate / 100,
+      },
+    ],
+  };
 }
 
 /** Extract the PDF's text with unpdf (no poppler in the runtime image). */
@@ -420,190 +438,36 @@ export function findLatestPdfUrl(html: string, baseUrl: string): string | null {
   return null;
 }
 
-// --- name matching ----------------------------------------------------------
-
-/**
- * Strip the ダム suffix and parenthetical annotations; fold ノ/の, 渓/溪 and
- * ため池/溜池.
- *
- * 渓/溪 fixes the one known mismatch this feed brings (also present in
- * oita-nourin's own table): the PDF prints 「耶馬渓ダム」, master holds
- * 「耶馬溪ダム」. ため池/溜池 likewise: the PDF prints 「花宗ため池」, master
- * holds 「花宗溜池」.
- */
-export function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/ため池$/, '溜池')
-    .replace(/ノ/g, 'の')
-    .replace(/渓/g, '溪')
-    .trim();
-}
-
-const KIND_SUFFIX_RE = /(調整池|貯水池|ため池|溜池)$/;
-
-/** Best master dam for a feed name; exact beats stem beats substring. */
-export function chooseMaster(feedName: string, masters: BindableMaster[]): bigint | null {
-  const stem = normalizeName(feedName);
-  if (!stem) return null;
-  const bareStem = stem.replace(KIND_SUFFIX_RE, '');
-  const hasBareStem = bareStem.length >= 2 && bareStem !== stem;
-
-  let best: { m: BindableMaster; rank: number } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (m.name === feedName) rank = 0;
-    else if (mStem === stem) rank = 1;
-    else if (m.name === `${stem}ダム`) rank = 2;
-    else if (mStem.startsWith(stem)) rank = 3;
-    else if (mStem.includes(stem)) rank = 4;
-    else if (hasBareStem && mStem === bareStem) rank = 5;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-      best = { m, rank };
-    }
-  }
-  return best?.m.id ?? null;
-}
+// --- entries ----------------------------------------------------------------
 
 /** The universe key: the PDF has no ids, and names repeat across prefectures. */
 export function feedKey(name: string, prefCode: string | null): string {
   return `${prefCode ?? 'unknown'}:${name}`;
 }
 
-/**
- * Master for a published row: its NDI pin (`pinnedIds`: NDI → dam id), else
- * the best name match among its own prefecture's masters.
- */
-export function masterFor(
-  name: string,
-  prefCode: string | null,
-  mastersByPref: ReadonlyMap<string, BindableMaster[]>,
-  pinnedIds: ReadonlyMap<string, bigint>,
-): bigint | null {
-  const pin = NDI_PINS[feedKey(name, prefCode)];
-  const pinned = pin ? pinnedIds.get(pin.ndi) : undefined;
-  return pinned ?? chooseMaster(name, mastersByPref.get(prefCode ?? '') ?? []);
+/** Every dam row of the table, bound within its own prefecture block. */
+export function kyushuNouseiEntries(text: string): Entry[] {
+  return parseKyushuNouseiPdfText(text).rows.map((r) => {
+    const key = feedKey(r.name, r.prefCode);
+    const bind = BINDS[key];
+    return {
+      key,
+      name: r.name,
+      pref: r.prefCode,
+      ...(bind ? { bind } : {}),
+      reading: r.reading,
+    };
+  });
 }
 
-// --- DB helpers -------------------------------------------------------------
-
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active, trusted_rate_basis)
-    VALUES (${SOURCE_ID}, 279,
-            '九州農政局 管内の農業用ダムの貯水状況 — 59 基 (6県, 月1-2回, 貯水量+貯水率)',
-            true, true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority           = EXCLUDED.priority,
-          description        = EXCLUDED.description,
-          active             = EXCLUDED.active,
-          trusted_rate_basis = EXCLUDED.trusted_rate_basis
-  `;
-}
-
-// --- task -------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
-  const headers = {
-    'user-agent':
-      process.env.HTTP_USER_AGENT ??
-      'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-  };
-
-  const indexRes = await fetch(INDEX_URL, { headers, signal: AbortSignal.timeout(20_000) });
-  if (indexRes.status !== 200) {
-    log(`${SOURCE_ID}: index HTTP ${indexRes.status}; aborting`);
-    return;
-  }
-  const pdfUrl = findLatestPdfUrl(await indexRes.text(), INDEX_URL);
-  if (!pdfUrl) {
-    log(`${SOURCE_ID}: no survey PDF linked from the index; aborting`);
-    return;
-  }
-
-  const pdfRes = await fetch(pdfUrl, { headers, signal: AbortSignal.timeout(30_000) });
-  if (pdfRes.status !== 200) {
-    log(`${SOURCE_ID}: PDF HTTP ${pdfRes.status} for ${pdfUrl}; aborting`);
-    return;
-  }
-
-  const text = await pdfToText(new Uint8Array(await pdfRes.arrayBuffer()));
-  const { reportDate, rows, published } = parseKyushuNouseiPdfText(text);
-  if (!reportDate) {
-    log(`${SOURCE_ID}: no survey date in ${pdfUrl}; aborting`);
-    return;
-  }
-  log(`${SOURCE_ID}: parsed ${rows.length} dam rows for ${reportDate.toISOString()}`);
-
-  const prefCodes = Object.values(PREF_NAME_TO_CODE);
-  const masterRows = await sql<(BindableMaster & { prefCode: string; ndi: string | null })[]>`
-    SELECT id, name, completed_year AS "completedYear", pref_code AS "prefCode",
-           external_ids->>'ndi' AS ndi
-    FROM dams WHERE pref_code = ANY(${prefCodes}) ORDER BY id
-  `;
-  const mastersByPref = new Map<string, BindableMaster[]>();
-  const pinnedIds = new Map<string, bigint>();
-  const pins = Object.values(NDI_PINS);
-  for (const m of masterRows) {
-    const list = mastersByPref.get(m.prefCode) ?? [];
-    list.push(m);
-    mastersByPref.set(m.prefCode, list);
-    if (m.ndi && pins.some((p) => p.ndi === m.ndi && p.prefCode === m.prefCode)) {
-      pinnedIds.set(m.ndi, m.id);
-    }
-  }
-
-  const universe: UniverseRow[] = published.map((p) => ({
-    externalId: feedKey(p.name, p.prefCode),
-    name: p.name,
-    prefCode: p.prefCode,
-    resolvedDamId: masterFor(p.name, p.prefCode, mastersByPref, pinnedIds),
-  }));
-  await recordUniverse(SOURCE_ID, universe);
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  let unmatched = 0;
-  for (const p of rows) {
-    const damId = masterFor(p.kyushuName, p.prefCode, mastersByPref, pinnedIds);
-    if (!damId) {
-      unmatched += 1;
-      log(`${SOURCE_ID}: no master match for "${p.kyushuName}" (pref ${p.prefCode})`);
-      continue;
-    }
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: p.storageRate,
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: null,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(
-    `${SOURCE_ID} done: parsed=${rows.length} matched=${inputs.length} unmatched=${unmatched} written=${written}`,
-  );
-
-  // The R8.9.15 PDF dropped its leading 利水容量 column and this adapter
-  // parsed 0 of 59 rows while exiting green. A run that finds dam rows but no
-  // usable reading is a layout change; throwing puts it in failing_jobs.
-  if (published.length > 0 && rows.length === 0) {
-    throw new Error(
-      `${SOURCE_ID}: parsed ${published.length} dam names but no usable rows from ${pdfUrl} — layout change?`,
-    );
-  }
-};
-
-export default task;
+// The R8.9.15 PDF dropped its leading 利水容量 column and this adapter parsed
+// 0 of 59 rows while exiting green. Every row is now an entry, so a layout
+// change makes them unreadable and the run fails the job (failing_jobs).
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const pdfUrl = findLatestPdfUrl((await upstream.fetch(INDEX_URL)).text(), INDEX_URL);
+  if (!pdfUrl) throw new Error(`${SOURCE_ID}: no survey PDF linked from ${INDEX_URL}`);
+  const pdf = await upstream.fetch(pdfUrl, { timeoutMs: 30_000 });
+  const entries = kyushuNouseiEntries(await pdfToText(pdf.bytes));
+  log(`${SOURCE_ID}: ${entries.length} dam rows in ${pdfUrl}`);
+  return { entries, dated: true };
+});

@@ -9,11 +9,11 @@
 //   data/damQuantities/list/{YYYY-MM-DD-HH-MM}.json → { items: [...] }
 //
 // Each item carries the dam's current values plus a per-field "Flg" where
-// "0" means the value is valid and anything else (2/4) means no telemetry.
-// 21 dams are listed; ~15 report a storage value at any given fetch (the
-// rest are seasonally empty or untelemetered). 苫田ダム(国) is also covered
-// by cgr-mlit-dam at higher priority — source_priorities resolves the
-// overlap, so we ingest it here too without special-casing.
+// "0" means the value is valid and anything else (2/4) is the portal's own
+// 欠測 / 調整中 mark. 21 dams are listed; ~15 report a storage value at any
+// given fetch, and a dam whose every field is flagged is provider-marked
+// empty. 苫田ダム(国) is also covered by cgr-mlit-dam at higher priority;
+// source priority resolves the overlap.
 //
 // Values:
 //   damQuantitiesLevel            → water level (m)
@@ -27,12 +27,9 @@
 // Cron: hourly at :21 (feed refreshes every 30 min; we take the freshest
 // snapshot and spread load away from the other prefectural sources).
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const BASE_URL = process.env.OKAYAMA_DAM_URL ?? 'https://www.bousai.pref.okayama.jp';
 const PREF_CODE = '33';
@@ -56,17 +53,6 @@ interface OkayamaItem {
   dataTimestamp: string;
 }
 
-export interface ParsedRow {
-  observatoryId: string;
-  observatoryName: string;
-  observedAt: Date;
-  waterLevelM: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
-  storageVolumeM3: number | null;
-  storageRate: number | null;
-}
-
 /** Parse 「YYYY-MM-DD HH:MM:SS」 (JST) → UTC Date. */
 export function parseOkayamaTimestamp(s: string): Date | null {
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/);
@@ -83,208 +69,58 @@ export function parseOkayamaTimestamp(s: string): Date | null {
   );
 }
 
-/**
- * Fold visually-identical kanji variants that differ only by codepoint so
- * the feed and the master compare equal. 槇 (U+69C7) vs 槙 (U+69D9) is the
- * one pair seen in 岡山 (槙谷ダム ↔ master 槇谷); extend the maps in tandem
- * if more surface.
- */
-function foldVariants(s: string): string {
-  return s.replace(/槇/g, '槙');
+/** One item's reading. A Flg other than "0" is the portal's own mark. */
+export function okayamaReading(it: OkayamaItem): Reading {
+  const field = (value: number | null, flg: string): Cell => cell(value, flg !== '0');
+  const level = field(it.damQuantitiesLevel, it.damQuantitiesLevelFlg);
+  const inflow = field(it.damInflowQuantities, it.damInflowQuantitiesFlg);
+  const outflow = field(it.damTotalReleaseQuantities, it.damTotalReleaseQuantitiesFlg);
+  const storage = field(it.damEffectiveStorageQuantities, it.damEffectiveStorageQuantitiesFlg);
+  const rateEffective = field(it.storageRateEffectiveCapacity, it.storageRateEffectiveCapacityFlg);
+  const rateWaterUse = field(it.storageRateWaterUseCapacity, it.storageRateWaterUseCapacityFlg);
+
+  const state = cellState([level, inflow, outflow, storage, rateEffective, rateWaterUse]);
+  if (state === 'empty') return { state, mark: 'Flg ≠ 0 on every field' };
+  if (state === 'unreadable') return { state, why: 'no Flg-0 value' };
+  const observedAt = parseOkayamaTimestamp(it.dataTimestamp ?? '');
+  if (!observedAt) return { state: 'unreadable', why: `dataTimestamp "${it.dataTimestamp}"` };
+  // 有効貯水率 is often absent; the portal's headline 貯水率 is the 利水 one.
+  const ratePct = numberIn(rateEffective) ?? numberIn(rateWaterUse);
+  return {
+    state: 'values',
+    observations: [
+      {
+        observedAt,
+        waterLevelM: numberIn(level),
+        inflowM3s: numberIn(inflow),
+        outflowM3s: numberIn(outflow),
+        // damEffectiveStorageQuantities is already in m³ on this feed.
+        storageVolumeM3: numberIn(storage),
+        storageRate: ratePct != null ? Math.max(0, Math.min(1, ratePct / 100)) : null,
+      },
+    ],
+  };
 }
 
-/** Strip the ダム suffix and (国)/（再）/（元）-style annotations, fold kanji variants. */
-export function normalizeName(s: string): string {
-  return foldVariants(
-    s
-      .replace(/[（(][^）)]*[）)]/g, '')
-      .replace(/ダム$/, '')
-      .trim(),
-  );
+/** Every listed dam: the feed's list is the universe. */
+export function okayamaEntries(items: OkayamaItem[]): Entry[] {
+  return items.map((it) => ({
+    key: it.observatoryId,
+    name: it.name,
+    pref: PREF_CODE,
+    reading: okayamaReading(it),
+  }));
 }
 
-/** A field value is only trustworthy when its companion Flg is "0". */
-function gated(value: number | null, flg: string): number | null {
-  return flg === '0' && typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
-/**
- * Convert the feed's items into observation rows, dropping dams that report
- * no usable value (every gated field null).
- */
-export function parseOkayamaItems(items: OkayamaItem[]): ParsedRow[] {
-  const out: ParsedRow[] = [];
-  for (const it of items) {
-    const observedAt = parseOkayamaTimestamp(it.dataTimestamp ?? '');
-    if (!observedAt) continue;
-
-    const level = gated(it.damQuantitiesLevel, it.damQuantitiesLevelFlg);
-    const inflow = gated(it.damInflowQuantities, it.damInflowQuantitiesFlg);
-    const outflow = gated(it.damTotalReleaseQuantities, it.damTotalReleaseQuantitiesFlg);
-    const storage = gated(it.damEffectiveStorageQuantities, it.damEffectiveStorageQuantitiesFlg);
-    const ratePct =
-      gated(it.storageRateEffectiveCapacity, it.storageRateEffectiveCapacityFlg) ??
-      gated(it.storageRateWaterUseCapacity, it.storageRateWaterUseCapacityFlg);
-
-    if (level == null && inflow == null && outflow == null && storage == null && ratePct == null) {
-      continue;
-    }
-
-    out.push({
-      observatoryId: it.observatoryId,
-      observatoryName: it.name,
-      observedAt,
-      waterLevelM: level,
-      inflowM3s: inflow,
-      outflowM3s: outflow,
-      storageVolumeM3: storage,
-      storageRate: ratePct != null ? Math.max(0, Math.min(1, ratePct / 100)) : null,
-    });
-  }
-  return out;
-}
-
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 309,
-            'おかやま防災ポータル — hourly, ~15 県管理ダム (JSON feed, 30分更新)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-interface DamMatch {
-  observatoryId: string;
-  damId: bigint;
-}
-
-/**
- * Pick the best master dam for a feed name. Both sides are normalized
- * identically (strip ダム + （...） annotations, fold 槇→槙) so an exact stem
- * match wins over a substring collision such as 黒谷 grabbing 黒谷池（元）
- * instead of the intended 黒谷（再）. A row already stamped with the station
- * keeps it (#57).
- */
-export function chooseMaster(
-  stem: string,
-  masters: BindableMaster[],
-  stationKey?: string,
-): bigint | null {
-  const stamped = stationKey ? stampedMaster(masters, stationKey) : null;
-  if (stamped) return stamped.id;
-  let best: { m: BindableMaster; rank: number } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (mStem === stem) rank = 0;
-    else if (m.name === `${stem}ダム`) rank = 1;
-    else if (mStem.startsWith(stem)) rank = 2;
-    else if (mStem.includes(stem)) rank = 3;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-      best = { m, rank };
-    }
-  }
-  return best?.m.id ?? null;
-}
-
-async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const out: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  for (const r of rows) {
-    const stem = normalizeName(r.observatoryName);
-    if (!stem) continue;
-    const damId = chooseMaster(stem, masters, r.observatoryId);
-    universe.push({
-      externalId: r.observatoryId,
-      name: r.observatoryName,
-      prefCode: PREF_CODE,
-      resolvedDamId: damId,
-    });
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for ${r.observatoryName} (${r.observatoryId})`);
-      continue;
-    }
-    out.push({ observatoryId: r.observatoryId, damId });
-    await bindExternalId(damId, SOURCE_ID, r.observatoryId);
-  }
-  await recordUniverse(SOURCE_ID, universe);
-  return out;
-}
-
-async function fetchJson<T>(path: string, ua: string): Promise<T | null> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { 'user-agent': ua },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (res.status !== 200) return null;
-  return (await res.json()) as T;
-}
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
-  const ua =
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
-
-  const pointer = await fetchJson<{ latestDateTimestamp: string }>(
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const json = async <T>(path: string) =>
+    (await upstream.fetch(`${BASE_URL}${path}`, { timeoutMs: 15_000 })).json<T>();
+  const { latestDateTimestamp: latest } = await json<{ latestDateTimestamp: string }>(
     `/data/damQuantities/data.json?request.preventCache=${Date.now()}`,
-    ua,
   );
-  const latest = pointer?.latestDateTimestamp;
-  if (!latest) {
-    log(`${SOURCE_ID}: could not read latestDateTimestamp; abort`);
-    return;
-  }
   // 「2026-05-25 11:30:00」 → list/2026-05-25-11-30.json
   const slug = latest.slice(0, 16).replace(/[ :]/g, '-');
-  const snapshot = await fetchJson<{ items: OkayamaItem[] }>(
-    `/data/damQuantities/list/${slug}.json`,
-    ua,
-  );
-  if (!snapshot?.items) {
-    log(`${SOURCE_ID}: snapshot ${slug} missing items; abort`);
-    return;
-  }
-
-  const parsed = parseOkayamaItems(snapshot.items);
-  log(`${SOURCE_ID}: parsed ${parsed.length}/${snapshot.items.length} dams at ${latest}`);
-
-  const matches = await matchMaster(parsed, log);
-  const damByObs = new Map(matches.map((m) => [m.observatoryId, m.damId]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of parsed) {
-    const damId = damByObs.get(p.observatoryId);
-    if (!damId) continue;
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: p.storageRate,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${parsed.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+  const { items } = await json<{ items: OkayamaItem[] }>(`/data/damQuantities/list/${slug}.json`);
+  log(`${SOURCE_ID}: ${items.length} dams at ${latest}`);
+  return { entries: okayamaEntries(items) };
+});

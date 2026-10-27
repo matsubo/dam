@@ -3,13 +3,17 @@
 // bytes. Columns: ダム名 / 貯水位[EL.m] / 貯水量[千 m3] / 空容量[千 m3] /
 // 全流入量[m3/s] / 全放流量[m3/s] / ダム雨量 時間[mm/h] / 累計[mm].
 
+// Fixture → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
+
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { Entry, Observed } from '../ingest/types.ts';
 import {
-  chooseMaster,
   parseYamanashiStatusHtml,
   parseYamanashiTimestamp,
+  yamanashiEntries,
 } from './ingest_yamanashi_dam.ts';
 
 const FIXTURE = join(
@@ -42,27 +46,36 @@ describe('parseYamanashiTimestamp', () => {
   });
 });
 
-describe('parseYamanashiStatusHtml', () => {
+function observed(entries: Entry[], key: string): Observed {
+  const r = entries.find((e) => e.key === key)?.reading;
+  if (!r || typeof r === 'function' || r.state !== 'values') throw new Error(`${key}: no values`);
+  const [o] = r.observations;
+  if (!o) throw new Error(`${key}: no observation`);
+  return o;
+}
+
+describe('yamanashiEntries', () => {
   const warn = (): void => {};
 
-  test('reads all six dams at the page timestamp', async () => {
-    const rows = parseYamanashiStatusHtml(await fixtureHtml(), warn);
-    expect(rows.map((r) => r.yamanashiName)).toEqual([
-      '大門ダム',
-      '塩川ダム',
-      '広瀬ダム',
-      '琴川ダム',
-      '荒川ダム',
-      '深城ダム',
+  test('reads all six dams, keyed by station code, at the page timestamp', async () => {
+    const entries = yamanashiEntries(await fixtureHtml(), warn);
+    expect(entries.map((e) => [e.key, e.name])).toEqual([
+      ['5002', '大門ダム'],
+      ['5001', '塩川ダム'],
+      ['4001', '広瀬ダム'],
+      ['4002', '琴川ダム'],
+      ['1001', '荒川ダム'],
+      ['8001', '深城ダム'],
     ]);
-    for (const r of rows) expect(r.observedAt.toISOString()).toBe('2026-09-27T07:00:00.000Z');
+    for (const e of entries) {
+      expect(e.pref).toBe('19');
+      expect(observed(entries, e.key).observedAt.toISOString()).toBe('2026-09-27T07:00:00.000Z');
+    }
   });
 
   test('takes 貯水量 (not 空容量) and converts 千m³ → m³', async () => {
-    const rows = parseYamanashiStatusHtml(await fixtureHtml(), warn);
-    const daimon = rows.find((r) => r.yamanashiName === '大門ダム');
-    expect(daimon).toEqual({
-      yamanashiName: '大門ダム',
+    const entries = yamanashiEntries(await fixtureHtml(), warn);
+    expect(observed(entries, '5002')).toEqual({
       observedAt: new Date('2026-09-27T07:00:00.000Z'),
       waterLevelM: 895.49,
       storageVolumeM3: 1_114_000,
@@ -71,23 +84,23 @@ describe('parseYamanashiStatusHtml', () => {
       rainfallMm: 0,
     });
     // 深城: 貯水量 880 / 空容量 4,457 千m³.
-    expect(rows.find((r) => r.yamanashiName === '深城ダム')?.storageVolumeM3).toBe(880_000);
+    expect(observed(entries, '8001').storageVolumeM3).toBe(880_000);
   });
 
   test('a blank cell is missing, not zero', async () => {
     const html = (await fixtureHtml()).replace('<TD>1114</TD>', '<TD>&nbsp;</TD>');
-    const daimon = parseYamanashiStatusHtml(html, warn).find((r) => r.yamanashiName === '大門ダム');
-    expect(daimon?.storageVolumeM3).toBeNull();
-    expect(daimon?.waterLevelM).toBe(895.49);
+    const daimon = observed(yamanashiEntries(html, warn), '5002');
+    expect(daimon.storageVolumeM3).toBeNull();
+    expect(daimon.waterLevelM).toBe(895.49);
   });
 
   test('drops only the volumes when 貯水量 is no longer labelled 千 m3', async () => {
     const html = (await fixtureHtml()).replace('貯水量<BR>[千 m3]', '貯水量<BR>[万 m3]');
     const warnings: string[] = [];
-    const rows = parseYamanashiStatusHtml(html, (s) => warnings.push(s));
-    expect(rows).toHaveLength(6);
-    for (const r of rows) expect(r.storageVolumeM3).toBeNull();
-    expect(rows.find((r) => r.yamanashiName === '大門ダム')).toMatchObject({
+    const entries = yamanashiEntries(html, (s) => warnings.push(s));
+    expect(entries).toHaveLength(6);
+    for (const e of entries) expect(observed(entries, e.key).storageVolumeM3).toBeNull();
+    expect(observed(entries, '5002')).toMatchObject({
       waterLevelM: 895.49,
       inflowM3s: 2.31,
       outflowM3s: 3.69,
@@ -96,36 +109,24 @@ describe('parseYamanashiStatusHtml', () => {
     expect(warnings).toHaveLength(1);
   });
 
-  test('returns no rows when the page has no timestamp', () => {
-    expect(parseYamanashiStatusHtml('<html><body><table></table></body></html>', warn)).toEqual([]);
-  });
-});
-
-describe('chooseMaster (#79)', () => {
-  const m = (
-    id: number,
-    name: string,
-    completedYear: number | null = null,
-    stamp: string | null = null,
-  ) => ({
-    id: BigInt(id),
-    name,
-    completedYear,
-    stamp,
+  test('a dam missing from the page is unreadable; a row outside the catalogue is listed by name', async () => {
+    const html = (await fixtureHtml()).replace('>深城ダム<', '>新設ダム<');
+    const entries = yamanashiEntries(html, warn);
+    expect(entries.find((e) => e.key === '8001')?.reading).toEqual({
+      state: 'unreadable',
+      why: 'not on the page',
+    });
+    const extra = entries.find((e) => e.key === '新設ダム');
+    expect(extra?.name).toBe('新設ダム');
+    expect(observed(entries, '新設ダム').storageVolumeM3).toBe(880_000);
   });
 
-  test('keeps the row already stamped with the station code over a better name match', () => {
-    const masters = [m(10, '大門ダム'), m(20, '大門', null, '5002')];
-    expect(chooseMaster('大門ダム', masters, '5002')).toBe(20n);
-  });
-
-  test('ignores a stamp for another station and ranks by name', () => {
-    const masters = [m(10, '大門ダム'), m(20, '大門', null, '5001')];
-    expect(chooseMaster('大門ダム', masters, '5002')).toBe(10n);
-  });
-
-  test('binds to the completed （再）, not the lower-id （元）', () => {
-    const masters = [m(10, '荒川（元）', 1960), m(20, '荒川（再）', 2010)];
-    expect(chooseMaster('荒川ダム', masters, '1001')).toBe(20n);
+  test('every catalogue dam is unreadable when the page has no timestamp', () => {
+    expect(parseYamanashiStatusHtml('<html><body><table></table></body></html>', warn)).toBeNull();
+    const entries = yamanashiEntries('<html><body><table></table></body></html>', warn);
+    expect(entries).toHaveLength(6);
+    for (const e of entries) {
+      expect(e.reading).toEqual({ state: 'unreadable', why: 'no 現在 timestamp' });
+    }
   });
 });

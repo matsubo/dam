@@ -1,5 +1,4 @@
 import { sql } from '../client.ts';
-import { newestFirst, sourceRankJoin } from './newest_row.ts';
 import { RATE_FRESHNESS_DAYS } from './watersheds.ts';
 
 // 平年比 (comparison against the seasonal norm): for "is this year unusually
@@ -28,19 +27,15 @@ export interface SeasonalNorm {
 }
 
 /**
- * Same-season historical norm vs the latest fresh observation for one dam.
- * Null when the dam lacks a fresh observation or enough history.
+ * Same-season historical norm vs the dam's reading (dam_reading(), the 貯水量
+ * its page shows) when that is fresh. Null when the dam lacks a fresh reading
+ * or enough history.
  */
 export async function damSeasonalNorm(damId: bigint): Promise<SeasonalNorm | null> {
   const rows = await sql<SeasonalNorm[]>`
     WITH current AS (
-      SELECT o.storage_volume_m3
-      FROM observations o ${sourceRankJoin()}
-      WHERE o.dam_id = ${damId}
-        AND o.storage_volume_m3 IS NOT NULL
-        AND o.observed_at > NOW() - make_interval(days => ${RATE_FRESHNESS_DAYS})
-      ORDER BY ${newestFirst()}
-      LIMIT 1
+      SELECT r.storage_volume_m3
+      FROM dam_reading(${damId}, TRUE, make_interval(days => ${RATE_FRESHNESS_DAYS})) r
     ),
     norm AS (
       SELECT AVG(od.last_storage_volume_m3) AS norm_volume,
@@ -75,17 +70,9 @@ export async function damSeasonalNorm(damId: bigint): Promise<SeasonalNorm | nul
 export async function watershedSeasonalNorm(watershedId: bigint): Promise<SeasonalNorm | null> {
   const rows = await sql<SeasonalNorm[]>`
     WITH cohort AS (
-      SELECT d.id AS dam_id, latest.storage_volume_m3 AS current_volume
+      SELECT d.id AS dam_id, r.storage_volume_m3 AS current_volume
       FROM dams d
-      CROSS JOIN LATERAL (
-        SELECT o.storage_volume_m3
-        FROM observations o ${sourceRankJoin()}
-        WHERE o.dam_id = d.id
-          AND o.storage_volume_m3 IS NOT NULL
-          AND o.observed_at > NOW() - make_interval(days => ${RATE_FRESHNESS_DAYS})
-        ORDER BY ${newestFirst()}
-        LIMIT 1
-      ) latest
+      CROSS JOIN LATERAL dam_reading(d.id, TRUE, make_interval(days => ${RATE_FRESHNESS_DAYS})) r
       WHERE d.watershed_id = ${watershedId}
     ),
     norm AS (

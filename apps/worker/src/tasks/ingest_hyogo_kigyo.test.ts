@@ -7,8 +7,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { BindableMaster } from '@dam/core/dam_binding';
-import { chooseMaster, parseHyogoKigyoChosui, storedReadings } from './ingest_hyogo_kigyo.ts';
+import { hyogoKigyoEntries, parseHyogoKigyoChosui } from './ingest_hyogo_kigyo.ts';
 
 const FIXTURE = join(
   import.meta.dir,
@@ -71,52 +70,34 @@ describe('parseHyogoKigyoChosui', () => {
   });
 });
 
-describe('storedReadings', () => {
-  test('writes 神谷 only: 黒川 is the 企業庁 share, the rest are other bases or totals', () => {
-    expect(storedReadings(parsed.rows).map((r) => r.name)).toEqual(['神谷ダム']);
+describe('hyogoKigyoEntries', () => {
+  const entries = (rows = parsed.rows) => {
+    if (!parsed.observedAt) throw new Error('no date');
+    return hyogoKigyoEntries(parsed.observedAt, rows);
+  };
+
+  test('lists every 水源; writes 神谷 only, 黒川 (the 企業庁 share) never binds', () => {
+    const list = entries();
+    expect(list).toHaveLength(10);
+    expect(list.filter((e) => !e.dontWrite).map((e) => e.key)).toEqual(['黒川ダム', '神谷ダム']);
+    expect(list.find((e) => e.key === '黒川ダム')?.bind).toBe('never');
+    expect(list.every((e) => e.pref === '28')).toBe(true);
   });
 
-  test('drops 神谷 when both of its readings are blank', () => {
+  test('神谷 reads its volume and rate at the 現在 date', () => {
+    const r = entries().find((e) => e.key === '神谷ダム')?.reading;
+    if (!r || typeof r === 'function' || r.state !== 'values') throw new Error('no values');
+    expect(r.observations[0]?.observedAt.toISOString()).toBe('2026-09-23T15:00:00.000Z');
+    expect(r.observations[0]?.storageVolumeM3).toBe(13_989_000);
+    expect(r.observations[0]?.storageRate).toBeCloseTo(0.869, 6);
+  });
+
+  test('神谷 with both readings blank is unreadable', () => {
     const rows = parsed.rows.map((r) =>
       r.name === '神谷ダム' ? { ...r, storageVolumeM3: null, storageRate: null } : r,
     );
-    expect(storedReadings(rows)).toEqual([]);
-  });
-});
-
-describe('chooseMaster', () => {
-  // Real prod rows (兵庫 28) whose names share a stem with a published row.
-  const masters: BindableMaster[] = [
-    { id: 10194n, name: '一庫', completedYear: 1983 },
-    { id: 10195n, name: '青野', completedYear: 1987 },
-    { id: 10210n, name: '平荘第1', completedYear: 1969 },
-    { id: 10211n, name: '平荘第2', completedYear: 1969 },
-    { id: 10212n, name: '平荘第3', completedYear: 1969 },
-    { id: 10221n, name: '大川瀬', completedYear: 1991 },
-    { id: 10229n, name: '呑吐', completedYear: 1987 },
-    { id: 10230n, name: '権現第1', completedYear: 1981 },
-    { id: 10231n, name: '権現第3', completedYear: 1981 },
-    { id: 10234n, name: '黒川', completedYear: 1974 },
-    { id: 10235n, name: '生野', completedYear: 1972 },
-    { id: 10242n, name: '神谷', completedYear: 2000 },
-    { id: 10244n, name: '引原', completedYear: 1957 },
-  ];
-
-  test('binds a single dam by its name without ダム', () => {
-    expect(chooseMaster('神谷ダム', masters)).toBe(10242n);
-    expect(chooseMaster('青野ダム', masters)).toBe(10195n);
-    expect(chooseMaster('呑吐ダム', masters)).toBe(10229n);
-  });
-
-  test('leaves a reservoir total over several dam bodies unresolved', () => {
-    expect(chooseMaster('平荘ダム', masters)).toBeNull();
-    expect(chooseMaster('権現ダム', masters)).toBeNull();
-  });
-
-  test('leaves 黒川 unresolved: its figures are the 企業庁 share, not the dam', () => {
-    expect(chooseMaster('黒川ダム', masters)).toBeNull();
-    // A stamp from an earlier run must not re-bind it either.
-    const stamped = masters.map((m) => (m.id === 10234n ? { ...m, stamp: '黒川ダム' } : m));
-    expect(chooseMaster('黒川ダム', stamped)).toBeNull();
+    expect(entries(rows).find((e) => e.key === '神谷ダム')?.reading).toMatchObject({
+      state: 'unreadable',
+    });
   });
 });

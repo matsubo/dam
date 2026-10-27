@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
 import { EntityIcon } from '../../components/entity-icon.tsx';
+import { DISCORD_INVITE, REPO_URL } from '../../lib/contributors.ts';
 
 export const revalidate = 86400;
 export const metadata: Metadata = {
@@ -277,9 +278,18 @@ export default function GlossaryPage() {
       ))}
 
       <p className="mt-12 text-xs text-on-surface-variant">
-        定義の不明点・追加要望は{' '}
+        定義の誤り・追加要望は{' '}
         <a
-          href="https://discord.gg/UbWqspWbAk"
+          href={`${REPO_URL}/issues`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary hover:underline"
+        >
+          GitHub Issues
+        </a>
+        、不明点の相談は{' '}
+        <a
+          href={DISCORD_INVITE}
           target="_blank"
           rel="noopener noreferrer"
           className="text-primary hover:underline"

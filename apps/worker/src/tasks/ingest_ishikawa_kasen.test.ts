@@ -1,7 +1,19 @@
 // apps/worker/src/tasks/ingest_ishikawa_kasen.test.ts
+//
+// Feed → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
 
 import { describe, expect, test } from 'bun:test';
-import { buildUrl, parseIshikawaJson, parseIshikawaTimestamp } from './ingest_ishikawa_kasen.ts';
+import type { Entry, Observed } from '../ingest/types.ts';
+import { buildUrl, ishikawaEntries, parseIshikawaTimestamp } from './ingest_ishikawa_kasen.ts';
+
+function observed(e: Entry | undefined): Observed | undefined {
+  const r = e?.reading;
+  if (!r || typeof r === 'function' || r.state !== 'values') throw new Error('no values');
+  return r.observations[0];
+}
+const state = (e: Entry | undefined) =>
+  e && typeof e.reading !== 'function' ? e.reading.state : undefined;
 
 describe('parseIshikawaTimestamp', () => {
   test('parses "YYYY-MM-DD-HH-mm" (JST) → UTC', () => {
@@ -85,7 +97,7 @@ const SAMPLE_JSON = {
       },
     ],
   },
-  // 手取川ダム(国) should be excluded (not in STATION_MAP)
+  // 手取川ダム(国): recorded, not written
   '21565_7_1': {
     data60: [
       {
@@ -99,23 +111,37 @@ const SAMPLE_JSON = {
   },
 };
 
-describe('parseIshikawaJson', () => {
-  test('parses 3 dam rows (手取川(国) excluded)', () => {
-    const rows = parseIshikawaJson(SAMPLE_JSON);
-    expect(rows).toHaveLength(3);
-    expect(rows.map((r) => r.ishikawaName)).toEqual(['八ヶ川ダム', '新内川ダム', '大日川ダム']);
+describe('ishikawaEntries', () => {
+  const entries = ishikawaEntries(SAMPLE_JSON);
+  const named = (n: string) => entries.find((e) => e.name === n);
+
+  test('the whole catalogue, keyed by station id; a station absent from the feed is unreadable', () => {
+    expect(entries).toHaveLength(12);
+    expect(named('八ヶ川ダム')?.key).toBe('4361_7_41');
+    expect(named('八ヶ川ダム')?.pref).toBe('17');
+    expect(entries.filter((e) => state(e) === 'values').map((e) => e.name)).toEqual([
+      '八ヶ川ダム',
+      '新内川ダム',
+      '大日川ダム',
+      '手取川ダム',
+    ]);
+    expect(state(named('内川ダム'))).toBe('unreadable');
+  });
+
+  test('手取川ダム(国) is recorded but never written', () => {
+    expect(named('手取川ダム')?.key).toBe('21565_7_1');
+    expect(named('手取川ダム')?.dontWrite).toBeDefined();
+    expect(entries.filter((e) => e.dontWrite).map((e) => e.name)).toEqual(['手取川ダム']);
   });
 
   test('all rows share the same observedAt (2026-06-05T08:00Z)', () => {
-    const rows = parseIshikawaJson(SAMPLE_JSON);
-    for (const r of rows) {
-      expect(r.observedAt.toISOString()).toBe('2026-06-05T08:00:00.000Z');
+    for (const n of ['八ヶ川ダム', '新内川ダム', '大日川ダム']) {
+      expect(observed(named(n))?.observedAt.toISOString()).toBe('2026-06-05T08:00:00.000Z');
     }
   });
 
   test('八ヶ川ダム: all fields parsed correctly', () => {
-    const r = parseIshikawaJson(SAMPLE_JSON).find((x) => x.ishikawaName === '八ヶ川ダム');
-    expect(r).toBeDefined();
+    const r = observed(named('八ヶ川ダム'));
     expect(r?.waterLevelM).toBeCloseTo(130.6);
     expect(r?.storageVolumeM3).toBe(958_000);
     expect(r?.inflowM3s).toBeCloseTo(0.21);
@@ -123,8 +149,7 @@ describe('parseIshikawaJson', () => {
   });
 
   test('新内川ダム: "*" inflow and storage → null; outflow and level present', () => {
-    const r = parseIshikawaJson(SAMPLE_JSON).find((x) => x.ishikawaName === '新内川ダム');
-    expect(r).toBeDefined();
+    const r = observed(named('新内川ダム'));
     expect(r?.waterLevelM).toBeCloseTo(104.99);
     expect(r?.storageVolumeM3).toBeNull();
     expect(r?.inflowM3s).toBeNull();
@@ -132,18 +157,31 @@ describe('parseIshikawaJson', () => {
   });
 
   test('大日川ダム: comma-separated storage parsed and converted to m³', () => {
-    const r = parseIshikawaJson(SAMPLE_JSON).find((x) => x.ishikawaName === '大日川ダム');
-    expect(r).toBeDefined();
+    const r = observed(named('大日川ダム'));
     expect(r?.storageVolumeM3).toBe(17_634_000);
     expect(r?.inflowM3s).toBeCloseTo(3.74);
   });
 
-  test('手取川ダム(国) excluded from results', () => {
-    const rows = parseIshikawaJson(SAMPLE_JSON);
-    expect(rows.find((r) => r.ishikawaName.includes('手取川'))).toBeUndefined();
+  test('"*" on every item is provider-marked empty', () => {
+    const json = {
+      '4361_7_41': {
+        data60: [
+          {
+            time: '2026-06-05-17-00',
+            item_10: { val: '*' },
+            item_20: { val: '*' },
+            item_50: { val: '*' },
+            item_70: { val: '*' },
+          },
+        ],
+      },
+    };
+    expect(state(ishikawaEntries(json).find((e) => e.key === '4361_7_41'))).toBe('empty');
   });
 
-  test('returns empty array for empty JSON', () => {
-    expect(parseIshikawaJson({ observationTime: '2026-06-05-17-00' })).toHaveLength(0);
+  test('a feed that could not be fetched leaves every station unreadable', () => {
+    const list = ishikawaEntries(null, 'HTTP 404');
+    expect(list).toHaveLength(12);
+    expect(new Set(list.map(state))).toEqual(new Set(['unreadable']));
   });
 });

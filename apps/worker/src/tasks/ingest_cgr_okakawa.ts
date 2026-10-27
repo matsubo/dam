@@ -24,8 +24,8 @@
 // every row in column order — 湯原 comes out as「51.5 -112湯 原 ダ ム 72,000
 // 37,064」— so the parser anchors on the name, takes 利水容量 and 貯水量 as the
 // first two figures after it, and accepts as the rate only a printed figure on
-// that line equal to 貯水量 / 利水容量. A row that has none is dropped, so a
-// side note on the same line (「６つのダムの貯水率は 25.0 ％です。」) or a
+// that line equal to 貯水量 / 利水容量. A row that has none is unreadable, so
+// a side note on the same line (「６つのダムの貯水率は 25.0 ％です。」) or a
 // misread can never become a reading.
 //
 // Rate: 「※ 貯水率は洪水期利水容量に対する貯水量の比率」. Back-solving
@@ -45,13 +45,9 @@
 // the second run catches a late edition. Idempotent UPSERT on the PDF's own
 // timestamp.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
 import { extractText, getDocumentProxy } from 'unpdf';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry } from '../ingest/types.ts';
 
 const PDF_URL =
   process.env.CGR_OKAKAWA_DAM_URL ??
@@ -141,19 +137,35 @@ export function parseOkakawaPdfText(text: string): { rows: ParsedRow[]; publishe
 }
 
 /**
- * Throw when a fetched PDF yields no usable row. Line-oriented parsing over
- * extracted text fails silently on a layout change — the names may still match
- * while no row survives the rate check, or (a notice PDF, a re-typeset table)
- * nothing matches at all — and either way the fetch is green. The PDF lists 13
- * rows every edition, so zero is never a legitimate reading; throwing surfaces
- * it in /api/v1/admin/jobs failing_jobs (#31).
+ * Every name the PDF prints, with its row when one passed the rate check.
+ * Line-oriented parsing over extracted text fails silently on a layout change
+ * — the names may still match while no row survives the rate check, or (a
+ * notice PDF, a re-typeset table) nothing matches at all. The PDF lists 13
+ * rows every edition, so the first leaves every entry unreadable and the
+ * second lists nothing; either way the run fails the job (#31).
  */
-export function assertUsableRows(parsed: { rows: ParsedRow[]; published: string[] }): void {
-  if (parsed.rows.length === 0) {
-    throw new Error(
-      `${SOURCE_ID}: 0 usable rows from ${parsed.published.length} published names — layout change?`,
-    );
-  }
+export function okakawaEntries(text: string): Entry[] {
+  const { rows, published } = parseOkakawaPdfText(text);
+  return published.map((name) => {
+    const row = rows.find((r) => r.name === name);
+    return {
+      key: name,
+      name,
+      pref: PREF_CODE,
+      reading: row
+        ? {
+            state: 'values',
+            observations: [
+              {
+                observedAt: row.observedAt,
+                storageVolumeM3: row.storageVolumeM3,
+                storageRate: row.storageRate,
+              },
+            ],
+          }
+        : { state: 'unreadable', why: 'no dated row whose 貯水率 is 貯水量 / 利水容量' },
+    };
+  });
 }
 
 /** Extract the PDF's text with unpdf (no poppler in the runtime image). */
@@ -163,121 +175,11 @@ export async function pdfToText(bytes: Uint8Array): Promise<string> {
   return text;
 }
 
-// --- matching ---------------------------------------------------------------
-
-function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .trim();
-}
-
-/**
- * Best pref-33 master for a printed name: the row already stamped with it
- * keeps it; otherwise an exact stem beats a prefix (苫田 over 苫田鞍部) beats
- * a substring, and equal ranks go to the live （元）/（再） twin.
- */
-export function chooseMaster(name: string, masters: BindableMaster[]): bigint | null {
-  const stamped = stampedMaster(masters, name);
-  if (stamped) return stamped.id;
-  const stem = normalizeName(name);
-  if (!stem) return null;
-  let best: { m: BindableMaster; rank: number } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (mStem === stem) rank = 0;
-    else if (mStem.startsWith(stem)) rank = 1;
-    else if (mStem.includes(stem)) rank = 2;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-      best = { m, rank };
-    }
-  }
-  return best?.m.id ?? null;
-}
-
-// --- DB helpers -------------------------------------------------------------
-
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 292,
-            '国土交通省 中国地方整備局 岡山河川事務所 三水系主要ダム貯水状況 — 11 ダム + 2 堰, 平日 9時 (PDF)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
 // --- task -------------------------------------------------------------------
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
-  const res = await fetch(PDF_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (res.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${res.status}; aborting`);
-    return;
-  }
-
-  const { rows, published } = parseOkakawaPdfText(
-    await pdfToText(new Uint8Array(await res.arrayBuffer())),
-  );
-  log(`${SOURCE_ID}: parsed ${rows.length}/${published.length} rows`);
-
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  const damByName = new Map<string, bigint>();
-  for (const name of published) {
-    const damId = chooseMaster(name, masters);
-    universe.push({ externalId: name, name, prefCode: PREF_CODE, resolvedDamId: damId });
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${name}"`);
-      continue;
-    }
-    damByName.set(name, damId);
-    await bindExternalId(damId, SOURCE_ID, name);
-  }
-  await recordUniverse(SOURCE_ID, universe);
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = damByName.get(p.name);
-    if (!damId) continue;
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: p.storageRate,
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: null,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${damByName.size} written=${written}`);
-
-  assertUsableRows({ rows, published });
-};
-
-export default task;
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const res = await upstream.fetch(PDF_URL, { timeoutMs: 30_000 });
+  const entries = okakawaEntries(await pdfToText(res.bytes));
+  log(`${SOURCE_ID}: ${entries.length} names printed`);
+  return { entries };
+});

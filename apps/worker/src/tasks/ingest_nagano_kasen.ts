@@ -18,17 +18,20 @@
 //   item_70   = 全放流量[m³/s]
 //   time      = "YYYY-MM-DD-HH-mm" (JST)
 //
-// Station 2001_7_3 (釜口水門) is a sluice gate — excluded from STATION_MAP.
+// Station 2001_7_3 (釜口水門) is a sluice gate: listed, never bound.
 // Station names verified against /dps/map/map.html data-river-key attributes.
+//
+// The published list is the whole STATION_MAP, not this run's rows: the feed
+// keeps a station's slot on an hour when it reports no usable value, and a
+// station that never reports is exactly the case /coverage must not read as
+// "nobody publishes it". When the hour's file cannot be read, every station
+// is listed unreadable.
 //
 // Priority 308. Cron hourly at :33.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const BASE_URL = process.env.NAGANO_KASEN_URL ?? 'https://www.sabo-nagano.jp/dyn/json/dat/pc';
 
@@ -36,11 +39,11 @@ const PREF_CODE = '20';
 const SOURCE_ID = 'nagano-kasen';
 
 // --- station map ------------------------------------------------------------
-// Skip 2001_7_3 (釜口水門 — sluice gate, not a dam).
 
 const STATION_MAP: Readonly<Record<string, string>> = {
   '2001_7_1': '松川ダム',
   '2001_7_2': '片桐ダム',
+  '2001_7_3': '釜口水門',
   '2001_7_4': '箕輪ダム',
   '2001_7_5': '横川ダム',
   '2001_7_6': '奈良井ダム',
@@ -58,16 +61,10 @@ const STATION_MAP: Readonly<Record<string, string>> = {
   '2001_7_18': '金原ダム',
 };
 
-// --- types ------------------------------------------------------------------
+/** 釜口水門: the sluice gate at 諏訪湖's outlet, not a dam. */
+const SLUICE_GATE = '2001_7_3';
 
-export interface ParsedRow {
-  naganoName: string;
-  observedAt: Date;
-  storageVolumeM3: number | null;
-  waterLevelM: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
-}
+// --- types ------------------------------------------------------------------
 
 interface ItemVal {
   value?: string;
@@ -86,7 +83,7 @@ interface StationData {
   data60?: DataPoint[];
 }
 
-interface NaganoJson {
+export interface NaganoJson {
   observationTime?: string;
   updateTime?: string;
   [stationId: string]: StationData | string | undefined;
@@ -104,10 +101,11 @@ export function parseNaganoTimestamp(ts: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function parseVal(s: string | undefined): number | null {
-  if (!s || s === '*' || s === '--' || s === '---' || s === '**') return null;
-  const n = Number(s.replace(/,/g, ''));
-  return Number.isFinite(n) ? n : null;
+/** A value cell; the feed marks a missing value with *, --, --- or **. */
+function parseVal(s: string | undefined): Cell {
+  if (s === '*' || s === '--' || s === '---' || s === '**') return cell(null, true);
+  if (!s) return null;
+  return cell(Number(s.replace(/,/g, '')), false);
 }
 
 /** Build the data JSON URL for the given UTC wall-clock moment. */
@@ -120,185 +118,64 @@ export function buildNaganoUrl(nowUtc: Date, baseUrl: string): string {
   return `${baseUrl}/${ds}/${ds}_1_dam_60.json`;
 }
 
-export function parseNaganoJson(json: NaganoJson): ParsedRow[] {
-  const rows: ParsedRow[] = [];
-
-  for (const [stationId, naganoName] of Object.entries(STATION_MAP)) {
-    const stationData = json[stationId];
-    if (!stationData || typeof stationData === 'string') continue;
-    const latest = (stationData as StationData).data60?.[0];
-    if (!latest?.time) continue;
-
-    const observedAt = parseNaganoTimestamp(latest.time);
-    if (!observedAt) continue;
-
-    const waterLevelM = parseVal(latest.item_10?.value);
-    const volRaw = parseVal(latest.item_20?.value);
-    const inflowM3s = parseVal(latest.item_50?.value);
-    const outflowM3s = parseVal(latest.item_70?.value);
-
-    if (waterLevelM === null && inflowM3s === null && outflowM3s === null) continue;
-
-    rows.push({
-      naganoName,
-      observedAt,
-      storageVolumeM3: volRaw != null ? volRaw * 1000 : null,
-      waterLevelM,
-      inflowM3s,
-      outflowM3s,
-    });
+/** One station's latest hourly reading. */
+export function naganoReading(json: NaganoJson, stationId: string): Reading {
+  const stationData = json[stationId];
+  if (!stationData || typeof stationData === 'string') {
+    return { state: 'unreadable', why: 'station absent from the hour file' };
+  }
+  const latest = stationData.data60?.[0];
+  const observedAt = latest?.time ? parseNaganoTimestamp(latest.time) : null;
+  if (!latest || !observedAt) {
+    return { state: 'unreadable', why: `data60[0].time "${latest?.time ?? ''}"` };
   }
 
-  return rows;
-}
-
-// --- DB helpers -------------------------------------------------------------
-
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 308,
-            '長野県 河川砂防情報ステーション — 17 県管理ダム hourly JSON',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/貯水池$/, '')
-    .trim();
-}
-
-interface DamMatch {
-  naganoName: string;
-  damId: bigint;
-}
-
-/**
- * Best master dam for a station; a row already stamped with its station id
- * wins, then exact name, stem, and substring matches.
- */
-export function chooseMaster(
-  naganoName: string,
-  masters: BindableMaster[],
-  stationId?: string,
-): bigint | null {
-  // A row already stamped with this station keeps it; names alone cannot
-  // separate same-name dams (#57).
-  const stamped = stationId ? stampedMaster(masters, stationId) : null;
-  if (stamped) return stamped.id;
-  const stem = normalizeName(naganoName);
-  if (!stem) return null;
-  let best: { m: BindableMaster; rank: number } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (m.name === naganoName) rank = 0;
-    else if (mStem === stem) rank = 1;
-    else if (m.name === `${stem}ダム`) rank = 2;
-    else if (mStem.startsWith(stem)) rank = 3;
-    else if (mStem.includes(stem)) rank = 4;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-      best = { m, rank };
-    }
+  const level = parseVal(latest.item_10?.value);
+  const volume = parseVal(latest.item_20?.value);
+  const inflow = parseVal(latest.item_50?.value);
+  const outflow = parseVal(latest.item_70?.value);
+  const state = cellState([level, volume, inflow, outflow]);
+  if (state === 'empty') return { state, mark: '* / -- on every field' };
+  if (numberIn(level) === null && numberIn(inflow) === null && numberIn(outflow) === null) {
+    return { state: 'unreadable', why: 'no 貯水位 or flow' };
   }
-  return best?.m.id ?? null;
+  const volRaw = numberIn(volume);
+  return {
+    state: 'values',
+    observations: [
+      {
+        observedAt,
+        storageVolumeM3: volRaw != null ? volRaw * 1000 : null,
+        waterLevelM: numberIn(level),
+        inflowM3s: numberIn(inflow),
+        outflowM3s: numberIn(outflow),
+      },
+    ],
+  };
 }
 
-async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const out: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing. The
-  // published list is the whole STATION_MAP, not this run's rows: the feed
-  // keeps a station's slot on an hour when it reports no usable value, and a
-  // station that never reports is exactly the case /coverage must not read as
-  // "nobody publishes it". Only stations that did report become matches.
-  const universe: UniverseRow[] = [];
-  const reported = new Set(rows.map((r) => r.naganoName));
-
-  for (const [stationId, naganoName] of Object.entries(STATION_MAP)) {
-    if (!normalizeName(naganoName)) continue;
-    const damId = chooseMaster(naganoName, masters, stationId);
-
-    universe.push({
-      externalId: stationId,
+/** Every station of STATION_MAP, read from the hour file (null: unreadable). */
+export function naganoEntries(json: NaganoJson | null, why = 'hour file unreadable'): Entry[] {
+  return Object.entries(STATION_MAP).map(
+    ([stationId, naganoName]): Entry => ({
+      key: stationId,
       name: naganoName,
-      prefCode: PREF_CODE,
-      resolvedDamId: damId,
-    });
-
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${naganoName}"`);
-      continue;
-    }
-    await bindExternalId(damId, SOURCE_ID, stationId);
-    if (reported.has(naganoName)) out.push({ naganoName, damId });
-  }
-
-  await recordUniverse(SOURCE_ID, universe);
-  return out;
+      pref: PREF_CODE,
+      ...(stationId === SLUICE_GATE ? { bind: 'never' as const } : {}),
+      reading: json ? naganoReading(json, stationId) : { state: 'unreadable', why },
+    }),
+  );
 }
 
 // --- task -------------------------------------------------------------------
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
   const url = buildNaganoUrl(new Date(), BASE_URL);
-  const r = await fetch(url, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
+  try {
+    return { entries: naganoEntries((await upstream.fetch(url)).json<NaganoJson>()) };
+  } catch (err) {
+    const why = `${url}: ${err instanceof Error ? err.message : String(err)}`;
+    log(`${SOURCE_ID}: ${why}`);
+    return { entries: naganoEntries(null, why) };
   }
-
-  const json = (await r.json()) as NaganoJson;
-  const rows = parseNaganoJson(json);
-  log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
-
-  const matches = await matchMaster(rows, log);
-  const damByName = new Map(matches.map((m) => [m.naganoName, m.damId]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = damByName.get(p.naganoName);
-    if (!damId) continue;
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: null,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+});

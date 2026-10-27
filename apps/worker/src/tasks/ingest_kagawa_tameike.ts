@@ -37,12 +37,9 @@
 // finer-grained agricultural feeds (fukushima-nourin 285, miyagi-nousei 286)
 // by convention.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask, type Log } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 import { pdfToText } from './ingest_oita_nourin.ts';
 
 const INDEX_URL =
@@ -52,6 +49,8 @@ const ORIGIN = 'https://www.pref.kagawa.lg.jp';
 const PREF_CODE = '37';
 const SOURCE_ID = 'kagawa-tameike';
 
+const TIMEOUT_MS = 30_000;
+
 /** 宝山湖 as the page names it — its stamp and universe key. */
 const HOZANKO = '宝山湖';
 /**
@@ -60,28 +59,29 @@ const HOZANKO = '宝山湖';
  */
 const HOZANKO_NDI = '2170';
 
-export interface ParsedRow {
+/** One pond of the ため池 column: its printed name and its rate cell. */
+export interface PondRow {
   /** Pond name exactly as printed (「公渕池」) — also the stamp and universe key. */
   name: string;
-  /** 貯水率 as a 0..1 fraction. */
-  storageRate: number;
+  /** The rate cell as printed: a whole percent, or the PDF's 「－」 marker. */
+  cell: string;
 }
-
-type Master = BindableMaster & { ndi: string | null };
 
 // --- parsing ----------------------------------------------------------------
 
 /** One pond line: name ending 池, the rate (or a marker), the 市町 or 〃. */
 const POND_LINE_RE = /^(\S+池)\s+(\S+)\s+(\S+(?:市|町|村)|〃)$/;
 
+/** A rate cell the PDF prints in place of a figure. */
+const MARK_RE = /^[－―ー‐-]+$/;
+
 export function parseKagawaTameikeText(text: string): {
   surveyDate: Date | null;
-  rows: ParsedRow[];
-  published: string[];
+  ponds: PondRow[];
 } {
   const lines = text.split(/\r?\n/).map((l) => l.trim());
   const labelAt = lines.findIndex((l) => l.startsWith('ため池貯水率'));
-  if (labelAt < 0) return { surveyDate: null, rows: [], published: [] };
+  if (labelAt < 0) return { surveyDate: null, ponds: [] };
 
   // The report date (「令和8年9月25日」) fixes the year; the survey date follows
   // the ため池 label and has no year of its own.
@@ -101,19 +101,27 @@ export function parseKagawaTameikeText(text: string): {
   }
 
   // The pond column runs upward from the label until the 県下平均/平年値 lines.
-  const rows: ParsedRow[] = [];
-  const published: string[] = [];
+  const ponds: PondRow[] = [];
   for (let i = labelAt - 1; i >= 0; i--) {
     const line = lines[i] ?? '';
     if (line === '備考') continue;
     const m = line.match(POND_LINE_RE);
     if (!m) break;
-    published.unshift(m[1] as string);
-    const pct = /^\d{1,3}$/.test(m[2] ?? '') ? Number(m[2]) : null;
-    if (pct === null || pct <= 0 || pct > 100) continue;
-    rows.unshift({ name: m[1] as string, storageRate: pct / 100 });
+    ponds.unshift({ name: m[1] as string, cell: m[2] as string });
   }
-  return { surveyDate, rows, published };
+  return { surveyDate, ponds };
+}
+
+/** A pond's reading from its rate cell and the column's survey date. */
+export function pondReading(cell: string, surveyDate: Date | null): Reading {
+  if (MARK_RE.test(cell)) return { state: 'empty', mark: cell };
+  const pct = /^\d{1,3}$/.test(cell) ? Number(cell) : null;
+  if (pct === null) return { state: 'unreadable', why: `rate cell 「${cell}」` };
+  if (pct <= 0 || pct > 100) {
+    return { state: 'unreadable', why: `${pct} % is not an operating reading` };
+  }
+  if (!surveyDate) return { state: 'unreadable', why: 'no 「…現在」 survey date' };
+  return { state: 'values', observations: [{ observedAt: surveyDate, storageRate: pct / 100 }] };
 }
 
 /** The newest chosuiYYYYMMDD.pdf linked from the かがわの水 page. */
@@ -159,184 +167,77 @@ export function parseHozankoHtml(
   return { observedAt, storageRate };
 }
 
-// --- matching ---------------------------------------------------------------
+// --- entries ----------------------------------------------------------------
+
+/**
+ * 宝山湖, read from the page itself whatever happens to the PDF. Pinned by
+ * NDI: no master row carries the lake name.
+ */
+export function hozankoEntry(indexHtml: string): Entry {
+  const hozanko = parseHozankoHtml(indexHtml);
+  let reading: Reading;
+  if (!hozanko) reading = { state: 'unreadable', why: `no ${HOZANKO} block on the index` };
+  else if (hozanko.storageRate === null) {
+    reading = { state: 'unreadable', why: 'no usable 現在貯水率' };
+  } else {
+    reading = {
+      state: 'values',
+      observations: [{ observedAt: hozanko.observedAt, storageRate: hozanko.storageRate }],
+    };
+  }
+  return {
+    key: HOZANKO,
+    name: HOZANKO,
+    pref: PREF_CODE,
+    bind: { ndi: HOZANKO_NDI },
+    reading,
+  };
+}
 
 /**
  * Pond names are generic (新池, 城池, 大谷池 exist all over the prefecture),
  * so only an exact name binds — after folding 渕→淵 (the PDF's 公渕池 is the
- * master's 公淵池) and dropping the （元）/（再） marker, whose twins
- * preferMaster settles.
+ * master's 公淵池); a （元）/（再） pair goes to the live twin.
  */
-export function chooseMaster(name: string, masters: BindableMaster[]): bigint | null {
-  const stamped = stampedMaster(masters, name);
-  if (stamped) return stamped.id;
-  const key = name.replace(/渕/g, '淵');
-  let best: BindableMaster | null = null;
-  for (const m of masters) {
-    if (m.name.replace(/[（(][^）)]*[）)]/g, '').trim() !== key) continue;
-    if (!best || preferMaster(m, best)) best = m;
-  }
-  return best?.id ?? null;
+export function pondEntries(text: string): Entry[] {
+  const { surveyDate, ponds } = parseKagawaTameikeText(text);
+  return ponds.map((p) => ({
+    key: p.name,
+    name: p.name,
+    pref: PREF_CODE,
+    bind: { name: p.name.replace(/渕/g, '淵'), exact: true },
+    reading: pondReading(p.cell, surveyDate),
+  }));
 }
-
-/** 宝山湖's master: the row already stamped with it, else NDI 2170. */
-export function chooseHozanko(masters: Master[]): bigint | null {
-  return (
-    stampedMaster(masters, HOZANKO)?.id ?? masters.find((m) => m.ndi === HOZANKO_NDI)?.id ?? null
-  );
-}
-
-// --- DB helpers -------------------------------------------------------------
-
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 283,
-            '香川県 水資源対策課 降雨及び貯水率の状況 — 主要ため池 26 か所 (月2回程度) と宝山湖の貯水率',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-// --- task -------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
-  const headers = {
-    'user-agent':
-      process.env.HTTP_USER_AGENT ??
-      'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-  };
-
-  const indexRes = await fetch(INDEX_URL, { headers, signal: AbortSignal.timeout(20_000) });
-  if (indexRes.status !== 200) {
-    log(`${SOURCE_ID}: index HTTP ${indexRes.status}; aborting`);
-    return;
-  }
-  const indexHtml = await indexRes.text();
-
-  const masters = await sql<Master[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp,
-           external_ids->>'ndi' AS ndi
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  const readings: { damId: bigint; observedAt: Date; storageRate: number }[] = [];
-
-  // 宝山湖 lives on the page itself, so it is read whatever happens to the PDF.
-  const hozanko = parseHozankoHtml(indexHtml);
-  if (hozanko) {
-    const damId = chooseHozanko(masters);
-    universe.push({
-      externalId: HOZANKO,
-      name: HOZANKO,
-      prefCode: PREF_CODE,
-      resolvedDamId: damId,
-    });
-    if (damId) {
-      await bindExternalId(damId, SOURCE_ID, HOZANKO);
-      if (hozanko.storageRate !== null) {
-        readings.push({ damId, observedAt: hozanko.observedAt, storageRate: hozanko.storageRate });
-      }
-    }
-    log(
-      `${SOURCE_ID}: ${HOZANKO} ${hozanko.storageRate ?? '-'} at ${hozanko.observedAt.toISOString()}`,
-    );
-  } else {
-    log(`${SOURCE_ID}: no ${HOZANKO} block on the index`);
-  }
-
-  const ponds = await readPonds(indexHtml, headers, log);
-  const damByName = new Map<string, bigint>();
-  for (const name of ponds?.published ?? []) {
-    const damId = chooseMaster(name, masters);
-    universe.push({ externalId: name, name, prefCode: PREF_CODE, resolvedDamId: damId });
-    if (!damId) continue;
-    damByName.set(name, damId);
-    await bindExternalId(damId, SOURCE_ID, name);
-  }
-  await recordUniverse(SOURCE_ID, universe);
-
-  for (const p of ponds?.rows ?? []) {
-    const damId = damByName.get(p.name);
-    if (damId && ponds) {
-      readings.push({ damId, observedAt: ponds.surveyDate, storageRate: p.storageRate });
-    }
-  }
-
-  const written = await upsertObservations(
-    readings.map((r) => ({
-      observedAt: r.observedAt,
-      damId: r.damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: null,
-      storageRate: r.storageRate,
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: null,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    })),
-  );
-  const parsed = (ponds?.rows.length ?? 0) + (hozanko?.storageRate != null ? 1 : 0);
-  log(`${SOURCE_ID} done: parsed=${parsed} matched=${readings.length} written=${written}`);
-
-  // Both blocks are located by fixed labels (the 宝山湖 heading has been on the
-  // page since at least 2024); a layout change that breaks one yields nothing
-  // while the fetch succeeds.
-  if (!hozanko) {
-    throw new Error(`${SOURCE_ID}: no ${HOZANKO} block on ${INDEX_URL} — layout change?`);
-  }
-  if (ponds?.rows.length === 0) {
-    throw new Error(`${SOURCE_ID}: no ため池 rows in ${ponds.pdfUrl} — layout change?`);
-  }
-};
 
 /**
- * The ため池 column of the newest report PDF. null (logged) when the PDF is
- * not linked, not served, times out, cannot be read, or carries no survey
- * date — so 宝山湖, read from the page itself, is still written.
+ * The ため池 column of the newest report PDF. Empty (logged) when the PDF is
+ * not linked, not served, times out or cannot be read — so 宝山湖, read from
+ * the page itself, is still written.
  */
-export async function readPonds(
-  indexHtml: string,
-  headers: Record<string, string>,
-  log: (s: string) => void,
-): Promise<{ pdfUrl: string; surveyDate: Date; rows: ParsedRow[]; published: string[] } | null> {
+export async function readPonds(indexHtml: string, upstream: Upstream, log: Log): Promise<Entry[]> {
   const pdfUrl = findLatestPdfUrl(indexHtml);
   if (!pdfUrl) {
     log(`${SOURCE_ID}: no chosui PDF linked from the index`);
-    return null;
+    return [];
   }
   let text: string;
   try {
-    const pdfRes = await fetch(pdfUrl, { headers, signal: AbortSignal.timeout(30_000) });
-    if (pdfRes.status !== 200) {
-      log(`${SOURCE_ID}: PDF HTTP ${pdfRes.status} for ${pdfUrl}`);
-      return null;
-    }
-    text = await pdfToText(new Uint8Array(await pdfRes.arrayBuffer()));
+    text = await pdfToText((await upstream.fetch(pdfUrl, { timeoutMs: TIMEOUT_MS })).bytes);
   } catch (err) {
     log(`${SOURCE_ID}: PDF unreadable at ${pdfUrl}: ${err instanceof Error ? err.message : err}`);
-    return null;
+    return [];
   }
-  const { surveyDate, rows, published } = parseKagawaTameikeText(text);
-  if (!surveyDate) {
-    log(`${SOURCE_ID}: no ため池 survey date in ${pdfUrl}`);
-    return null;
-  }
-  log(
-    `${SOURCE_ID}: parsed ${rows.length}/${published.length} ponds for ${surveyDate.toISOString()}`,
-  );
-  return { pdfUrl, surveyDate, rows, published };
+  const ponds = pondEntries(text);
+  log(`${SOURCE_ID}: ${ponds.length} ponds in ${pdfUrl}`);
+  return ponds;
 }
 
-export default task;
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const indexHtml = (await upstream.fetch(INDEX_URL, { timeoutMs: TIMEOUT_MS })).text();
+  // Both blocks are located by fixed labels (the 宝山湖 heading has been on the
+  // page since at least 2024); a layout change that breaks one makes its
+  // entries unreadable while the fetch succeeds.
+  const entries = [hozankoEntry(indexHtml), ...(await readPonds(indexHtml, upstream, log))];
+  return { entries, dated: true };
+});

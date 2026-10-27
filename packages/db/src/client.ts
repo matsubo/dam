@@ -54,3 +54,7 @@ if (!globalAny.__damSql) globalAny.__damSql = makeClient();
 export const sql = globalAny.__damSql;
 
 export type Sql = typeof sql;
+
+type Types = Sql extends postgres.Sql<infer T> ? T : never;
+/** The pooled client or a transaction handle from `sql.begin()`. */
+export type Db = postgres.Sql<Types> | postgres.TransactionSql<Types>;

@@ -13,10 +13,7 @@
 // Parsing returns every block with every label it prints, so each task can
 // record the map's whole list and pick the quantities it stores.
 
-import { type BindableMaster, preferMaster, stampedMaster, twinOf } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import type { UniverseRow } from '@dam/db/repo/source_universe';
+import type { Entry, Observed } from '../ingest/types.ts';
 
 export interface RealtimeFacility {
   /** The <h4> text ("中里貯水池"); also the stamp and universe key. */
@@ -63,69 +60,39 @@ export function parseJwaChubuRealtime(html: string): {
   return { observedAt: parseJwaChubuTimestamp(html), facilities };
 }
 
-// --- binding ----------------------------------------------------------------
+/** The quantities a task stores from one facility's printed values. */
+export type StoredQuantities = (
+  values: Readonly<Record<string, number | null>>,
+) => Omit<Observed, 'observedAt'>;
 
 /**
- * The master row for a facility among same-prefecture candidates whose name,
- * less any （元）/（再）, is the facility's full name or its stem ("牧尾ダム"
- * → "牧尾"). The row stamped with the key keeps it; else the full name beats
- * the stem, twins of one dam go to the live one, and two different dams at
- * the best rank bind to neither.
+ * One entry per facility on the map, keyed by its <h4> name (the stamp). The
+ * prefecture comes from the task's list of the map; a facility new on the
+ * map has none, so only an existing stamp can bind it. Names match by
+ * equality only, never by prefix or contains: the name, its stem without
+ * ダム ("牧尾ダム" → "牧尾"), or the name less 貯水池 ("中里貯水池" → master
+ * "中里"). A facility printing none of the stored quantities ("cc" or blank
+ * in every cell) is unreadable.
  */
-export function chooseFacilityMaster<M extends BindableMaster>(
-  key: string,
-  candidates: M[],
-): M | null {
-  const stamped = stampedMaster(candidates, key);
-  if (stamped) return stamped;
-  const exact = candidates.filter((m) => (twinOf(m.name)?.base ?? m.name) === key);
-  const [a, b, ...more] = exact.length > 0 ? exact : candidates;
-  if (!a) return null;
-  if (!b) return a;
-  const ta = twinOf(a.name);
-  const tb = twinOf(b.name);
-  // Two rows are one dam only as its （元） and （再）.
-  if (more.length > 0 || !ta || !tb || ta.base !== tb.base || ta.marker === tb.marker) return null;
-  return preferMaster(a, b) ? a : b;
-}
-
-/**
- * Bind each listed facility whose prefecture is known to its master dam and
- * stamp it; return the bindings and the universe rows for the whole list. A
- * facility missing from `prefByName` (new on the map) is recorded unresolved.
- */
-export async function matchFacilities(
-  sourceId: string,
-  facilities: RealtimeFacility[],
+export function facilityEntries(
+  facilities: readonly RealtimeFacility[],
+  observedAt: Date,
   prefByName: Readonly<Record<string, string>>,
-  log: (s: string) => void,
-): Promise<{ damByName: Map<string, bigint>; universe: UniverseRow[] }> {
-  const damByName = new Map<string, bigint>();
-  const universe: UniverseRow[] = [];
-  for (const f of facilities) {
-    const prefCode = prefByName[f.name] ?? null;
-    const hasData = Object.values(f.values).some((v) => v !== null) ? true : null;
-    let damId: bigint | null = null;
-    if (prefCode === null) {
-      log(`${sourceId}: "${f.name}" is new on the map; add its prefecture to bind it`);
-    } else {
-      const candidates = await sql<BindableMaster[]>`
-        SELECT id, name, completed_year AS "completedYear",
-               external_ids->>${sourceId} AS stamp
-        FROM dams
-        WHERE pref_code = ${prefCode}
-          AND (external_ids->>${sourceId} = ${f.name}
-               OR regexp_replace(name, '[（(](元|再)[）)]$', '')
-                  IN (${f.name}, ${f.name.replace(/(ダム|貯水池)$/, '')}))
-        ORDER BY id
-      `;
-      damId = chooseFacilityMaster(f.name, candidates)?.id ?? null;
-      if (damId === null) log(`${sourceId}: no single master dam for "${f.name}"`);
-    }
-    universe.push({ externalId: f.name, name: f.name, prefCode, resolvedDamId: damId, hasData });
-    if (damId === null) continue;
-    damByName.set(f.name, damId);
-    await bindExternalId(damId, sourceId, f.name);
-  }
-  return { damByName, universe };
+  stored: StoredQuantities,
+): Entry[] {
+  return facilities.map((f) => {
+    const quantities = stored(f.values);
+    const printed = Object.values(quantities).some((v) => v != null);
+    return {
+      key: f.name,
+      name: f.name,
+      pref: prefByName[f.name] ?? null,
+      bind: f.name.endsWith('貯水池')
+        ? { name: f.name.replace(/貯水池$/, ''), exact: true }
+        : { exact: true },
+      reading: printed
+        ? { state: 'values', observations: [{ observedAt, ...quantities }] }
+        : { state: 'unreadable', why: 'no stored quantity printed ("cc" or blank)' },
+    };
+  });
 }

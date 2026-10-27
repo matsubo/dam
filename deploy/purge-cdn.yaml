@@ -1,7 +1,7 @@
-# Purges dam.teraren.com from the Cloudflare cache after a rollout (Coolify ran
-# `bun run bin/purge_cdn.ts` as its post-deploy command). Applied by
-# .github/workflows/deploy.yml with IMAGE_WEB replaced, after the old Job of the
-# same name is deleted (a Job's pod template is immutable).
+# Purges dam.teraren.com from the Cloudflare cache after a rollout
+# (`bun run bin/purge_cdn.ts`). Applied by .github/workflows/deploy.yml with
+# IMAGE_WEB replaced, after the old Job of the same name is deleted (a Job's
+# pod template is immutable).
 apiVersion: batch/v1
 kind: Job
 metadata:

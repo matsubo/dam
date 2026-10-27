@@ -5,7 +5,8 @@
 // Source:
 //   http://tndam.pref.hyogo.lg.jp/dam/DamData.jsp?PSNO={1-6}
 //   Shift_JIS HTML; single latest observation per dam (no time series).
-//   更新時刻: JST timestamp. "0000/00/00 00:00:00" = dam offline → skip.
+//   更新時刻: JST timestamp. "0000/00/00 00:00:00" = dam offline: the
+//   page's own mark, so provider-marked empty.
 //
 // Dams (PSNO → name):
 //   1 鍔市ダム    2 八幡谷ダム  3 藤岡ダム
@@ -17,20 +18,16 @@
 //
 // Priority 308. Cron hourly at :53.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const BASE_URL = process.env.TNDAM_HYOGO_URL ?? 'http://tndam.pref.hyogo.lg.jp/dam/DamData.jsp';
 const PREF_CODE = '28';
 const SOURCE_ID = 'tndam-hyogo';
-const USER_AGENT =
-  process.env.HTTP_USER_AGENT ??
-  'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
 
+// The 6 DamData.jsp pages are the published catalogue; PSNO is the key.
 const DAMS = [
   { psno: 1, name: '鍔市ダム' },
   { psno: 2, name: '八幡谷ダム' },
@@ -39,20 +36,6 @@ const DAMS = [
   { psno: 5, name: '黒石ダム' },
   { psno: 6, name: '大杉ダム' },
 ] as const;
-
-// --- types -------------------------------------------------------------------
-
-export interface TndamReading {
-  psno: number;
-  damName: string;
-  observedAt: Date | null;
-  waterLevelM: number | null;
-  storageVolumeM3: number | null;
-  storageRate: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
-  rainfallMm: number | null;
-}
 
 // --- parsing -----------------------------------------------------------------
 
@@ -63,11 +46,10 @@ function stripTags(html: string): string {
     .trim();
 }
 
-function parseNum(s: string): number | null {
+function parseNum(s: string): Cell {
   const trimmed = s.trim().replace(/[　\s]/g, '');
-  if (!trimmed || trimmed === '-' || trimmed === '---') return null;
-  const n = Number(trimmed);
-  return Number.isFinite(n) ? n : null;
+  if (trimmed === '-' || trimmed === '---') return MARKED;
+  return trimmed ? cell(Number(trimmed), false) : null;
 }
 
 /**
@@ -88,215 +70,65 @@ export function extractDataMap(html: string): Map<string, string> {
 }
 
 /**
- * Parse 「更新時刻：YYYY/MM/DD HH:MM:SS」 (JST) → UTC Date.
- * Returns null for "0000/00/00 00:00:00" (dam offline).
+ * Parse 「更新時刻：YYYY/MM/DD HH:MM:SS」 (JST) → UTC Date; 'offline' for
+ * "0000/00/00 00:00:00", null when the page carries no 更新時刻.
  */
-export function parseTndamTimestamp(html: string): Date | null {
+export function parseTndamTimestamp(html: string): Date | 'offline' | null {
   const m = html.match(/更新時刻[：:](\d{4})\/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2})/);
   if (!m) return null;
   const yr = +(m[1] ?? 0);
-  if (yr === 0) return null;
+  if (yr === 0) return 'offline';
   const d = new Date(Date.UTC(yr, +(m[2] ?? 0) - 1, +(m[3] ?? 0), +(m[4] ?? 0) - 9, +(m[5] ?? 0)));
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/**
- * Parse one dam page HTML into a TndamReading.
- * Returns null if the dam is offline (no timestamp) or no useful data.
- */
-export function parseTndamPage(html: string, psno: number, damName: string): TndamReading | null {
+/** One dam page's reading. */
+export function tndamReading(html: string): Reading {
   const observedAt = parseTndamTimestamp(html);
+  if (observedAt === 'offline') return { state: 'empty', mark: '更新時刻 0000/00/00 (offline)' };
   const data = extractDataMap(html);
 
-  const waterLevelM = parseNum(data.get('貯水位(m)') ?? '');
-  const storageVolumeM3 = parseNum(data.get('貯水量(m3)') ?? '');
-  const storageRatePct = parseNum(data.get('貯水率(%)') ?? '');
-  const inflowM3s = parseNum(data.get('流入量(m3/s)') ?? '');
-  const outflowM3s = parseNum(data.get('放流量(m3/s)') ?? '');
-  const rainfallMm = parseNum(data.get('時間雨量(mm)') ?? '');
+  const level = parseNum(data.get('貯水位(m)') ?? '');
+  const volume = parseNum(data.get('貯水量(m3)') ?? '');
+  const ratePct = parseNum(data.get('貯水率(%)') ?? '');
+  const inflow = parseNum(data.get('流入量(m3/s)') ?? '');
+  const outflow = parseNum(data.get('放流量(m3/s)') ?? '');
+  const rain = parseNum(data.get('時間雨量(mm)') ?? '');
 
-  if (waterLevelM === null && storageVolumeM3 === null && storageRatePct === null) return null;
-
+  const state = cellState([level, volume, ratePct, inflow, outflow, rain]);
+  if (state === 'empty') return { state, mark: '- in every item' };
+  if (state === 'unreadable') return { state, why: 'no readable value' };
+  if (!observedAt) return { state: 'unreadable', why: 'no 更新時刻' };
+  const rate = numberIn(ratePct);
   return {
-    psno,
-    damName,
-    observedAt,
-    waterLevelM,
-    storageVolumeM3,
-    storageRate: storageRatePct !== null ? storageRatePct / 100 : null,
-    inflowM3s,
-    outflowM3s,
-    rainfallMm,
+    state,
+    observations: [
+      {
+        observedAt,
+        waterLevelM: numberIn(level),
+        storageVolumeM3: numberIn(volume),
+        storageRate: rate !== null ? rate / 100 : null,
+        inflowM3s: numberIn(inflow),
+        outflowM3s: numberIn(outflow),
+        rainfallMm: numberIn(rain),
+      },
+    ],
   };
 }
 
-// --- DB helpers --------------------------------------------------------------
+/** One DamData.jsp page, by PSNO. */
+export const pageUrl = (psno: number): string => `${BASE_URL}?PSNO=${psno}`;
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 308,
-            '兵庫県丹波農林振興事務所 ダムテレメータ — 6 dams (Tanba area), hourly',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/貯水池$/, '')
-    .trim();
-}
-
-interface DamMatch {
-  psno: number;
-  damId: bigint;
-}
-
-async function matchMaster(
-  readings: TndamReading[],
-  log: (s: string) => void,
-): Promise<DamMatch[]> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const out: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-
-  for (const r of readings) {
-    const psnoKey = String(r.psno);
-
-    // A row already stamped with this PSNO keeps it (#57).
-    const byExtId = stampedMaster(masters, psnoKey);
-    if (byExtId) {
-      universe.push({
-        externalId: psnoKey,
-        name: r.damName,
-        prefCode: PREF_CODE,
-        resolvedDamId: byExtId.id,
-      });
-      out.push({ psno: r.psno, damId: byExtId.id });
-      continue;
-    }
-
-    const stem = normalizeName(r.damName);
-    let best: { m: BindableMaster; rank: number } | null = null;
-    for (const m of masters) {
-      const mStem = normalizeName(m.name);
-      let rank: number;
-      if (m.name === r.damName) rank = 0;
-      else if (mStem === stem) rank = 1;
-      else if (m.name === `${stem}ダム`) rank = 2;
-      else if (mStem.startsWith(stem)) rank = 3;
-      else if (mStem.includes(stem)) rank = 4;
-      else continue;
-      if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-        best = { m, rank };
-      }
-    }
-
-    universe.push({
-      externalId: psnoKey,
-      name: r.damName,
-      prefCode: PREF_CODE,
-      resolvedDamId: best?.m.id ?? null,
-    });
-    if (!best) {
-      log(`${SOURCE_ID}: no master match for "${r.damName}" (PSNO=${r.psno})`);
-      continue;
-    }
-
-    await bindExternalId(best.m.id, SOURCE_ID, psnoKey);
-    out.push({ psno: r.psno, damId: best.m.id });
-  }
-
-  // The 6 DamData.jsp pages are the published catalogue, so record all of
-  // them — a dam whose page is offline ("0000/00/00", currently PSNO 2 and 4)
-  // parses to nothing but is still published, and must read as "published,
-  // unlinked" rather than "nobody publishes it". Resolution falls back to the
-  // external_ids stamp, which every dam matched on an earlier run carries.
-  const seen = new Set(readings.map((r) => r.psno));
-  for (const d of DAMS) {
-    if (seen.has(d.psno)) continue;
-    const psnoKey = String(d.psno);
-    universe.push({
-      externalId: psnoKey,
-      name: d.name,
-      prefCode: PREF_CODE,
-      resolvedDamId: stampedMaster(masters, psnoKey)?.id ?? null,
-    });
-  }
-
-  await recordUniverse(SOURCE_ID, universe);
-  return out;
+/** All six pages, each read from its own page; one that fails is unreadable. */
+export function tndamEntries(upstream: Upstream): Entry[] {
+  return DAMS.map(({ psno, name }) => ({
+    key: String(psno),
+    name,
+    pref: PREF_CODE,
+    reading: async () => tndamReading((await upstream.fetch(pageUrl(psno))).text('shift_jis')),
+  }));
 }
 
 // --- task --------------------------------------------------------------------
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
-  const results = await Promise.allSettled(
-    DAMS.map(async ({ psno, name }) => {
-      const url = `${BASE_URL}?PSNO=${psno}`;
-      const resp = await fetch(url, {
-        headers: { 'user-agent': USER_AGENT },
-        signal: AbortSignal.timeout(20_000),
-      });
-      if (resp.status !== 200) {
-        log(`${SOURCE_ID}: PSNO=${psno} HTTP ${resp.status}`);
-        return null;
-      }
-      const buf = await resp.arrayBuffer();
-      const html = new TextDecoder('shift_jis').decode(buf);
-      return parseTndamPage(html, psno, name);
-    }),
-  );
-
-  const readings: TndamReading[] = results
-    .map((r) => (r.status === 'fulfilled' ? r.value : null))
-    .filter((r): r is TndamReading => r !== null);
-
-  log(`${SOURCE_ID}: fetched ${readings.length} readings`);
-
-  const matches = await matchMaster(readings, log);
-  const damByPsno = new Map(matches.map((m) => [m.psno, m.damId]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const r of readings) {
-    const damId = damByPsno.get(r.psno);
-    if (!damId) continue;
-    if (!r.observedAt) {
-      log(`${SOURCE_ID}: PSNO=${r.psno} has no timestamp; skipping`);
-      continue;
-    }
-
-    inputs.push({
-      observedAt: r.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: r.storageVolumeM3,
-      storageRate: r.storageRate,
-      inflowM3s: r.inflowM3s,
-      outflowM3s: r.outflowM3s,
-      waterLevelM: r.waterLevelM,
-      rainfallMm: r.rainfallMm,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${readings.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+export default ingestTask(SOURCE_ID, async ({ upstream }) => ({ entries: tndamEntries(upstream) }));

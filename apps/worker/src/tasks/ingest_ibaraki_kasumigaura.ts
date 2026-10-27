@@ -31,12 +31,8 @@
 // Priority 308 (prefectural 防災 tier, like ibaraki-bousai); only mudam (280,
 // historical) also carries this dam. Cron hourly at :13, all 24 rows re-upserted.
 
-import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const PAGE_URL =
   process.env.IBARAKI_KASUMIGAURA_URL ??
@@ -91,91 +87,41 @@ export function parseDejimaGraph(html: string): DejimaGraph | null {
   return { zeroTpM, readings };
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 308,
-            '茨城県河川情報 霞ヶ浦 出島 水位 — 霞ヶ浦開発の湖水位 (Y.P.換算, 毎時 24 時間分)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-async function findDamId(log: (s: string) => void): Promise<bigint | null> {
-  const rows = await sql<(BindableMaster & { rank: number })[]>`
-    SELECT id, name, completed_year AS "completedYear",
-           external_ids->>${SOURCE_ID} AS stamp, 0 AS rank
-    FROM dams
-    WHERE pref_code = ${PREF_CODE}
-      AND name = ${MASTER_NAME}
-    ORDER BY id
-  `;
-  const dam = chooseRanked(rows, STATION_ID);
-  // The one station this source reads, matched or not.
-  const universe: UniverseRow[] = [
-    {
-      externalId: STATION_ID,
-      name: `${STATION}（霞ヶ浦）`,
-      prefCode: PREF_CODE,
-      resolvedDamId: dam?.id ?? null,
-    },
-  ];
-  await recordUniverse(SOURCE_ID, universe);
-  if (!dam) {
-    log(`${SOURCE_ID}: no master match for ${MASTER_NAME} (pref ${PREF_CODE})`);
-    return null;
-  }
-  await bindExternalId(dam.id, SOURCE_ID, STATION_ID);
-  return dam.id;
-}
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
-  const ua =
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
-
-  // Resolved before the fetch: the station is published whether or not this
-  // run's page loads, and the universe must say so.
-  const damId = await findDamId(log);
-
-  const res = await fetch(PAGE_URL, {
-    headers: { 'user-agent': ua },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (res.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${res.status}; abort`);
-    return;
-  }
-  const graph = parseDejimaGraph(new TextDecoder('shift_jis').decode(await res.arrayBuffer()));
+/** The page's reading: every row that carries a gauge reading. */
+export function dejimaReading(html: string): Reading {
+  const graph = parseDejimaGraph(html);
   if (!graph) {
-    throw new Error(`${SOURCE_ID}: page is not the 出島 graph with a 零点高; layout changed?`);
+    return {
+      state: 'unreadable',
+      why: 'page is not the 出島 graph with a 零点高; layout changed?',
+    };
   }
-  if (!damId) return;
+  if (graph.readings.length === 0) return { state: 'unreadable', why: 'no numeric gauge row' };
+  return { state: 'values', observations: graph.readings };
+}
 
-  const written = await upsertObservations(
-    graph.readings.map((r) => ({
-      observedAt: r.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: null,
-      storageRate: null,
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: r.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    })),
-  );
-  log(
-    `${SOURCE_ID} done: parsed=${graph.readings.length} matched=1 written=${written} zero=T.P.${graph.zeroTpM}`,
-  );
-};
+/**
+ * The one station this source reads, published whether or not this run's
+ * page loads. It binds to the master by its exact name, not the station's.
+ */
+export function kasumigauraEntry(reading: Reading): Entry {
+  return {
+    key: STATION_ID,
+    name: `${STATION}（霞ヶ浦）`,
+    pref: PREF_CODE,
+    bind: { name: MASTER_NAME, exact: true },
+    reading,
+  };
+}
 
-export default task;
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  try {
+    const res = await upstream.fetch(PAGE_URL, { timeoutMs: 15_000 });
+    const html = res.text('shift_jis');
+    return { entries: [kasumigauraEntry(dejimaReading(html))] };
+  } catch (err) {
+    const why = err instanceof Error ? err.message : String(err);
+    log(`${SOURCE_ID}: ${why}`);
+    return { entries: [kasumigauraEntry({ state: 'unreadable', why })] };
+  }
+});

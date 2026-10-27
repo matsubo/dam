@@ -31,12 +31,8 @@
 // Priority 298 (JWA realtime tier, cf. jwa-toyokawa). Nothing else carries
 // live data for 利根川河口堰; mudam's rows are historical. Cron hourly at :30.
 
-import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const BASE_URL = process.env.JWA_TONEKAKO_BASE_URL ?? 'https://tonekako.sakura.ne.jp/json/online';
 const SUII_FILE = 'J225360003.js';
@@ -141,100 +137,38 @@ export function tonekakoHours(suiiSrc: string, ryuryoSrc: string): TonekakoHour[
   return hours;
 }
 
-// --- DB helpers -------------------------------------------------------------
-
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 298,
-            '水資源機構 利根川河口堰管理所 利根河口堰 情報提供 — 堰上流水位(Y.P.)・堰流入量 hourly',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
+/** The weir's reading from the two tables: the hours with any value. */
+export function tonekakoReading(suiiSrc: string, ryuryoSrc: string): Reading {
+  const hours = tonekakoHours(suiiSrc, ryuryoSrc);
+  if (hours.length === 0) return { state: 'unreadable', why: 'table layout not recognised' };
+  const observations = hours.filter(
+    (h) => h.waterLevelM !== null || h.inflowM3s !== null || h.outflowM3s !== null,
+  );
+  if (observations.length === 0) return { state: 'unreadable', why: 'no hour with a value' };
+  return { state: 'values', observations };
 }
 
-async function bindWeir(log: (s: string) => void): Promise<bigint | null> {
-  // （元） and （再） rank alike so chooseRanked binds the current twin.
-  const candidates = await sql<(BindableMaster & { rank: number })[]>`
-    SELECT id, name, completed_year AS "completedYear",
-           external_ids->>${SOURCE_ID} AS stamp,
-           CASE
-             WHEN name = ${STATION}                THEN 0
-             WHEN name LIKE ${`${STATION}（再）%`} THEN 1
-             WHEN name LIKE ${`${STATION}（元）%`} THEN 1
-             ELSE 2
-           END AS rank
-    FROM dams
-    WHERE pref_code = ANY(${PREF_CODES}::text[])
-      AND name LIKE ${`${STATION}%`}
-  `;
-  const r = chooseRanked(candidates, STATION);
-  await recordUniverse(SOURCE_ID, [
-    // No prefCode: the weir is on the border and pref_code is sticky once written.
-    { externalId: STATION, name: STATION, prefCode: null, resolvedDamId: r?.id ?? null },
-  ]);
-  if (!r) {
-    log(`${SOURCE_ID}: no master match for "${STATION}"`);
-    return null;
-  }
-  await bindExternalId(r.id, SOURCE_ID, STATION);
-  return r.id;
-}
-
-async function fetchText(file: string): Promise<string | null> {
-  const r = await fetch(`${BASE_URL}/${file}?time=${Date.now()}`, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  return r.status === 200 ? r.text() : null;
+/** The one listed facility. No single prefecture: the weir is on the border. */
+export function tonekakoEntry(reading: Reading): Entry {
+  return { key: STATION, name: STATION, pref: PREF_CODES, reading };
 }
 
 // --- task -------------------------------------------------------------------
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-  const damId = await bindWeir(log);
-
-  const [suii, ryuryo] = await Promise.all([fetchText(SUII_FILE), fetchText(RYURYO_FILE)]);
-  if (suii === null || ryuryo === null) {
-    log(`${SOURCE_ID}: table fetch failed; aborting`);
-    return;
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  // The station is known in advance: a failed table fetch leaves it
+  // unreadable, still listed.
+  const table = async (file: string) =>
+    (await upstream.fetch(`${BASE_URL}/${file}?time=${Date.now()}`)).text();
+  let reading: Reading;
+  try {
+    const [suii, ryuryo] = await Promise.all([table(SUII_FILE), table(RYURYO_FILE)]);
+    reading = tonekakoReading(suii, ryuryo);
+  } catch (err) {
+    reading = { state: 'unreadable', why: err instanceof Error ? err.message : String(err) };
   }
-  const hours = tonekakoHours(suii, ryuryo);
-  log(`${SOURCE_ID}: parsed ${hours.length} hours`);
-  if (hours.length === 0) {
-    log(`${SOURCE_ID}: table layout not recognised; nothing stored`);
-    return;
-  }
-  if (!damId) return;
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const h of hours) {
-    if (h.waterLevelM === null && h.inflowM3s === null && h.outflowM3s === null) continue;
-    inputs.push({
-      observedAt: h.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: null,
-      storageRate: null,
-      inflowM3s: h.inflowM3s,
-      outflowM3s: h.outflowM3s,
-      waterLevelM: h.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${hours.length} matched=1 written=${written}`);
-};
-
-export default task;
+  log(
+    `${SOURCE_ID}: ${reading.state === 'values' ? `${reading.observations.length} hours` : reading.state}`,
+  );
+  return { entries: [tonekakoEntry(reading)] };
+});

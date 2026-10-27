@@ -5,12 +5,15 @@
 // 2026-09-27 — the 2026-09-25 午前9時 edition. Parsing runs through unpdf, so
 // the test covers the extraction order as well as the line parser: unpdf emits
 // the 湯原 row with its 貯水率 and 前日との増減 *before* the dam name.
+//
+// Fixture → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
 
 import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
+import type { Entry, Reading } from '../ingest/types.ts';
 import {
-  assertUsableRows,
-  chooseMaster,
+  okakawaEntries,
   parseOkakawaDate,
   parseOkakawaPdfText,
   pdfToText,
@@ -118,50 +121,40 @@ describe('parseOkakawaPdfText — row guards', () => {
   });
 });
 
-describe('assertUsableRows', () => {
-  test('fails a run where no dam name matched at all', () => {
-    // A notice or re-typeset PDF: nothing matches NAME_RE, so 0 names and 0 rows.
-    const notice = parseOkakawaPdfText('お知らせ\n本日の貯水状況の掲載は休止しています。\n');
-    expect(() => assertUsableRows(notice)).toThrow('0 usable rows from 0 published names');
+function readingOf(e: Entry | undefined): Reading {
+  if (!e || typeof e.reading === 'function') throw new Error('expected a static reading');
+  return e.reading;
+}
+
+describe('okakawaEntries', () => {
+  test('lists every printed name in 岡山, keyed by name, all 13 read', () => {
+    const entries = okakawaEntries(text);
+    expect(entries.map((e) => e.key).sort()).toEqual(parsed.published.sort());
+    expect(entries.every((e) => e.pref === '33')).toBe(true);
+    expect(entries.every((e) => readingOf(e).state === 'values')).toBe(true);
   });
 
-  test('fails a run where names matched but no row passed the rate check', () => {
+  test('carries 小阪部川 volume and rate through to the observation', () => {
+    const r = readingOf(okakawaEntries(text).find((e) => e.key === '小阪部川ダム'));
+    expect(r).toEqual({
+      state: 'values',
+      observations: [
+        {
+          observedAt: new Date('2026-09-25T00:00:00.000Z'),
+          storageVolumeM3: 3_809_000,
+          storageRate: expect.closeTo(0.252, 6),
+        },
+      ],
+    });
+  });
+
+  test('names matched but no row passed the rate check: every entry unreadable (the run fails the job)', () => {
     const header = '高梁川水系 主要ダム貯水量 (2026年9月25日 午前９時現在）\n';
-    const misread = parseOkakawaPdfText(`${header}千 屋 ダ ム 14,200 7,392 12.1 -102\n`);
-    expect(() => assertUsableRows(misread)).toThrow('0 usable rows from 1 published names');
-  });
-});
-
-describe('chooseMaster', () => {
-  const m = (id: number, name: string, stamp: string | null = null) => ({
-    id: BigInt(id),
-    name,
-    completedYear: null,
-    stamp,
-  });
-  // Real pref-33 master rows (prod ids).
-  const masters = [
-    m(10749, '苫田'),
-    m(10750, '苫田鞍部'),
-    m(10751, '坂根堰'),
-    m(10785, '湯原'),
-    m(10811, '小阪部川'),
-  ];
-
-  test('binds dams by stem and weirs by their full name', () => {
-    expect(chooseMaster('小阪部川ダム', masters)).toBe(10811n);
-    expect(chooseMaster('坂根堰', masters)).toBe(10751n);
+    const entries = okakawaEntries(`${header}千 屋 ダ ム 14,200 7,392 12.1 -102\n`);
+    expect(entries.map((e) => [e.key, readingOf(e).state])).toEqual([['千屋ダム', 'unreadable']]);
   });
 
-  test('binds 苫田ダム to 苫田, not the 苫田鞍部 saddle dam', () => {
-    expect(chooseMaster('苫田ダム', masters)).toBe(10749n);
-  });
-
-  test('leaves a weir with no master row unmatched', () => {
-    expect(chooseMaster('新田原井堰', masters)).toBeNull();
-  });
-
-  test('keeps the row already stamped with the station', () => {
-    expect(chooseMaster('湯原ダム', [...masters, m(99999, '湯原', '湯原ダム')])).toBe(99999n);
+  test('a notice PDF with no dam name lists nothing (the run fails the job)', () => {
+    expect(okakawaEntries('お知らせ\n本日の貯水状況の掲載は休止しています。\n')).toEqual([]);
   });
 });

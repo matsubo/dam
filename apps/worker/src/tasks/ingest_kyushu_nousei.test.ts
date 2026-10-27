@@ -1,4 +1,5 @@
-// Parser tests for 九州農政局「管内の農業用ダムの貯水状況」(issue #28).
+// Fixture → universe entries for 九州農政局「管内の農業用ダムの貯水状況」(issue
+// #28), no database: binding and writing belong to the ingest run.
 //
 // Runs against the real R8.9.1 survey PDF in tests/fixtures/kyushu_nousei, so
 // this covers the unpdf extraction as well as the row/column parser — the
@@ -6,10 +7,10 @@
 // fixture would not exercise it.
 
 import { describe, expect, test } from 'bun:test';
+import type { Entry, Observed } from '../ingest/types.ts';
 import {
-  chooseMaster,
   findLatestPdfUrl,
-  masterFor,
+  kyushuNouseiEntries,
   parseKyushuNouseiDate,
   parseKyushuNouseiPdfText,
   pdfToText,
@@ -20,14 +21,27 @@ const FIXTURE = new URL('../../../../tests/fixtures/kyushu_nousei/r8_0901.pdf', 
 
 const text = await pdfToText(new Uint8Array(await Bun.file(FIXTURE).arrayBuffer()));
 const parsed = parseKyushuNouseiPdfText(text);
+const entries = kyushuNouseiEntries(text);
 
 const FIXTURE_0915 = new URL(
   '../../../../tests/fixtures/kyushu_nousei/r8_0915.pdf',
   import.meta.url,
 ).pathname;
-const parsed0915 = parseKyushuNouseiPdfText(
-  await pdfToText(new Uint8Array(await Bun.file(FIXTURE_0915).arrayBuffer())),
-);
+const text0915 = await pdfToText(new Uint8Array(await Bun.file(FIXTURE_0915).arrayBuffer()));
+const entries0915 = kyushuNouseiEntries(text0915);
+
+function stateOf(e: Entry | undefined): string | undefined {
+  const r = e?.reading;
+  return r && typeof r !== 'function' ? r.state : undefined;
+}
+
+function observed(list: Entry[], name: string): Observed | undefined {
+  const r = list.find((e) => e.name === name)?.reading;
+  if (!r || typeof r === 'function' || r.state !== 'values') return undefined;
+  return r.observations[0];
+}
+
+const valued = (list: Entry[]) => list.filter((e) => stateOf(e) === 'values');
 
 describe('parseKyushuNouseiDate', () => {
   test('reads the full-width 令和 survey date as JST midnight', () => {
@@ -41,71 +55,64 @@ describe('parseKyushuNouseiDate', () => {
   });
 });
 
-describe('parseKyushuNouseiPdfText — the real R8.9.1 PDF', () => {
+describe('kyushuNouseiEntries — the real R8.9.1 PDF', () => {
   test('extracts the survey date from the PDF itself', () => {
     expect(parsed.reportDate?.toISOString()).toBe('2026-08-31T15:00:00.000Z');
   });
 
-  test('parses 58 of the 59 published dams', () => {
-    // The PDF lists 59 dams (matching the issue's own count). 58 carry a
-    // usable R8.9.1 reading; 日向神ダム is the one exception — it genuinely
-    // reports 0.0% that day (a multi-purpose flood-control dam mid-drawdown,
-    // not a parser miss), which the phantom-zero guard correctly drops while
-    // still recording it as published.
-    expect(parsed.published.length).toBe(59);
-    expect(parsed.rows.length).toBe(58);
-    expect(parsed.published.some((p) => p.name === '日向神ダム')).toBe(true);
-    expect(parsed.rows.some((r) => r.kyushuName === '日向神ダム')).toBe(false);
+  test('lists all 59 dams; 58 carry the R8.9.1 reading', () => {
+    // The PDF lists 59 dams (matching the issue's own count). 日向神ダム is the
+    // one exception — it genuinely reports 0.0% that day (a multi-purpose
+    // flood-control dam mid-drawdown, not a parser miss), which the
+    // phantom-zero guard leaves unreadable while still listing it.
+    expect(entries).toHaveLength(59);
+    expect(valued(entries)).toHaveLength(58);
+    expect(stateOf(entries.find((e) => e.name === '日向神ダム'))).toBe('unreadable');
   });
 
   test('reads 石場ダム (shared with oita-nourin, #27) with the R8.9.1 value', () => {
     // 大分 大野川 石場ダム: 2,154 千m³ 有効/利水 (same figure), 688 千m³ 現,
     // 31.9% — the fixture's own footer confirms this after the mid-row
     // capacity-update markers around the 洪水期 boundary are skipped.
-    const row = parsed.rows.find((r) => r.kyushuName === '石場ダム');
-    expect(row).toBeDefined();
-    expect(row?.prefCode).toBe('44');
-    expect(row?.storageVolumeM3).toBe(688_000);
-    expect(row?.storageRate).toBeCloseTo(0.319, 3);
+    expect(entries.find((e) => e.name === '石場ダム')?.pref).toBe('44');
+    const o = observed(entries, '石場ダム');
+    expect(o?.storageVolumeM3).toBe(688_000);
+    expect(o?.storageRate).toBeCloseTo(0.319, 3);
   });
 
   test('reads a row across a prefecture boundary where 県名 is not repeated', () => {
     // 伊佐ノ浦ダム (長崎) is not the first row of its block's block-mate 繁敷
     // ダム, but 小ヶ倉ダム above it is — 県名 must carry forward correctly.
-    const row = parsed.rows.find((r) => r.kyushuName === '伊佐ノ浦ダム');
-    expect(row?.prefCode).toBe('42');
-    expect(row?.storageVolumeM3).toBe(1_459_000);
-    expect(row?.storageRate).toBeCloseTo(0.89, 2);
+    expect(entries.find((e) => e.name === '伊佐ノ浦ダム')?.pref).toBe('42');
+    const o = observed(entries, '伊佐ノ浦ダム');
+    expect(o?.storageVolumeM3).toBe(1_459_000);
+    expect(o?.storageRate).toBeCloseTo(0.89, 2);
   });
 
   test('reads a row with a missing mid-year survey date (熊本 教良木ダム)', () => {
     // The PDF's own footnote says 教良木ダム's R8.8.1 column is blank
     // ("－ －"); pairDateColumns must still land on the correct R8.9.1 pair
     // afterwards rather than shifting off by one.
-    const row = parsed.rows.find((r) => r.kyushuName === '教良木ダム');
-    expect(row?.prefCode).toBe('43');
-    expect(row?.storageVolumeM3).toBe(1_064_000);
-    expect(row?.storageRate).toBeCloseTo(0.776, 3);
+    expect(entries.find((e) => e.name === '教良木ダム')?.pref).toBe('43');
+    const o = observed(entries, '教良木ダム');
+    expect(o?.storageVolumeM3).toBe(1_064_000);
+    expect(o?.storageRate).toBeCloseTo(0.776, 3);
   });
 
-  test('every stored row is internally consistent', () => {
-    // Re-derived per row from the raw text rather than trusting the parser's
-    // own denominator: every published rate must be explainable as
-    // volume / capacity to within rounding.
-    for (const r of parsed.rows) {
-      expect(r.storageRate).toBeGreaterThan(0);
-      expect(r.storageRate).toBeLessThanOrEqual(2);
+  test('every stored rate is a plausible fraction', () => {
+    for (const e of valued(entries)) {
+      const rate = observed(entries, e.name)?.storageRate ?? 0;
+      expect(rate).toBeGreaterThan(0);
+      expect(rate).toBeLessThanOrEqual(2);
     }
   });
 
-  test('records the published universe, including 佐賀 rows that never match a target dam', () => {
-    expect(parsed.published.length).toBeGreaterThanOrEqual(parsed.rows.length);
-    const saga = parsed.published.filter((p) => p.prefCode === '41');
-    expect(saga.length).toBeGreaterThan(0);
+  test('keys rows by prefecture, 佐賀 included', () => {
+    expect(entries.filter((e) => e.pref === '41').length).toBeGreaterThan(0);
+    expect(entries.find((e) => e.name === '石場ダム')?.key).toBe('44:石場ダム');
   });
 
   test('finds all 12 dams issue #28 targets', () => {
-    const names = parsed.rows.map((r) => r.kyushuName);
     const expected = [
       ['久保白ダム', '40'],
       ['伊佐ノ浦ダム', '42'],
@@ -121,9 +128,8 @@ describe('parseKyushuNouseiPdfText — the real R8.9.1 PDF', () => {
       ['喜界地下ダム', '46'],
     ] as const;
     for (const [name, prefCode] of expected) {
-      expect(names).toContain(name);
-      const row = parsed.rows.find((r) => r.kyushuName === name);
-      expect(row?.prefCode).toBe(prefCode);
+      const e = valued(entries).find((x) => x.name === name);
+      expect(e?.pref).toBe(prefCode);
     }
   });
 });
@@ -147,45 +153,54 @@ describe('findLatestPdfUrl', () => {
   });
 });
 
-describe('parseKyushuNouseiPdfText — the R8.9.15 PDF (no leading 利水容量 column)', () => {
+describe('kyushuNouseiEntries — the R8.9.15 PDF (no leading 利水容量 column)', () => {
   // From R8.9.15 the table's date window starts at 4/15 and a row reads
   // 有効貯水量 → (貯水量, 貯水率)… with no 利水容量 column in between; the
   // R8.9.1 parser read the first volume as 利水容量 and kept 0 of 59 rows.
-  const p = parsed0915;
+  const p = entries0915;
+  const TITLE = '九州農政局管内の合計貯水率（令和８年９月１５日現在）';
 
   test('dates the survey 令和8年9月15日', () => {
-    expect(p.reportDate?.toISOString()).toBe('2026-09-14T15:00:00.000Z');
+    expect(parseKyushuNouseiPdfText(text0915).reportDate?.toISOString()).toBe(
+      '2026-09-14T15:00:00.000Z',
+    );
   });
 
   test('keeps the same 58 of 59 rows as the old layout', () => {
-    expect(p.published.length).toBe(59);
-    expect(p.rows.length).toBe(58);
+    expect(p).toHaveLength(59);
+    expect(valued(p)).toHaveLength(58);
   });
 
   test('reads the 9/15 column: 石場 886 千m³ 41.1 %, 花宗ため池 1,499 千m³ 58.1 %', () => {
-    const row = (name: string) => p.rows.find((r) => r.kyushuName === name);
-    expect(row('石場ダム')?.storageVolumeM3).toBe(886_000);
-    expect(row('石場ダム')?.storageRate).toBeCloseTo(0.411, 3);
-    expect(row('花宗ため池')?.storageVolumeM3).toBe(1_499_000);
+    expect(observed(p, '石場ダム')?.storageVolumeM3).toBe(886_000);
+    expect(observed(p, '石場ダム')?.storageRate).toBeCloseTo(0.411, 3);
+    expect(observed(p, '花宗ため池')?.storageVolumeM3).toBe(1_499_000);
   });
 
   test('keeps a row whose first survey column is a 「－ －」 missing pair', () => {
     // 教良木ダム printed 「－ －」 for 8/1; once the window reaches that column
     // it is the first pair after 有効貯水量, where no 利水容量 column precedes it.
-    const p2 = parseKyushuNouseiPdfText(
-      '熊本 教良木川 教良木ダム 1,371 - - 1,153 84.1% 1,064 77.6% 1,200 87.5% 90.0%',
+    const p2 = kyushuNouseiEntries(
+      `${TITLE}\n熊本 教良木川 教良木ダム 1,371 - - 1,153 84.1% 1,064 77.6% 1,200 87.5% 90.0%`,
     );
-    expect(p2.published).toEqual([{ name: '教良木ダム', prefCode: '43' }]);
-    expect(p2.rows).toHaveLength(1);
-    expect(p2.rows[0]?.storageVolumeM3).toBe(1_064_000);
-    expect(p2.rows[0]?.storageRate).toBeCloseTo(0.776, 3);
+    expect(p2.map((e) => [e.key, e.pref])).toEqual([['43:教良木ダム', '43']]);
+    const r = p2[0]?.reading;
+    if (!r || typeof r === 'function' || r.state !== 'values') throw new Error('no values');
+    expect(r.observations[0]?.storageVolumeM3).toBe(1_064_000);
+    expect(r.observations[0]?.storageRate).toBeCloseTo(0.776, 3);
+  });
+
+  test('a current survey printed 「－ －」 is the PDF’s own mark: provider-marked empty', () => {
+    const p2 = kyushuNouseiEntries(
+      `${TITLE}\n熊本 教良木川 教良木ダム 1,371 1,153 84.1% - - 1,200 87.5% 90.0%`,
+    );
+    expect(stateOf(p2[0])).toBe('empty');
   });
 
   test('checks a multi-purpose dam against its reprinted 利水容量, not 有効貯水量', () => {
     // 寺内ダム 有効 16,000 / 利水 8,230: 1,937 / 8,230 = 23.5 %.
-    const r = p.rows.find((x) => x.kyushuName === '寺内ダム');
-    expect(r?.storageVolumeM3).toBe(1_937_000);
-    expect(r?.storageRate).toBeCloseTo(0.235, 3);
+    expect(observed(p, '寺内ダム')?.storageVolumeM3).toBe(1_937_000);
+    expect(observed(p, '寺内ダム')?.storageRate).toBeCloseTo(0.235, 3);
   });
 
   test('stamps each prefecture block at the hour its figures were read', () => {
@@ -196,8 +211,7 @@ describe('parseKyushuNouseiPdfText — the R8.9.15 PDF (no leading 利水容量 
     // kumamoto-bousai 00:00Z, 石場 886 = oita-nourin's 「9：00現在」 row).
     // 鹿児島 is midnight too: 高隈's 6/1–9/15 volumes against kasenbosai's
     // 貯水位 give ΔV/ΔL 924–967 千m³/m at midnight, 901–1,335 at 09:00.
-    const at = (name: string) =>
-      p.rows.find((r) => r.kyushuName === name)?.observedAt.toISOString();
+    const at = (name: string) => observed(p, name)?.observedAt.toISOString();
     expect(at('江川ダム')).toBe('2026-09-14T15:00:00.000Z');
     expect(at('高隈ダム')).toBe('2026-09-14T15:00:00.000Z');
     expect(at('厳木ダム')).toBe('2026-09-15T00:00:00.000Z');
@@ -207,64 +221,24 @@ describe('parseKyushuNouseiPdfText — the R8.9.15 PDF (no leading 利水容量 
   });
 });
 
-describe('chooseMaster', () => {
-  const masters = [
-    { id: 1n, name: '石場' },
-    { id: 2n, name: '耶馬溪' },
-    { id: 3n, name: '東原調整池' },
-    { id: 4n, name: '花宗溜池' },
-  ];
+describe('binding', () => {
+  const bind = (key: string) => entries0915.find((e) => e.key === key)?.bind;
 
-  test('matches the feed name minus its ダム suffix', () => {
-    expect(chooseMaster('石場ダム', masters)).toBe(1n);
+  test('pins the 大分-printed 大蘇ダム / 大谷ダム to their 熊本-filed NDI rows', () => {
+    expect(bind('44:大蘇ダム')).toEqual({ ndi: '2306' });
+    expect(bind('44:大谷ダム')).toEqual({ ndi: '2307' });
   });
 
-  test('folds 渓/溪 so 耶馬渓ダム matches master 耶馬溪', () => {
-    expect(chooseMaster('耶馬渓ダム', masters)).toBe(2n);
+  test('pins 小ヶ倉ダム to NDI 2592 of its two same-named master rows', () => {
+    expect(bind('42:小ヶ倉ダム')).toEqual({ ndi: '2592' });
   });
 
-  test('matches a 調整池-suffixed name exactly', () => {
-    expect(chooseMaster('東原調整池', masters)).toBe(3n);
+  test('looks up the master spelling of 花宗ため池 and 耶馬渓ダム', () => {
+    expect(bind('40:花宗ため池')).toEqual({ name: '花宗溜池' });
+    expect(bind('44:耶馬渓ダム')).toEqual({ name: '耶馬溪ダム' });
   });
 
-  test('folds ため池/溜池 so 花宗ため池 matches master 花宗溜池', () => {
-    expect(chooseMaster('花宗ため池', masters)).toBe(4n);
-  });
-
-  test('returns null for a dam the master does not hold', () => {
-    expect(chooseMaster('存在しないダム', masters)).toBeNull();
-  });
-});
-
-describe('masterFor', () => {
-  // The master files 大蘇 and 大谷 under 熊本; the PDF prints them under 大分.
-  const mastersByPref = new Map([
-    [
-      '43',
-      [
-        { id: 10n, name: '大蘇' },
-        { id: 11n, name: '大谷' },
-      ],
-    ],
-    ['44', [{ id: 1n, name: '石場' }]],
-    ['40', [{ id: 20n, name: '大谷' }]],
-  ]);
-  const pinnedIds = new Map([
-    ['2306', 10n],
-    ['2307', 11n],
-  ]);
-  const bind = (name: string) => {
-    const r = parsed0915.rows.find((x) => x.kyushuName === name);
-    return r ? masterFor(r.kyushuName, r.prefCode, mastersByPref, pinnedIds) : undefined;
-  };
-
-  test('binds the 大分-printed 大蘇ダム / 大谷ダム to their 熊本-filed NDI rows', () => {
-    expect(bind('大蘇ダム')).toBe(10n);
-    expect(bind('大谷ダム')).toBe(11n);
-  });
-
-  test('matches every other row by name within its own prefecture', () => {
-    expect(bind('石場ダム')).toBe(1n);
-    expect(masterFor('大谷ダム', '40', mastersByPref, pinnedIds)).toBe(20n);
+  test('binds every other row by its own name within its own prefecture', () => {
+    expect(bind('44:石場ダム')).toBeUndefined();
   });
 });

@@ -7,8 +7,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { BindableMaster } from '@dam/core/dam_binding';
-import { chooseMaster, parseKitakyushuSuigen } from './ingest_kitakyushu_suido.ts';
+import { kitakyushuEntries, parseKitakyushuSuigen } from './ingest_kitakyushu_suido.ts';
 
 const FIXTURE = join(
   import.meta.dir,
@@ -61,41 +60,39 @@ describe('parseKitakyushuSuigen', () => {
   });
 });
 
-describe('chooseMaster', () => {
-  // Real prod rows (福岡 40 / 大分 44) that the published names could reach.
-  const masters: BindableMaster[] = [
-    { id: 10993n, name: '松ヶ江', completedYear: 1960 },
-    { id: 11008n, name: 'ます渕', completedYear: 1973 },
-    { id: 11012n, name: '遠賀川河口堰', completedYear: 1983 },
-    { id: 11013n, name: '切畑', completedYear: 1975 },
-    { id: 11026n, name: '畑', completedYear: 1955 },
-    { id: 11028n, name: '頓田第1（再）', completedYear: 1968 },
-    { id: 11029n, name: '頓田第2（再）', completedYear: 1968 },
-    { id: 11045n, name: '南畑（元）', completedYear: 1965 },
-    { id: 11046n, name: '南畑（再）', completedYear: 1985 },
-    { id: 11279n, name: '耶馬溪', completedYear: 1984 },
-  ];
+describe('kitakyushuEntries', () => {
+  const { observedAt, rows } = parseKitakyushuSuigen(html);
+  if (!observedAt) throw new Error('no date');
+  const entries = kitakyushuEntries(observedAt, rows);
 
-  test('strips 貯水池 and matches the dam of the same stem', () => {
-    expect(chooseMaster('松ヶ江貯水池', masters)).toBe(10993n);
-    expect(chooseMaster('ます渕貯水池', masters)).toBe(11008n);
-    expect(chooseMaster('遠賀川河口堰', masters)).toBe(11012n);
+  test('binds on the name without 貯水池, 耶馬渓 in the master kanji 耶馬溪 in 大分', () => {
+    const by = (key: string) => entries.find((e) => e.key === key);
+    expect(by('松ヶ江貯水池')).toMatchObject({ pref: '40', bind: { name: '松ヶ江' } });
+    // 畑 is the master 畑 by exact name, never 切畑 or 南畑.
+    expect(by('畑貯水池')).toMatchObject({ pref: '40', bind: { name: '畑' } });
+    expect(by('耶馬渓貯水池')).toMatchObject({ pref: '44', bind: { name: '耶馬溪' } });
+    expect(by('遠賀川河口堰')?.bind).toBeUndefined();
   });
 
-  test('畑 binds to 畑, never to 切畑 or 南畑', () => {
-    expect(chooseMaster('畑貯水池', masters)).toBe(11026n);
+  test('never binds 頓田, whose one combined figure spans two master dams', () => {
+    expect(entries.find((e) => e.key === '頓田貯水池')?.bind).toBe('never');
   });
 
-  test('folds 耶馬渓 (feed) onto 耶馬溪 (master)', () => {
-    expect(chooseMaster('耶馬渓貯水池', masters)).toBe(11279n);
+  test('every facility reads level, volume and rate at the caption time', () => {
+    expect(entries).toHaveLength(10);
+    expect(entries.every((e) => 'state' in e.reading && e.reading.state === 'values')).toBe(true);
+    const hata = entries.find((e) => e.key === '畑貯水池')?.reading;
+    if (!hata || typeof hata === 'function' || hata.state !== 'values') throw new Error('畑');
+    expect(hata.observations[0]).toMatchObject({ observedAt, storageVolumeM3: 3_760_000 });
   });
 
-  test('refuses 頓田, whose one combined figure spans two master dams', () => {
-    expect(chooseMaster('頓田貯水池', masters)).toBeNull();
-  });
-
-  test('a row already stamped with the station keeps it', () => {
-    const stamped = masters.map((m) => (m.id === 11029n ? { ...m, stamp: '頓田貯水池' } : m));
-    expect(chooseMaster('頓田貯水池', stamped)).toBe(11029n);
+  test('a facility with every cell blank is unreadable', () => {
+    const blank = rows.map((r) =>
+      r.name === '白木貯水池'
+        ? { ...r, waterLevelM: null, storageVolumeM3: null, storageRate: null }
+        : r,
+    );
+    const shiraki = kitakyushuEntries(observedAt, blank).find((e) => e.key === '白木貯水池');
+    expect(shiraki?.reading).toMatchObject({ state: 'unreadable' });
   });
 });

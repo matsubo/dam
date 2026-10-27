@@ -9,11 +9,21 @@
 //   sn=2  浅虫ダム         tm=2026-09-27 01:00 (window crosses midnight)
 // and of the ダム諸量現況表 that lists every dam with its 局番号
 // (servletBousaiTableStatus?sv=3&dk=4&mp=0&no=0&fn=0&pg=1, 21:40 JST).
+// No database: binding and writing belong to the ingest run
+// (apps/worker/src/ingest/run.test.ts).
 
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { parseAomoriDamGraph, parseAomoriDamList } from './ingest_aomori.ts';
+import type { Reading } from '../ingest/types.ts';
+import { fixtureUpstream } from '../ingest/upstream.ts';
+import {
+  aomoriEntries,
+  aomoriReading,
+  graphUrl,
+  parseAomoriDamGraph,
+  parseAomoriDamList,
+} from './ingest_aomori.ts';
 
 const FIXTURE_DIR = join(import.meta.dir, '..', '..', '..', '..', 'tests/fixtures/aomori');
 
@@ -106,5 +116,56 @@ describe('parseAomoriDamGraph', () => {
       .replace('貯水率<br>(有効容量)', '貯水率<br>(利水容量)')
       .replace('貯水率<br>(TMP)', '貯水率<br>(有効容量)');
     expect(parseAomoriDamGraph(html)).toEqual([]);
+  });
+});
+
+describe('aomoriReading', () => {
+  test('the latest row that carries dam data is the one observation', async () => {
+    const r = aomoriReading(await fixtureHtml('dam_graph10m_sn1_2026-09-27.shiftjis.html'));
+    if (r.state !== 'values') throw new Error(r.state);
+    expect(r.observations).toHaveLength(1);
+    expect(r.observations[0]?.observedAt.toISOString()).toBe('2026-09-27T07:30:00.000Z');
+    expect(r.observations[0]?.storageRate).toBeCloseTo(1.0, 4);
+  });
+
+  test('a page in another layout is unreadable', async () => {
+    const html = (await fixtureHtml('dam_graph10m_sn1_2026-09-27.shiftjis.html')).replace(
+      '貯水率<br>(利水容量)',
+      '貯水率<br>(TMP)',
+    );
+    expect(aomoriReading(html).state).toBe('unreadable');
+  });
+
+  test('"---" / "***" in every dam column is provider-marked empty', async () => {
+    const html = (await fixtureHtml('dam_graph10m_sn7_2026-09-27.shiftjis.html')).replace(
+      /(<th[^>]*class="title time"[^>]*>\d{2}:\d{2}[^<]*<\/th>)((?:\s*<td[^>]*>[^<]*<\/td>){8})/g,
+      (_, th: string, tds: string) =>
+        th + tds.replace(/(<td[^>]*>)[^<]*(<\/td>)/g, (_m, a: string, b: string) => `${a}---${b}`),
+    );
+    expect(aomoriReading(html).state).toBe('empty');
+  });
+});
+
+describe('aomoriEntries', () => {
+  test('every listed dam is an entry keyed by its name; each reads its own 局番号 page', async () => {
+    const dams = parseAomoriDamList(await fixtureHtml('dam_table_status_2026-09-27.shiftjis.html'));
+    const asked: string[] = [];
+    const page = await readFile(join(FIXTURE_DIR, 'dam_graph10m_sn7_2026-09-27.shiftjis.html'));
+    const upstream = fixtureUpstream((url) => {
+      asked.push(url);
+      return url === graphUrl(7) ? page : { status: 503 };
+    });
+    const entries = aomoriEntries(dams, upstream);
+    expect(entries.map((e) => [e.key, e.pref])).toContainEqual(['遠部ダム', '02']);
+    expect(entries).toHaveLength(11);
+    const read = async (name: string): Promise<Reading> => {
+      const r = entries.find((e) => e.name === name)?.reading;
+      if (typeof r !== 'function') throw new Error('expected a page reading');
+      return r(null);
+    };
+    expect((await read('遠部ダム')).state).toBe('values');
+    // A page that fails throws; the run records that dam unreadable.
+    await expect(read('下湯ダム')).rejects.toThrow('HTTP 503');
+    expect(asked).toEqual([graphUrl(7), graphUrl(1)]);
   });
 });

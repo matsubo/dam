@@ -69,7 +69,7 @@ export async function GET(): Promise<NextResponse> {
   // `task_identifier` from `_private_jobs`, which has no such column (it holds
   // `task_id` into `_private_tasks`), so `active_or_pending_jobs` and
   // `queue_depth_by_task` returned `[]` on every call. That is why #31's
-  // failing job was only visible in the Coolify log.
+  // failing job was only visible in the worker log.
   const degraded: string[] = [];
   const orEmpty =
     <T>(label: string) =>
@@ -131,7 +131,7 @@ export async function GET(): Promise<NextResponse> {
   // `active_or_pending_jobs` because that one is `ORDER BY run_at LIMIT 20` —
   // a job retrying on a long backoff sorts to the end and falls off it. #31
   // went unnoticed for a day for exactly that reason: `storageRate:recompute`
-  // was burning through 25 attempts and the only evidence was the Coolify log.
+  // was burning through 25 attempts and the only evidence was the worker log.
   //
   // `attempts > 0` with a `last_error` covers both the still-retrying case and
   // the exhausted one (graphile-worker leaves a job row behind at

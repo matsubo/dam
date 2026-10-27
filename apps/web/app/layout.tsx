@@ -5,6 +5,7 @@ import { ExtensionErrorShield } from '../components/extension-error-shield.tsx';
 import { GoogleAnalytics } from '../components/google-analytics.tsx';
 import { Gtm, GtmNoscript } from '../components/gtm.tsx';
 import { Nav } from '../components/nav.tsx';
+import { DISCORD_INVITE, REPO_URL } from '../lib/contributors.ts';
 import { APP_STAGE, APP_VERSION } from '../lib/version.ts';
 import './globals.css';
 
@@ -190,24 +191,11 @@ function SiteFooter() {
                 </a>
               </li>
               <li>
-                <a className="text-primary font-semibold hover:underline" href="/contribute">
+                <a
+                  className="text-on-surface-variant hover:text-primary transition-colors"
+                  href="/contribute"
+                >
                   開発者募集
-                </a>
-              </li>
-              <li>
-                <a
-                  className="text-on-surface-variant hover:text-primary transition-colors"
-                  href="/sitemap.xml"
-                >
-                  サイトマップ
-                </a>
-              </li>
-              <li>
-                <a
-                  className="text-on-surface-variant hover:text-primary transition-colors"
-                  href="/api/v1/healthz"
-                >
-                  ヘルスチェック
                 </a>
               </li>
             </ul>
@@ -255,11 +243,21 @@ function SiteFooter() {
               <li>
                 <a
                   className="text-on-surface-variant hover:text-primary transition-colors"
-                  href="https://discord.gg/UbWqspWbAk"
+                  href={`${REPO_URL}/issues`}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  お問い合わせ (Discord)
+                  不具合報告・要望 (GitHub Issues)
+                </a>
+              </li>
+              <li>
+                <a
+                  className="text-on-surface-variant hover:text-primary transition-colors"
+                  href={DISCORD_INVITE}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  相談 (Discord)
                 </a>
               </li>
             </ul>

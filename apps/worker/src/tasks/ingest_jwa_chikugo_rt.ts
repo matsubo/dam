@@ -38,12 +38,9 @@
 // License: 水資源機構 利用ルール (water.go.jp/honsya/honsya/policy/copyright/)
 // — 出典を記載すれば複製・公衆送信・加工・商用利用可; 数値データは著作権の対象外.
 
-import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const BASE_URL =
   process.env.JWA_CHIKUGO_RT_BASE_URL ?? 'http://chikugo.ec-net.jp/chikugo/kyoku/pc/new';
@@ -54,16 +51,15 @@ export interface Station {
   /** The site's screen id (rep{code}_I60.html); also the stamp and universe key. */
   code: string;
   name: string;
-  masterName: string;
-  prefCodes: string[];
+  prefCode: string;
 }
 
 export const STATIONS: Station[] = [
-  { code: 'EG', name: '江川ダム', masterName: '江川', prefCodes: ['40'] },
-  { code: 'TR', name: '寺内ダム', masterName: '寺内', prefCodes: ['40'] },
-  { code: 'KB', name: '小石原川ダム', masterName: '小石原川', prefCodes: ['40'] },
-  { code: 'OY', name: '大山ダム', masterName: '大山', prefCodes: ['44'] },
-  { code: 'CO', name: '筑後大堰', masterName: '筑後大堰', prefCodes: ['40'] },
+  { code: 'EG', name: '江川ダム', prefCode: '40' },
+  { code: 'TR', name: '寺内ダム', prefCode: '40' },
+  { code: 'KB', name: '小石原川ダム', prefCode: '40' },
+  { code: 'OY', name: '大山ダム', prefCode: '44' },
+  { code: 'CO', name: '筑後大堰', prefCode: '40' },
 ];
 
 // --- parsing ----------------------------------------------------------------
@@ -77,6 +73,14 @@ export interface ParsedRow {
   inflowM3s: number | null;
   outflowM3s: number | null;
   rainfallMm: number | null;
+}
+
+export interface ParsedPage {
+  rows: ParsedRow[];
+  /** Hourly rows printed on the page, read or not. */
+  printed: number;
+  /** Hourly rows dropped because every column we read carries a marker (***). */
+  marked: number;
 }
 
 function cellText(raw: string): string {
@@ -94,6 +98,11 @@ function cellValue(raw: string | undefined): number | null {
   return Number(text);
 }
 
+/** The site's own no-value marks: *** (欠測) and the like. */
+function isMarker(raw: string | undefined): boolean {
+  return /^(?:\*+|-+|―+|欠測)$/.test(cellText(raw ?? ''));
+}
+
 /** Header label with units and line breaks dropped: "有効<br>貯水量<br>[千m³]" → "有効貯水量". */
 function headerLabel(raw: string): string {
   return cellText(raw.replace(/\[[^\]]*\]/g, '')).replace(/\s/g, '');
@@ -103,7 +112,7 @@ function headerLabel(raw: string): string {
  * Every hourly row of one rep*_I60 page. Rows with no parsable time, or with
  * nothing but markers, are dropped; the station itself is still published.
  */
-export function parseChikugoRtPage(html: string): ParsedRow[] {
+export function parseChikugoRtPage(html: string): ParsedPage {
   const labels = [...html.matchAll(/<td class="item"[^>]*>([\s\S]*?)<\/td>/g)].map((m) =>
     headerLabel(m[1] ?? ''),
   );
@@ -116,8 +125,11 @@ export function parseChikugoRtPage(html: string): ParsedRow[] {
   const outflow = labels.indexOf('総放流量');
   const rain = labels.findIndex((l) => l.endsWith('時間雨量'));
   const at = (cells: string[], i: number): number | null => (i < 0 ? null : cellValue(cells[i]));
+  const read = [level, volume, rate, inflow, outflow, rain].filter((i) => i >= 0);
 
   const rows: ParsedRow[] = [];
+  let printed = 0;
+  let marked = 0;
   let date: { y: number; m: number; d: number } | null = null;
   for (const tr of html.matchAll(/<tr class="line\d"[^>]*>([\s\S]*?)<\/tr>/g)) {
     const cells = [...(tr[1] ?? '').matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((c) => c[1] ?? '');
@@ -127,6 +139,7 @@ export function parseChikugoRtPage(html: string): ParsedRow[] {
     if (!stamp) continue;
     if (stamp[1]) date = { y: Number(stamp[1]), m: Number(stamp[2]), d: Number(stamp[3]) };
     if (!date) continue;
+    printed += 1;
     // JST → UTC; "24:00" rolls over to the next day through Date.UTC.
     const observedAt = new Date(
       Date.UTC(date.y, date.m - 1, date.d, Number(stamp[4]) - 9, Number(stamp[5])),
@@ -148,136 +161,47 @@ export function parseChikugoRtPage(html: string): ParsedRow[] {
       row.inflowM3s === null &&
       row.outflowM3s === null
     ) {
+      if (read.length > 0 && read.every((i) => isMarker(cells[i]))) marked += 1;
       continue;
     }
     rows.push(row);
   }
-  return rows;
+  return { rows, printed, marked };
 }
 
-// --- matching ---------------------------------------------------------------
-
-function stem(name: string): string {
-  return name
-    .normalize('NFKC')
-    .replace(/\((?:元|再)\)$/, '')
-    .replace(/ダム$/, '')
-    .trim();
+/** A page's reading: its whole 24 h window, so a missed run heals. */
+export function chikugoRtReading(page: ParsedPage): Reading {
+  if (page.rows.length > 0) return { state: 'values', observations: page.rows };
+  if (page.printed > 0 && page.marked === page.printed) {
+    return { state: 'empty', mark: '*** in every column of every hour' };
+  }
+  return { state: 'unreadable', why: `no readable hourly row (${page.printed} printed)` };
 }
+
+// --- fetching ---------------------------------------------------------------
+
+/** One station's hourly page, by its screen id. */
+export const pageUrl = (code: string): string => `${BASE_URL}/rep${code}_I60.html`;
 
 /**
- * The master for a station: the row already stamped with its code, else the
- * row whose name is the station's (（元）/（再） alike, so preferMaster picks the
- * live twin). No prefix or substring fallback — these five names are exact in
- * the master, and a looser match would only ever find a different dam.
+ * The site's menu is the universe: one entry per station, each read from its
+ * own page. The five names are exact in the master; a prefix or contains
+ * match would only ever find a different dam (大山 → 大山川), so the ladder
+ * stops at the stem.
  */
-export function chooseMaster(station: Station, masters: BindableMaster[]): bigint | null {
-  const candidates = masters
-    .filter((m) => m.stamp === station.code || stem(m.name) === station.masterName)
-    .map((m) => ({ ...m, rank: 0 }));
-  return chooseRanked(candidates, station.code)?.id ?? null;
+export function chikugoRtEntries(upstream: Upstream): Entry[] {
+  return STATIONS.map((s) => ({
+    key: s.code,
+    name: s.name,
+    pref: s.prefCode,
+    bind: { exact: true },
+    reading: async () =>
+      chikugoRtReading(
+        parseChikugoRtPage((await upstream.fetch(pageUrl(s.code))).text('shift_jis')),
+      ),
+  }));
 }
 
-// --- DB helpers -------------------------------------------------------------
-
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 298,
-            '水資源機構 筑後川局 水管理情報WEB — hourly, 5 施設 (江川/寺内/小石原川/大山/筑後大堰)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-async function matchMaster(log: (s: string) => void): Promise<Map<string, bigint>> {
-  const prefCodes = [...new Set(STATIONS.flatMap((s) => s.prefCodes))];
-  const masters = await sql<(BindableMaster & { prefCode: string })[]>`
-    SELECT id, name, pref_code AS "prefCode", completed_year AS "completedYear",
-           external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ANY(${prefCodes}::text[]) ORDER BY id
-  `;
-  const damByCode = new Map<string, bigint>();
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  for (const s of STATIONS) {
-    const damId = chooseMaster(
-      s,
-      masters.filter((m) => s.prefCodes.includes(m.prefCode)),
-    );
-    universe.push({
-      externalId: s.code,
-      name: s.name,
-      prefCode: s.prefCodes[0] ?? null,
-      resolvedDamId: damId,
-    });
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${s.name}" (${s.code})`);
-      continue;
-    }
-    damByCode.set(s.code, damId);
-    await bindExternalId(damId, SOURCE_ID, s.code);
-  }
-  await recordUniverse(SOURCE_ID, universe);
-  return damByCode;
-}
-
-// --- task -------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
-  // Resolved before the fetches so a dead page still leaves a scan on record.
-  const damByCode = await matchMaster(log);
-
-  const headers = {
-    'user-agent':
-      process.env.HTTP_USER_AGENT ??
-      'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-  };
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  let parsed = 0;
-  for (const s of STATIONS) {
-    const damId = damByCode.get(s.code);
-    if (!damId) continue;
-    const r = await fetch(`${BASE_URL}/rep${s.code}_I60.html`, {
-      headers,
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (r.status !== 200) {
-      log(`${SOURCE_ID}: HTTP ${r.status} for ${s.name}; skipping`);
-      continue;
-    }
-    const rows = parseChikugoRtPage(new TextDecoder('shift_jis').decode(await r.arrayBuffer()));
-    parsed += rows.length;
-    log(
-      `${SOURCE_ID}: ${s.name} ${rows.length} rows, latest ${rows.at(-1)?.observedAt.toISOString() ?? '(none)'}`,
-    );
-    for (const p of rows) {
-      inputs.push({
-        observedAt: p.observedAt,
-        damId,
-        sourceId: SOURCE_ID,
-        storageVolumeM3: p.storageVolumeM3,
-        storageRate: p.storageRate,
-        inflowM3s: p.inflowM3s,
-        outflowM3s: p.outflowM3s,
-        waterLevelM: p.waterLevelM,
-        rainfallMm: p.rainfallMm,
-        rawSnapshotId: null,
-        qualityFlag: 0,
-      });
-    }
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${parsed} matched=${damByCode.size} written=${written}`);
-};
-
-export default task;
+export default ingestTask(SOURCE_ID, async ({ upstream }) => ({
+  entries: chikugoRtEntries(upstream),
+}));

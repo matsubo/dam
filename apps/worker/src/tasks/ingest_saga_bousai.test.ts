@@ -1,7 +1,20 @@
+// apps/worker/src/tasks/ingest_saga_bousai.test.ts
+//
+// Fixture → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
+
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { extractYear, parseSagaPage, parseSagaTimestamp } from './ingest_saga_bousai.ts';
+import type { Entry } from '../ingest/types.ts';
+import {
+  extractYear,
+  parseSagaPage,
+  parseSagaTimestamp,
+  sagaEntries,
+} from './ingest_saga_bousai.ts';
+
+const state = (e: Entry) => (typeof e.reading === 'function' ? undefined : e.reading.state);
 
 describe('extractYear', () => {
   test('reads the year from the page header', () => {
@@ -132,28 +145,60 @@ const page3 = new TextDecoder('shift_jis').decode(
   ),
 );
 
-describe('parseSagaPage hasData', () => {
-  test('marks the dams whose every value cell is 「***」 or blank as publishing nothing', () => {
-    expect(parseSagaPage(page3).map((r) => [r.sagaName, r.hasData])).toEqual([
-      ['岩屋川内ダム', true],
-      ['横竹ダム', true],
-      ['天ヶ瀬ダム', false],
-      ['河内ダム', false],
-      ['深浦ダム', false],
+describe('sagaEntries', () => {
+  test('marks the dams whose every value cell is 「***」 or blank as provider-marked empty', () => {
+    expect(sagaEntries(parseSagaPage(page3)).map((e) => [e.key, state(e)])).toEqual([
+      ['岩屋川内ダム', 'values'],
+      ['横竹ダム', 'values'],
+      ['天ヶ瀬ダム', 'empty'],
+      ['河内ダム', 'empty'],
+      ['深浦ダム', 'empty'],
     ]);
   });
 
-  test('an unreadable value cell is unknown, not "no value"', () => {
+  test('an unreadable value cell is unreadable, not "no value"', () => {
     const garbled = page3.replace(
       /(貯水位　EL \[m\]<\/td>(?:<td[^>]*>[^<]*<\/td>){3})<td([^>]*)>\*\*\*</,
       '$1<td$2>ERR<',
     );
     expect(garbled).not.toBe(page3);
-    expect(parseSagaPage(garbled).find((r) => r.sagaName === '河内ダム')?.hasData).toBeNull();
+    const kawachi = sagaEntries(parseSagaPage(garbled)).find((e) => e.key === '河内ダム');
+    expect(kawachi && state(kawachi)).toBe('unreadable');
   });
 
   test('a page without its 貯水位 row cannot say a dam is empty', () => {
     const noLevel = page3.replace('貯水位　EL [m]', '貯水位（旧）');
-    expect(parseSagaPage(noLevel).map((r) => r.hasData)).toEqual([true, true, null, null, null]);
+    expect(sagaEntries(parseSagaPage(noLevel)).map(state)).toEqual([
+      'values',
+      'values',
+      'unreadable',
+      'unreadable',
+      'unreadable',
+    ]);
+  });
+
+  test('reads 伊岐佐ダム: volume × 1000, rate ÷ 100, with the JST time', () => {
+    const iki = sagaEntries(parseSagaPage(SAMPLE_HTML)).find((e) => e.key === '伊岐佐ダム');
+    expect(iki?.reading).toEqual({
+      state: 'values',
+      observations: [
+        {
+          observedAt: new Date('2026-06-05T12:00:00.000Z'),
+          storageVolumeM3: 114_000,
+          storageRate: 0.884,
+          inflowM3s: 0.266,
+          outflowM3s: 0.228,
+          waterLevelM: 250.13,
+        },
+      ],
+    });
+  });
+
+  test('狩立日ノ峯ダム binds the master 狩立; the others bind by their own name', () => {
+    const html = SAMPLE_HTML.replace('<td>岸川ダム</td>', '<td>狩立日ノ峯ダム</td>');
+    expect(sagaEntries(parseSagaPage(html)).map((e) => [e.key, e.pref, e.bind])).toEqual([
+      ['狩立日ノ峯ダム', '41', { name: '狩立' }],
+      ['伊岐佐ダム', '41', undefined],
+    ]);
   });
 });

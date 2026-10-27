@@ -7,12 +7,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import {
-  chooseMaster,
-  type KandaMaster,
-  parseKandaSuigen,
-  planKanda,
-} from './ingest_kanda_suido.ts';
+import { kandaEntries, parseKandaSuigen } from './ingest_kanda_suido.ts';
 
 const FIXTURE = join(
   import.meta.dir,
@@ -24,12 +19,6 @@ const FIXTURE = join(
 );
 
 const html = await readFile(FIXTURE, 'utf8');
-
-const MASTERS: KandaMaster[] = [
-  { id: 10997n, name: '山口', ndi: '2248', completedYear: 1996, stamp: null },
-  { id: 11058n, name: '山口調整池', ndi: '2487', completedYear: 1998, stamp: null },
-  { id: 10999n, name: '油木', ndi: '2253', completedYear: 1971, stamp: null },
-];
 
 describe('parseKandaSuigen', () => {
   test('lists the three reservoirs of 表1 and nothing from 表2', () => {
@@ -62,32 +51,37 @@ describe('parseKandaSuigen', () => {
   });
 });
 
-describe('chooseMaster', () => {
-  test('山口ダム is 福岡県の山口 (NDI 2248), not 山口調整池', () => {
-    expect(chooseMaster('山口ダム', MASTERS)).toBe(10997n);
-  });
+describe('kandaEntries', () => {
+  const { observedAt, rows } = parseKandaSuigen(html);
+  if (!observedAt) throw new Error('no date');
+  const entries = kandaEntries(observedAt, rows);
 
-  test('油木ダム binds by name', () => {
-    expect(chooseMaster('油木ダム', MASTERS)).toBe(10999n);
-  });
-
-  test('井ノ口池 is not in the master', () => {
-    expect(chooseMaster('井ノ口池', MASTERS)).toBeNull();
-  });
-});
-
-describe('planKanda', () => {
-  test('records all three and writes 油木 and 山口', () => {
-    const { universe, writes } = planKanda(parseKandaSuigen(html).rows, MASTERS);
-    expect(universe.map((u) => [u.externalId, u.resolvedDamId])).toEqual([
-      ['油木ダム', 10999n],
-      ['山口ダム', 10997n],
-      ['井ノ口池', null],
+  test('山口ダム is pinned to 福岡県の山口 (NDI 2248), not 山口調整池; the rest bind by exact name', () => {
+    expect(entries.map((e) => [e.key, e.pref, e.bind])).toEqual([
+      ['油木ダム', '40', { exact: true }],
+      ['山口ダム', '40', { ndi: '2248' }],
+      ['井ノ口池', '40', { exact: true }],
     ]);
-    expect(writes.map((w) => [w.damId, w.row.storageVolumeM3])).toEqual([
-      [10999n, 6_463_000],
-      [10997n, 633_000],
-    ]);
-    expect(writes[0]?.row.storageRate).toBeCloseTo(0.447, 6);
+  });
+
+  test('every row reads its volume and rate at the 現在 date', () => {
+    const read = entries.map((e) => {
+      const r = e.reading;
+      if (typeof r === 'function' || r.state !== 'values') throw new Error(`${e.key}: no values`);
+      expect(r.observations[0]?.observedAt).toEqual(observedAt);
+      return r.observations[0];
+    });
+    expect(read.map((o) => o?.storageVolumeM3)).toEqual([6_463_000, 633_000, expect.any(Number)]);
+    expect(read[0]?.storageRate).toBeCloseTo(0.447, 6);
+  });
+
+  test('a row whose cells are blank is listed and unreadable', () => {
+    const blank = parseKandaSuigen(html).rows.map((r) =>
+      r.name === '山口ダム' ? { ...r, storageVolumeM3: null, storageRate: null } : r,
+    );
+    expect(kandaEntries(observedAt, blank)[1]?.reading).toEqual({
+      state: 'unreadable',
+      why: 'no 貯水量 or 貯水率',
+    });
   });
 });

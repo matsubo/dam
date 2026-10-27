@@ -7,7 +7,7 @@
 //   賀祥 (kasho), 朝鍋 (asanabe), 佐治川 (sajigawa),
 //   東郷 (togo),  百谷 (momodani).
 //
-// Page is EUC-JP encoded; we decode via TextDecoder. One row per dam:
+// Page is EUC-JP encoded; we decode it explicitly. One row per dam:
 //
 //   佐治川ダム | 時間雨量 0 | 累計雨量 0 | ダム水位 382.57 | 流入量 1.04 |
 //   放流量 0.12 | 有効貯水量 111 | 有効貯水容量 1880 | 貯水率 6 | 空容量 1663 | …
@@ -24,50 +24,41 @@
 //
 // Cron: hourly at :09.
 
-import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
+
+const SOURCE_ID = 'tottori-dam';
 
 // 10分データ全ダム一覧 — one request for all five dams. Only served from inside
 // a dam directory; every copy renders the same table.
 const PAGE_URL = process.env.TOTTORI_DAM_URL ?? 'http://tottoridam.jp/kasho/data10all.php';
 
-interface DamCfg {
-  tottoriName: string;
-  masterName: string;
-}
-
-const DAMS: DamCfg[] = [
-  { tottoriName: '賀祥ダム', masterName: '賀祥' },
-  { tottoriName: '朝鍋ダム', masterName: '朝鍋' },
-  { tottoriName: '佐治川ダム', masterName: '佐治川' },
-  { tottoriName: '東郷ダム', masterName: '東郷' },
-  { tottoriName: '百谷ダム', masterName: '百谷' },
-];
+/** The five dams the table lists, known in advance (the universe if the page fails). */
+const DAMS = ['賀祥ダム', '朝鍋ダム', '佐治川ダム', '東郷ダム', '百谷ダム'] as const;
 
 const PREF_CODE = '31';
 
-interface ParsedRow {
-  tottoriName: string;
+export interface ParsedRow {
+  name: string;
   observedAt: Date;
-  waterLevelM: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
-  storageVolumeM3: number | null;
+  waterLevelM: Cell;
+  inflowM3s: Cell;
+  outflowM3s: Cell;
+  storageVolumeM3: Cell;
   /** 有効貯水容量 the row's own 貯水率 is divided by (千m³ → m³). */
   effectiveCapacityM3: number | null;
-  storageRate: number | null;
-  rainfallMm: number | null;
+  storageRate: Cell;
+  rainfallMm: Cell;
 }
 
-function parseNum(s: string): number | null {
+/** The site's own no-value marks. */
+const MARKS = new Set(['―', '-', '欠測']);
+
+function field(s: string): Cell {
   const t = s.replace(/[,\s　]/g, '');
-  if (!t || t === '―' || t === '-' || t === '欠測') return null;
-  const n = Number(t);
-  return Number.isFinite(n) ? n : null;
+  if (MARKS.has(t)) return MARKED;
+  return t ? cell(Number(t), false) : null;
 }
 
 /** Parse 「2026/05/15 22:50」 (or 「2026/5/15 23:00」 — Tottori uses both)
@@ -99,21 +90,22 @@ const RATE_TOLERANCE = 0.05;
 /**
  * Parse 10分データ全ダム一覧 (`/{dam}/data10all.php`) — every dam in one table,
  * with the 有効貯水容量 each 貯水率 is divided by printed on the same row.
+ * Null when the page is not the table (maintenance page, no timestamp).
  *
  * Columns are located by their header label rather than by position so a new
  * 下流水位 column cannot silently shift the values.
  */
-export function parseTottoriAllPage(html: string, knownNames: Set<string>): ParsedRow[] {
+export function parseTottoriAllPage(html: string): ParsedRow[] | null {
   const table = /<table[^>]*class="data10"[\s\S]*?<\/table>/.exec(html)?.[0];
-  if (!table) return [];
+  if (!table) return null;
 
   const stamp = /<p[^>]*id="date"[^>]*>([^<]*)<\/p>/.exec(html)?.[1] ?? '';
   const observedAt = parseJstStamp(stamp);
-  if (!observedAt) return [];
+  if (!observedAt) return null;
 
   const rows = [...table.matchAll(/<tr>([\s\S]*?)<\/tr>/g)].map((m) => m[1] ?? '');
   const header = rows.find((r) => r.includes('<th'));
-  if (!header) return [];
+  if (!header) return null;
   // Header labels line up with the data cells one-for-one, the leading blank
   // cell included, so their index is the data cell's index.
   const labels = [...header.matchAll(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/g)].map((m) =>
@@ -136,12 +128,14 @@ export function parseTottoriAllPage(html: string, knownNames: Set<string>): Pars
     if (row.includes('<th')) continue;
     const cells = [...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((m) => cellText(m[1] ?? ''));
     const name = cells[0] ?? '';
-    if (!knownNames.has(name)) continue;
+    if (!name) continue;
 
-    const at = (i: number): number | null => (i < 0 ? null : parseNum(cells[i] ?? ''));
-    const volThou = at(idx.volume);
-    const capThou = at(idx.capacity);
-    const ratePct = at(idx.rate);
+    const at = (i: number): Cell => (i < 0 ? null : field(cells[i] ?? ''));
+    const volume = at(idx.volume);
+    const volThou = numberIn(volume);
+    const capThou = numberIn(at(idx.capacity));
+    const rateCell = at(idx.rate);
+    const ratePct = numberIn(rateCell);
 
     // 鳥取県 publishes 貯水率 = 有効貯水量 / 有効貯水容量 (stated on the 朝鍋 page),
     // so every row carries its own check: keep a rate only while it still matches
@@ -156,122 +150,75 @@ export function parseTottoriAllPage(html: string, knownNames: Set<string>): Pars
       rate == null || implied == null || Math.abs(implied - rate) <= RATE_TOLERANCE;
 
     out.push({
-      tottoriName: name,
+      name,
       observedAt,
       waterLevelM: at(idx.level),
       inflowM3s: at(idx.inflow),
       outflowM3s: at(idx.outflow),
-      storageVolumeM3: volThou != null ? volThou * 1_000 : null,
+      storageVolumeM3: volThou != null ? volThou * 1_000 : volume,
       effectiveCapacityM3: capThou != null ? capThou * 1_000 : null,
-      storageRate: consistent ? rate : null,
+      // A contradicted rate is known-bad: unread, not the provider's mark.
+      storageRate: rate == null ? rateCell : consistent ? rate : null,
       rainfallMm: at(idx.rainfall),
     });
   }
   return out;
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES ('tottori-dam', 307,
-            '鳥取県ダム諸量情報システム — hourly, 5 dams (賀祥/朝鍋/佐治川/東郷/百谷)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
+export function tottoriReading(row: ParsedRow): Reading {
+  const cells: Cell[] = [
+    row.waterLevelM,
+    row.inflowM3s,
+    row.outflowM3s,
+    row.storageVolumeM3,
+    row.storageRate,
+    row.rainfallMm,
+  ];
+  const state = cellState(cells);
+  if (state === 'empty') return { state, mark: '欠測/― in every column' };
+  if (state === 'unreadable') return { state, why: 'no readable value in the row' };
+  return {
+    state,
+    observations: [
+      {
+        observedAt: row.observedAt,
+        waterLevelM: numberIn(row.waterLevelM),
+        inflowM3s: numberIn(row.inflowM3s),
+        outflowM3s: numberIn(row.outflowM3s),
+        storageVolumeM3: numberIn(row.storageVolumeM3),
+        storageRate: numberIn(row.storageRate),
+        rainfallMm: numberIn(row.rainfallMm),
+      },
+    ],
+  };
 }
 
-interface DamMatch {
-  tottoriName: string;
-  damId: bigint;
+function entry(name: string, reading: Reading): Entry {
+  return { key: name, name, pref: PREF_CODE, reading };
 }
 
-async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
-  const matches: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  for (const c of DAMS) {
-    // A redeveloped dam's twins share the ELSE rank, so chooseRanked picks the
-    // current one; a row already stamped with the station keeps it (#79).
-    const rows = await sql<(BindableMaster & { rank: number })[]>`
-      SELECT id, name, completed_year AS "completedYear",
-             external_ids->>'tottori-dam' AS stamp,
-             CASE
-               WHEN name = ${c.masterName} THEN 0
-               WHEN name = ${`${c.masterName}ダム`} THEN 1
-               ELSE 5
-             END AS rank
-      FROM dams
-      WHERE pref_code = ${PREF_CODE}
-        AND name LIKE ${`%${c.masterName}%`}
-      ORDER BY rank, id
-    `;
-    const r = chooseRanked(rows, c.tottoriName);
-    universe.push({
-      externalId: c.tottoriName,
-      name: c.tottoriName,
-      prefCode: PREF_CODE,
-      resolvedDamId: r?.id ?? null,
-    });
-    if (!r) {
-      log(`tottori-dam: no master match for ${c.tottoriName}`);
-      continue;
+/** Every row of the table; a known dam the page lacks, or every dam on a broken page, is unreadable. */
+export function tottoriEntries(html: string): Entry[] {
+  const rows = parseTottoriAllPage(html);
+  if (!rows) return DAMS.map((n) => entry(n, { state: 'unreadable', why: 'no data10 table' }));
+  const entries = rows.map((r) => entry(r.name, tottoriReading(r)));
+  for (const n of DAMS) {
+    if (!rows.some((r) => r.name === n)) {
+      entries.push(entry(n, { state: 'unreadable', why: 'not in the table' }));
     }
-    matches.push({ tottoriName: c.tottoriName, damId: r.id });
-    await bindExternalId(r.id, 'tottori-dam', c.tottoriName);
   }
-  await recordUniverse('tottori-dam', universe);
-  return matches;
+  return entries;
 }
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-  const matches = await ensureExternalIds(log);
-  log(`tottori-dam: matched ${matches.length}/${DAMS.length} master dams`);
-
-  const r = await fetch(PAGE_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (r.status !== 200) {
-    log(`tottori-dam: HTTP ${r.status}; aborting`);
-    return;
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  let html: string;
+  try {
+    // Page is EUC-JP — decode explicitly.
+    html = (await upstream.fetch(PAGE_URL, { timeoutMs: 15_000 })).text('euc-jp');
+  } catch (err) {
+    const why = err instanceof Error ? err.message : String(err);
+    log(`${SOURCE_ID}: ${why}`);
+    return { entries: DAMS.map((n) => entry(n, { state: 'unreadable', why })) };
   }
-  // Page is EUC-JP — decode explicitly.
-  const buf = await r.arrayBuffer();
-  const html = new TextDecoder('euc-jp').decode(buf);
-  const parsed = parseTottoriAllPage(html, new Set(DAMS.map((d) => d.tottoriName)));
-  log(`tottori-dam: parsed ${parsed.length} dam rows`);
-
-  const matchByName = new Map(matches.map((m) => [m.tottoriName, m.damId]));
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const row of parsed) {
-    const damId = matchByName.get(row.tottoriName);
-    if (!damId) continue;
-    inputs.push({
-      observedAt: row.observedAt,
-      damId,
-      sourceId: 'tottori-dam',
-      storageVolumeM3: row.storageVolumeM3,
-      storageRate: row.storageRate,
-      inflowM3s: row.inflowM3s,
-      outflowM3s: row.outflowM3s,
-      waterLevelM: row.waterLevelM,
-      rainfallMm: row.rainfallMm,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-  const written = await upsertObservations(inputs);
-  log(`tottori-dam done: parsed=${parsed.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+  return { entries: tottoriEntries(html) };
+});

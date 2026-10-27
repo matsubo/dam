@@ -24,12 +24,9 @@
 // Timestamp: "観測時刻：YYYY年MM月DD日 HH時MM分" JST.
 // Priority 308, matching other 防災Web prefectural sources.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry } from '../ingest/types.ts';
+import { type Upstream, UpstreamError } from '../ingest/upstream.ts';
 
 const DATA_URL =
   process.env.MIYAGI_KASEN_URL ??
@@ -155,109 +152,16 @@ export function parseMiyagiTable(html: string): ParsedRow[] {
   return rows;
 }
 
-// --- DB helpers -------------------------------------------------------------
-
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 308,
-            '宮城県土木総合情報システム ダム現況表 — 21 ダム (18 県管理 + 3 国管理), hourly',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/貯水池$/, '')
-    .trim();
-}
-
-interface DamMatch {
-  miyagiName: string;
-  damId: bigint;
-}
-
-/** Best master dam for a feed name; a row already stamped with the station wins. */
-export function chooseMaster(
-  miyagiName: string,
-  masters: BindableMaster[],
-  stationKey?: string,
-): bigint | null {
-  // A row already stamped with this station keeps it; names alone cannot
-  // separate same-name dams (#57).
-  const stamped = stationKey ? stampedMaster(masters, stationKey) : null;
-  if (stamped) return stamped.id;
-  const stem = normalizeName(miyagiName);
-  if (!stem) return null;
-  let best: { m: BindableMaster; rank: number } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (m.name === miyagiName) rank = 0;
-    else if (mStem === stem) rank = 1;
-    else if (m.name === `${stem}ダム`) rank = 2;
-    else if (mStem.startsWith(stem)) rank = 3;
-    else if (mStem.includes(stem)) rank = 4;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-      best = { m, rank };
-    }
-  }
-  return best?.m.id ?? null;
-}
-
-async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const out: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-
-  for (const r of rows) {
-    if (!normalizeName(r.miyagiName)) continue;
-    const damId = chooseMaster(r.miyagiName, masters, r.stationNo);
-
-    universe.push({
-      externalId: r.stationNo,
-      name: r.miyagiName,
-      prefCode: PREF_CODE,
-      resolvedDamId: damId,
-    });
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${r.miyagiName}"`);
-      continue;
-    }
-
-    out.push({ miyagiName: r.miyagiName, damId });
-    await bindExternalId(damId, SOURCE_ID, r.stationNo);
-  }
-
-  await recordUniverse(SOURCE_ID, universe);
-  return out;
-}
-
 // --- task -------------------------------------------------------------------
 
-async function fetchTable(url: string): Promise<string | null> {
-  const r = await fetch(url, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (r.status !== 200) return null;
-  return new TextDecoder('shift_jis').decode(await r.arrayBuffer());
+/** A table page, or null when it answers with a non-2xx status; a network failure throws. */
+async function fetchTable(upstream: Upstream, url: string): Promise<string | null> {
+  try {
+    return (await upstream.fetch(url)).text('shift_jis');
+  } catch (err) {
+    if (err instanceof UpstreamError && err.status !== null) return null;
+    throw err;
+  }
 }
 
 /**
@@ -289,10 +193,11 @@ export function readingsToStore(latest: ParsedRow[], earlier: ParsedRow[]): Pars
 export async function fetchEarlierRows(
   latestHtml: string,
   log: (s: string) => void,
+  upstream: Upstream,
 ): Promise<ParsedRow[]> {
   const url = earlierTableUrl(DATA_URL, latestHtml, 1);
   const html = url
-    ? await fetchTable(url).catch((err: unknown) => {
+    ? await fetchTable(upstream, url).catch((err: unknown) => {
         log(`${SOURCE_ID}: previous-hour fetch failed: ${String(err)}`);
         return null;
       })
@@ -304,47 +209,42 @@ export async function fetchEarlierRows(
   return parseMiyagiTable(html);
 }
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
+/**
+ * Every station of the latest table, with the readings this run stores for
+ * it. A station still blank in both tables (「　」 until its telemetry lands)
+ * is unreadable: the table prints no 欠測 mark for it.
+ */
+export function miyagiEntries(latest: ParsedRow[], earlier: ParsedRow[]): Entry[] {
+  const stored = readingsToStore(latest, earlier);
+  return latest
+    .filter((r) => r.miyagiName)
+    .map((r): Entry => {
+      const observations = stored
+        .filter((p) => p.stationNo === r.stationNo)
+        .map((p) => ({
+          observedAt: p.observedAt,
+          waterLevelM: p.waterLevelM,
+          storageVolumeM3: p.storageVolumeM3,
+          inflowM3s: p.inflowM3s,
+          outflowM3s: p.outflowM3s,
+          storageRate: p.storageRate,
+        }));
+      return {
+        key: r.stationNo,
+        name: r.miyagiName,
+        pref: PREF_CODE,
+        reading:
+          observations.length > 0
+            ? { state: 'values', observations }
+            : { state: 'unreadable', why: 'no 貯水位 or 貯水量 in either table' },
+      };
+    });
+}
 
-  const html = await fetchTable(DATA_URL);
-  if (html === null) {
-    log(`${SOURCE_ID}: latest table fetch failed; aborting`);
-    return;
-  }
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const html = await fetchTable(upstream, DATA_URL);
+  if (html === null) throw new Error(`${SOURCE_ID}: latest table fetch failed`);
   const rows = parseMiyagiTable(html);
   log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
-
-  const readings = readingsToStore(rows, await fetchEarlierRows(html, log));
-
-  const matches = await matchMaster(rows, log);
-  const damByName = new Map(matches.map((m) => [m.miyagiName, m.damId]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of readings) {
-    const damId = damByName.get(p.miyagiName);
-    if (!damId) continue;
-
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: p.storageRate,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(
-    `${SOURCE_ID} done: parsed=${rows.length} readings=${readings.length} matched=${matches.length} written=${written}`,
-  );
-};
-
-export default task;
+  return { entries: miyagiEntries(rows, await fetchEarlierRows(html, log, upstream)) };
+});

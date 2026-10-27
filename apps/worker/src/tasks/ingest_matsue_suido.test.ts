@@ -7,8 +7,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { BindableMaster } from '@dam/core/dam_binding';
-import { chooseMaster, parseMatsueChosuiList } from './ingest_matsue_suido.ts';
+import { matsueEntries, parseMatsueChosuiList } from './ingest_matsue_suido.ts';
 
 const FIXTURE = join(
   import.meta.dir,
@@ -71,15 +70,30 @@ describe('parseMatsueChosuiList', () => {
   });
 });
 
-describe('chooseMaster', () => {
-  // Real prod rows (島根 32).
-  const masters: BindableMaster[] = [
-    { id: 10917n, name: '大谷', completedYear: 1957 },
-    { id: 10958n, name: '千本', completedYear: 1918 },
-  ];
+describe('matsueEntries', () => {
+  test('one entry per dam, bound by exact name, carrying every day of both tables', () => {
+    const entries = matsueEntries(html);
+    expect(entries.map((e) => [e.key, e.pref, e.bind])).toEqual([
+      ['千本ダム', '32', { exact: true }],
+      ['大谷ダム', '32', { exact: true }],
+    ]);
+    const r = entries[0]?.reading;
+    if (!r || typeof r === 'function' || r.state !== 'values') throw new Error('no values');
+    expect(r.observations).toHaveLength(25 + 31);
+    expect(r.observations).toContainEqual({
+      observedAt: new Date('2026-09-24T15:00:00.000Z'),
+      storageVolumeM3: 280_269,
+      storageRate: 0.74,
+    });
+  });
 
-  test('strips ダム and matches the master of the same name', () => {
-    expect(chooseMaster('千本ダム', masters)).toBe(10958n);
-    expect(chooseMaster('大谷ダム', masters)).toBe(10917n);
+  test('a dam whose every day is blank is listed and unreadable', () => {
+    const blank = html.replace(
+      /(<td[^>]*>\d+日<\/td>\s*)<td[^>]*>[\d,]+<\/td>\s*<td[^>]*>[\d.]+<\/td>/g,
+      '$1<td></td><td></td>',
+    );
+    const [senbon, ootani] = matsueEntries(blank);
+    expect(senbon?.reading).toMatchObject({ state: 'unreadable' });
+    expect(ootani?.reading).toMatchObject({ state: 'values' });
   });
 });

@@ -9,38 +9,62 @@
 // Format: UTF-8 HTML; "観測日時：YYYY年MM月DD日 HH時MM分" (JST); hourly cadence.
 //         貯水位(EL.m)・流入量・全放流量 for all 5 dams.
 //         早明浦ダムのみ「利水貯水率[速報値]」もあり (storageRate).
-//         "CC" = 閉局 (communication closed); treat as null.
+//         "CC" = 閉局 (communication closed), "**" = 調整中: the page's own marks.
 // License: 水資源機構 published; 出典明示で再配布可.
+//
+// The same 流域概況図 also carries weirs (新井堰, 影井堰, 瀬戸川取水堰,
+// 地蔵寺川取水堰) and a 鏡ダム 自流量 point, none with a 貯水位: they are
+// listed with what they print (水位, 流入量/自流量/流量, 放流量) but never
+// bound to a master dam, so never written.
 //
 // These dams are in jwa-junpo (10-day, priority 290). This adapter upgrades to
 // hourly cadence and adds 水位 (EL.m). 早明浦ダムは四国の給水危機指標として最も
 // 注目されるダム (Shikoku water-supply crisis indicator).
 
-import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const PAGE_URL =
   process.env.JWA_YOSHINO_URL ??
   'https://www.water.go.jp/mizu/ikeda/mizuinfo/dyn/html/p0001/60/p000101.html';
+const SOURCE_ID = 'jwa-yoshino';
+const SAMEURA = '早明浦ダム';
 
-const NAME_MAP: Array<{ yoshinoName: string; masterName: string; prefCodes: string[] }> = [
-  { yoshinoName: '池田ダム', masterName: '池田', prefCodes: ['36'] }, // 徳島
-  { yoshinoName: '早明浦ダム', masterName: '早明浦', prefCodes: ['39', '36'] }, // 高知
-  { yoshinoName: '新宮ダム', masterName: '新宮', prefCodes: ['36', '38'] }, // 徳島
-  { yoshinoName: '富郷ダム', masterName: '富郷', prefCodes: ['38'] }, // 愛媛
-  { yoshinoName: '柳瀬ダム', masterName: '柳瀬', prefCodes: ['38'] }, // 愛媛
-];
+/**
+ * The prefectures each dam's master may be in, by printed name. A multi-code
+ * entry is a lookup scope, not an attribution — its first code is sometimes
+ * the wrong prefecture (新宮 is 愛媛, not 徳島).
+ */
+const PREFS_BY_NAME: Readonly<Record<string, string[]>> = {
+  池田ダム: ['36'], // 徳島
+  早明浦ダム: ['39', '36'], // 高知
+  新宮ダム: ['36', '38'],
+  富郷ダム: ['38'], // 愛媛
+  柳瀬ダム: ['38'], // 愛媛
+};
 
-interface ParsedRow {
+/** The page's region, for the blocks that are not one of its five reservoirs. */
+const BASIN_PREFS = ['36', '38', '39'];
+
+/** Cells the page prints instead of a number. */
+const MARKS: Readonly<Record<string, true>> = {
+  '―': true,
+  '-': true,
+  '—': true,
+  CC: true,
+  cc: true,
+  '**': true,
+};
+
+export interface ParsedRow {
   yoshinoName: string;
-  waterLevelM: number | null;
-  storageRatePct: number | null; // 早明浦のみ: 利水貯水率[速報値]
-  inflowM3s: number | null;
-  outflowM3s: number | null;
+  /** A reservoir block (it prints 貯水位); the others are weirs and flow points. */
+  reservoir: boolean;
+  waterLevelM: Cell;
+  storageRatePct: Cell; // 早明浦のみ: 利水貯水率[速報値]
+  inflowM3s: Cell;
+  outflowM3s: Cell;
 }
 
 function textOf(s: string): string {
@@ -54,13 +78,9 @@ function textOf(s: string): string {
     .trim();
 }
 
-function parseNum(s: string): number | null {
+function parseCell(s: string): Cell {
   const cleaned = s.replace(/[,\s　]/g, '');
-  if (!cleaned || cleaned === '―' || cleaned === '-' || cleaned === '—') return null;
-  // CC = 閉局 (station closed); ** = 調整中 (calibrating)
-  if (cleaned === 'CC' || cleaned === 'cc' || cleaned === '**') return null;
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? n : null;
+  return cell(cleaned ? Number(cleaned) : null, MARKS[cleaned] === true);
 }
 
 /**
@@ -80,176 +100,113 @@ export function parseYoshinoTimestamp(text: string): Date | null {
 }
 
 /**
- * Extract the HTML section for a specific dam.
- * Dams are wrapped in `<div class="str-data2"...>DAM_NAME</div>`, so we look for
- * `>DAM_NAME</div>` as the section start and the next `str-data2` as the end.
+ * The page's facility blocks, in page order. Each is wrapped in
+ * `<div class="str-data2"...>NAME</div>`; a block runs to the next
+ * `str-data2`.
  */
-function extractDamSection(html: string, damName: string): string {
-  const header = `>${damName}</div>`;
-  const start = html.indexOf(header);
-  if (start < 0) return '';
-  const afterHeader = start + header.length;
-  const nextHeader = html.indexOf('class="str-data2"', afterHeader);
-  const end = nextHeader > 0 ? nextHeader : html.length;
-  return html.slice(start, end);
+function facilitySections(html: string): { name: string; section: string }[] {
+  const heads = [...html.matchAll(/class="str-data2"[^>]*>([^<]*)<\/div>/g)];
+  return heads.map((h, i) => ({
+    name: textOf(h[1] ?? ''),
+    section: html.slice(h.index, heads[i + 1]?.index ?? html.length),
+  }));
 }
 
 /**
- * The value cell of the first `<th>` whose text starts with `label`. The unit
- * sits inside the `<th>` as markup (`流入量(<span class='unit'>m<sup>3</sup>/s
- * </span>)`), so the value must come from the `<td>`, never from the first
- * digit after the label: that is the 3 of m³.
+ * The value cell of the first `<th>` whose text starts with `label`, or
+ * undefined when no such `<th>`. The unit sits inside the `<th>` as markup
+ * (`流入量(<span class='unit'>m<sup>3</sup>/s</span>)`), so the value must
+ * come from the `<td>`, never from the first digit after the label: that is
+ * the 3 of m³.
  */
-function extractLabeled(html: string, label: string): number | null {
+function extractLabeled(html: string, label: string): Cell | undefined {
   for (const m of html.matchAll(/<th[^>]*>([\s\S]*?)<\/th>\s*<td[^>]*>([^<]*)/g)) {
-    if (textOf(m[1] ?? '').startsWith(label)) return parseNum(m[2] ?? '');
+    if (textOf(m[1] ?? '').startsWith(label)) return parseCell(m[2] ?? '');
   }
-  return null;
+  return undefined;
 }
 
+/** One row per facility block, in page order. */
 export function parseYoshinoHtml(html: string): { observedAt: Date | null; rows: ParsedRow[] } {
   const observedAt = parseYoshinoTimestamp(html);
   const rows: ParsedRow[] = [];
 
   // 早明浦ダム利水貯水率[速報値] is in the global summary box at the top of the page.
-  const sameuraRate = extractLabeled(html, '早明浦ダム利水貯水率[速報値]');
+  const sameuraRate = extractLabeled(html, `${SAMEURA}利水貯水率[速報値]`) ?? null;
 
-  for (const m of NAME_MAP) {
-    const section = extractDamSection(html, m.yoshinoName);
-    if (!section) continue;
-
-    const waterLevel = extractLabeled(section, '貯水位');
-    const inflow = extractLabeled(section, '流入量');
-    // 全放流量 = total outflow (controlled release + spillage)
-    const outflow = extractLabeled(section, '全放流量');
-
-    // Skip if water level (primary metric) is unavailable.
-    if (waterLevel === null) continue;
-
+  const seen = new Set<string>();
+  for (const { name, section } of facilitySections(html)) {
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    const storageLevel = extractLabeled(section, '貯水位');
+    if (storageLevel !== undefined) {
+      rows.push({
+        yoshinoName: name,
+        reservoir: true,
+        waterLevelM: storageLevel,
+        storageRatePct: name === SAMEURA ? sameuraRate : null,
+        inflowM3s: extractLabeled(section, '流入量') ?? null,
+        // 全放流量 = total outflow (controlled release + spillage)
+        outflowM3s: extractLabeled(section, '全放流量') ?? null,
+      });
+      continue;
+    }
+    // A weir or flow point: 水位(m), 流入量 / 自流量 / 流量, the first 放流量.
     rows.push({
-      yoshinoName: m.yoshinoName,
-      waterLevelM: waterLevel,
-      storageRatePct: m.yoshinoName === '早明浦ダム' ? sameuraRate : null,
-      inflowM3s: inflow,
-      outflowM3s: outflow,
+      yoshinoName: name,
+      reservoir: false,
+      waterLevelM: extractLabeled(section, '水位') ?? null,
+      storageRatePct: null,
+      inflowM3s:
+        extractLabeled(section, '流入量') ??
+        extractLabeled(section, '自流量') ??
+        extractLabeled(section, '流量') ??
+        null,
+      outflowM3s: extractLabeled(section, '放流量') ?? null,
     });
   }
   return { observedAt, rows };
 }
 
-interface DamMatch {
-  yoshinoName: string;
-  damId: bigint;
+/** One dam's reading at the page's 観測日時. */
+export function yoshinoReading(row: ParsedRow, observedAt: Date | null): Reading {
+  const cells: Cell[] = [row.waterLevelM, row.inflowM3s, row.outflowM3s];
+  const state = cellState(row.yoshinoName === SAMEURA ? [...cells, row.storageRatePct] : cells);
+  if (state === 'empty') return { state, mark: 'CC (閉局) / ** (調整中) on every field' };
+  if (state === 'unreadable') return { state, why: 'no 水位, 流入量 or 放流量 number' };
+  if (!observedAt) return { state: 'unreadable', why: 'no 観測日時 on the page' };
+  const ratePct = numberIn(row.storageRatePct);
+  return {
+    state: 'values',
+    observations: [
+      {
+        observedAt,
+        waterLevelM: numberIn(row.waterLevelM),
+        inflowM3s: numberIn(row.inflowM3s),
+        outflowM3s: numberIn(row.outflowM3s),
+        storageRate: ratePct != null ? Math.max(0, Math.min(1, ratePct / 100)) : null,
+      },
+    ],
+  };
 }
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES ('jwa-yoshino', 297,
-            '水資源機構 吉野川上流総管 — hourly, 5 dams (池田/早明浦/新宮/富郷/柳瀬)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-async function ensureExternalIds(log: (s: string) => void): Promise<DamMatch[]> {
-  const matches: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  for (const m of NAME_MAP) {
-    // Both twins of a redeveloped dam rank alike so chooseRanked picks the
-    // current one; a row already stamped with the station keeps it (#79).
-    const rows = await sql<(BindableMaster & { rank: number })[]>`
-      SELECT id, name, completed_year AS "completedYear",
-             external_ids->>'jwa-yoshino' AS stamp,
-             CASE
-               WHEN name = ${`${m.masterName}ダム`}       THEN 0
-               WHEN name = ${m.masterName}                 THEN 1
-               WHEN name LIKE ${`${m.masterName}（再）%`}
-                 OR name LIKE ${`${m.masterName}（元）%`}  THEN 2
-               ELSE 5
-             END AS rank
-      FROM dams
-      WHERE pref_code = ANY(${m.prefCodes}::text[])
-        AND name LIKE ${`%${m.masterName}%`}
-      ORDER BY rank, id
-    `;
-    const r = chooseRanked(rows, m.yoshinoName);
-    universe.push({
-      externalId: m.yoshinoName,
-      name: m.yoshinoName,
-      // A multi-code entry is a LIKE-narrowing hint, not an attribution — its
-      // first code is sometimes the wrong prefecture (新宮 is 愛媛, not 徳島),
-      // and pref_code is COALESCE-sticky once written.
-      prefCode: m.prefCodes.length === 1 ? (m.prefCodes[0] ?? null) : null,
-      resolvedDamId: r?.id ?? null,
-    });
-    if (!r) {
-      log(`jwa-yoshino: no master match for "${m.yoshinoName}" (${m.masterName})`);
-      continue;
-    }
-    matches.push({ yoshinoName: m.yoshinoName, damId: r.id });
-    await bindExternalId(r.id, 'jwa-yoshino', m.yoshinoName);
-  }
-  await recordUniverse('jwa-yoshino', universe);
-  return matches;
-}
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-  const matches = await ensureExternalIds(log);
-  log(`jwa-yoshino: matched ${matches.length}/${NAME_MAP.length} master dams`);
-
-  const r = await fetch(PAGE_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
+/** Every facility on the page, keyed by its printed name. */
+export function yoshinoEntries(html: string): Entry[] {
+  const { observedAt, rows } = parseYoshinoHtml(html);
+  return rows.map((row) => {
+    const prefs = row.reservoir ? (PREFS_BY_NAME[row.yoshinoName] ?? []) : BASIN_PREFS;
+    return {
+      key: row.yoshinoName,
+      name: row.yoshinoName,
+      pref: prefs.length === 0 ? null : prefs.length === 1 ? (prefs[0] ?? null) : prefs,
+      ...(row.reservoir ? {} : { bind: 'never' as const }),
+      reading: yoshinoReading(row, observedAt),
+    };
   });
-  if (r.status !== 200) {
-    log(`jwa-yoshino: HTTP ${r.status}; aborting`);
-    return;
-  }
-  const html = await r.text();
-  const { observedAt, rows: parsed } = parseYoshinoHtml(html);
-  log(
-    `jwa-yoshino: parsed ${parsed.length} rows, observedAt=${observedAt?.toISOString() ?? '(missing)'}`,
-  );
+}
 
-  if (!observedAt) {
-    log('jwa-yoshino: no timestamp found; aborting');
-    return;
-  }
-
-  const matchByName = new Map(matches.map((m) => [m.yoshinoName, m.damId]));
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const row of parsed) {
-    const damId = matchByName.get(row.yoshinoName);
-    if (!damId) continue;
-    inputs.push({
-      observedAt,
-      damId,
-      sourceId: 'jwa-yoshino',
-      storageVolumeM3: null,
-      storageRate:
-        row.storageRatePct !== null ? Math.max(0, Math.min(1, row.storageRatePct / 100)) : null,
-      inflowM3s: row.inflowM3s,
-      outflowM3s: row.outflowM3s,
-      waterLevelM: row.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-  const written = await upsertObservations(inputs);
-  log(`jwa-yoshino done: parsed=${parsed.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const entries = yoshinoEntries((await upstream.fetch(PAGE_URL)).text());
+  log(`${SOURCE_ID}: ${entries.length} facilities listed`);
+  return { entries };
+});

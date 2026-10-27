@@ -37,13 +37,10 @@
 //
 // Priority 278: nothing else publishes 大日川. Cron daily 03:33 UTC (12:33 JST).
 
-import { type BindableMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
 import { extractText, getDocumentProxy } from 'unpdf';
+import { ingestTask, type Log } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
+import { type Upstream, UpstreamError } from '../ingest/upstream.ts';
 
 const PAGE_URL = process.env.DAINICHIGAWA_LID_URL ?? 'http://dainichigawa-lid.com/dam.html';
 
@@ -111,111 +108,53 @@ export async function pdfToText(bytes: Uint8Array): Promise<string> {
   return text;
 }
 
-// --- matching ---------------------------------------------------------------
-
-export interface DainichigawaMaster extends BindableMaster {
-  ndi: string | null;
+/** Every measured day of the months read; none is unreadable. */
+export function dailyReading(rows: DailyReading[]): Reading {
+  return rows.length > 0
+    ? { state: 'values', observations: rows }
+    : { state: 'unreadable', why: 'no measured day in the monthly PDFs' };
 }
 
-/** The row stamped with the station, else the NDI-pinned 大日川. */
-export function chooseMaster(masters: DainichigawaMaster[]): bigint | null {
-  return (stampedMaster(masters, STATION) ?? masters.find((m) => m.ndi === NDI))?.id ?? null;
-}
+// --- entries ----------------------------------------------------------------
 
-// --- DB helpers -------------------------------------------------------------
+/** The page and its newest monthly PDFs, read into one reading. */
+async function readDam(upstream: Upstream, log: Log): Promise<Reading> {
+  const page = await upstream.fetch(PAGE_URL);
+  const links = parseDailyLinks(page.text(), PAGE_URL).slice(0, MONTHS_PER_RUN);
+  if (links.length === 0) throw new Error(`no monthly PDF linked from ${PAGE_URL}`);
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 278,
-            '大日川土地改良区 大日川ダム情報 — 大日川ダム (日別 PDF, 午前9時)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-async function resolveDam(log: (s: string) => void): Promise<bigint | null> {
-  const masters = await sql<DainichigawaMaster[]>`
-    SELECT id, name, completed_year AS "completedYear",
-           external_ids->>'ndi' AS ndi, external_ids->>${SOURCE_ID} AS stamp
-    FROM dams
-    WHERE pref_code = ${PREF_CODE}
-      AND (external_ids->>'ndi' = ${NDI} OR external_ids ? ${SOURCE_ID})
-    ORDER BY id
-  `;
-  const damId = chooseMaster(masters);
-  // The one dam this district publishes, matched or not, so /coverage can
-  // tell "published, not linked" from "nobody publishes it".
-  await recordUniverse(SOURCE_ID, [
-    { externalId: STATION, name: STATION, prefCode: PREF_CODE, resolvedDamId: damId },
-  ]);
-  if (!damId) {
-    log(`${SOURCE_ID}: no master with NDI ${NDI} in pref ${PREF_CODE}`);
-    return null;
-  }
-  await bindExternalId(damId, SOURCE_ID, STATION);
-  return damId;
-}
-
-// --- task -------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-  // Before the fetch: the district publishes the dam whether or not this
-  // run's page loads, and the universe must say so.
-  const damId = await resolveDam(log);
-
-  const headers = {
-    'user-agent':
-      process.env.HTTP_USER_AGENT ??
-      'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-  };
-  const page = await fetch(PAGE_URL, { headers, signal: AbortSignal.timeout(20_000) });
-  if (page.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${page.status} on ${PAGE_URL}; aborting`);
-    return;
-  }
-  const links = parseDailyLinks(await page.text(), PAGE_URL).slice(0, MONTHS_PER_RUN);
-
-  const readings: DailyReading[] = [];
+  const rows: DailyReading[] = [];
   for (const link of links) {
-    const r = await fetch(link.url, { headers, signal: AbortSignal.timeout(30_000) });
-    if (r.status !== 200) {
-      log(`${SOURCE_ID}: HTTP ${r.status} on ${link.url}; skipped`);
+    let bytes: Uint8Array;
+    try {
+      bytes = (await upstream.fetch(link.url, { timeoutMs: 30_000 })).bytes;
+    } catch (err) {
+      // A month the server answers with an error status is skipped; a network
+      // failure still fails the reading.
+      if (!(err instanceof UpstreamError) || err.status === null) throw err;
+      log(`${err.message}; skipped`);
       continue;
     }
-    const text = await pdfToText(new Uint8Array(await r.arrayBuffer()));
-    readings.push(...parseDailyText(text, link.year, link.month));
+    rows.push(...parseDailyText(await pdfToText(bytes), link.year, link.month));
   }
+  return dailyReading(rows);
+}
 
-  const written = damId
-    ? await upsertObservations(
-        readings.map((p) => ({
-          observedAt: p.observedAt,
-          damId,
-          sourceId: SOURCE_ID,
-          storageVolumeM3: p.storageVolumeM3,
-          storageRate: p.storageRate,
-          inflowM3s: null,
-          outflowM3s: null,
-          waterLevelM: null,
-          rainfallMm: null,
-          rawSnapshotId: null,
-          qualityFlag: 0,
-        })),
-      )
-    : 0;
-  log(`${SOURCE_ID} done: parsed=${readings.length} matched=${damId ? 1 : 0} written=${written}`);
+/**
+ * The one dam the district publishes, whether or not this run's page loads:
+ * a failed fetch leaves it unreadable, never unrecorded, so /coverage can
+ * tell "published, not linked" from "nobody publishes it". Pinned to NDI 1594.
+ */
+export function dainichigawaEntry(upstream: Upstream, log: Log): Entry {
+  return {
+    key: STATION,
+    name: STATION,
+    pref: PREF_CODE,
+    bind: { ndi: NDI },
+    reading: () => readDam(upstream, log),
+  };
+}
 
-  if (links.length === 0 || readings.length === 0) {
-    throw new Error(
-      `${SOURCE_ID}: ${links.length} monthly PDFs / ${readings.length} readings on ${PAGE_URL} — layout change?`,
-    );
-  }
-};
-
-export default task;
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => ({
+  entries: [dainichigawaEntry(upstream, log)],
+}));

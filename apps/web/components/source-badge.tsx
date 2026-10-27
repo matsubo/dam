@@ -6,8 +6,8 @@
 // anything else — a real source registered in source_priorities. Shown
 //                emerald with the source identifier as a small chip so
 //                users can click through to /sources for full provenance.
+import { sourceLabel } from '@dam/core/sources';
 import Link from 'next/link';
-import { sourceLabel } from '../lib/source-details.ts';
 
 interface SourceBadgeProps {
   sourceId: string;

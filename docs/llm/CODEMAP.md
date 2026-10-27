@@ -27,7 +27,7 @@ the file for detail.
 | `app/layout.tsx` | nav + footer + metadata defaults |
 | `app/page.tsx` | home: counts + 6 largest dams + map CTA |
 | `app/dams/page.tsx` | dam list table with pref/watershed filter |
-| `app/dams/[slug]/page.tsx` | dam detail (stat block, ObservationChart, watershed section, nearby); no-reading dams get 諸元-focused title/H1, an empty （元）/（再） twin canonicalises to the twin with data (`canonicalTwin`), dams with readings emit Dataset JSON-LD |
+| `app/dams/[slug]/page.tsx` | dam detail (stat block, ObservationChart, watershed section, nearby). Metadata, body, `md/dams/[slug]` and the share card all switch on `lib/dam-reading-state.ts` (`loadDamReading` → `reading` with display rate + effective capacity / `twin` / `not_published` / `none`): no-reading dams get 諸元-focused title/H1, an empty （元）/（再） twin canonicalises to the twin with data, 提供元なし shows no reading or chart, dams with readings emit Dataset JSON-LD |
 | `app/dams/[slug]/opengraph-image.tsx` | per-dam 1200×630 share card: name, 都道府県・水系, 貯水量/容量, latest 貯水率 bucket (`twitter-image.tsx` re-exports it) |
 | `app/watersheds/page.tsx` | watershed list grouped by kind; one `<table>` restyled into cards below `md` by `page.module.css` (icons/bars are CSS, keeps the HTML small) |
 | `app/watersheds/[slug]/page.tsx` | watershed detail with aggregate + dam list |
@@ -35,13 +35,14 @@ the file for detail.
 | `app/prefectures/[code]/page.tsx` | prefecture-scoped dam list |
 | `app/prefectures/[code]/opengraph-image.tsx` | per-prefecture share card: dam count, capacities, dams with data in the last 30 days (`twitter-image.tsx` re-exports it) |
 | `app/map/page.tsx` | server fetches all coords, JapanMap renders client-side |
-| `app/sources/page.tsx` | data-source transparency table |
+| `app/sources/page.tsx` | data-source transparency table (`sourceSummaries()`), name matching, ERD, gaps; `app/sources/[id]/page.tsx` one source (`sourceSummary` + `sourceDams`) |
+| `app/api/v1/sources/route.ts`, `[id]/route.ts` | `{ items: SourceSummary[] }` and one summary plus `dams`; `route.test.ts` checks both against the OpenAPI `SourceSummary` schema |
 | `app/contribute/page.tsx` | contributor recruitment: history, live scale figures, stack, terms, credits |
 | `app/api/docs/page.tsx` | server-rendered h1 + intro, then Redoc (`components/redoc-viewer.tsx`, client-only) on `/api/v1/openapi.json` |
 | `app/sitemap.ts` | dynamic sitemap: static pages, /stats, every dam (minus canonicalised twins, `sitemapDams`), watersheds, prefectures, /sources/* — slugs percent-encoded, lastmod only where a real change date exists |
 | `app/robots.txt/route.ts` | allows everything except `/api/` (re-allows `/api/docs` and `/api/v1/openapi.json`); Content-Signal + per-AI-bot groups |
 | `app/llms.txt/route.ts` | llmstxt.org summary: overview, endpoints, sources, link lists of pages and Markdown views |
-| `app/md/**/route.ts` | Markdown twins of `/`, `/sources`, `/legal/*` (hand-written) and `/dams/[slug]` (from the DB); each page links its twin via `<link rel="alternate" type="text/markdown">`. All answer through `lib/markdown-response.ts` (`private`: Cloudflare ignores `Vary: Accept`) |
+| `app/md/**/route.ts` | Markdown twins of `/`, `/legal/*` (hand-written), `/sources` (prose hand-written, the source table from the declarations' `allSourceFacts()`) and `/dams/[slug]` (from the DB); each page links its twin via `<link rel="alternate" type="text/markdown">`. All answer through `lib/markdown-response.ts` (`private`: Cloudflare ignores `Vary: Accept`) |
 | `proxy.ts` | Next 16 proxy (ex-middleware): agent `Link` header, `Accept: text/markdown` → `/md/*` rewrite, legacy `watershed-` 308 |
 | `app/not-found.tsx` | 404 page |
 | `app/error.tsx` | client error boundary |
@@ -107,8 +108,16 @@ the file for detail.
 
 | File | Purpose |
 |---|---|
-| `src/index.ts` | graphile-worker entry; registers tasks + crontab |
-| `src/crontab.test.ts` | the schedule itself is `packages/core/src/crontab.ts`. Checks each ingest line's key and that its retries (default 25 attempts) outlast its longest gap between runs, so no dead job is left behind per tick, and that `INGEST_INTERVAL_HOURS` agrees with graphile-worker for every ingest line |
+| `src/index.ts` | graphile-worker entry; runs `TASK_LIST` on `CRONTAB` |
+| `src/task_list.ts` | `TASK_LIST`: every task the worker runs, by name |
+| `src/task_list.test.ts` | every scheduled task is in `TASK_LIST`, and every `ingest:*` task belongs to a declared source |
+| `src/crontab.test.ts` | the schedule itself is `packages/core/src/crontab.ts`. Checks each ingest line's key and that its retries (default 25 attempts) outlast its longest gap between runs, so no dead job is left behind per tick, and that `INGEST_INTERVAL_HOURS` agrees with graphile-worker for every declared ingest task |
+| `src/ingest/run.ts` | `ingestTask(sourceId, scan)`: the ingest run. `scan({ log, upstream })` gets the live upstream. Contract check, one master query, binding, reading each entry outside any transaction (a throwing reading → unreadable), then universe → stamps → observations in one transaction; fails the job (`IngestRunError('nothing-read')`) after the commit when nothing could be read |
+| `src/ingest/upstream.ts` | The provider port: `Upstream.fetch(url, { method, body, headers, timeoutMs (20 s), allow })` → `{ status, headers, bytes, text(charset), json() }`; any non-2xx outside `allow`, network error or timeout throws `UpstreamError` `<source>: HTTP <status> for <url>`. `liveUpstream(sourceId)` (core `HttpClient`, `userAgent()`), `fixtureUpstream(routes)` for tests (same status rule; unknown URL is a test bug) |
+| `src/ingest/types.ts` | `Scan`, `Entry` (key, name, pref scope, `bind`, `dontWrite`, `reading`), `Reading` (`values` / `empty` / `unreadable`), `Bind` (`{ndi}` pin, `{name?, exact?}`, `'never'`), `BoundDam`, `IngestRunError` |
+| `src/ingest/bind.ts` | `bindEntry`: pin → stamp in scope → exact name → stem → stem+ダム → prefix → contains; a non-twin tie leaves the entry unbound; a `not_dam_reason` key binds only by stamp. `stemOf` (NFKC, annotations, ダム, 槇→槙) |
+| `src/ingest/plan.ts` | `planWrites`: universe rows (has_data from state, published_at for dated scans), stamps (first entry per dam), observations (valueless dropped); duplicate keys merge values > empty > unreadable |
+| `src/ingest/cells.ts` | `cell` / `MARKED` / `cellState`: any value → values, every field provider-marked → empty, else unreadable |
 | `src/tasks/master_refresh_ndi.ts` | monthly NLNI reimport |
 | `src/tasks/master_refresh_damnet.ts` | monthly damnet attribute pass |
 | `src/tasks/master_match.ts` | `master:match`: placeholder, logs and returns (still on the nightly cron) |
@@ -157,7 +166,7 @@ the file for detail.
 | `src/tasks/ingest_aichi_kasen.ts` | `aichi-kasen`: 愛知県 川の防災情報 ダム表, hourly (雨山 / 木瀬) |
 | `src/tasks/ingest_aitoyo.ts` | `aitoyo`: 愛知・豊川用水振興協会 daily 利水容量・貯水量・貯水率 table (7 dams in 木曽川 / 豊川 / 矢作川) |
 | `src/tasks/ingest_akita_kasen.ts` | `akita-kasen`: 秋田県河川砂防情報システム 防災Web table, hourly (18 県管理ダム; no volume) |
-| `src/tasks/ingest_cgr_mlit.ts` | `cgr-mlit-dam`: 中国地方整備局 dam dashboard JSON, hourly (11 国管理ダム); reference `recordUniverse` over a hardcoded array |
+| `src/tasks/ingest_cgr_mlit.ts` | `cgr-mlit-dam`: 中国地方整備局 dam dashboard JSON, hourly (11 国管理ダム); reference ingest-run task over a catalogue known in advance (a failed fetch records every dam unreadable) |
 | `src/tasks/ingest_chiba.ts` | `chiba-suisei`: 千葉県水政課 県内ダムの貯水状況, weekly table polled daily (~23 水道 / 工業用水 dams; dated from the table heading) |
 | `src/tasks/ingest_chiba_nourin.ts` | `chiba-nourin`: 千葉県耕地課 農業用ダム貯水状況, daily (11 dams) |
 | `src/tasks/ingest_ehime_bousai.ts` | `ehime-bousai`: 愛媛県 河川・砂防情報システム ダム諸量経過表, hourly (12 dams, 24 h table each) |
@@ -182,7 +191,7 @@ the file for detail.
 | `src/tasks/ingest_jwa_kiso_rt.ts` | `jwa-kiso-rt`: JWA 中部支社 木曽川水系 realtime page, hourly (12 facilities: 5 dams, 三重用水 調整池, 長良川河口堰, 木曽川大堰) |
 | `src/tasks/ingest_jwa_toneara.ts` | `jwa-toneara`: JWA 関東支社 利根川 / 荒川 daily 0時 table, polled hourly (13 facilities) |
 | `src/tasks/ingest_jwa_toyokawa.ts` | `jwa-toyokawa`: JWA 中部支社 豊川水系 realtime page, hourly (14 facilities: 宇連 / 大島, 豊川用水 調整池 and 頭首工) |
-| `src/tasks/jwa_chubu_realtime.ts` | Parser and name/prefecture binding shared by `jwa-kiso-rt` and `jwa-toyokawa` (中部支社 realtime overview maps) |
+| `src/tasks/jwa_chubu_realtime.ts` | Pure parser and `facilityEntries` shared by `jwa-kiso-rt` and `jwa-toyokawa` (中部支社 realtime overview maps) |
 | `src/tasks/ingest_jwa_yoshino.ts` | `jwa-yoshino`: JWA 吉野川上流総合管理所 realtime page, hourly (5 dams; rate for 早明浦 only) |
 | `src/tasks/ingest_kagawa_bousai.ts` | `kagawa-bousai`: かがわ防災Webポータル `dam_station.json`, hourly (18 dams) |
 | `src/tasks/ingest_kagoshima_bousai.ts` | `kagoshima-bousai`: 鹿児島県防災ポータル `dam_station.json`, hourly; items only during flood events |
@@ -202,7 +211,7 @@ the file for detail.
 | `src/tasks/ingest_nagasaki_kasen.ts` | `nagasaki-kasen`: 長崎県河川砂防情報 dam JSON, every 30 min (35 dams; 利水 rate); `has_data` FALSE for a dam printed 「-」 in every field |
 | `src/tasks/ingest_oita_bousai.ts` | `oita-bousai`: 大分県河川情報 防災Web ダム諸量現況表, hourly (10 県管理ダム) |
 | `src/tasks/ingest_oita_nourin.ts` | `oita-nourin`: 大分県 農業用ダム貯水率一覧 PDF (link discovered each run), daily (21 dams) |
-| `src/tasks/ingest_okayama.ts` | `okayama-bousai`: おかやま防災ポータル pointer → list JSON, hourly (21 dams listed); reference `recordUniverse` over a fetched list |
+| `src/tasks/ingest_okayama.ts` | `okayama-bousai`: おかやま防災ポータル pointer → list JSON, hourly (21 dams listed; all-flagged dams are provider-marked empty); on the ingest run |
 | `src/tasks/ingest_okinawa_eb.ts` | `okinawa-eb`: 沖縄県企業局 `dam-youryou.csv`, daily (倉敷 / 山城) |
 | `src/tasks/ingest_osaka.ts` | `osaka-bousai`: 大阪府河川防災情報 `choryuryo.json`, dams only (typeId 3), hourly (安威川 / 箕面川 / 狭山池) |
 | `src/tasks/ingest_qsr_ryumon.ts` | `qsr-ryumon-dam`: 九州地方整備局 竜門ダム key-value endpoints, hourly |
@@ -221,7 +230,7 @@ the file for detail.
 | `src/tasks/ingest_tokushima_bousai.ts` | `tokushima-bousai`: 徳島県 ダム諸量情報, hourly (7 dams; level + flows) |
 | `src/tasks/ingest_tokyo_waterworks.ts` | `tokyo-waterworks`: 東京都水道局 水源状況 daily table, polled twice a day (利根川 / 荒川 / 多摩川 dams) |
 | `src/tasks/ingest_tottori.ts` | `tottori-dam`: 鳥取県ダム諸量情報システム `data10all.php`, hourly (5 県管理ダム) |
-| `src/tasks/ingest_tottori_bousai.ts` | `tottori-bousai`: 鳥取県防災Web pointer → list JSON, hourly (6 dams; adds 菅沢) |
+| `src/tasks/ingest_tottori_bousai.ts` | `tottori-bousai`: 鳥取県防災Web pointer → list JSON, hourly (6 dams; adds 菅沢; another dam's placeholder values are unreadable); on the ingest run |
 | `src/tasks/ingest_toyama_bousai.ts` | `toyama-bousai`: 富山県 河川現況表 dam CSVs, hourly (16 県管理ダム) |
 | `src/tasks/ingest_wakayama_kasen.ts` | `wakayama-kasen`: 和歌山県河川／雨量防災情報 `dinfo.csv` (EUC-JP), hourly (19 dams) |
 | `src/tasks/ingest_yamagata_bousai.ts` | `yamagata-bousai`: 山形県河川・砂防情報 防災Web JSON, hourly (~17 dams: 13 県 + 4 国) |
@@ -242,11 +251,14 @@ the file for detail.
 | `src/slug.ts` | `toSlug`, `suffixedSlug` |
 | `src/prefectures.ts` | `PREFECTURES` array, `prefNameToCode` |
 | `src/source_adapter.ts` | `SourceAdapter`, `FetchTarget`, `RawBytes`, `ParsedReading`, `FetchContext` |
-| `src/http_client.ts` | `HttpClient` (throttle + retry + ETag) |
+| `src/http_client.ts` | `HttpClient` (throttle + retry + ETag; `request` with method/body/per-call timeout, `get`), `userAgent()` (HTTP_USER_AGENT else our identity — the one user agent every worker request sends) |
 | `src/hateoas.ts` | `buildLinks`, `Link`, `LinksInput` |
 | `src/similarity.ts` | `trigramSimilarity`, `normalizeJaName` |
 | `src/dam_binding.ts` | `BindableMaster`, `twinOf`, `preferMaster`, `stampedMaster`, `chooseRanked` (station → master: a stamped row keeps it, then lowest SQL rank, （元）/（再） tie-break) |
-| `src/crontab.ts` | `CRONTAB`, the worker schedule (colon-separated task names, UTC); every `ingest:*` line carries `?jobKey=<task>` so a tick replaces its pending retry. `INGEST_INTERVAL_HOURS`: each ingest source's longest gap between runs (the web app reads it; it can't load graphile-worker) |
+| `src/sources.ts` | `SOURCES`, `sourceById`, `sourceLabel`, `defineSource`, `FRESHNESS_OVERRIDE_HOURS`; types `SourceDeclaration`, `SourceDetails` (docs/adr/0001) |
+| `src/source_registry.ts` | `SOURCES`: one `defineSource` per source (priority, description, status, gate flags, trusted rate basis, `ingestCron` / `jobs`, freshness override, /sources details; `license: null` = 未確認). The comment above each entry explains its schedule |
+| `src/source_declaration.ts` | the declaration shape and `defineSource` (defaults: active, provides observations, enumerable, not trusted) |
+| `src/crontab.ts` | `CRONTAB`: the maintenance lines plus one line per declared source job (colon-separated task names, UTC); every `ingest:*` line carries `?jobKey=<task>` so a tick replaces its pending retry. `INGEST_INTERVAL_HOURS`: each source's longest gap between ingest runs, keyed by source id (the web app reads it; it can't load graphile-worker) |
 
 ## packages/db
 
@@ -270,6 +282,9 @@ the file for detail.
 0131_source_universe_not_dam_reason.sql  source_universe.not_dam_reason (cited "not a master dam"; out of the backlog)
 0222_obs_daily_one_row_per_dam_day.sql  recompress chunks with overlapping batches, recompute split obs_daily groups, UNIQUE (dam_id, day) on its materialization hypertable (#115)
 0223_last_value_by_source_priority.sql  timestamp ties → higher source priority, then source_id: display_observation(), and obs_daily rebuilt (last volume ignores NULLs) with obs_monthly, swapped in one transaction
+0224_ingest_run_not_dam_rows_and_iwate_stamps.sql  not_dam_reason for the rows the ingest run newly lists that are not one master dam (weirs, gates, combined rows); iwate-kasen stamps moved from dam names to station numbers
+0225_value_and_coverage_gate.sql  observation_has_value(o) (GLOSSARY: Value; inlined by the planner) and the view coverage_gate_sources (the sources that must record their list before a dam can be 提供元なし)
+0226_reading.sql  dam_reading(dam, need_volume, window, as_of) — the reading (GLOSSARY, docs/adr/0002): trusted own rate within 24 h of the moment, else newest row with a value, ties by source_rank then source_id; returns effective_capacity_m3 and rate. window_source(dam, from, to, prefer_volume) — the chart's source. source_rank(sp). obs_daily unchanged (its last value already is the daily value); display_observation() kept for the rolling deploy, dropped by 0227
 ```
 
 ### Schemas
@@ -291,15 +306,20 @@ the file for detail.
 
 | File | Functions |
 |---|---|
-| `src/repo/dams.ts` | `upsertDamByExternalId`, `findDamBySlug`, `latestObservation`, `earliestObservationAt`, `canonicalTwin` + `sitemapDams` (one shared （元）/（再） twin rule), `nearbyDams`, `listDams` (orderBy: id\|capacity), `takenSlugs`, `appendExternalId`, `applyDamnetAttributes`, `findDamsForReconciliation` |
-| `src/repo/watersheds.ts` | `upsertWatershed`, `findWatershedBySlug`, `findWatershedContaining`, `findNearestWatershed`, `listWatersheds`, `aggregateWatershed` |
+| `src/repo/dams.ts` | `upsertDamByExternalId`, `findDamBySlug`, `latestObservation`, `earliestObservationAt`, `canonicalTwin` + `sitemapDams` (one shared （元）/（再） twin rule), `nearbyDams`, `listDams` (orderBy: id\|capacity), `takenSlugs`, `appendExternalId`, `applyDamnetAttributes`, `findDamsForReconciliation`. Every reading here (`latestObservation`, `storageChange`, `nearbyDams`, `latestRateByDam`, `latestRateAndSourceByDam`, `lowStorageDams`) is `dam_reading()` |
+| `src/repo/watersheds.ts` | `upsertWatershed`, `findWatershedBySlug`, `findWatershedContaining`, `findNearestWatershed`, `listWatersheds`, `aggregateWatershed`, `ratesForWatersheds`, `driestWatersheds` (fresh readings over effective capacity), `watershedStorageChange` / `nationalStorageChange` (readings as of anchor − N: anchor fetched first and bound, one LATERAL per window, so each prunes chunks at startup; national d1+ from obs_daily) |
+| `src/repo/storage_totals.ts` | 全国 / per-pref / per-水系 totals: readings within `freshDays` summed over their effective capacity (`effectiveCapacityM3`); home page and /stats |
+| `src/repo/seasonal.ts` | 平年比: the fresh reading against obs_daily's same-season daily values |
 | `src/repo/match_review.ts` | `enqueueMatchReview` (never touches a closed review: open = `resolved_at IS NULL`; a migration closes one with `SET resolved_at = NOW(), resolved_dam_id = <id or NULL = not a dam>`) |
-| `src/repo/source_universe.ts` | `recordUniverse` (never writes `not_dam_reason`; `publishedAt` = the provider's own date for the row's newest value, 0221), `classifyDamCoverage`, `classifyOneDam` (`covered` = a value in 30 days OR a scan from the last 7 days whose `published_at` we hold an observation at), `providerAvailability` (`available` / `none` = 提供元なし / `unknown`), `isUnobtainable` (提供元なし or 提供元に値なし), `coverageSummary` (`unmatchedStations` = unresolved AND `not_dam_reason IS NULL`; `notDamStations` = unresolved with a reason; `pendingScanSources` = the gate-holding sources, each `no_recent_observations` / `ingesting_without_list` (30-day window), `sourcesPendingScan` its length). Mark a non-dam from a migration: `UPDATE source_universe SET not_dam_reason = '<cited reason>' WHERE source_id = '<src>' AND source_external_id = '<key>' AND resolved_dam_id IS NULL;` |
-| `src/repo/coverage.ts` | `coverageHeadline` + `realtimeCoveragePct` (the home headline: `covered` ÷ dams minus 提供元なし and 提供元に値なし), `storageRateCoveragePct`, `historicalCoveragePct`; shared by `/`, `/coverage`, `/contribute` |
-| `src/repo/source_freshness.ts` | `staleSources` (threshold = 3 × cadence + publication lag; cadence = the longer of the cron gap and the 90th-percentile spacing of the last 20 stamps, lag = median `created_at − observed_at`), `FRESHNESS_OVERRIDE_HOURS` (explicit thresholds; `null` = silent by design). Feeds `stale_sources` in `/api/v1/admin/jobs` and `quality:freshness-check` |
+| `src/repo/source_universe.ts` | `recordUniverseOrThrow` (the ingest run's universe write, inside its transaction; never writes `not_dam_reason`; `publishedAt` = the provider's own date for the row's newest value, 0221), `recordUniverse` (the same with failures logged and swallowed: match:kasenbosai and the backfills), `recordUniverseHasData` |
+| `src/repo/coverage.ts` | Coverage triage, one module. `triageDams(ids?)` / `triageDam(id)`: the one definition of a dam's coverage status (`covered` = a value in 30 days OR a scan from the last 7 days whose `published_at` we hold a value at). `coverageSnapshot()`: one triage of every dam plus `headline` (`realtimeCoveragePct` etc.: `covered` ÷ dams minus 提供元なし and 提供元に値なし), `summary` (`unmatchedStations` = unresolved AND `not_dam_reason IS NULL`; `notDamStations`; `pendingScanSources`, each `no_recent_observations` / `ingesting_without_list`) and `prefectures`; one call per page. Vocabulary: `COVERAGE_STATUSES`, `COVERAGE_STATUS` (label + meaning, used by the pages, the API's `statusMeanings` and OpenAPI), `PROVIDER_AVAILABILITY_LABEL`, `providerAvailability`, `isUnobtainable` |
+| `src/repo/real_data.test.ts` | a dam whose recent observations carry no value is real data in no view (list filters, `realSourceId`, triage) |
+| `src/repo/source_freshness.ts` | `staleSources` (threshold = 3 × cadence + publication lag; cadence = the longer of the cron gap and the 90th-percentile spacing of the last 20 stamps, lag = median `created_at − observed_at`; a declared `freshnessOverrideHours` replaces it, `null` = silent by design). Feeds `stale_sources` in `/api/v1/admin/jobs` and `quality:freshness-check` |
+| `src/repo/source_summary.ts` | The source summary: a declared source's facts (`@dam/core/sources` `sourceFacts`) plus 30-day rows/dams/latest/earliest from one grouped query (#108). `sourceSummaries()`, `sourceSummary(id)` (null if undeclared), `sourceDams(id)`. /sources, /sources/[id] and /api/v1/sources project it; /md/sources uses the facts alone |
 | `src/repo/observations.ts` | `upsertObservations`, `findSeries{Hourly,Daily,Monthly}` |
-| `src/repo/source_priorities.ts` | `preferredSource`, `priorityMap` |
-| `src/repo/newest_row.ts` | `sourceRankJoin` + `newestFirst`: the newest-row rule as SQL fragments (newest `observed_at`, then higher active `source_priorities.priority`, inactive/unlisted below, then greater `source_id`; same order as `display_observation()`/`obs_daily`, 0223). Every "latest reading" pick outside those uses it; prefer a per-dam `LATERAL … LIMIT 1` over `DISTINCT ON` (#122) |
+| `src/repo/source_priorities.ts` | `syncSourcePriorities` (declared rows overwrite every column; undeclared rows left alone and reported), `preferredSource`, `windowSource` (the hourly chart's source, `window_source()`), `priorityMap` |
+| `src/sources_cli.ts` | `bun run --filter @dam/db sources sync` (bootstrap, after migrations) / `kick` (enqueue every active ingest task) |
+| `src/repo/reading.test.ts` / `reading_views.test.ts` | the reading's rule (trust, value, rank, as-of, window); every view (dam page, list, drought list, change strips, 平年比, 水系/全国 totals) showing the same reading over its effective capacity |
 | `src/repo/backfill_progress.ts` | `nextPending`, `startRunning`, `complete`, `fail`, `enqueueAllDams` |
 | `src/repo/api_keys.ts` | `issueKey`, `lookupByPrefix`, `revoke`, `recordUsage`, `usageInLastMinute`, `usageToday`, `hashKey`, `touchLastUsed` |
 | `src/migrate.ts` | numbered-SQL runner, ENOENT-tolerant |
@@ -352,10 +372,11 @@ the file for detail.
 
 | Path | Purpose |
 |---|---|
-| `deploy/coolify/Dockerfile.web` | multi-stage Bun build for Next |
-| `deploy/coolify/Dockerfile.worker` | thin Bun image for graphile-worker |
-| `deploy/coolify/docker-compose.coolify.yml` | full stack with healthchecks |
-| `deploy/coolify/README.md` | first-time bring-up |
-| `deploy/backup/pgbackrest.conf` | full+diff schedule, S3 destination, AES-256 |
+| `deploy/Dockerfile.web` | multi-stage Bun build for Next; bundles `deploy/seed/` |
+| `deploy/Dockerfile.worker` | thin Bun image for graphile-worker |
+| `deploy/bootstrap.sh` | web pod start: migrations, master seed/upsert, then Next.js |
+| `deploy/k8s.yaml` | web/worker Deployments, web PDB, Service, Ingress (namespace `dam` on k3s) |
+| `deploy/purge-cdn.yaml` | Cloudflare purge Job run after each rollout |
+| `deploy/postgres/` | CloudNativePG operand image (PostgreSQL 18 + TimescaleDB + PostGIS) |
 | `deploy/ops/runbook.md` | operator runbook |
 | `deploy/ops/oneoff/*.sql` | dated one-off data fixes on compressed `observations` (never migrations); see runbook §9 |

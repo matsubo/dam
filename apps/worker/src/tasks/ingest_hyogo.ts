@@ -9,30 +9,20 @@
 //   全流入量[m3/s],全流入量フラグ,全放流量[m3/s],全放流量フラグ
 //
 // A value is valid only when its companion flag is "0" (160 = missing).
-// 貯水量 is in 千m³ → ×1000 for m³. 22 stations (incl. a 分水堰 weir that
-// won't match the dam master and is simply skipped). Cron hourly at :25.
+// 貯水量 is in 千m³ → ×1000 for m³. 22 stations (incl. a 分水堰 weir, which
+// is recorded but is not one master dam). Cron hourly at :25.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const CSV_URL =
   process.env.HYOGO_DAM_CSV ??
   'https://data.bodik.jp/dataset/d854dd8e-0bf8-4821-8bc2-88108c32156f/resource/eaabaacb-97fb-451a-b0b8-10e2ece3f90c/download/tm-dam.csv';
 const PREF_CODE = '28';
 const SOURCE_ID = 'hyogo-bodik';
-
-export interface ParsedRow {
-  hyogoName: string;
-  observedAt: Date;
-  waterLevelM: number | null;
-  storageVolumeM3: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
-}
+/** The one listed station that is a weir, not a dam. */
+const WEIR = '分水堰';
 
 /** Parse 「YYYY/MM/DD HH:MM」 (JST) → UTC Date. */
 function parseStamp(s: string): Date | null {
@@ -44,177 +34,63 @@ function parseStamp(s: string): Date | null {
 }
 
 /** A value is trustworthy only when its companion flag is "0". */
-function gated(value: string, flag: string): number | null {
-  if (flag.trim() !== '0') return null;
+function gated(value: string, flag: string): Cell {
   const t = value.trim();
-  if (!t) return null;
-  const n = Number(t);
-  return Number.isFinite(n) ? n : null;
+  return cell(t ? Number(t) : null, flag.trim() !== '0');
+}
+
+function rowReading(c: string[]): Reading {
+  const level = gated(c[3] ?? '', c[4] ?? '');
+  const volThou = gated(c[5] ?? '', c[6] ?? '');
+  const inflow = gated(c[7] ?? '', c[8] ?? '');
+  const outflow = gated(c[9] ?? '', c[10] ?? '');
+  const state = cellState([level, volThou, inflow, outflow]);
+  if (state === 'empty') return { state, mark: 'flag ≠ 0 on every field' };
+  if (state === 'unreadable') return { state, why: 'no flag-0 value' };
+  const observedAt = parseStamp(c[2] ?? '');
+  if (!observedAt) return { state: 'unreadable', why: `観測時刻 "${c[2]}"` };
+  const vol = numberIn(volThou);
+  return {
+    state: 'values',
+    observations: [
+      {
+        observedAt,
+        waterLevelM: numberIn(level),
+        storageVolumeM3: vol != null ? vol * 1_000 : null,
+        inflowM3s: numberIn(inflow),
+        outflowM3s: numberIn(outflow),
+      },
+    ],
+  };
 }
 
 /**
- * Parse the BODIK dam CSV. Skips the header and any row that lacks a
- * parseable observation time.
+ * Parse the BODIK dam CSV: one entry per station row, keyed by 観測所名 (the
+ * stamp this source has always used). Skips the header and nameless rows.
  */
-export function parseHyogoCsv(csv: string): ParsedRow[] {
+export function hyogoEntries(csv: string): Entry[] {
   const lines = csv.replace(/^﻿/, '').split(/\r?\n/);
-  const out: ParsedRow[] = [];
+  const out: Entry[] = [];
   for (const line of lines) {
     if (!line.trim()) continue;
     const c = line.split(',');
     if (c.length < 11) continue;
     if (c[0]?.trim() === '局番号') continue; // header
     const name = (c[1] ?? '').trim();
-    const observedAt = parseStamp(c[2] ?? '');
-    if (!name || !observedAt) continue;
-    const volThou = gated(c[5] ?? '', c[6] ?? '');
+    if (!name) continue;
     out.push({
-      hyogoName: name,
-      observedAt,
-      waterLevelM: gated(c[3] ?? '', c[4] ?? ''),
-      storageVolumeM3: volThou != null ? volThou * 1_000 : null,
-      inflowM3s: gated(c[7] ?? '', c[8] ?? ''),
-      outflowM3s: gated(c[9] ?? '', c[10] ?? ''),
+      key: name,
+      name,
+      pref: PREF_CODE,
+      ...(name === WEIR ? { bind: 'never' as const } : {}),
+      reading: rowReading(c),
     });
   }
   return out;
 }
 
-/** Strip ダム + （...）annotations for master matching. */
-export function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .trim();
-}
-
-/** Best master dam for a feed stem; exact stem match beats substring. */
-export function chooseMaster(
-  stem: string,
-  masters: BindableMaster[],
-  stationKey?: string,
-): bigint | null {
-  // A row already stamped with this station keeps it; names alone cannot
-  // separate same-name dams (#57).
-  const stamped = stationKey ? stampedMaster(masters, stationKey) : null;
-  if (stamped) return stamped.id;
-  let best: { m: BindableMaster; rank: number } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (mStem === stem) rank = 0;
-    else if (m.name === `${stem}ダム`) rank = 1;
-    else if (mStem.startsWith(stem)) rank = 2;
-    else if (mStem.includes(stem)) rank = 3;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-      best = { m, rank };
-    }
-  }
-  return best?.m.id ?? null;
-}
-
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 311,
-            '兵庫県 ダム諸量 BODIK オープンデータ (CC-BY 4.0, 10分更新, 22観測所)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-interface DamMatch {
-  hyogoName: string;
-  damId: bigint;
-}
-
-async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const out: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing. Keyed by
-  // 観測所名 (the CSV's 局番号 never reaches ParsedRow) so a repeated station
-  // can't break the upsert.
-  const universe = new Map<string, UniverseRow>();
-  for (const r of rows) {
-    const stem = normalizeName(r.hyogoName);
-    if (!stem) continue;
-    const damId = chooseMaster(stem, masters, r.hyogoName);
-    universe.set(r.hyogoName, {
-      externalId: r.hyogoName,
-      name: r.hyogoName,
-      prefCode: PREF_CODE,
-      resolvedDamId: damId,
-    });
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for ${r.hyogoName}`);
-      continue;
-    }
-    out.push({ hyogoName: r.hyogoName, damId });
-    await bindExternalId(damId, SOURCE_ID, r.hyogoName);
-  }
-  await recordUniverse(SOURCE_ID, [...universe.values()]);
-  return out;
-}
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
-  const ua =
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
-
-  const res = await fetch(CSV_URL, {
-    headers: { 'user-agent': ua },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (res.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${res.status}; abort`);
-    return;
-  }
-  const csv = await res.text();
-  const parsed = parseHyogoCsv(csv);
-  log(`${SOURCE_ID}: parsed ${parsed.length} dam rows`);
-
-  const matches = await matchMaster(parsed, log);
-  const damByName = new Map(matches.map((m) => [m.hyogoName, m.damId]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of parsed) {
-    const damId = damByName.get(p.hyogoName);
-    if (!damId) continue;
-    if (
-      p.waterLevelM == null &&
-      p.storageVolumeM3 == null &&
-      p.inflowM3s == null &&
-      p.outflowM3s == null
-    ) {
-      continue;
-    }
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: null,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${parsed.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const entries = hyogoEntries((await upstream.fetch(CSV_URL, { timeoutMs: 15_000 })).text());
+  log(`${SOURCE_ID}: ${entries.length} stations`);
+  return { entries };
+});

@@ -7,8 +7,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { BindableMaster } from '@dam/core/dam_binding';
-import { chooseMaster, parseShimonosekiSuigen } from './ingest_shimonoseki_suido.ts';
+import { parseShimonosekiSuigen, shimonosekiEntries } from './ingest_shimonoseki_suido.ts';
 
 const FIXTURE = join(
   import.meta.dir,
@@ -77,37 +76,35 @@ describe('parseShimonosekiSuigen in the 洪水期', () => {
   });
 });
 
-describe('chooseMaster', () => {
-  // Real prod rows (山口 35) that the published names could reach.
-  const masters: BindableMaster[] = [
-    { id: 10578n, name: '内日第1', completedYear: 1906 },
-    { id: 10579n, name: '内日第2', completedYear: 1928 },
-    { id: 10610n, name: '木屋川（元）', completedYear: 1955 },
-    { id: 10611n, name: '湯の原', completedYear: 1990 },
-    { id: 10614n, name: '内日', completedYear: 1990 },
-    { id: 10622n, name: '木屋川（再）', completedYear: null },
-  ];
+describe('shimonosekiEntries', () => {
+  const { observedAt, rows } = parseShimonosekiSuigen(html);
+  if (!observedAt) throw new Error('no date');
+  const entries = shimonosekiEntries(observedAt, rows);
+  const by = (key: string) => entries.find((e) => e.key === key);
 
-  test('湯の原ダム binds to 湯の原 (NDI 2024)', () => {
-    expect(chooseMaster('湯の原ダム', masters)).toBe(10611n);
+  test('writes 湯の原 only; 木屋川 is recorded, 内日貯水池 (第1 + 第2, never the 県 内日ダム) never binds', () => {
+    expect(entries.map((e) => e.key)).toEqual(['木屋川ダム', '湯の原ダム', '内日貯水池']);
+    expect(by('湯の原ダム')?.bind).toBeUndefined();
+    expect(by('湯の原ダム')?.dontWrite).toBeUndefined();
+    expect(by('木屋川ダム')?.dontWrite).toContain('10 minutes');
+    expect(by('内日貯水池')?.bind).toBe('never');
   });
 
-  test('木屋川ダム resolves to the completed （元） while the （再） is unbuilt', () => {
-    expect(chooseMaster('木屋川ダム', masters)).toBe(10610n);
+  test('湯の原 reads its volume and rate at the 現在 date', () => {
+    expect(by('湯の原ダム')?.reading).toEqual({
+      state: 'values',
+      observations: [
+        { observedAt, storageVolumeM3: 507_000, storageRate: expect.closeTo(0.247, 6) },
+      ],
+    });
   });
 
-  test('refuses 内日貯水池: the combined 第1 + 第2 figure, never the 県 内日ダム', () => {
-    expect(chooseMaster('内日貯水池', masters)).toBeNull();
-    const stamped = masters.map((m) => (m.id === 10614n ? { ...m, stamp: '内日貯水池' } : m));
-    expect(chooseMaster('内日貯水池', stamped)).toBeNull();
-  });
-
-  test('a row already stamped with the facility keeps it', () => {
-    const stamped = masters.map((m) => (m.id === 10622n ? { ...m, stamp: '木屋川ダム' } : m));
-    expect(chooseMaster('木屋川ダム', stamped)).toBe(10622n);
-  });
-
-  test('an unknown facility binds to nothing', () => {
-    expect(chooseMaster('豊田浄水場', masters)).toBeNull();
+  test('a row without numbers is unreadable', () => {
+    const blank = rows.map((r) =>
+      r.name === '湯の原ダム' ? { ...r, storageVolumeM3: null, storageRate: null } : r,
+    );
+    expect(shimonosekiEntries(observedAt, blank)[1]?.reading).toMatchObject({
+      state: 'unreadable',
+    });
   });
 });

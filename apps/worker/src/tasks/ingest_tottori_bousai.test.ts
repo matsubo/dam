@@ -1,3 +1,6 @@
+// Fixture → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
+
 import { describe, expect, it } from 'bun:test';
 import listFixture from '../../../../tests/fixtures/tottori_bousai/list_2026-06-05-08-20.json';
 // Items that are not the dam's own telemetry, verbatim from 鳥取県防災Web:
@@ -9,80 +12,46 @@ import completeCopied from '../../../../tests/fixtures/tottori_bousai/list_2026-
 import partialPlaceholder from '../../../../tests/fixtures/tottori_bousai/list_2026-09-27-12-20.json';
 // Live list 2026-09-28 12:40 JST, verbatim: the 利水 column null for all six.
 import liveList from '../../../../tests/fixtures/tottori_bousai/list_2026-09-28-12-40.json';
-import {
-  chooseMaster,
-  normalizeName,
-  parseTottoriItems,
-  parseTottoriTimestamp,
-} from './ingest_tottori_bousai';
+import type { Entry, Observed } from '../ingest/types.ts';
+import { parseTottoriTimestamp, tottoriEntries } from './ingest_tottori_bousai';
+
+type Items = Parameters<typeof tottoriEntries>[0];
+
+/** The single observation of an entry in state `values`, else null. */
+function observed(e: Entry | undefined): Observed | null {
+  const r = e?.reading;
+  return r && typeof r !== 'function' && r.state === 'values' ? (r.observations[0] ?? null) : null;
+}
+const states = (entries: Entry[]) =>
+  entries.map((e) => [e.name, typeof e.reading === 'function' ? 'fn' : e.reading.state]);
 
 describe('parseTottoriTimestamp', () => {
-  it('converts JST to UTC', () => {
-    const d = parseTottoriTimestamp('2026-06-05 08:20:00');
-    expect(d?.toISOString()).toBe('2026-06-04T23:20:00.000Z');
-  });
-
-  it('handles midnight JST', () => {
-    const d = parseTottoriTimestamp('2026-01-01 00:00:00');
-    expect(d?.toISOString()).toBe('2025-12-31T15:00:00.000Z');
-  });
-
-  it('returns null for garbage', () => {
+  it('converts JST to UTC, across midnight', () => {
+    expect(parseTottoriTimestamp('2026-06-05 08:20:00')?.toISOString()).toBe(
+      '2026-06-04T23:20:00.000Z',
+    );
+    expect(parseTottoriTimestamp('2026-01-01 00:00:00')?.toISOString()).toBe(
+      '2025-12-31T15:00:00.000Z',
+    );
     expect(parseTottoriTimestamp('bad')).toBeNull();
   });
 });
 
-describe('normalizeName', () => {
-  it('strips ダム suffix', () => {
-    expect(normalizeName('百谷ダム')).toBe('百谷');
-    expect(normalizeName('菅沢ダム')).toBe('菅沢');
-  });
-
-  it('strips annotations', () => {
-    expect(normalizeName('狭山池（再）')).toBe('狭山池');
-    expect(normalizeName('狭山池（元）')).toBe('狭山池');
-  });
-
-  it('preserves plain name', () => {
-    expect(normalizeName('東郷')).toBe('東郷');
-  });
-});
-
-describe('parseTottoriItems', () => {
-  it('parses all 6 fixture dams', () => {
-    const rows = parseTottoriItems(listFixture.items as Parameters<typeof parseTottoriItems>[0]);
-    expect(rows.length).toBe(6);
-  });
-
-  it('converts storage 千m³ → m³', () => {
-    const rows = parseTottoriItems(listFixture.items as Parameters<typeof parseTottoriItems>[0]);
-    const sugisawa = rows.find((r) => r.observatoryName === '菅沢ダム');
-    expect(sugisawa).toBeDefined();
-    // fixture damEffectiveStorageQuantities: 10604 千m³ → 10,604,000 m³
-    expect(sugisawa?.storageVolumeM3).toBe(10604 * 1000);
-  });
-
-  it('stores rate as fraction 0-1', () => {
-    const rows = parseTottoriItems(listFixture.items as Parameters<typeof parseTottoriItems>[0]);
-    for (const r of rows) {
-      if (r.storageRate != null) {
-        expect(r.storageRate).toBeGreaterThanOrEqual(0);
-        expect(r.storageRate).toBeLessThanOrEqual(1);
-      }
-    }
+describe('tottoriEntries', () => {
+  it('lists all 6 dams, keyed by the stringified observatory id, in 千m³ → m³', () => {
+    const entries = tottoriEntries(listFixture.items as Items);
+    expect(entries.length).toBe(6);
+    expect(entries[0]?.key).toBe('71001');
+    const sugisawa = entries.find((e) => e.name === '菅沢ダム');
+    expect(observed(sugisawa)?.storageVolumeM3).toBe(10604 * 1000);
     // 東郷 (県-managed): 31.0% → 0.31
-    const togo = rows.find((r) => r.observatoryName === '東郷ダム');
-    expect(togo?.storageRate).toBeCloseTo(0.31, 3);
+    expect(observed(entries.find((e) => e.name === '東郷ダム'))?.storageRate).toBeCloseTo(0.31, 3);
   });
 
   it('prefers 利水容量貯水率 over 有効容量貯水率', () => {
-    // 鳥取県防災Web publishes both columns; today every dam reports
-    // storageRateWaterUseCapacity as null/flg=2, so this only bites when the
-    // 利水 column starts arriving. 有効 divides by the full 有効貯水容量 and
-    // understates flood-control dams — same inversion as issue #19.
-    const [base] = listFixture.items as Parameters<typeof parseTottoriItems>[0];
+    const [base] = listFixture.items as Items;
     if (!base) throw new Error('fixture missing');
-    const rows = parseTottoriItems([
+    const [e] = tottoriEntries([
       {
         ...base,
         storageRateEffectiveCapacity: 31.0,
@@ -91,104 +60,53 @@ describe('parseTottoriItems', () => {
         storageRateWaterUseCapacityFlg: '0',
       },
     ]);
-    expect(rows[0]?.storageRate).toBeCloseTo(0.962, 3);
-  });
-
-  it('a 県 dam falls back to 有効容量貯水率 when 利水 is unpublished', () => {
-    const [base] = listFixture.items as Parameters<typeof parseTottoriItems>[0];
-    if (!base) throw new Error('fixture missing');
-    const rows = parseTottoriItems([
-      {
-        ...base,
-        storageRateEffectiveCapacity: 31.0,
-        storageRateEffectiveCapacityFlg: '0',
-        storageRateWaterUseCapacity: null,
-        storageRateWaterUseCapacityFlg: '2',
-      },
-    ]);
-    expect(rows[0]?.storageRate).toBeCloseTo(0.31, 3);
+    expect(observed(e)?.storageRate).toBeCloseTo(0.962, 3);
   });
 
   it("does not store 菅沢's 有効容量貯水率: the 国 dam's rate is not its manager's", () => {
-    // 12:40: 450 千m³ at 2.9 % — volume / 15,403 千m³ on every stored row since
-    // June — while the manager's own feeds (cgr-mlit-dam, kasenbosai
-    // storPcntIrr) read ~39 %. A NULL rate lets the trigger derive and flag it.
-    const rows = parseTottoriItems(liveList.items as Items);
-    const sugisawa = rows.find((r) => r.observatoryName === '菅沢ダム');
+    const entries = tottoriEntries(liveList.items as Items);
+    const sugisawa = observed(entries.find((e) => e.name === '菅沢ダム'));
     expect(sugisawa?.storageVolumeM3).toBe(450_000);
     expect(sugisawa?.storageRate).toBeNull();
-    // 県-managed 賀祥 keeps 鳥取県's own 15 % (kasenbosai stores the same), not
-    // the 26.7 % its 総貯水量-including volume column would derive to.
-    expect(rows.find((r) => r.observatoryName === '賀祥ダム')?.storageRate).toBeCloseTo(0.15, 3);
+    // 県-managed 賀祥 keeps 鳥取県's own 15 %.
+    expect(observed(entries.find((e) => e.name === '賀祥ダム'))?.storageRate).toBeCloseTo(0.15, 3);
   });
 
   it('still takes a 国 dam’s 利水容量貯水率 when one is published', () => {
     const sugisawa = (liveList.items as Items).find((it) => it.managerCd === '41');
     if (!sugisawa) throw new Error('fixture missing');
-    const rows = parseTottoriItems([
+    const [e] = tottoriEntries([
       { ...sugisawa, storageRateWaterUseCapacity: 39.1, storageRateWaterUseCapacityFlg: '0' },
     ]);
-    expect(rows[0]?.storageRate).toBeCloseTo(0.391, 3);
+    expect(observed(e)?.storageRate).toBeCloseTo(0.391, 3);
   });
 
-  it('observatoryId is stringified', () => {
-    const rows = parseTottoriItems(listFixture.items as Parameters<typeof parseTottoriItems>[0]);
-    expect(rows[0]?.observatoryId).toBe('71001');
-  });
-
-  type Items = Parameters<typeof parseTottoriItems>[0];
-
-  it('drops the zero-level placeholder of an incomplete list, keeps real rows', () => {
-    // 09-27 12:20: 朝鍋 reads 0 m / 0 千m³ against its own 最低水位 97.0 m,
-    // while 菅沢 carries real telemetry (356.2 m, between 11:20's 356.18 and
-    // 13:20's 356.22 in the complete lists).
-    const rows = parseTottoriItems(partialPlaceholder.items as Items);
-    expect(rows.map((r) => r.observatoryName)).toEqual(['菅沢ダム']);
-    expect(rows[0]?.waterLevelM).toBeCloseTo(356.2, 2);
-    expect(rows[0]?.storageVolumeM3).toBe(429_000);
-  });
-
-  it('drops placeholder rows even when their other fields look plausible', () => {
-    // 09-23 14:20: both items are 0 m / 0 千m³ and 菅沢 carries 朝鍋's
-    // 24 % / 0.08 / 0.07 verbatim — none of it is 菅沢's.
-    expect(parseTottoriItems(partialCopied.items as Items)).toEqual([]);
-  });
-
-  it("drops a 菅沢 item carrying 朝鍋's real values, keeps the other five", () => {
-    // 09-27 05:20, total=6: 菅沢 reads 102.89 m / 280 千m³ / 24 % — 朝鍋's
-    // figures to the digit — against its own 最低水位 353.1 m.
-    const rows = parseTottoriItems(completeCopied.items as Items);
-    expect(rows.map((r) => r.observatoryName)).toEqual([
-      '百谷ダム',
-      '佐治川ダム',
-      '東郷ダム',
-      '賀祥ダム',
-      '朝鍋ダム',
+  it('the zero-level placeholder of an incomplete list is unreadable; the real row is read', () => {
+    const entries = tottoriEntries(partialPlaceholder.items as Items);
+    expect(states(entries)).toEqual([
+      ['朝鍋ダム', 'unreadable'],
+      ['菅沢ダム', 'values'],
     ]);
-    const asanabe = rows.find((r) => r.observatoryName === '朝鍋ダム');
+    expect(observed(entries[1])?.waterLevelM).toBeCloseTo(356.2, 2);
+    expect(observed(entries[1])?.storageVolumeM3).toBe(429_000);
+  });
+
+  it('placeholder items are unreadable even when their other fields look plausible', () => {
+    expect(states(tottoriEntries(partialCopied.items as Items)).map(([, s]) => s)).toEqual([
+      'unreadable',
+      'unreadable',
+    ]);
+  });
+
+  it("a 菅沢 item carrying 朝鍋's real values is unreadable; the other five are read", () => {
+    const entries = tottoriEntries(completeCopied.items as Items);
+    expect(
+      states(entries)
+        .filter(([, s]) => s === 'values')
+        .map(([n]) => n),
+    ).toEqual(['百谷ダム', '佐治川ダム', '東郷ダム', '賀祥ダム', '朝鍋ダム']);
+    const asanabe = observed(entries.find((e) => e.name === '朝鍋ダム'));
     expect(asanabe?.waterLevelM).toBeCloseTo(102.89, 2);
     expect(asanabe?.storageVolumeM3).toBe(280_000);
-  });
-});
-
-describe('chooseMaster', () => {
-  const masters = [
-    { id: 10979n, name: '菅沢' },
-    { id: 10980n, name: '百谷' },
-    { id: 10981n, name: '佐治川' },
-    { id: 10982n, name: '東郷' },
-  ];
-
-  it('exact stem match wins', () => {
-    expect(chooseMaster('菅沢', masters)).toBe(10979n);
-    expect(chooseMaster('東郷', masters)).toBe(10982n);
-  });
-
-  it('matches stem-only master for ダム-suffix input', () => {
-    expect(chooseMaster('百谷', masters)).toBe(10980n);
-  });
-
-  it('returns null for no match', () => {
-    expect(chooseMaster('存在しない', masters)).toBeNull();
   });
 });

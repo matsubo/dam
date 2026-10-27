@@ -135,7 +135,7 @@ describe('driestWatersheds — rate basis (#32/#45)', () => {
     `;
 
     const [picked] = await sql<{ source_id: string; storage_volume_m3: string }[]>`
-      SELECT source_id, storage_volume_m3::TEXT FROM display_observation(${damId})
+      SELECT source_id, storage_volume_m3::TEXT FROM dam_reading(${damId})
     `;
     // The watershed aggregate reads through the same function, so agreeing here
     // is what keeps the two pages telling the same story about one dam.

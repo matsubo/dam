@@ -14,7 +14,6 @@ const POINT = '0101000020e6100000000000000000614000000000008045c0'; // hex EWKB,
 
 async function cleanup(): Promise<void> {
   await sql`DELETE FROM dams WHERE external_ids ->> 'ndi' = ANY(${FIXTURE_NDI}::TEXT[])`;
-  await sql`DELETE FROM source_priorities WHERE source_id IN ('seed-test-new', 'seed-test-old')`;
 }
 
 const seedDam = (ndi: string, slug: string, damnet: string, heightM: string): SeedDam => ({
@@ -58,16 +57,9 @@ beforeAll(async () => {
               jsonb_build_object('ndi', ${ndi}::text, 'damnet', ${damnet}::text), 100, 5000)
     `;
   }
-  await sql`INSERT INTO source_priorities (source_id, description, priority, active)
-            VALUES ('seed-test-old', 'prod description', 300, TRUE)`;
 
   // Seed: the pre-#54 snapshot, stamps swapped and specs stale.
   const text = buildMasterUpsertSql({
-    sources: [
-      { source_id: 'seed-test-old', description: 'stale description', priority: 1, active: false },
-      { source_id: 'seed-test-new', description: 'new source', priority: 10, active: true },
-      { source_id: 'synthetic', description: 'retired', priority: 200, active: true },
-    ],
     watersheds: [],
     dams: [
       seedDam(NDI_A, 'seed-test-a', 'T802', '12.5'),
@@ -129,22 +121,5 @@ describe('buildMasterUpsertSql', () => {
       FROM dams WHERE external_ids ->> 'ndi' = ${NDI_NEW}
     `;
     expect(n).toEqual({ ids: { ndi: NDI_NEW }, height: '30.00' });
-  });
-
-  test('source_priorities: inserts new rows only and never re-adds synthetic', async () => {
-    const rows = await sql<{ source_id: string; description: string; priority: number }[]>`
-      SELECT source_id, description, priority FROM source_priorities
-      WHERE source_id IN ('seed-test-old', 'seed-test-new') ORDER BY 1
-    `;
-    expect([...rows]).toEqual([
-      { source_id: 'seed-test-new', description: 'new source', priority: 10 },
-      { source_id: 'seed-test-old', description: 'prod description', priority: 300 },
-    ]);
-    const text = buildMasterUpsertSql({
-      sources: [{ source_id: 'synthetic', description: 'x', priority: 1, active: true }],
-      watersheds: [],
-      dams: [],
-    });
-    expect(text).not.toContain("'synthetic'");
   });
 });

@@ -3,10 +3,10 @@
 // Next's framework defaults and so wins for force-dynamic pages).
 //
 // Cloudflare caches these responses at the edge for s-maxage. Every deploy
-// purges dam.teraren.com from the cache (apps/web/bin/purge_cdn.ts, run as
-// Coolify's post-deployment command), so the TTLs only bound how stale a page
-// gets if a purge is missed: minutes for data pages, at most an hour for
-// everything else. Browsers always revalidate (max-age=0). Hashed
+// purges dam.teraren.com from the cache (apps/web/bin/purge_cdn.ts, run by the
+// deploy workflow as the deploy/purge-cdn.yaml Job), so the TTLs only bound
+// how stale a page gets if a purge is missed: minutes for data pages, at most
+// an hour for everything else. Browsers always revalidate (max-age=0). Hashed
 // /_next/static assets are untouched — Next serves them immutable for a year,
 // which is correct.
 const CACHE_TIGHT = 'public, max-age=0, s-maxage=300, stale-while-revalidate=86400';

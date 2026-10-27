@@ -8,12 +8,11 @@
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { BindableMaster } from '@dam/core/dam_binding';
 import {
-  chooseMaster,
   findLatestPdfUrl,
   parseSaseboPdfText,
   pdfToText,
+  saseboEntries,
 } from './ingest_sasebo_suido.ts';
 
 const DIR = join(import.meta.dir, '..', '..', '..', '..', 'tests/fixtures/sasebo_suido');
@@ -76,21 +75,32 @@ describe('findLatestPdfUrl', () => {
   });
 });
 
-describe('chooseMaster', () => {
-  // Real prod rows (長崎 42).
-  const masters: BindableMaster[] = [
-    { id: 11151n, name: '川谷', completedYear: 1954 },
-    { id: 11159n, name: '下の原（元）', completedYear: 1968 },
-    { id: 11235n, name: '下の原（再）', completedYear: 2006 },
-    { id: 11156n, name: '山の田', completedYear: 1908 },
-  ];
+describe('saseboEntries', () => {
+  const { reportDate, rows, published } = parsed;
+  if (!reportDate) throw new Error('no date');
 
-  test('binds 下の原 to the completed （再） twin, whose 2,182 千m³ the PDF prints', () => {
-    expect(chooseMaster('下の原', masters)).toBe(11235n);
+  test('one entry per dam line, bound by whole name only', () => {
+    const entries = saseboEntries(reportDate, rows, published);
+    expect(entries.map((e) => [e.key, e.pref, e.bind])).toEqual(
+      ['山の田', '菰田', '川谷', '相当', '転石', '下の原'].map((n) => [n, '42', { exact: true }]),
+    );
+    expect(entries.find((e) => e.key === '川谷')?.reading).toEqual({
+      state: 'values',
+      observations: [
+        {
+          observedAt: reportDate,
+          storageVolumeM3: 1_310_523,
+          storageRate: expect.closeTo(0.814, 6),
+        },
+      ],
+    });
   });
 
-  test('matches whole names only', () => {
-    expect(chooseMaster('川谷', masters)).toBe(11151n);
-    expect(chooseMaster('谷', masters)).toBeNull();
+  test('a dam line whose readings did not parse is unreadable', () => {
+    const entries = saseboEntries(reportDate, [], published);
+    expect(entries).toHaveLength(6);
+    expect(entries.every((e) => 'state' in e.reading && e.reading.state === 'unreadable')).toBe(
+      true,
+    );
   });
 });

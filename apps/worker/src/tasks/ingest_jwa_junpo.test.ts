@@ -1,17 +1,17 @@
 // apps/worker/src/tasks/ingest_jwa_junpo.test.ts
 //
+// Fixture → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
+//
 // Parser tests against a verbatim capture of the live page from 2026-04-21.
 // The values asserted below are eyeballed against the page, so changing
 // them on a parser refactor should fail loudly.
-//
-// ensureExternalIds runs against synthetic 牧尾 （元）/（再） rows modelled on
-// NDI 905/906 (the backfill binds through it too).
 
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { sql } from '@dam/db/client';
-import { ensureExternalIds, parseJwaJunpoHtml, parseReportDate } from './ingest_jwa_junpo.ts';
+import type { Entry, Observed } from '../ingest/types.ts';
+import { junpoEntries, parseJwaJunpoHtml, parseReportDate } from './ingest_jwa_junpo.ts';
 
 const FIXTURE_PATH = join(
   import.meta.dir,
@@ -21,6 +21,15 @@ const FIXTURE_PATH = join(
   '..',
   'tests/fixtures/jwa-junpo/index_2026-04-21.html',
 );
+const html = await readFile(FIXTURE_PATH, 'utf8');
+
+/** The single observation of an entry in state `values`, else null. */
+function observed(e: Entry | undefined): Observed | null {
+  const r = e?.reading;
+  return r && typeof r !== 'function' && r.state === 'values' ? (r.observations[0] ?? null) : null;
+}
+const stateOf = (e: Entry | undefined) =>
+  e && typeof e.reading !== 'function' ? e.reading.state : undefined;
 
 describe('parseReportDate', () => {
   test('parses 「令和N年M月D日」 to JST midnight (= 15:00 UTC of D-1)', () => {
@@ -36,11 +45,9 @@ describe('parseReportDate', () => {
 });
 
 describe('parseJwaJunpoHtml', () => {
-  test('extracts exactly one row per known dam (no rainfall-table duplicates)', async () => {
-    const html = await readFile(FIXTURE_PATH, 'utf8');
+  test('extracts exactly one row per listed dam (no rainfall-table duplicates)', () => {
     const { reportDate, rows } = parseJwaJunpoHtml(html);
     expect(reportDate).not.toBeNull();
-    // 26 dams in NAME_MAP; the fixture is the live index so all should match.
     expect(rows.length).toBe(26);
     // 旬報 page also has a 「ダムの降水量等」 table that lists the same dam
     // names with rainfall numbers — a previous version of the parser walked
@@ -49,8 +56,7 @@ describe('parseJwaJunpoHtml', () => {
     expect(new Set(names).size).toBe(rows.length);
   });
 
-  test('gets numbers right for a sample of dams', async () => {
-    const html = await readFile(FIXTURE_PATH, 'utf8');
+  test('gets numbers right for a sample of dams', () => {
     const { rows } = parseJwaJunpoHtml(html);
     const byName = new Map(rows.map((r) => [r.jwaName, r]));
     // 矢木沢: 利水容量 115,500 / 貯水量 105,598 / 貯水率 91.4%
@@ -59,16 +65,14 @@ describe('parseJwaJunpoHtml', () => {
       storageVolumeThouM3: 105598,
       storageRatePct: 91.4,
     });
-    // 早明浦: 利水容量 ?, 貯水率 100%, capacity from junpo table (not full)
+    // 早明浦: 貯水率 100% (its 確保量 row)
     expect(byName.get('早明浦ダム')?.storageRatePct).toBeCloseTo(100, 1);
     // 下久保: low storage 29.3%
     expect(byName.get('下久保ダム')?.storageRatePct).toBeCloseTo(29.3, 1);
   });
 
-  test('skips synthesis rows (上流9ダム, 銅山川3ダム)', async () => {
-    const html = await readFile(FIXTURE_PATH, 'utf8');
-    const { rows } = parseJwaJunpoHtml(html);
-    const names = rows.map((r) => r.jwaName);
+  test('skips synthesis rows (上流9ダム, 銅山川3ダム): sums over dams the table lists', () => {
+    const names = parseJwaJunpoHtml(html).rows.map((r) => r.jwaName);
     expect(names).not.toContain('上流9ダム');
     expect(names).not.toContain('銅山川3ダム');
   });
@@ -83,85 +87,44 @@ describe('parseJwaJunpoHtml', () => {
   });
 });
 
-describe('ensureExternalIds binds 牧尾ダム to the dam in service (#79)', () => {
-  // Synthetic fixtures modelled on production's 牧尾（元） (NDI 905, 1961) and
-  // 牧尾（再） (NDI 906, 2006), both in 長野. The （元） is inserted first so
-  // it has the lower id.
-  const SLUGS = ['jwa-junpo-t79-makio-moto', 'jwa-junpo-t79-makio-sai'];
-  const KEY = '牧尾ダム';
-
-  async function insertDam(
-    slug: string,
-    name: string,
-    completedYear: number,
-    stamped: boolean,
-  ): Promise<bigint> {
-    const ids = stamped ? { 'jwa-junpo': KEY } : {};
-    const rows = await sql<{ id: bigint }[]>`
-      INSERT INTO dams (slug, name, pref_code, completed_year, location, external_ids)
-      VALUES (${slug}, ${name}, '20', ${completedYear},
-              ST_SetSRID(ST_MakePoint(137.6, 35.8), 4326)::geography, ${sql.json(ids)})
-      RETURNING id
-    `;
-    const id = rows[0]?.id;
-    if (!id) throw new Error('insert dam failed');
-    return id;
-  }
-
-  async function stampOf(id: bigint): Promise<string | null> {
-    const rows = await sql<{ k: string | null }[]>`
-      SELECT external_ids->>'jwa-junpo' AS k FROM dams WHERE id = ${id}
-    `;
-    return rows[0]?.k ?? null;
-  }
-
-  async function boundId(): Promise<string | undefined> {
-    const matches = await ensureExternalIds(() => {});
-    return matches.find((m) => m.jwaName === KEY)?.damId.toString();
-  }
-
-  // ensureExternalIds records the jwa-junpo universe; remove only the rows
-  // and scan stamp this file created, never ones that were already there.
-  let universeBefore: string[] = [];
-  let runBefore = false;
-  beforeAll(async () => {
-    const rows = await sql<{ k: string }[]>`
-      SELECT source_external_id AS k FROM source_universe WHERE source_id = 'jwa-junpo'
-    `;
-    universeBefore = rows.map((r) => r.k);
-    const runs = await sql`SELECT 1 FROM source_universe_runs WHERE source_id = 'jwa-junpo'`;
-    runBefore = runs.length > 0;
-  });
-  beforeEach(async () => {
-    await sql`DELETE FROM dams WHERE slug = ANY(${SLUGS})`;
-  });
-  afterAll(async () => {
-    await sql`DELETE FROM dams WHERE slug = ANY(${SLUGS})`;
-    await sql`
-      DELETE FROM source_universe
-      WHERE source_id = 'jwa-junpo' AND NOT (source_external_id = ANY(${universeBefore}))
-    `;
-    if (!runBefore) await sql`DELETE FROM source_universe_runs WHERE source_id = 'jwa-junpo'`;
+describe('junpoEntries', () => {
+  test('every listed dam is an entry with values, keyed by its printed name', () => {
+    const entries = junpoEntries(html);
+    expect(entries.map((e) => e.key)).toEqual(parseJwaJunpoHtml(html).rows.map((r) => r.jwaName));
+    expect(entries.every((e) => e.key === e.name)).toBe(true);
+    expect(entries.every((e) => stateOf(e) === 'values')).toBe(true);
+    expect(entries.some((e) => e.bind === 'never')).toBe(false);
   });
 
-  // The old query already ranked （再） 2 and （元） 9, so this held before
-  // #79 too; it pins that equal ranks still resolve to the completed （再）.
-  test('an unstamped pair binds the completed （再）', async () => {
-    const moto = await insertDam(SLUGS[0] as string, '牧尾（元）', 1961, false);
-    const sai = await insertDam(SLUGS[1] as string, '牧尾（再）', 2006, false);
-
-    expect(await boundId()).toBe(sai.toString());
-    expect(await stampOf(sai)).toBe(KEY);
-    expect(await stampOf(moto)).toBeNull();
+  test('stores 千m³ as m³ and the rate as a fraction, at the report date', () => {
+    const yagisawa = observed(junpoEntries(html).find((e) => e.key === '矢木沢ダム'));
+    expect(yagisawa).toEqual({
+      observedAt: new Date('2026-04-20T15:00:00.000Z'),
+      storageVolumeM3: 105_598_000,
+      storageRate: 0.914,
+    });
   });
 
-  // The regression: the add-only UPDATE left the （元）'s copy in place.
-  test('a copy of the stamp on the （元） is taken off', async () => {
-    const moto = await insertDam(SLUGS[0] as string, '牧尾（元）', 1961, true);
-    const sai = await insertDam(SLUGS[1] as string, '牧尾（再）', 2006, true);
+  test('scopes each dam to its prefectures; 大島 to 愛知 only', () => {
+    const entries = junpoEntries(html);
+    expect(entries.find((e) => e.key === '大島ダム')?.pref).toBe('23');
+    expect(entries.find((e) => e.key === '下久保ダム')?.pref).toEqual(['10', '11']);
+  });
 
-    expect(await boundId()).toBe(sai.toString());
-    expect(await stampOf(sai)).toBe(KEY);
-    expect(await stampOf(moto)).toBeNull();
+  test('小石川原ダム binds as the master 小石原川', () => {
+    const koishi = junpoEntries(html).find((e) => e.key === '小石川原ダム');
+    expect(koishi?.bind).toEqual({ name: '小石原川' });
+  });
+
+  test('a row printing ― for 貯水量 and 貯水率 is provider-marked empty', () => {
+    const marked = html.replace('>105,598<', '>―<').replace('>91.4<', '>―<');
+    expect(stateOf(junpoEntries(marked).find((e) => e.key === '矢木沢ダム'))).toBe('empty');
+  });
+
+  test('a page without its 令和 date is unreadable, every dam still listed', () => {
+    const undated = html.replaceAll(/令和\d+年\d+月\d+日/g, '');
+    const entries = junpoEntries(undated);
+    expect(entries.length).toBe(26);
+    expect(entries.every((e) => stateOf(e) === 'unreadable')).toBe(true);
   });
 });

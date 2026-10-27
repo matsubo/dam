@@ -6,11 +6,16 @@
 // 2026-06-27 06:00 table (nw=0&tm=202606270600), with 初瀬, 天理 and 大門
 // at or above 常時満水位 and 岩井川 blank.
 
+//
+// Fixture → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
+
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { BoundDam } from '../ingest/types.ts';
 import {
-  chooseMaster,
+  naraEntries,
   type ParsedRow,
   parseNaraTable,
   usableVolumeM3,
@@ -59,11 +64,13 @@ describe('parseNaraTable', () => {
     expect(daimon.outflowM3s).toBe(0);
   });
 
-  test('drops a blank (未入力) row and keeps the others', async () => {
+  test('keeps a blank (未入力) row, marked, beside the others', async () => {
     const rows = await fixture('dam_table_2026-01-15.shiftjis.html');
     expect(rows.map((r) => r.naraName).sort()).toEqual(
-      ['初瀬ダム', '大門ダム', '岩井川ダム', '白川ダム'].sort(),
+      ['初瀬ダム', '大門ダム', '天理ダム', '岩井川ダム', '白川ダム'].sort(),
     );
+    expect(rows.filter((r) => r.allMarked).map((r) => r.naraName)).toEqual(['天理ダム']);
+    expect(row(rows, '天理ダム').waterLevelM).toBeNull();
     expect(row(rows, '初瀬ダム').observedAt.toISOString()).toBe('2026-01-15T01:00:00.000Z');
     expect(row(rows, '初瀬ダム').storedVolumeM3).toBe(1_504_000);
   });
@@ -128,20 +135,70 @@ describe('usableVolumeM3', () => {
   });
 });
 
-describe('chooseMaster (#79)', () => {
-  test('keeps the row already stamped with the station over a better name match', () => {
-    const masters = [
-      { id: 10307n, name: '白川（再）', completedYear: 1996, stamp: null },
-      { id: 10308n, name: '白川溜池（元）', completedYear: 1933, stamp: '白川ダム' },
-    ];
-    expect(chooseMaster('白川', masters, '白川ダム')).toBe(10308n);
+describe('naraEntries', () => {
+  const dam = (activeCapacityM3: number | null): BoundDam => ({
+    id: 1n,
+    name: '初瀬',
+    totalCapacityM3: null,
+    activeCapacityM3,
   });
 
-  test('binds an equal-rank （元）/（再） pair to the completed （再）, not the lower id', () => {
-    const masters = [
-      { id: 10n, name: '天理（元）', completedYear: 1950, stamp: null },
-      { id: 20n, name: '天理（再）', completedYear: 1978, stamp: null },
-    ];
-    expect(chooseMaster('天理', masters, '天理ダム')).toBe(20n);
+  async function read(file: string, name: string, bound: BoundDam | null) {
+    const logs: string[] = [];
+    const e = naraEntries(await fixture(file), (s) => logs.push(s)).find((x) => x.key === name);
+    if (typeof e?.reading !== 'function') throw new Error(`${name}: no reading function`);
+    return { entry: e, reading: await e.reading(bound), logs };
+  }
+
+  test('lists every row keyed by its printed name', async () => {
+    const list = naraEntries(await fixture('dam_table_2026-09-27.shiftjis.html'), () => {});
+    expect(list.map((e) => [e.key, e.pref])).toEqual([
+      ['初瀬ダム', '29'],
+      ['岩井川ダム', '29'],
+      ['天理ダム', '29'],
+      ['白川ダム', '29'],
+      ['大門ダム', '29'],
+    ]);
+  });
+
+  test("reads the volume from the bound dam's 有効貯水容量", async () => {
+    const { reading } = await read(
+      'dam_table_2026-09-27.shiftjis.html',
+      '初瀬ダム',
+      dam(3_740_000),
+    );
+    expect(reading).toEqual({
+      state: 'values',
+      observations: [
+        {
+          observedAt: new Date('2026-09-27T07:30:00.000Z'),
+          storageVolumeM3: 1_365_000,
+          inflowM3s: 0.32,
+          outflowM3s: 0.32,
+          waterLevelM: 221.7,
+        },
+      ],
+    });
+  });
+
+  test('keeps the level and flows, without a volume, for an unbound row', async () => {
+    const { reading } = await read('dam_table_2026-09-27.shiftjis.html', '初瀬ダム', null);
+    if (reading.state !== 'values') throw new Error(reading.state);
+    expect(reading.observations[0]?.storageVolumeM3).toBeNull();
+    expect(reading.observations[0]?.waterLevelM).toBeCloseTo(221.7);
+  });
+
+  test('logs a printed volume it drops because the master lost 有効貯水容量', async () => {
+    const { logs } = await read('dam_table_2026-09-27.shiftjis.html', '初瀬ダム', dam(null));
+    expect(logs.join('\n')).toContain('volume not stored for "初瀬ダム"');
+  });
+
+  test('a blank (未入力) row is provider-marked empty', async () => {
+    const { reading } = await read(
+      'dam_table_2026-01-15.shiftjis.html',
+      '天理ダム',
+      dam(2_250_000),
+    );
+    expect(reading).toEqual({ state: 'empty', mark: '***/---/###/blank in every value cell' });
   });
 });

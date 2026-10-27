@@ -1,6 +1,6 @@
 import { sql } from '@dam/db/client';
 import { findSeries, type SeriesPoint } from '@dam/db/repo/observations';
-import { preferredSourceForDam } from '@dam/db/repo/source_priorities';
+import { windowSource } from '@dam/db/repo/source_priorities';
 import { z } from 'zod';
 import { asProblem, HttpError } from '../../../../../../lib/api/error.ts';
 import { parseObservationWindow } from '../../../../../../lib/api/observation-window.ts';
@@ -76,15 +76,14 @@ export async function GET(
     if (!dam) throw new HttpError(404, 'Dam not found');
 
     const allSources = parsed.data.all_sources === '1' || parsed.data.all_sources === 'true';
-    // The default hourly path picks the highest-priority source that
-    // actually has observations FOR THIS DAM in the window, so the chart
-    // shows a single coherent series. Falling back to a global pick (the
-    // earlier behaviour) caused empty hourly graphs for any dam whose data
+    // The default hourly path shows one coherent series: the best source
+    // with a value FOR THIS DAM in the window (windowSource). A global pick
+    // (the earlier behaviour) emptied the hourly graph of any dam whose data
     // lived under a non-top-priority source. all_sources=1 asks for every
     // source at once (e.g. tokyo-waterworks + jwa-junpo) — skip the pick.
     const preferred =
       parsed.data.interval === 'hourly' && !allSources
-        ? await preferredSourceForDam(dam.id, from, to)
+        ? await windowSource(dam.id, from, to)
         : null;
     const series = await findSeries({
       damId: dam.id,

@@ -13,6 +13,7 @@ down:
 # Run all migrations
 migrate:
     bun run --filter @dam/db migrate
+    bun run --filter @dam/db sources sync
 
 # Reset the database (drops volume — local only)
 reset-db:

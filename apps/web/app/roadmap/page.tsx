@@ -2,6 +2,7 @@ import { CircleCheck, CircleDashed, CircleDot } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Breadcrumbs } from '../../components/breadcrumbs.tsx';
+import { DISCORD_INVITE, REPO_URL } from '../../lib/contributors.ts';
 import { APP_STAGE, APP_VERSION, STAGE_JA } from '../../lib/version.ts';
 
 export const revalidate = 86400;
@@ -125,16 +126,6 @@ export default function RoadmapPage() {
           );
         })}
       </ol>
-      <div className="mt-8 border border-primary bg-primary/5 rounded-xl p-4">
-        <p className="text-sm leading-relaxed">
-          このロードマップは一人で進めています。歩みを速めるのを手伝ってくれる開発者を{' '}
-          <Link href="/contribute" className="text-primary font-semibold hover:underline">
-            開発者募集ページ
-          </Link>{' '}
-          で探しています。寄付でも支えられます。
-        </p>
-      </div>
-
       <p className="mt-6 text-xs text-on-surface-variant">
         実測データの取得状況（ソース別・都道府県別）は{' '}
         <Link className="text-primary hover:underline" href="/coverage">
@@ -143,9 +134,18 @@ export default function RoadmapPage() {
         で常時更新しています。
       </p>
       <p className="mt-2 text-xs text-on-surface-variant">
-        日付や具体的なリリース時期は確約しません。コミュニティへの議論は{' '}
+        日付や具体的なリリース時期は確約しません。機能の要望は{' '}
         <a
-          href="https://discord.gg/UbWqspWbAk"
+          href={`${REPO_URL}/issues`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary hover:underline"
+        >
+          GitHub Issues
+        </a>
+        、議論・相談は{' '}
+        <a
+          href={DISCORD_INVITE}
           target="_blank"
           rel="noopener noreferrer"
           className="text-primary hover:underline"

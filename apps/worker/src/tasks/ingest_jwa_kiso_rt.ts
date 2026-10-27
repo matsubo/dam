@@ -31,12 +31,10 @@
 // 打上調整池 / 加佐登調整池 / 木曽川大堰. 宮川調整池 and 長良川河口堰 have no
 // other source.
 
-import { sql } from '@dam/db/client';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry } from '../ingest/types.ts';
 import {
-  matchFacilities,
+  facilityEntries,
   parseJwaChubuRealtime,
   type RealtimeFacility,
 } from './jwa_chubu_realtime.ts';
@@ -64,108 +62,27 @@ const PREF_BY_NAME: Record<string, string> = {
   木曽川大堰: '23',
 };
 
-export interface KisoReading {
-  name: string;
-  waterLevelM: number | null;
-  storageVolumeM3: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
-}
-
-/** The stored quantities of each facility; one with none of them is dropped. */
-export function kisoReadings(facilities: RealtimeFacility[]): KisoReading[] {
-  const rows: KisoReading[] = [];
-  for (const f of facilities) {
-    const v = f.values;
+/** Every facility on the map, with the quantities stored from its table. */
+export function kisoEntries(facilities: readonly RealtimeFacility[], observedAt: Date): Entry[] {
+  return facilityEntries(facilities, observedAt, PREF_BY_NAME, (v) => {
     const volumeThou = v.有効貯水量 ?? null;
-    const row = {
-      name: f.name,
+    return {
       waterLevelM: v.貯水位 ?? v.堰上流水位 ?? null,
+      // no rate on the page; the trigger derives one from the volume
       storageVolumeM3: volumeThou === null ? null : volumeThou * 1000,
       inflowM3s: v.流入量 ?? null,
       outflowM3s: v.放流量 ?? v.流出量 ?? null,
     };
-    if (
-      row.waterLevelM === null &&
-      row.storageVolumeM3 === null &&
-      row.inflowM3s === null &&
-      row.outflowM3s === null
-    ) {
-      continue;
-    }
-    rows.push(row);
-  }
-  return rows;
-}
-
-export function matchKiso(facilities: RealtimeFacility[], log: (s: string) => void) {
-  return matchFacilities(SOURCE_ID, facilities, PREF_BY_NAME, log);
-}
-
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 297,
-            '水資源機構 中部支社 木曽川水系 実時計 — hourly, 12 facilities (5 dams, 三重用水 中里 + 調整池, 長良川河口堰, 木曽川大堰)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
-  const r = await fetch(PAGE_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
   });
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
-  }
-  const { observedAt, facilities } = parseJwaChubuRealtime(await r.text());
+}
+
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const { observedAt, facilities } = parseJwaChubuRealtime((await upstream.fetch(PAGE_URL)).text());
   if (!observedAt || facilities.length === 0) {
     throw new Error(
       `${SOURCE_ID}: no 観測時刻 or no facility blocks on ${PAGE_URL} — layout change?`,
     );
   }
-
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const { damByName, universe } = await matchKiso(facilities, log);
-  await recordUniverse(SOURCE_ID, universe);
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const row of kisoReadings(facilities)) {
-    const damId = damByName.get(row.name);
-    if (!damId) continue;
-    inputs.push({
-      observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: row.storageVolumeM3,
-      storageRate: null, // no rate on the page; the trigger derives one from the volume
-      inflowM3s: row.inflowM3s,
-      outflowM3s: row.outflowM3s,
-      waterLevelM: row.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-  const written = await upsertObservations(inputs);
-  log(
-    `${SOURCE_ID} done at ${observedAt.toISOString()}: parsed=${facilities.length} ` +
-      `matched=${damByName.size} written=${written}`,
-  );
-};
-
-export default task;
+  log(`${SOURCE_ID}: ${facilities.length} facilities at ${observedAt.toISOString()}`);
+  return { entries: kisoEntries(facilities, observedAt) };
+});

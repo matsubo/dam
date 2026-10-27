@@ -18,13 +18,12 @@
 // of these dams' 有効容量-based and 利水容量-based rates diverge sharply
 // (e.g. 氷川ダム: 22% vs 94%), the same static-vs-seasonal-capacity mismatch
 // found for 八田原ダム.
+// DspDat carries no station code, so the printed name is the key. An entry
+// whose time or fields cannot be read is still listed, unreadable.
 // Priority 308.
 
-import { type BindableMaster, preferMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const DATA_URL =
   process.env.KUMAMOTO_BOUSAI_URL ?? 'https://www.bousai.pref.kumamoto.jp/Dsp/GmnDspD.exe?52A0';
@@ -81,10 +80,7 @@ function parseNum(s: string): number | null {
  *  [11] 貯水率(治水容量) (%)
  */
 export function parseDspDatEntry(raw: string): ParsedRow | null {
-  // Extract dam name from HTML link before stripping tags
-  const nameMatch = raw.match(/<u>([^<]+)<\/u>/i);
-  if (!nameMatch) return null;
-  const kumamotoName = nameMatch[1]?.trim() ?? '';
+  const kumamotoName = damNameOf(raw);
   if (!kumamotoName) return null;
 
   // Strip all HTML tags; arrow chars (↑↓→) get stripped by parseNum
@@ -111,153 +107,59 @@ export function parseDspDatEntry(raw: string): ParsedRow | null {
   };
 }
 
-/** Extract all DspDat entries from the JS page source */
-export function parseKumamotoPage(html: string): ParsedRow[] {
-  const rows: ParsedRow[] = [];
-  const re = /DspDat\[\d+\]\s*=\s*'([^']+)'/g;
-  for (const m of html.matchAll(re)) {
-    const entry = parseDspDatEntry(m[1] ?? '');
-    if (entry) rows.push(entry);
+/** The dam name in an entry's HTML link, before any tag is stripped. */
+function damNameOf(raw: string): string {
+  return raw.match(/<u>([^<]+)<\/u>/i)?.[1]?.trim() ?? '';
+}
+
+/** A row with any value has values; the page prints no 欠測 mark. */
+function kumamotoReading(p: ParsedRow): Reading {
+  if (
+    p.waterLevelM === null &&
+    p.inflowM3s === null &&
+    p.outflowM3s === null &&
+    p.storageVolumeM3 === null &&
+    p.storageRate === null
+  ) {
+    return { state: 'unreadable', why: 'no value' };
   }
-  return rows;
+  return {
+    state: 'values',
+    observations: [
+      {
+        observedAt: p.observedAt,
+        waterLevelM: p.waterLevelM,
+        inflowM3s: p.inflowM3s,
+        outflowM3s: p.outflowM3s,
+        storageVolumeM3: p.storageVolumeM3,
+        storageRate: p.storageRate,
+      },
+    ],
+  };
 }
 
-// --- DB helpers -------------------------------------------------------------
-
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 308,
-            '熊本県防災情報システム 地方別ダム情報 — 6 ダム (Shift_JIS JS, 60分更新)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/貯水池$/, '')
-    .trim();
-}
-
-interface DamMatch {
-  kumamotoName: string;
-  damId: bigint;
-}
-
-async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear"
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const out: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-
-  for (const r of rows) {
-    const stem = normalizeName(r.kumamotoName);
-    if (!stem) continue;
-
-    let best: { m: BindableMaster; rank: number } | null = null;
-    for (const m of masters) {
-      const mStem = normalizeName(m.name);
-      let rank: number;
-      if (m.name === r.kumamotoName) rank = 0;
-      else if (mStem === stem) rank = 1;
-      else if (m.name === `${stem}ダム`) rank = 2;
-      else if (mStem.startsWith(stem)) rank = 3;
-      else if (mStem.includes(stem)) rank = 4;
-      else continue;
-      if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-        best = { m, rank };
-      }
-    }
-
-    // DspDat carries no station code, so the published name plus the
-    // prefecture is the stable key.
-    universe.push({
-      externalId: r.kumamotoName,
-      name: r.kumamotoName,
-      prefCode: PREF_CODE,
-      resolvedDamId: best?.m.id ?? null,
-    });
-
-    if (!best) {
-      log(`${SOURCE_ID}: no master match for "${r.kumamotoName}"`);
-      continue;
-    }
-
-    out.push({ kumamotoName: r.kumamotoName, damId: best.m.id });
-  }
-
-  await recordUniverse(SOURCE_ID, universe);
-  return out;
+/**
+ * Every DspDat entry of the JS page source. One without a name has nothing to
+ * key it by; one whose time or fields cannot be read is unreadable.
+ */
+export function kumamotoEntries(html: string): Entry[] {
+  return [...html.matchAll(/DspDat\[\d+\]\s*=\s*'([^']+)'/g)].flatMap((m) => {
+    const raw = m[1] ?? '';
+    const name = damNameOf(raw);
+    if (!name) return [];
+    const row = parseDspDatEntry(raw);
+    const reading: Reading = row
+      ? kumamotoReading(row)
+      : { state: 'unreadable', why: 'DspDat entry without a time or its 12 fields' };
+    return [{ key: name, name, pref: PREF_CODE, reading }];
+  });
 }
 
 // --- task -------------------------------------------------------------------
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
-  const r = await fetch(DATA_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
-  }
-
-  const raw = await r.arrayBuffer();
-  const html = new TextDecoder('shift_jis').decode(raw);
-  const rows = parseKumamotoPage(html);
-  log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
-
-  const matches = await matchMaster(rows, log);
-  const damByName = new Map(matches.map((m) => [m.kumamotoName, m.damId]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = damByName.get(p.kumamotoName);
-    if (!damId) continue;
-    if (
-      p.waterLevelM === null &&
-      p.inflowM3s === null &&
-      p.outflowM3s === null &&
-      p.storageVolumeM3 === null &&
-      p.storageRate === null
-    )
-      continue;
-
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: p.storageRate,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const html = (await upstream.fetch(DATA_URL)).text('shift_jis');
+  const entries = kumamotoEntries(html);
+  log(`${SOURCE_ID}: parsed ${entries.length} dam rows`);
+  return { entries };
+});

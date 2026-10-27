@@ -30,13 +30,9 @@
 // Priority 300: no other feed publishes these 6 dams. Cron 01:54 and 07:54 UTC
 // (10:54 / 16:54 JST), the second run catching a late upload.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
 import { extractText, getDocumentProxy } from 'unpdf';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry } from '../ingest/types.ts';
 
 const INDEX_URL =
   process.env.SASEBO_SUIDO_URL ??
@@ -109,72 +105,44 @@ export function findLatestPdfUrl(html: string): string | null {
   return best ? `${ORIGIN}${best.path}` : null;
 }
 
-// --- matching ---------------------------------------------------------------
-
-function stemOf(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .trim();
+/**
+ * Every dam line of the report, bound by exact name (a （元）/（再） pair goes
+ * to the live twin). A line whose readings did not parse is unreadable: on
+ * extracted PDF text a layout change leaves the names and loses the values.
+ */
+export function saseboEntries(reportDate: Date, rows: ParsedRow[], published: string[]): Entry[] {
+  return published.map((name): Entry => {
+    const row = rows.find((r) => r.name === name);
+    return {
+      key: name,
+      name,
+      pref: PREF_CODE,
+      bind: { exact: true },
+      reading: row
+        ? {
+            state: 'values',
+            observations: [
+              {
+                observedAt: reportDate,
+                storageVolumeM3: row.storageVolumeM3,
+                storageRate: row.storageRate,
+              },
+            ],
+          }
+        : { state: 'unreadable', why: 'no 現在貯水量 / 貯水率 on its line' },
+    };
+  });
 }
 
-/** The stamped row, else the dam of the same name (live twin of （元）/（再）). */
-export function chooseMaster(name: string, masters: BindableMaster[]): bigint | null {
-  const stamped = stampedMaster(masters, name);
-  if (stamped) return stamped.id;
-  const stem = stemOf(name);
-  let best: BindableMaster | null = null;
-  for (const m of masters) {
-    if (stemOf(m.name) !== stem) continue;
-    if (!best || preferMaster(m, best)) best = m;
-  }
-  return best?.id ?? null;
-}
-
-// --- DB helpers -------------------------------------------------------------
-
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 300,
-            '佐世保市水道局 水道用貯水池の貯水状況表 — 6 ダム (日次 PDF, 貯水量+貯水率)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-// --- task -------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
-  const headers = {
-    'user-agent':
-      process.env.HTTP_USER_AGENT ??
-      'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-  };
-
-  const indexRes = await fetch(INDEX_URL, { headers, signal: AbortSignal.timeout(20_000) });
-  if (indexRes.status !== 200) {
-    log(`${SOURCE_ID}: index HTTP ${indexRes.status}; aborting`);
-    return;
-  }
-  const pdfUrl = findLatestPdfUrl(await indexRes.text());
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const indexRes = await upstream.fetch(INDEX_URL);
+  const pdfUrl = findLatestPdfUrl(indexRes.text());
   if (!pdfUrl) {
     throw new Error(`${SOURCE_ID}: no suiryounippou PDF linked from ${INDEX_URL} — layout change?`);
   }
 
-  const pdfRes = await fetch(pdfUrl, { headers, signal: AbortSignal.timeout(30_000) });
-  if (pdfRes.status !== 200) {
-    log(`${SOURCE_ID}: PDF HTTP ${pdfRes.status} for ${pdfUrl}; aborting`);
-    return;
-  }
-
-  const text = await pdfToText(new Uint8Array(await pdfRes.arrayBuffer()));
+  const pdfRes = await upstream.fetch(pdfUrl, { timeoutMs: 30_000 });
+  const text = await pdfToText(pdfRes.bytes);
   const { reportDate, rows, published } = parseSaseboPdfText(text);
   if (!reportDate) {
     throw new Error(`${SOURCE_ID}: no 令和 date in ${pdfUrl} — layout change?`);
@@ -182,55 +150,5 @@ const task: Task = async (_payload, helpers) => {
   log(
     `${SOURCE_ID}: parsed ${rows.length}/${published.length} dams for ${reportDate.toISOString()}`,
   );
-
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-
-  const damByName = new Map<string, bigint>();
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  for (const name of published) {
-    const damId = chooseMaster(name, masters);
-    universe.push({ externalId: name, name, prefCode: PREF_CODE, resolvedDamId: damId });
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${name}"`);
-      continue;
-    }
-    damByName.set(name, damId);
-    await bindExternalId(damId, SOURCE_ID, name);
-  }
-  await recordUniverse(SOURCE_ID, universe);
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = damByName.get(p.name);
-    if (!damId) continue;
-    inputs.push({
-      observedAt: reportDate,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: p.storageRate,
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: null,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${damByName.size} written=${written}`);
-
-  // Line-oriented parsing over extracted PDF text fails silently on a layout
-  // change: names still found, no readings. Throwing surfaces it in failing_jobs.
-  if (published.length > 0 && rows.length === 0) {
-    throw new Error(`${SOURCE_ID}: ${published.length} dams listed but no readings in ${pdfUrl}`);
-  }
-};
-
-export default task;
+  return { entries: saseboEntries(reportDate, rows, published) };
+});

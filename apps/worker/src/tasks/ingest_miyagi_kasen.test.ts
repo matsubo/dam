@@ -1,12 +1,16 @@
 // apps/worker/src/tasks/ingest_miyagi_kasen.test.ts
+//
+// Fixture → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
 
-import { describe, expect, spyOn, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { fixtureUpstream } from '../ingest/upstream.ts';
 import {
-  chooseMaster,
   earlierTableUrl,
   fetchEarlierRows,
+  miyagiEntries,
   parseMiyagiDispDate,
   parseMiyagiTable,
   parseMiyagiTimestamp,
@@ -285,28 +289,6 @@ describe('parseMiyagiTable on the live ダム現況表', () => {
   });
 });
 
-describe('chooseMaster (#79)', () => {
-  // 宮城 has a 花山（元）/花山（再） pair; the live table publishes 花山ダム as
-  // stationNo 104007001 (Gamen42Servlet, 2026-09-27). Ids are chosen so the
-  // （元） has the lower one, which the old lowest-id tie-break would pick.
-  const m = (id: number, name: string, completedYear: number | null, stamp: string | null) => ({
-    id: BigInt(id),
-    name,
-    completedYear,
-    stamp,
-  });
-
-  test('binds 花山ダム to the completed （再）, not the lower-id （元）', () => {
-    const masters = [m(10, '花山（元）', 1957, null), m(20, '花山（再）', 2020, null)];
-    expect(chooseMaster('花山ダム', masters, '104007001')).toBe(20n);
-  });
-
-  test('keeps the row already stamped with the station', () => {
-    const masters = [m(10, '花山（元）', 1957, '104007001'), m(20, '花山（再）', 2020, null)];
-    expect(chooseMaster('花山ダム', masters, '104007001')).toBe(10n);
-  });
-});
-
 describe('earlierTableUrl', () => {
   // dam_table_2026-09-27T2100: the latest table at 21:37 JST, dispDate 21:00.
   test('asks for the same table one hour back, keeping the other params', async () => {
@@ -377,18 +359,65 @@ describe('readingsToStore', () => {
   });
 });
 
+describe('miyagiEntries', () => {
+  // The same two captures as readingsToStore: the :06 table (T2200) with only
+  // four stations reported, and the complete previous hour (T2100).
+  const LATE = 'dam_table_2026-09-27T2200.shiftjis.html';
+  const COMPLETE = 'dam_table_2026-09-27T2100.shiftjis.html';
+
+  test('lists all 21 stations by stationNo, each with its readings from both tables', async () => {
+    const list = miyagiEntries(
+      parseMiyagiTable(await fixtureHtml(LATE)),
+      parseMiyagiTable(await fixtureHtml(COMPLETE)),
+    );
+    expect(list).toHaveLength(21);
+    expect(list[0]).toMatchObject({ key: '104007011', name: '大倉ダム', pref: '04' });
+    const gandosawa = list.find((e) => e.key === '104007025')?.reading;
+    if (!gandosawa || typeof gandosawa === 'function' || gandosawa.state !== 'values') {
+      throw new Error('岩堂沢 has no values');
+    }
+    expect(gandosawa.observations).toEqual([
+      {
+        observedAt: new Date('2026-09-27T12:00:00.000Z'),
+        waterLevelM: 406.95,
+        storageVolumeM3: 12_663_000,
+        inflowM3s: expect.any(Number),
+        outflowM3s: expect.any(Number),
+        storageRate: expect.any(Number),
+      },
+    ]);
+  });
+
+  test('a station blank in the latest table, with no earlier one, is unreadable', async () => {
+    const list = miyagiEntries(parseMiyagiTable(await fixtureHtml(LATE)), []);
+    const states = new Map(
+      list.map((e) => [e.name, typeof e.reading === 'function' ? '' : e.reading.state]),
+    );
+    expect(
+      [...states]
+        .filter(([, s]) => s === 'values')
+        .map(([n]) => n)
+        .sort(),
+    ).toEqual(['川内沢ダム', '栗駒ダム', '長沼ダム', '払川ダム'].sort());
+    expect(states.get('岩堂沢ダム')).toBe('unreadable');
+  });
+});
+
 describe('fetchEarlierRows', () => {
   test('a network failure yields no earlier rows instead of failing the run', async () => {
     const latest = await fixtureHtml('dam_table_2026-09-27T2200.shiftjis.html');
-    const fetchSpy = spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('fetch failed'));
-    try {
-      const logs: string[] = [];
-      const rows = await fetchEarlierRows(latest, (s) => logs.push(s));
-      expect(rows).toEqual([]);
-      expect(fetchSpy).toHaveBeenCalledTimes(1);
-      expect(logs.join('\n')).toContain('previous-hour fetch failed');
-    } finally {
-      fetchSpy.mockRestore();
-    }
+    const urls: string[] = [];
+    const logs: string[] = [];
+    const rows = await fetchEarlierRows(
+      latest,
+      (s) => logs.push(s),
+      fixtureUpstream(async (url) => {
+        urls.push(url);
+        throw new TypeError('fetch failed');
+      }),
+    );
+    expect(rows).toEqual([]);
+    expect(urls).toHaveLength(1);
+    expect(logs.join('\n')).toContain('previous-hour fetch failed');
   });
 });

@@ -13,8 +13,7 @@
 // in 万㎥. Each dam block (<div id="dam_s">, <div id="dam_k">) is headed
 // 「山王海ダム情報」/「葛丸ダム情報」, and its id suffix names the variable. A
 // value of 0 is the page's no-data marker (it shows the text 'zero' instead
-// of a level), so it is recorded as has_data=false, not as an empty
-// reservoir.
+// of a level), so it is provider-marked empty, not an empty reservoir.
 //
 // Date: the date the page shows is the viewer's clock (`new Date()`), not the
 // survey's, so it is useless. The survey date is taken from the page's own
@@ -31,21 +30,13 @@
 // 2026-08-04 and lists them as empty (has_data=false). Priority 277 stays
 // below it, so a kasenbosai reading wins again whenever there is one.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const PAGE_URL = process.env.SANNOUKAI_URL ?? 'https://sannoukai.jp/condition/';
 
 const PREF_CODE = '03';
 const SOURCE_ID = 'sannoukai';
-
-const USER_AGENT =
-  process.env.HTTP_USER_AGENT ??
-  'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
 
 // --- parsing ----------------------------------------------------------------
 
@@ -97,126 +88,44 @@ export function observedAtFromRest(record: unknown): Date | null {
   return new Date(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate(), -9));
 }
 
-// --- matching ---------------------------------------------------------------
+// --- entries ----------------------------------------------------------------
 
-function stemOf(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .trim();
+/** A dam's reading at the survey date (null: the REST record gave none). */
+function damReading(d: ParsedDam, observedAt: Date | null): Reading {
+  if (d.markedEmpty) return { state: 'empty', mark: 'Now = 0 (the page shows its zero text)' };
+  if (d.storageVolumeM3 === null)
+    return { state: 'unreadable', why: 'no …Now value in the script' };
+  if (!observedAt) return { state: 'unreadable', why: 'no edit date from the REST record' };
+  return { state: 'values', observations: [{ observedAt, storageVolumeM3: d.storageVolumeM3 }] };
 }
 
-/** The stamped row, else the dam of the same name (live twin of （元）/（再）). */
-export function chooseMaster(name: string, masters: BindableMaster[]): bigint | null {
-  const stamped = stampedMaster(masters, name);
-  if (stamped) return stamped.id;
-  const stem = stemOf(name);
-  let best: BindableMaster | null = null;
-  for (const m of masters) {
-    if (stemOf(m.name) !== stem) continue;
-    if (!best || preferMaster(m, best)) best = m;
+/**
+ * Every dam block on the page. Binds only the dam of the same name (the live
+ * twin of a （元）/（再） pair), never a prefix.
+ */
+export function sannoukaiEntries(html: string, observedAt: Date | null): Entry[] {
+  return parseSannoukaiPage(html).map((d) => ({
+    key: d.name,
+    name: d.name,
+    pref: PREF_CODE,
+    bind: { exact: true },
+    reading: damReading(d, observedAt),
+  }));
+}
+
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const html = (await upstream.fetch(PAGE_URL)).text();
+  const restUrl = findRestUrl(html);
+  let observedAt: Date | null = null;
+  try {
+    if (restUrl) observedAt = observedAtFromRest((await upstream.fetch(restUrl)).json<unknown>());
+  } catch (err) {
+    log(`${SOURCE_ID}: REST record unreadable: ${err instanceof Error ? err.message : err}`);
   }
-  return best?.id ?? null;
-}
-
-// --- DB helpers -------------------------------------------------------------
-
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 277,
-            '山王海土地改良区 ダムの状況 — 山王海ダム・葛丸ダム貯水量 (週次 HTML)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-async function fetchOk(url: string): Promise<Response | null> {
-  const r = await fetch(url, {
-    headers: { 'user-agent': USER_AGENT },
-    signal: AbortSignal.timeout(20_000),
-  });
-  return r.status === 200 ? r : null;
-}
-
-// --- task -------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
-  const page = await fetchOk(PAGE_URL);
-  if (!page) {
-    log(`${SOURCE_ID}: ${PAGE_URL} did not return 200; aborting`);
-    return;
-  }
-  const html = await page.text();
-  const dams = parseSannoukaiPage(html);
-  log(`${SOURCE_ID}: parsed ${dams.length} dams`);
-
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const damByName = new Map<string, bigint>();
-  // Everything the page lists, matched or not, before any skip.
-  const universe: UniverseRow[] = [];
-  for (const d of dams) {
-    const damId = chooseMaster(d.name, masters);
-    universe.push({
-      externalId: d.name,
-      name: d.name,
-      prefCode: PREF_CODE,
-      resolvedDamId: damId,
-      // false only on the page's own no-data marker; an unreadable value may
-      // be this parser breaking, so it stays unknown.
-      ...(d.storageVolumeM3 !== null ? { hasData: true } : d.markedEmpty ? { hasData: false } : {}),
-    });
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${d.name}"`);
-      continue;
-    }
-    damByName.set(d.name, damId);
-    await bindExternalId(damId, SOURCE_ID, d.name);
-  }
-  await recordUniverse(SOURCE_ID, universe);
-
-  if (dams.length === 0) {
+  if (!observedAt) log(`${SOURCE_ID}: no edit date from ${restUrl ?? '(no REST link)'}`);
+  const entries = sannoukaiEntries(html, observedAt);
+  if (entries.length === 0) {
     throw new Error(`${SOURCE_ID}: no dam blocks on ${PAGE_URL} — layout change?`);
   }
-
-  const restUrl = findRestUrl(html);
-  const rest = restUrl ? await fetchOk(restUrl) : null;
-  const observedAt = rest ? observedAtFromRest(await rest.json()) : null;
-  if (!observedAt) {
-    throw new Error(`${SOURCE_ID}: no edit date from ${restUrl ?? '(no REST link)'}`);
-  }
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const d of dams) {
-    const damId = damByName.get(d.name);
-    if (!damId || d.storageVolumeM3 === null) continue;
-    inputs.push({
-      observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: d.storageVolumeM3,
-      storageRate: null,
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: null,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-  const written = await upsertObservations(inputs);
-  log(
-    `${SOURCE_ID} done: parsed=${dams.length} matched=${damByName.size} written=${written} at=${observedAt.toISOString()}`,
-  );
-};
-
-export default task;
+  return { entries, dated: true };
+});

@@ -80,7 +80,7 @@ observations   ── PK (dam_id, observed_at, source_id) ── HYPERTABLE on o
                                           quality_flag bitfield
                                           → FK raw_snapshot_id (NULL on new rows)
 raw_snapshots  ── frozen historical ledger of fetched HTTP responses (last written 2026-09-11; bodies archived offline by the operator)
-source_priorities ── source_id → priority, higher wins the chart (77 rows on prod: feeds 279–313, e.g. kasenbosai=310, mudam=280; master ndi=80, damnet=50)
+source_priorities ── source_id → priority, higher wins the chart; one row per declared source (116), synced from packages/core/src/source_registry.ts, never written by migrations or tasks
 source_universe / source_universe_runs ── each provider's whole published list per run (recordUniverse), read by /coverage; `has_data` (0103) is FALSE when the provider lists a dam with no usable value; `published_at` (0221) is a dated provider's stamp on its newest value, which keeps a monthly survey's dam `covered` past the 30-day window
 backfill_progress ── (source_id, dam_id, year) → status
 api_keys / api_key_usage ── public-API auth + per-key rate-limit
@@ -129,14 +129,21 @@ header. Set `API_AUTH_BYPASS=1` for local development.
 
 ## Worker tasks (graphile-worker)
 
-Cron schedule lives in `packages/core/src/crontab.ts` (times are UTC); every task
-is registered in `apps/worker/src/index.ts`. Task names use `:` separators
-because graphile-worker rejects `.` in identifiers. Each ingest task writes
-under its own `source_id` (the task name without `ingest:`, except
-`kasenbosai-v2`, which writes `kasenbosai`) and calls `recordUniverse()` with
-the provider's whole published list (`kasenbosai`'s list is recorded by
-`match:kasenbosai`, its `has_data` by `kasenbosai-v2` through
-`recordUniverseHasData`; exemptions live in `universe_instrumentation.test.ts`).
+Every per-source fact — priority, status, gate flags, trusted rate basis, the
+schedule (UTC), freshness override and the /sources text — is declared once
+in `packages/core/src/source_registry.ts` (docs/adr/0001); the crontab
+(`packages/core/src/crontab.ts`), each source's poll cadence and the
+`source_priorities` rows (synced by `deploy/bootstrap.sh` after migrations)
+derive from it. Every task is registered in `apps/worker/src/task_list.ts`,
+and `task_list.test.ts` checks every scheduled and declared task is there.
+Task names use `:` separators because graphile-worker rejects `.` in
+identifiers. Each active source's ingest task is built with `ingestTask`
+(`apps/worker/src/ingest/`): the task returns the provider's whole published
+list as universe entries, and the run binds them, records the universe and
+writes the observations in one transaction (`task_list.test.ts` checks every
+active source is on it). `kasenbosai` is the exception: its list is recorded
+by `match:kasenbosai`, its `has_data` by `kasenbosai-v2` through
+`recordUniverseHasData`.
 Every ingest cron line carries `?jobKey=<task>`, so a tick replaces a job
 that is still retrying instead of queueing another; `apps/worker/src/crontab.test.ts` checks
 the key and that the default 25 attempts outlast each line's longest gap.
@@ -195,7 +202,7 @@ this.
 - **Test**: bun:test (unit/integration), Playwright (E2E)
 - **Charts**: ECharts via `echarts-for-react`
 - **Maps**: Leaflet directly (no react-leaflet) on GSI tiles
-- **Build/deploy**: GitHub Actions → home k3s (`deploy/k8s.yaml`); the database
-  and its daily volume-snapshot backups are cluster-side (matsubo/network-setting
-  `k8s/dam.yaml`). The former Coolify setup is kept with auto-deploy off
+- **Build/deploy**: GitHub Actions → home k3s (`deploy/Dockerfile.{web,worker}`,
+  `deploy/k8s.yaml`); the database and its daily volume-snapshot backups are
+  cluster-side (matsubo/network-setting `k8s/dam.yaml`)
 - **CI**: GitHub Actions (lint → typecheck → migrate → unit → E2E)

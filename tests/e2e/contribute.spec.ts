@@ -69,14 +69,13 @@ test('the site footer links to /contribute from every page', async ({ page }) =>
   await expect(page.locator('footer a[href="/contribute"]').first()).toBeVisible();
 });
 
-test('developer-facing pages funnel to /contribute', async ({ page }) => {
-  for (const path of ['/coverage', '/roadmap', '/sources']) {
-    await page.goto(path);
-    await expect(
-      page.locator(`main a[href="/contribute"]`).first(),
-      `${path} should link to /contribute`,
-    ).toBeVisible();
-  }
+test('the footer sends reports to GitHub Issues and consultation to Discord', async ({ page }) => {
+  await page.goto('/');
+  const footer = page.locator('footer');
+  await expect(
+    footer.locator('a[href="https://github.com/matsubo/dam/issues"]', { hasText: '不具合報告' }),
+  ).toBeVisible();
+  await expect(footer.locator('a[href^="https://discord.gg/"]', { hasText: '相談' })).toBeVisible();
 });
 
 test('/llms.txt points agents at the recruitment page', async ({ request }) => {

@@ -1,7 +1,19 @@
 // apps/worker/src/tasks/ingest_akita_kasen.test.ts
+//
+// Table → universe entries, no database: binding and writing belong to the
+// ingest run (apps/worker/src/ingest/run.test.ts).
 
 import { describe, expect, test } from 'bun:test';
-import { type ParsedRow, parseAkitaTable, parseAkitaTimestamp } from './ingest_akita_kasen.ts';
+import type { Entry, Observed } from '../ingest/types.ts';
+import { akitaEntries, parseAkitaTimestamp } from './ingest_akita_kasen.ts';
+
+function observed(e: Entry | undefined): Observed | undefined {
+  const r = e?.reading;
+  if (!r || typeof r === 'function' || r.state !== 'values') throw new Error('no values');
+  return r.observations[0];
+}
+const state = (e: Entry | undefined) =>
+  e && typeof e.reading !== 'function' ? e.reading.state : undefined;
 
 // Akita table has ONE table with 12 columns per data row:
 // Col 0: 管轄, Col 1: 河川名, Col 2: 局名(dam),
@@ -74,7 +86,7 @@ describe('parseAkitaTimestamp', () => {
   });
 });
 
-describe('parseAkitaTable', () => {
+describe('akitaEntries', () => {
   test('extracts all fields from a typical dam row', () => {
     const html = makeHtml([
       makeRow(
@@ -88,15 +100,19 @@ describe('parseAkitaTable', () => {
         '0.51',
       ),
     ]);
-    const rows = parseAkitaTable(html);
+    const rows = akitaEntries(html);
     expect(rows).toHaveLength(1);
-    const r = rows[0];
-    expect(r?.akitaName).toBe('砂子沢ダム');
-    expect(r?.riverName).toBe('小坂川');
-    expect(r?.observedAt?.toISOString()).toBe('2026-06-05T06:00:00.000Z');
+    expect(rows[0]?.key).toBe('砂子沢ダム');
+    expect(rows[0]?.pref).toBe('05');
+    expect(rows[0]?.bind).toBeUndefined();
+    const r = observed(rows[0]);
+    expect(r?.observedAt.toISOString()).toBe('2026-06-05T06:00:00.000Z');
     expect(r?.waterLevelM).toBeCloseTo(316.79);
     expect(r?.inflowM3s).toBeCloseTo(0.47);
     expect(r?.outflowM3s).toBeCloseTo(0.51);
+    // No 貯水量 or 貯水率 column.
+    expect(r?.storageVolumeM3).toBeUndefined();
+    expect(r?.storageRate).toBeUndefined();
   });
 
   test('&nbsp; between date and time is cleaned before timestamp parse', () => {
@@ -112,8 +128,9 @@ describe('parseAkitaTable', () => {
         '2.03',
       ),
     ]);
-    const rows = parseAkitaTable(html);
-    expect(rows[0]?.observedAt?.toISOString()).toBe('2026-06-05T05:50:00.000Z');
+    expect(observed(akitaEntries(html)[0])?.observedAt.toISOString()).toBe(
+      '2026-06-05T05:50:00.000Z',
+    );
   });
 
   test('strips trend arrows from numeric cells', () => {
@@ -129,13 +146,13 @@ describe('parseAkitaTable', () => {
         '&rarr;&nbsp;4.80',
       ),
     ]);
-    const rows = parseAkitaTable(html);
-    expect(rows[0]?.waterLevelM).toBeCloseTo(245.12);
-    expect(rows[0]?.inflowM3s).toBeCloseTo(5.2);
-    expect(rows[0]?.outflowM3s).toBeCloseTo(4.8);
+    const r = observed(akitaEntries(html)[0]);
+    expect(r?.waterLevelM).toBeCloseTo(245.12);
+    expect(r?.inflowM3s).toBeCloseTo(5.2);
+    expect(r?.outflowM3s).toBeCloseTo(4.8);
   });
 
-  test('skips header and unit rows (fewer than 8 cells or no dam name)', () => {
+  test('skips header and unit rows (<th> only)', () => {
     const html = makeHtml([
       makeRow(
         '鹿角',
@@ -148,10 +165,10 @@ describe('parseAkitaTable', () => {
         '0.51',
       ),
     ]);
-    expect(parseAkitaTable(html)).toHaveLength(1);
+    expect(akitaEntries(html)).toHaveLength(1);
   });
 
-  test('skips non-dam rows (防潮水門 has no ダム/貯水池 in name)', () => {
+  test('a non-dam row (防潮水門 has no ダム/貯水池 in name) is listed but never bound', () => {
     const html = makeHtml([
       makeRow(
         '秋田',
@@ -174,9 +191,11 @@ describe('parseAkitaTable', () => {
         '0.51',
       ),
     ]);
-    const rows = parseAkitaTable(html);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.akitaName).toBe('砂子沢ダム');
+    const rows = akitaEntries(html);
+    expect(rows.map((r) => [r.name, r.bind])).toEqual([
+      ['八郎潟防潮水門', 'never'],
+      ['砂子沢ダム', undefined],
+    ]);
   });
 
   test('parses multiple dams', () => {
@@ -212,9 +231,9 @@ describe('parseAkitaTable', () => {
         '6.94',
       ),
     ]);
-    const rows = parseAkitaTable(html);
+    const rows = akitaEntries(html);
     expect(rows).toHaveLength(3);
-    expect(rows.map((r) => r.akitaName)).toEqual(['砂子沢ダム', '萩形ダム', '森吉ダム']);
+    expect(rows.map((r) => r.name)).toEqual(['砂子沢ダム', '萩形ダム', '森吉ダム']);
   });
 
   test('handles 貯水池 dam name variant', () => {
@@ -230,12 +249,13 @@ describe('parseAkitaTable', () => {
         '1.00',
       ),
     ]);
-    const rows = parseAkitaTable(html);
+    const rows = akitaEntries(html);
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.akitaName).toBe('大仙貯水池');
+    expect(rows[0]?.name).toBe('大仙貯水池');
+    expect(rows[0]?.bind).toBeUndefined();
   });
 
-  test('storageVolumeM3 and storageRate are always null', () => {
+  test('"---" in every dam column is provider-marked empty', () => {
     const html = makeHtml([
       makeRow(
         '鹿角',
@@ -243,18 +263,33 @@ describe('parseAkitaTable', () => {
         '砂子沢ダム',
         '小坂町',
         '2026/06/05&nbsp;15:00',
-        '316.79',
-        '0.47',
-        '0.51',
+        '---',
+        '---',
+        '---',
       ),
     ]);
-    const rows = parseAkitaTable(html);
-    // ParsedRow does not include storage fields — confirmed by interface
-    expect((rows[0] as ParsedRow & { storageVolumeM3?: unknown }).storageVolumeM3).toBeUndefined();
+    expect(state(akitaEntries(html)[0])).toBe('empty');
+  });
+
+  test('a value without a readable 最新観測時刻 is unreadable; a blank cell is no mark', () => {
+    const html = makeHtml([
+      makeRow('鹿角', '小坂川', '砂子沢ダム', '小坂町', '&nbsp;', '316.79', '0.47', '0.51'),
+      makeRow(
+        '鹿角',
+        '小坂川',
+        '萩形ダム',
+        '小坂町',
+        '2026/06/05&nbsp;15:00',
+        '&nbsp;',
+        '---',
+        '---',
+      ),
+    ]);
+    expect(akitaEntries(html).map(state)).toEqual(['unreadable', 'unreadable']);
   });
 
   test('returns empty array for empty HTML', () => {
-    expect(parseAkitaTable('')).toHaveLength(0);
+    expect(akitaEntries('')).toHaveLength(0);
   });
 
   test('midnight crossover: JST 00:00 → UTC previous day 15:00', () => {
@@ -270,8 +305,9 @@ describe('parseAkitaTable', () => {
         '3.50',
       ),
     ]);
-    const rows = parseAkitaTable(html);
     // 00:00 JST = -9h UTC → 2026-06-04T15:00:00Z
-    expect(rows[0]?.observedAt?.toISOString()).toBe('2026-06-04T15:00:00.000Z');
+    expect(observed(akitaEntries(html)[0])?.observedAt.toISOString()).toBe(
+      '2026-06-04T15:00:00.000Z',
+    );
   });
 });

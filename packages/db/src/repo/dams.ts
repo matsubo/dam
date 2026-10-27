@@ -1,5 +1,4 @@
-import { sql } from '../client.ts';
-import { newestFirst, sourceRankJoin } from './newest_row.ts';
+import { type Db, sql } from '../client.ts';
 
 export interface UpsertDamInput {
   slug: string;
@@ -161,8 +160,13 @@ export async function appendExternalId(
  * any other row. Ingest tasks used to only add the stamp, so a station that
  * moved to a better row stayed stamped on the old one as well (#57).
  */
-export async function bindExternalId(damId: bigint, source: string, key: string): Promise<void> {
-  await sql.begin(async (tx) => {
+export async function bindExternalId(
+  damId: bigint,
+  source: string,
+  key: string,
+  db?: Db,
+): Promise<void> {
+  const run = async (tx: Db): Promise<void> => {
     await tx`
       UPDATE dams SET external_ids = external_ids - ${source}::text
       WHERE external_ids->>${source} = ${key} AND id <> ${damId}
@@ -172,7 +176,9 @@ export async function bindExternalId(damId: bigint, source: string, key: string)
       SET external_ids = COALESCE(external_ids, '{}'::jsonb) || jsonb_build_object(${source}::text, ${key}::text)
       WHERE id = ${damId} AND COALESCE(external_ids->>${source}, '') <> ${key}
     `;
-  });
+  };
+  if (db) await run(db);
+  else await sql.begin(run);
 }
 
 export async function applyDamnetAttributes(
@@ -214,7 +220,7 @@ export interface DamListFilters {
   /** When set, restrict to dams whose latest non-synthetic observation in
    * the last 30 days came from this source_id. Useful for /api/v1/dams?source=tokyo-waterworks. */
   source?: string | null;
-  /** When true, restrict to dams with at least one non-synthetic observation in last 30 days. */
+  /** When true, restrict to dams with a non-synthetic observation carrying a value in the last 30 days. */
   realDataOnly?: boolean;
 }
 
@@ -283,6 +289,7 @@ export async function listDams(
         WHERE o.dam_id = d.id
           AND o.source_id <> 'synthetic'
           AND o.observed_at > NOW() - INTERVAL '30 days'
+          AND observation_has_value(o)
       ))
       AND (${source}::text IS NULL OR EXISTS (
         SELECT 1 FROM observations o
@@ -305,8 +312,8 @@ export interface DamPagedFilters {
   search?: string | null;
   /**
    * When true, restrict to dams with at least one non-synthetic observation
-   * in the last 30 days. Used by the /dams?real=1 view and by the homepage
-   * "実測データ" stat link.
+   * carrying a value in the last 30 days. Used by the /dams?real=1 view and
+   * by the homepage "実測データ" stat link.
    */
   realDataOnly?: boolean;
   /** 1-based. Out-of-range values clamp to [1, totalPages]. */
@@ -342,6 +349,7 @@ export async function listDamsPaged(f: DamPagedFilters): Promise<{
         WHERE o.dam_id = d.id
           AND o.source_id <> 'synthetic'
           AND o.observed_at > NOW() - INTERVAL '30 days'
+          AND observation_has_value(o)
       ))
   `;
   const total = Number(totalRows[0]?.total ?? 0n);
@@ -367,6 +375,7 @@ export async function listDamsPaged(f: DamPagedFilters): Promise<{
         WHERE o.dam_id = d.id
           AND o.source_id <> 'synthetic'
           AND o.observed_at > NOW() - INTERVAL '30 days'
+          AND observation_has_value(o)
       ))
     ORDER BY d.id
     LIMIT ${pageSize} OFFSET ${offset}
@@ -493,45 +502,35 @@ export interface LatestObservation {
 }
 
 export async function latestObservation(damId: bigint): Promise<LatestObservation | null> {
+  // The dam's reading (dam_reading(), docs/adr/0002). FALSE: this path shows
+  // 水位/流入量/放流量 too, and dams fed only by level-carrying sources have no
+  // volume at all (issue #32 review).
   const rows = await sql<LatestObservation[]>`
     SELECT
-      o.observed_at AS "observedAt",
-      o.storage_volume_m3::TEXT AS "storageVolumeM3",
-      o.storage_rate::TEXT AS "storageRate",
-      o.inflow_m3s::TEXT AS "inflowM3s",
-      o.outflow_m3s::TEXT AS "outflowM3s",
-      o.water_level_m::TEXT AS "waterLevelM",
-      o.rainfall_mm::TEXT AS "rainfallMm",
-      o.quality_flag AS "qualityFlag",
-      o.source_id AS "sourceId",
-      effective_active_capacity_m3(
-        d.active_capacity_m3, o.storage_volume_m3, o.storage_rate,
-        COALESCE(sp.trusted_rate_basis, false)
-      )::TEXT AS "effectiveActiveCapacityM3",
+      r.observed_at AS "observedAt",
+      r.storage_volume_m3::TEXT AS "storageVolumeM3",
+      r.storage_rate::TEXT AS "storageRate",
+      r.inflow_m3s::TEXT AS "inflowM3s",
+      r.outflow_m3s::TEXT AS "outflowM3s",
+      r.water_level_m::TEXT AS "waterLevelM",
+      r.rainfall_mm::TEXT AS "rainfallMm",
+      r.quality_flag AS "qualityFlag",
+      r.source_id AS "sourceId",
+      r.effective_capacity_m3::TEXT AS "effectiveActiveCapacityM3",
       CASE
-        WHEN o.storage_volume_m3 IS NULL THEN NULL
-        WHEN COALESCE(sp.trusted_rate_basis, false)
-             AND o.storage_rate IS NOT NULL
-             AND (COALESCE(o.quality_flag, 0) & 32) = 0 THEN 'published'
+        WHEN r.storage_volume_m3 IS NULL THEN NULL
+        WHEN r.rate_published THEN 'published'
         ELSE 'computed'
       END AS "storageRateOrigin"
-    -- FALSE: this path shows 水位/流入量/放流量 too, and dams fed only by
-    -- level-carrying sources have no volume at all (issue #32 review).
-    FROM display_observation(${damId}, FALSE) sel
-    JOIN observations o
-      ON o.dam_id = ${damId}
-     AND o.observed_at = sel.observed_at
-     AND o.source_id   = sel.source_id
-    JOIN dams d ON d.id = o.dam_id
-    LEFT JOIN source_priorities sp ON sp.source_id = o.source_id
+    FROM dam_reading(${damId}, FALSE) r
   `;
   return rows[0] ?? null;
 }
 
 /**
  * When the dam's displayable history starts — `latestObservation`'s
- * counterpart, under the same rule (every source but 'synthetic', see
- * display_observation). Null when there is none.
+ * counterpart: every source but 'synthetic', as for the reading. Null when
+ * there is none.
  */
 export async function earliestObservationAt(damId: bigint): Promise<Date | null> {
   const rows = await sql<{ observedAt: Date }[]>`
@@ -550,8 +549,8 @@ export async function earliestObservationAt(damId: bigint): Promise<Date | null>
  * readings under only one of them. Scalar SQL over the outer alias `d`: the
  * slug of the twin (same base name, the other suffix, same pref_code) that
  * `d`'s page should declare canonical. That is the case only when `d` has no
- * displayable observation (display_observation(…, FALSE), the row the detail
- * page shows) and exactly one twin has one; NULL otherwise.
+ * reading (dam_reading(…, FALSE), what the detail page shows) and exactly one
+ * twin has one; NULL otherwise.
  */
 function canonicalTwinSlug() {
   return sql`(
@@ -561,8 +560,8 @@ function canonicalTwinSlug() {
       AND t.pref_code = d.pref_code
       AND t.name = LEFT(d.name, -3)
                    || CASE RIGHT(d.name, 3) WHEN '（元）' THEN '（再）' ELSE '（元）' END
-      AND NOT EXISTS (SELECT 1 FROM display_observation(d.id, FALSE))
-      AND EXISTS (SELECT 1 FROM display_observation(t.id, FALSE))
+      AND NOT EXISTS (SELECT 1 FROM dam_reading(d.id, FALSE))
+      AND EXISTS (SELECT 1 FROM dam_reading(t.id, FALSE))
   )`;
 }
 
@@ -633,25 +632,20 @@ export interface StorageChange {
 type StorageChangeWindow = 'h1' | 'h6' | 'h12' | 'd1' | 'd7' | 'd30' | 'd365' | 'd1825';
 
 /**
- * One row per lookback window: the latest displayed reading plus the most
- * recent volume-bearing observation at or before (latest − window).
+ * One row per lookback window: the dam's reading (the 貯水量 its page shows,
+ * docs/adr/0002) plus its reading as of (that reading − window).
  *
- * A single LATERAL lookup, so `observations` is planned once. The previous
- * form — 16 scalar subqueries — planned the hypertable 16 times over every
- * chunk (their bound comes from `latest`, so nothing is excluded at plan
- * time): on production (220 chunks) 0.47 s of planning and ~270 MB that glibc
- * then keeps in the backend, so every pooled web connection ended up holding
- * it. This form: 0.1 s and ~50 MB for the same rows.
+ * A single LATERAL over the windows, so `observations` is planned a fixed
+ * number of times however many windows there are. An earlier form — 16
+ * scalar subqueries — planned the hypertable 16 times over every chunk
+ * (their bound comes from `latest`, so nothing is excluded at plan time): on
+ * production (220 chunks) 0.47 s of planning and ~270 MB that glibc then
+ * keeps in the backend, so every pooled web connection ended up holding it.
  */
 export function storageChangeQuery(damId: bigint) {
   return sql`
     WITH latest AS (
-      -- The same row the page displays (#32/#45), not merely the newest one.
-      -- Picking independently here meant the 増減 baseline could come from one
-      -- source while the 貯水量 above it came from another, so the delta was
-      -- measured against a number the reader never sees. It also skipped the
-      -- 'synthetic' exclusion the display path has always applied.
-      SELECT storage_volume_m3, observed_at FROM display_observation(${damId})
+      SELECT storage_volume_m3, observed_at FROM dam_reading(${damId})
     )
     SELECT
       latest.storage_volume_m3::TEXT AS current,
@@ -665,13 +659,7 @@ export function storageChangeQuery(damId: bigint) {
       ('d1', INTERVAL '1 day'), ('d7', INTERVAL '7 days'), ('d30', INTERVAL '30 days'),
       ('d365', INTERVAL '365 days'), ('d1825', INTERVAL '1825 days')
     ) AS w(label, back)
-    LEFT JOIN LATERAL (
-      SELECT o.storage_volume_m3, o.observed_at
-      FROM observations o ${sourceRankJoin()}
-      WHERE o.dam_id = ${damId} AND o.storage_volume_m3 IS NOT NULL
-        AND o.observed_at <= latest.observed_at - w.back
-      ORDER BY ${newestFirst()} LIMIT 1
-    ) o ON TRUE
+    LEFT JOIN LATERAL dam_reading(${damId}, TRUE, NULL, latest.observed_at - w.back) o ON TRUE
   `;
 }
 
@@ -729,7 +717,7 @@ export interface NearbyDam extends DamListItem {
   distanceM: number;
   /** Bearing from the source dam, radians clockwise from north (0=N, π/2=E). */
   bearingRad: number;
-  /** Latest storage_volume_m3 across any source. NULL when no observations exist. */
+  /** 貯水量 of the dam's reading (dam_reading()). NULL when it has none. */
   latestStorageM3: string | null;
   /** Same denominator as LatestObservation.effectiveActiveCapacityM3 — prefers
    *  a trusted, season-aware native rate over the static activeCapacityM3. */
@@ -741,48 +729,61 @@ export async function nearbyDams(
   radiusM: number,
   limit: number,
 ): Promise<NearbyDam[]> {
+  // The nearest `limit` dams first, then one reading each: a LATERAL over
+  // the whole radius computed a reading for every dam inside it.
   return sql<NearbyDam[]>`
+    WITH near AS (
+      SELECT d2.*,
+             ST_Distance(d.location, d2.location)::FLOAT8                    AS distance_m,
+             ST_Azimuth(d.location::geometry, d2.location::geometry)::FLOAT8 AS bearing_rad
+      FROM dams d
+      JOIN dams d2 ON d2.id <> d.id AND ST_DWithin(d.location, d2.location, ${radiusM})
+      WHERE d.id = ${damId}
+      ORDER BY d.location <-> d2.location
+      LIMIT ${limit}
+    )
     SELECT
-      d2.id, d2.slug, d2.name, d2.pref_code AS "prefCode", d2.manager,
-      d2.total_capacity_m3::TEXT  AS "totalCapacityM3",
-      d2.active_capacity_m3::TEXT AS "activeCapacityM3",
+      n.id, n.slug, n.name, n.pref_code AS "prefCode", n.manager,
+      n.total_capacity_m3::TEXT  AS "totalCapacityM3",
+      n.active_capacity_m3::TEXT AS "activeCapacityM3",
       w.slug AS "watershedSlug", w.name AS "watershedName",
-      ST_Y(d2.location::geometry) AS lat, ST_X(d2.location::geometry) AS lng,
-      ST_Distance(d.location, d2.location)::FLOAT8                    AS "distanceM",
-      ST_Azimuth(d.location::geometry, d2.location::geometry)::FLOAT8 AS "bearingRad",
-      latest.storage_volume_m3::TEXT AS "latestStorageM3",
-      effective_active_capacity_m3(
-        d2.active_capacity_m3, latest.storage_volume_m3, latest.storage_rate,
-        COALESCE(sp.trusted_rate_basis, false)
-      )::TEXT AS "effectiveActiveCapacityM3"
-    FROM dams d
-    JOIN dams d2 ON d2.id <> d.id AND ST_DWithin(d.location, d2.location, ${radiusM})
-    LEFT JOIN watersheds w ON w.id = d2.watershed_id
-    LEFT JOIN LATERAL (
-      SELECT storage_volume_m3, storage_rate, source_id
-      FROM display_observation(d2.id)
-    ) latest ON TRUE
-    LEFT JOIN source_priorities sp ON sp.source_id = latest.source_id
-    WHERE d.id = ${damId}
-    ORDER BY d.location <-> d2.location
-    LIMIT ${limit}
+      ST_Y(n.location::geometry) AS lat, ST_X(n.location::geometry) AS lng,
+      n.distance_m  AS "distanceM",
+      n.bearing_rad AS "bearingRad",
+      r.storage_volume_m3::TEXT     AS "latestStorageM3",
+      r.effective_capacity_m3::TEXT AS "effectiveActiveCapacityM3"
+    FROM near n
+    LEFT JOIN watersheds w ON w.id = n.watershed_id
+    LEFT JOIN LATERAL dam_reading(n.id) r ON TRUE
+    ORDER BY n.distance_m
   `;
 }
 
-/**
- * Latest storage rate per dam id, keyed by `id.toString()` so the result is
- * JSON-safe. rate ∈ [0, 1] when a capacity + 観測値 are both present, null
- * otherwise. LATERAL DISTINCT-ON keeps this cheap even for ~200 ids.
- */
 export interface LatestRateAndSource {
   rate: number | null;
-  /** source_id of the latest non-synthetic observation in the last 30 days, or null. */
+  /** source_id of the dam's reading if it is from the last 30 days, else null. */
   realSourceId: string | null;
 }
 
-/** Variant of latestRateByDam that also returns the latest non-synthetic
- * source_id (within the last 30 days) so the dam list can show a "実測" dot.
- * Same query cost as the plain version + one extra LATERAL join. */
+/**
+ * 貯水率 of each dam's reading (dam_reading(), docs/adr/0002), clipped to
+ * [0, 1], keyed by `id.toString()` so the result is JSON-safe; null without a
+ * volume or a denominator.
+ */
+export async function latestRateByDam(damIds: bigint[]): Promise<Map<string, number | null>> {
+  if (damIds.length === 0) return new Map();
+  const ids = damIds.map((id) => id.toString());
+  const rows = await sql<{ damId: string; rate: number | null }[]>`
+    SELECT d.id::TEXT AS "damId", LEAST(1.0, r.rate::FLOAT8) AS rate
+    FROM dams d
+    LEFT JOIN LATERAL dam_reading(d.id) r ON TRUE
+    WHERE d.id::TEXT = ANY(${ids}::TEXT[])
+  `;
+  return new Map(rows.map((r) => [r.damId, r.rate]));
+}
+
+/** latestRateByDam plus the source of the dam's reading when it is from the
+ * last 30 days, so the dam list can show a "実測" dot. */
 export async function latestRateAndSourceByDam(
   damIds: bigint[],
 ): Promise<Map<string, LatestRateAndSource>> {
@@ -790,69 +791,15 @@ export async function latestRateAndSourceByDam(
   const ids = damIds.map((id) => id.toString());
   const rows = await sql<{ damId: string; rate: number | null; realSourceId: string | null }[]>`
     SELECT
-      d.id::TEXT AS "damId",
-      CASE
-        WHEN eff_cap.value IS NULL OR eff_cap.value <= 0 THEN NULL
-        WHEN latest.storage_volume_m3 IS NULL THEN NULL
-        ELSE LEAST(1.0, latest.storage_volume_m3::FLOAT8 / eff_cap.value::FLOAT8)
-      END               AS rate,
-      real_src.source_id AS "realSourceId"
+      d.id::TEXT                AS "damId",
+      LEAST(1.0, r.rate::FLOAT8) AS rate,
+      recent.source_id          AS "realSourceId"
     FROM dams d
-    LEFT JOIN LATERAL (
-      SELECT storage_volume_m3, storage_rate, source_id
-      FROM display_observation(d.id)
-    ) latest ON TRUE
-    LEFT JOIN source_priorities sp ON sp.source_id = latest.source_id
-    LEFT JOIN LATERAL (
-      SELECT effective_active_capacity_m3(
-        d.active_capacity_m3, latest.storage_volume_m3, latest.storage_rate,
-        COALESCE(sp.trusted_rate_basis, false)
-      ) AS value
-    ) eff_cap ON TRUE
-    LEFT JOIN LATERAL (
-      SELECT o.source_id
-      FROM observations o ${sourceRankJoin()}
-      WHERE o.dam_id = d.id
-        AND o.source_id <> 'synthetic'
-        AND o.observed_at > NOW() - INTERVAL '30 days'
-      ORDER BY ${newestFirst()}
-      LIMIT 1
-    ) real_src ON TRUE
+    LEFT JOIN LATERAL dam_reading(d.id) r ON TRUE
+    LEFT JOIN LATERAL dam_reading(d.id, FALSE, INTERVAL '30 days') recent ON TRUE
     WHERE d.id::TEXT = ANY(${ids}::TEXT[])
   `;
-  const m = new Map<string, LatestRateAndSource>();
-  for (const r of rows) m.set(r.damId, { rate: r.rate, realSourceId: r.realSourceId });
-  return m;
-}
-
-export async function latestRateByDam(damIds: bigint[]): Promise<Map<string, number | null>> {
-  if (damIds.length === 0) return new Map();
-  const ids = damIds.map((id) => id.toString());
-  const rows = await sql<{ damId: string; rate: number | null }[]>`
-    SELECT
-      d.id::TEXT AS "damId",
-      CASE
-        WHEN eff_cap.value IS NULL OR eff_cap.value <= 0 THEN NULL
-        WHEN latest.storage_volume_m3 IS NULL THEN NULL
-        ELSE LEAST(1.0, latest.storage_volume_m3::FLOAT8 / eff_cap.value::FLOAT8)
-      END AS rate
-    FROM dams d
-    LEFT JOIN LATERAL (
-      SELECT storage_volume_m3, storage_rate, source_id
-      FROM display_observation(d.id)
-    ) latest ON TRUE
-    LEFT JOIN source_priorities sp ON sp.source_id = latest.source_id
-    LEFT JOIN LATERAL (
-      SELECT effective_active_capacity_m3(
-        d.active_capacity_m3, latest.storage_volume_m3, latest.storage_rate,
-        COALESCE(sp.trusted_rate_basis, false)
-      ) AS value
-    ) eff_cap ON TRUE
-    WHERE d.id::TEXT = ANY(${ids}::TEXT[])
-  `;
-  const m = new Map<string, number | null>();
-  for (const r of rows) m.set(r.damId, r.rate);
-  return m;
+  return new Map(rows.map((r) => [r.damId, { rate: r.rate, realSourceId: r.realSourceId }]));
 }
 
 export interface LowStorageDam {
@@ -869,13 +816,11 @@ export interface LowStorageDam {
 }
 
 /**
- * Dams whose latest real (non-synthetic) observation has 貯水率 below
- * `thresholdPct`. Uses the same trust-aware denominator as
- * `latestRateByDam` — dividing by the static `active_capacity_m3` here put
- * dams on the drought list at 11 % while their own page, which honours the
- * source's season-aware rate, showed 100 % (issue #38 §2-2). Synthetic seeds
- * are excluded — we only want to alert on genuinely measured low storage,
- * not on the placeholder data.
+ * Dams whose reading (dam_reading(), within 30 days) has a 貯水率 below
+ * `thresholdPct`, over the reading's effective capacity like every other
+ * view — dividing by the static `active_capacity_m3` here once put dams on
+ * the drought list at 11 % while their own page, which honours the source's
+ * season-aware rate, showed 100 % (issue #38 §2-2).
  *
  * Returns at most `limit` rows ordered by rate ascending (worst first).
  */
@@ -885,39 +830,24 @@ export async function lowStorageDams(
 ): Promise<LowStorageDam[]> {
   return sql<LowStorageDam[]>`
     SELECT
-      d.id::TEXT                                     AS id,
+      d.id::TEXT                    AS id,
       d.name,
       d.slug,
-      d.pref_code                                    AS "prefCode",
-      w.slug                                         AS "watershedSlug",
-      w.name                                         AS "watershedName",
-      LEAST(1.0, latest.storage_volume_m3::FLOAT8 / eff_cap.value::FLOAT8) AS rate,
-      latest.storage_volume_m3::TEXT                 AS "storageVolumeM3",
-      latest.observed_at::TEXT                       AS "observedAt",
-      latest.source_id                               AS "sourceId"
+      d.pref_code                   AS "prefCode",
+      w.slug                        AS "watershedSlug",
+      w.name                        AS "watershedName",
+      LEAST(1.0, r.rate::FLOAT8)    AS rate,
+      r.storage_volume_m3::TEXT     AS "storageVolumeM3",
+      r.observed_at::TEXT           AS "observedAt",
+      r.source_id                   AS "sourceId"
     FROM dams d
     LEFT JOIN watersheds w ON w.id = d.watershed_id
-    JOIN LATERAL (
-      -- The 30-day guard goes *inside* the pick: this runs once per dam across
-      -- the whole master, and outside it TimescaleDB loses chunk exclusion and
-      -- reads every dam's full history (1455 ms vs 19 ms on the dev copy). It
-      -- is also where the guard sat before display_observation existed. A dam
-      -- whose newest row is older than 30 days still drops out of the 渇水
-      -- list, because the function then returns nothing.
-      SELECT storage_volume_m3, storage_rate, observed_at, source_id
-      FROM display_observation(d.id, TRUE, INTERVAL '30 days')
-    ) latest ON TRUE
-    LEFT JOIN source_priorities sp ON sp.source_id = latest.source_id
-    LEFT JOIN LATERAL (
-      SELECT effective_active_capacity_m3(
-        d.active_capacity_m3, latest.storage_volume_m3, latest.storage_rate,
-        COALESCE(sp.trusted_rate_basis, false)
-      ) AS value
-    ) eff_cap ON TRUE
-    WHERE eff_cap.value IS NOT NULL
-      AND eff_cap.value > 0
-      AND (latest.storage_volume_m3::FLOAT8 / eff_cap.value::FLOAT8)
-          < ${thresholdPct / 100.0}
+    -- The 30-day window goes *into* the reading: this runs once per dam
+    -- across the whole master, and filtered afterwards TimescaleDB loses
+    -- chunk exclusion and reads every dam's full history (1455 ms vs 19 ms
+    -- on the dev copy). A dam whose reading is older drops off the list.
+    JOIN LATERAL dam_reading(d.id, TRUE, INTERVAL '30 days') r ON TRUE
+    WHERE r.rate < ${thresholdPct / 100.0}
     ORDER BY rate ASC
     LIMIT ${limit}
   `;

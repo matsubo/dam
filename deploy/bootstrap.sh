@@ -2,7 +2,13 @@
 # Web container boot sequence: migrate → seed-if-empty (or force) → start.
 # Idempotent — safe to run on every restart.
 #
-# Force flags (set in the Coolify env, then UNSET after the deploy succeeds):
+# Force flags: set them on the dam-web Deployment, never in Secret dam-env (see
+# deploy/k8s.yaml), and remove them after the run succeeds:
+#   kubectl -n dam set env deploy/dam-web BOOTSTRAP_FORCE_MASTER=1
+#   kubectl -n dam set env deploy/dam-web BOOTSTRAP_FORCE_MASTER-
+# Each `set env` rolls the Deployment, and every new web pod (two replicas)
+# runs the flag in turn. A flag left set survives the workflow's
+# `kubectl apply`, so it would re-run on every deploy.
 #   BOOTSTRAP_FORCE_MASTER=1       — TRUNCATE master tables and re-restore
 #                                    /seed/master.sql.gz, even when dams is
 #                                    non-empty. Use to push a fresh local
@@ -57,17 +63,9 @@
 # the web app from serving — better to start with whatever data we have and
 # let the operator re-trigger the seed manually.
 
-# Capture key bootstrap output to a file Next.js can serve so an operator
-# without `docker exec` can read it via HTTPS:
-#   curl https://dam.teraren.com/bootstrap.txt
-# We can't use `exec > >(tee ...)` (process substitution needs bash and
-# this shell is sh/dash); instead, individual operations append to the log.
-BOOTSTRAP_LOG=/app/apps/web/public/bootstrap.txt
-mkdir -p "$(dirname "${BOOTSTRAP_LOG}")"
-: > "${BOOTSTRAP_LOG}" 2>/dev/null || true
+# Output goes to the web pod's log: `kubectl -n dam logs <dam-web pod>`.
 log() {
   echo "$@"
-  echo "$@" >>"${BOOTSTRAP_LOG}" 2>/dev/null || true
 }
 
 log "[bootstrap] $(date -u +%FT%TZ) starting"
@@ -140,7 +138,7 @@ fi
 # and converges prod's master rows to the bundled snapshot without touching
 # observations. No env flag required so a normal redeploy is enough to
 # refresh master metadata after a Damnet re-crawl. Add stdout+stderr capture
-# so the operator can inspect what changed in `coolify application_logs`.
+# so the operator can inspect what changed in `kubectl -n dam logs deploy/dam-web`.
 if [ -f /seed/master_upsert.sql.gz ]; then
   log "[bootstrap] applying /seed/master_upsert.sql.gz (idempotent UPSERT, observations preserved)"
   upsert_log=$(gunzip -c /seed/master_upsert.sql.gz | psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q 2>&1)
@@ -150,13 +148,23 @@ if [ -f /seed/master_upsert.sql.gz ]; then
     log "[bootstrap] dams.count after upsert = '${dams}'"
   else
     log "[bootstrap] master upsert FAILED (status=${upsert_status}, non-fatal):"
-    # Tee the first 30 error lines into the bootstrap log so we can inspect
-    # what postgres rejected without docker exec.
+    # Log the first 30 error lines so the pod log shows what postgres
+    # rejected.
     echo "${upsert_log}" | head -30 | while IFS= read -r line; do
       log "  ${line}"
     done
   fi
 fi
+
+# Write every declared source's source_priorities row (docs/adr/0001). After
+# the seed restore and upsert, which both carry rows of their own, so the
+# declarations have the last word.
+if ! sources_log=$(bun run --filter @dam/db sources sync 2>&1); then
+  log "[bootstrap] source sync FAILED (non-fatal):"
+fi
+echo "${sources_log}" | head -10 | while IFS= read -r line; do
+  log "  ${line}"
+done
 
 obs=$(count_or_empty "SELECT COUNT(*) FROM observations")
 log "[bootstrap] observations.count = '${obs}'"
@@ -257,20 +265,13 @@ if [ "${kick}" = "1" ]; then
   run_kick_step "drop_stuck_jobs" \
     "DELETE FROM graphile_worker._private_jobs WHERE attempts >= 3;"
 
-  # 3. Enqueue the cheap live-ingest jobs so prod gets fresh observation
-  # data without waiting for the next cron tick. These are small (one HTTP
-  # fetch each) and finish in seconds. Keyed like their cron line, so the
-  # next tick replaces a kick that is still retrying (see packages/core/src/crontab.ts).
-  for task in \
-    ingest:tokyo-waterworks ingest:jwa-junpo ingest:aitoyo \
-    ingest:jwa-chikugo ingest:kanagawa-dam ingest:shiga-bousai ingest:tottori-dam \
-    ingest:aomori-dam ingest:hkd-mlit-dam ingest:cgr-mlit-dam ingest:ktr-kinu-dam \
-    ingest:hrr-mlit-dam ingest:kasenbosai-v2 ingest:chiba-suisei ingest:okayama-bousai \
-    ingest:hyogo-bodik ingest:tochigi-bodik ingest:hiroshima-bousai ingest:osaka-bousai \
-    ingest:tottori-bousai ingest:fukuoka-bodik ingest:shimane-bousai ingest:jwa-toneara \
-    ingest:jwa-chubu ingest:jwa-toyokawa ingest:jwa-yoshino ingest:jwa-kiso-rt; do
-    run_kick_step "enqueue_${task}" \
-      "SELECT graphile_worker.add_job('${task}', '{}'::json, job_key := '${task}');"
+  # 3. Enqueue every active source's ingest task so prod gets fresh
+  # observation data without waiting for the next cron tick.
+  if ! kick_log=$(bun run --filter @dam/db sources kick 2>&1); then
+    log "[bootstrap] kick.enqueue_ingest FAILED:"
+  fi
+  echo "${kick_log}" | head -10 | while IFS= read -r line; do
+    log "  ${line}"
   done
 
   # 一回限り: 川の防災情報 (kasenbosai) ダムカタログを scrape して

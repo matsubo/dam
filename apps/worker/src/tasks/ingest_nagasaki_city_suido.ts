@@ -27,12 +27,8 @@
 // Priority 293: nothing else publishes 浦上. Cron daily 06:52 UTC (15:52 JST),
 // after the Tuesday update.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const PAGE_URL =
   process.env.NAGASAKI_CITY_SUIDO_URL ?? 'https://www.city.nagasaki.lg.jp/page/53407.html';
@@ -53,7 +49,8 @@ const SOURCE_ID = 'nagasaki-city-suido';
  * 1,900,000 is the （元）'s 有効 exactly; the （再） (NDI 2601) is the planned
  * 2,330,000 dam. Pinned rather than left to the twin rule so a completion year
  * the master refresh might write for the （再） cannot move 浦上 before the city
- * does; WRITE below stops the run if the page's 水道有効量 moves off 1,900,000.
+ * does; WRITE below stops writing 浦上 if the page's 水道有効量 moves off
+ * 1,900,000.
  *
  * 小ケ倉 → 小ヶ倉 (NDI 2609), the 長崎市上戸町 dam of the 小ケ倉浄水場 — pref 42
  * has a second 小ヶ倉 (NDI 2592, 諌早市小ヶ倉町).
@@ -138,143 +135,60 @@ export function parseNagasakiDamList(html: string): ParsedPage {
   return { observedAt, rows };
 }
 
-// --- matching ---------------------------------------------------------------
-
-export interface NagasakiMaster extends BindableMaster {
-  ndi: string | null;
-}
-
-/** Name without （元）/（再）, ダム, or the ヶ/ケ spelling difference. */
-function stemOf(s: string): string {
-  return s
-    .normalize('NFKC')
-    .replace(/\((?:元|再)\)$/, '')
-    .replace(/ダム$/, '')
-    .replace(/ヶ/g, 'ケ')
-    .trim();
-}
-
-/** The NDI pin, else the stamped row, else the dam of the same name (twin rule). */
-export function chooseMaster(name: string, masters: NagasakiMaster[]): bigint | null {
-  const pin = NDI_PINS[name];
-  if (pin) return masters.find((m) => m.ndi === pin)?.id ?? null;
-  const stamped = stampedMaster(masters, name);
-  if (stamped) return stamped.id;
-  const stem = stemOf(name);
-  let best: NagasakiMaster | null = null;
-  for (const m of masters) {
-    if (stemOf(m.name) !== stem) continue;
-    if (!best || preferMaster(m, best)) best = m;
+/** A row's reading: 休止中 is the city's own mark. */
+export function nagasakiCityReading(observedAt: Date, row: ParsedRow): Reading {
+  if (row.suspended) return { state: 'empty', mark: '休止中' };
+  if (row.storageVolumeM3 === null && row.storageRate === null) {
+    return { state: 'unreadable', why: 'no 貯水量 or 貯水率' };
   }
-  return best?.id ?? null;
+  return {
+    state: 'values',
+    observations: [
+      { observedAt, storageVolumeM3: row.storageVolumeM3, storageRate: row.storageRate },
+    ],
+  };
 }
 
-// --- DB helpers -------------------------------------------------------------
-
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 293,
-            '長崎市上下水道局 長崎市ダム貯水量一覧表 — 浦上 (週次 HTML, 貯水量+貯水率)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
+/** Why a row is recorded but not written, or null for a WRITE row that still fits. */
+function notWritten(row: ParsedRow): string | null {
+  const want = WRITE[row.name];
+  if (!want) return "kasenbosai / nagasaki-kasen cover it; 水道有効量 is the city's share";
+  // The pinned binding no longer fits the page (浦上's 再開発 finishing
+  // would drop it to ~1,200,000): fix NDI_PINS/WRITE before writing again.
+  if (row.capacityM3 !== want.capacityM3) {
+    return `水道有効量 ${row.capacityM3} (binding assumes ${want.capacityM3}) — re-check NDI_PINS`;
+  }
+  return null;
 }
 
-// --- task -------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
-  const r = await fetch(PAGE_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
+/**
+ * Every dam row. Pinned rows bind by NDI; the rest by exact name (a （元）/
+ * （再） pair goes to the live twin). Only WRITE rows are written.
+ */
+export function nagasakiCityEntries(observedAt: Date, rows: ParsedRow[]): Entry[] {
+  return rows.map((row): Entry => {
+    const pin = NDI_PINS[row.name];
+    const dontWrite = notWritten(row);
+    return {
+      key: row.name,
+      name: row.name,
+      pref: PREF_CODE,
+      bind: pin ? { ndi: pin } : { exact: true },
+      ...(dontWrite ? { dontWrite } : {}),
+      reading: nagasakiCityReading(observedAt, row),
+    };
   });
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
-  }
+}
 
-  const { observedAt, rows } = parseNagasakiDamList(await r.text());
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const { observedAt, rows } = parseNagasakiDamList((await upstream.fetch(PAGE_URL)).text());
   log(`${SOURCE_ID}: parsed ${rows.length} dams, 現在 ${observedAt?.toISOString() ?? 'missing'}`);
   if (!observedAt || rows.length === 0) {
     throw new Error(
       `${SOURCE_ID}: ${rows.length} dams / date ${observedAt ? 'found' : 'missing'} on ${PAGE_URL} — layout change?`,
     );
   }
-
-  const masters = await sql<NagasakiMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>'ndi' AS ndi,
-           external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  const drift: string[] = [];
-  for (const p of rows) {
-    const damId = chooseMaster(p.name, masters);
-    const row: UniverseRow = {
-      externalId: p.name,
-      name: p.name,
-      prefCode: PREF_CODE,
-      resolvedDamId: damId,
-      // 休止中 is the city saying the dam has no readings; a blank cell on a
-      // live dam stays unknown, since that may be our parser.
-      hasData: p.suspended ? false : null,
-    };
-    universe.push(row);
-    const want = WRITE[p.name];
-    if (!want) continue;
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${p.name}"`);
-      continue;
-    }
-    if (p.capacityM3 !== want.capacityM3) {
-      drift.push(`${p.name} 水道有効量 ${p.capacityM3} (binding assumes ${want.capacityM3})`);
-      continue;
-    }
-    await bindExternalId(damId, SOURCE_ID, p.name);
-    if (p.storageVolumeM3 === null && p.storageRate === null) continue;
-    // The 「…現在」 date is the newest value the city publishes: holding it
-    // keeps 浦上 covered while the weekly table lapses (8月24日 on 2026-10-02).
-    row.publishedAt = observedAt;
-    inputs.push({
-      observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: p.storageRate,
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: null,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-  await recordUniverse(SOURCE_ID, universe);
-
-  const written = await upsertObservations(inputs);
-  log(
-    `${SOURCE_ID} done: parsed=${rows.length} matched=${universe.filter((u) => u.resolvedDamId).length} written=${written}`,
-  );
-
-  if (drift.length > 0) {
-    // The pinned binding no longer fits the page (浦上's 再開発 finishing
-    // would drop it to ~1,200,000): fix NDI_PINS/WRITE before writing again.
-    throw new Error(`${SOURCE_ID}: ${drift.join('; ')} — re-check NDI_PINS`);
-  }
-};
-
-export default task;
+  // The 「…現在」 date is the newest value the city publishes: holding it
+  // keeps 浦上 covered while the weekly table lapses (8月24日 on 2026-10-02).
+  return { entries: nagasakiCityEntries(observedAt, rows), dated: true };
+});

@@ -17,7 +17,10 @@
 //     waterRate:       "XX.X" (%)
 //     inflow:          "XX.XX" (m³/s) or "休止中"
 //     totalDischarge:  "XX.XX" (m³/s) or "休止中"
-//   Aggregate entries (obsCD=8 "5ダム" and obsCD=29 "9ダム") are excluded.
+//   "休止中" / "-" is the office's own "no value"; a dam with it in every
+//   stored field is provider-marked empty.
+//   Aggregate entries (obsCD=8 "5ダム" and obsCD=29 "9ダム") sum dams already
+//   listed on the same feed: they are not universe entries and are skipped.
 //
 // Note: 下久保ダム is also covered by the shimokubo adapter (priority 297,
 // 10-minute resolution from a JWA telemetry feed). This adapter (priority 303)
@@ -26,11 +29,9 @@
 //
 // Priority 303. Cron hourly at :20.
 
-import { type BindableMaster, preferMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const DATA_URL =
   process.env.KTR_TONE_DAM_URL ??
@@ -44,26 +45,37 @@ interface DamCfg {
   officeCD: string;
   observationCD: string;
   name: string;
-  prefCodes: string[];
+  /** Prefecture(s) of the master dam. */
+  pref: string | string[];
+  /** The master's name, where the ladder on the printed name cannot reach it. */
+  masterName?: string;
 }
 
-// Aggregate entries (5ダム: obsCD=8, 9ダム: obsCD=29) are intentionally omitted.
 const DAM_CONFIG: DamCfg[] = [
-  { officeCD: '21289', observationCD: '1', name: '矢木沢ダム', prefCodes: ['10'] },
-  { officeCD: '21289', observationCD: '2', name: '奈良俣ダム', prefCodes: ['10'] },
-  { officeCD: '21289', observationCD: '3', name: '藤原ダム', prefCodes: ['10'] },
-  { officeCD: '21289', observationCD: '4', name: '相俣ダム', prefCodes: ['10'] },
-  { officeCD: '21289', observationCD: '5', name: '薗原ダム', prefCodes: ['10'] },
-  { officeCD: '21289', observationCD: '27', name: '八ッ場ダム', prefCodes: ['10'] },
-  { officeCD: '21289', observationCD: '6', name: '下久保ダム', prefCodes: ['10', '11'] },
-  { officeCD: '21289', observationCD: '7', name: '草木ダム', prefCodes: ['10'] },
+  { officeCD: '21289', observationCD: '1', name: '矢木沢ダム', pref: '10' },
+  { officeCD: '21289', observationCD: '2', name: '奈良俣ダム', pref: '10' },
+  { officeCD: '21289', observationCD: '3', name: '藤原ダム', pref: '10' },
+  { officeCD: '21289', observationCD: '4', name: '相俣ダム', pref: '10' },
+  { officeCD: '21289', observationCD: '5', name: '薗原ダム', pref: '10' },
+  { officeCD: '21289', observationCD: '27', name: '八ッ場ダム', pref: '10' },
+  { officeCD: '21289', observationCD: '6', name: '下久保ダム', pref: ['10', '11'] },
+  { officeCD: '21289', observationCD: '7', name: '草木ダム', pref: '10' },
+  // 渡良瀬貯水池 (谷中湖) is the reservoir of the master's 渡良瀬遊水地（一期）
+  // (NDI 614, 群馬): its 26,400 千m³ at 100.0 % is that dam's 有効貯水容量.
   {
     officeCD: '21259',
     observationCD: '1',
     name: '渡良瀬貯水池',
-    prefCodes: ['09', '10', '11', '08'],
+    pref: ['09', '10', '11', '08'],
+    masterName: '渡良瀬遊水地',
   },
 ];
+
+/** Aggregate rows (5ダム: obsCD=8, 9ダム: obsCD=29): sums of dams listed alongside. */
+const AGGREGATES: Record<string, true> = { '21289/8': true, '21289/29': true };
+
+/** Where a dam the feed adds would be: every prefecture configured above. */
+const PREF_CODES = [...new Set(DAM_CONFIG.flatMap((d) => [d.pref].flat()))];
 
 /** Lookup key used to match damDataList entries to DAM_CONFIG. */
 function damKey(officeCD: string, observationCD: string): string {
@@ -91,17 +103,8 @@ interface DamEntry {
   dataList?: DataPoint[];
 }
 
-interface ToneDamJson {
+export interface ToneDamJson {
   damDataList?: DamEntry[];
-}
-
-export interface ParsedRow {
-  toneName: string;
-  observedAt: Date;
-  storageVolumeM3: number | null;
-  storageRate: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
 }
 
 // --- parsing -----------------------------------------------------------------
@@ -117,195 +120,90 @@ export function parseToneTimestamp(ts: string): Date | null {
 }
 
 /**
- * Parse a value string that may contain commas ("43,918"), decimal points,
- * or non-numeric text ("休止中", "---"). Returns null for non-numeric values.
+ * Parse a value string that may contain commas ("43,918") or decimal points;
+ * "休止中" / "-" / "---" are the office's marks, other text is unread.
  */
-function parseVal(s: string | undefined): number | null {
-  if (!s) return null;
+function parseVal(s: string | undefined): Cell {
+  if (s == null) return null;
   const cleaned = s.replace(/,/g, '').trim();
+  if (cleaned === '休止中' || /^-+$/.test(cleaned)) return MARKED;
+  if (!cleaned) return null;
   const n = Number(cleaned);
   return Number.isFinite(n) ? n : null;
 }
 
-export function parseToneDamJson(json: ToneDamJson): ParsedRow[] {
-  const rows: ParsedRow[] = [];
+/** The latest point of one damDataList entry. */
+export function toneReading(entry: DamEntry): Reading {
+  const dp = entry.dataList?.[0];
+  if (!dp?.observationTime) return { state: 'unreadable', why: 'no dataList[0].observationTime' };
+  const observedAt = parseToneTimestamp(dp.observationTime);
+  if (!observedAt) return { state: 'unreadable', why: `observationTime "${dp.observationTime}"` };
 
-  for (const entry of json.damDataList ?? []) {
-    const key = damKey(entry.officeCD ?? '', entry.observationCD ?? '');
-    const cfg = DAM_MAP.get(key);
-    if (!cfg) continue; // aggregate or unknown entry
-
-    const dp = entry.dataList?.[0];
-    if (!dp?.observationTime) continue;
-
-    const observedAt = parseToneTimestamp(dp.observationTime);
-    if (!observedAt) continue;
-
-    const capThousandM3 = parseVal(dp.waterCapacity);
-    const storageVolumeM3 = capThousandM3 !== null ? capThousandM3 * 1000 : null;
-    const ratePct = parseVal(dp.waterRate);
-    const storageRate = ratePct !== null ? Math.max(0, Math.min(1, ratePct / 100)) : null;
-    const inflowM3s = parseVal(dp.inflow);
-    const outflowM3s = parseVal(dp.totalDischarge);
-
-    if (
-      storageVolumeM3 === null &&
-      storageRate === null &&
-      inflowM3s === null &&
-      outflowM3s === null
-    ) {
-      continue;
-    }
-
-    rows.push({
-      toneName: cfg.name,
-      observedAt,
-      storageVolumeM3,
-      storageRate,
-      inflowM3s,
-      outflowM3s,
-    });
-  }
-
-  return rows;
-}
-
-// --- DB helpers --------------------------------------------------------------
-
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 303,
-            '国土交通省 関東地方整備局 利根川ダム統合管理事務所 — 9 国管理ダム hourly JSON',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/貯水池$/, '')
-    .trim();
-}
-
-interface DamMatch {
-  toneName: string;
-  damId: bigint;
+  const capThousandM3 = parseVal(dp.waterCapacity);
+  const ratePct = parseVal(dp.waterRate);
+  const inflow = parseVal(dp.inflow);
+  const outflow = parseVal(dp.totalDischarge);
+  const state = cellState([capThousandM3, ratePct, inflow, outflow]);
+  if (state === 'empty') return { state, mark: '休止中 in every field' };
+  if (state === 'unreadable') return { state, why: 'no numeric field' };
+  const thou = numberIn(capThousandM3);
+  const pct = numberIn(ratePct);
+  return {
+    state: 'values',
+    observations: [
+      {
+        observedAt,
+        storageVolumeM3: thou !== null ? thou * 1000 : null,
+        storageRate: pct !== null ? Math.max(0, Math.min(1, pct / 100)) : null,
+        inflowM3s: numberIn(inflow),
+        outflowM3s: numberIn(outflow),
+      },
+    ],
+  };
 }
 
 /**
- * Match every dam in DAM_CONFIG, not just the ones the current fetch
- * returned. DAM_CONFIG *is* the feed's published catalogue (minus the 5ダム /
- * 9ダム aggregates), so walking it keeps `source_universe` complete on a run
- * where a dam reports 休止中 and gets dropped during parsing; the match
- * depends only on the configured name and prefectures, never on the values.
+ * Every damDataList entry, then every configured dam the feed leaves out
+ * (unreadable), so the universe stays complete on a run where one is missing.
  */
-async function matchMaster(log: (s: string) => void): Promise<DamMatch[]> {
-  const out: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-
-  for (const cfg of DAM_CONFIG) {
-    const stem = normalizeName(cfg.name);
-    if (!stem) continue;
-
-    const masters = await sql<BindableMaster[]>`
-      SELECT id, name, completed_year AS "completedYear"
-      FROM dams WHERE pref_code = ANY(${cfg.prefCodes}::text[]) ORDER BY id
-    `;
-
-    // Equal-rank ties go to the current （元）/（再） twin, else the lower id
-    // (#79). This source writes no station stamp.
-    let best: { m: BindableMaster; rank: number } | null = null;
-    for (const m of masters) {
-      const mStem = normalizeName(m.name);
-      let rank: number;
-      if (m.name === cfg.name) rank = 0;
-      else if (mStem === stem) rank = 1;
-      else if (m.name === `${stem}ダム`) rank = 2;
-      else if (mStem.startsWith(stem)) rank = 3;
-      else if (mStem.includes(stem)) rank = 4;
-      else continue;
-      if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-        best = { m, rank };
-      }
-    }
-
-    // officeCD/observationCD is the feed's own station id.
-    universe.push({
-      externalId: damKey(cfg.officeCD, cfg.observationCD),
-      name: cfg.name,
-      prefCode: cfg.prefCodes[0] ?? null,
-      resolvedDamId: best?.m.id ?? null,
+export function toneEntries(json: ToneDamJson): Entry[] {
+  const entries: Entry[] = [];
+  const seen = new Set<string>();
+  for (const e of json.damDataList ?? []) {
+    const key = damKey(e.officeCD ?? '', e.observationCD ?? '');
+    if (AGGREGATES[key]) continue;
+    const cfg = DAM_MAP.get(key);
+    const name = e.observationName?.trim() || cfg?.name || key;
+    seen.add(key);
+    // The configured name is the one matched on when the printed name drifts.
+    const bindName = cfg?.masterName ?? (cfg && cfg.name !== name ? cfg.name : null);
+    entries.push({
+      key,
+      name,
+      pref: cfg?.pref ?? PREF_CODES,
+      ...(bindName ? { bind: { name: bindName } } : {}),
+      reading: toneReading(e),
     });
-
-    if (!best) {
-      log(`${SOURCE_ID}: no master match for "${cfg.name}" (prefs: ${cfg.prefCodes.join(',')})`);
-      continue;
-    }
-    out.push({ toneName: cfg.name, damId: best.m.id });
   }
-
-  await recordUniverse(SOURCE_ID, universe);
-  return out;
+  for (const cfg of DAM_CONFIG) {
+    const key = damKey(cfg.officeCD, cfg.observationCD);
+    if (seen.has(key)) continue;
+    entries.push({
+      key,
+      name: cfg.name,
+      pref: cfg.pref,
+      ...(cfg.masterName ? { bind: { name: cfg.masterName } } : {}),
+      reading: { state: 'unreadable', why: 'not in damDataList' },
+    });
+  }
+  return entries;
 }
 
 // --- task --------------------------------------------------------------------
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
-  const r = await fetch(DATA_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
-  }
-
-  // Strip UTF-8 BOM if present before JSON parsing
-  const raw = await r.text();
-  const json = JSON.parse(raw.replace(/^﻿/, '')) as ToneDamJson;
-  const rows = parseToneDamJson(json);
-  log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
-
-  const matches = await matchMaster(log);
-  const damByName = new Map(matches.map((m) => [m.toneName, m.damId]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = damByName.get(p.toneName);
-    if (!damId) continue;
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: p.storageRate,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: null,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  // The file may start with a UTF-8 BOM; json() decodes past it.
+  const entries = toneEntries((await upstream.fetch(DATA_URL)).json<ToneDamJson>());
+  log(`${SOURCE_ID}: ${entries.length} rows`);
+  return { entries };
+});

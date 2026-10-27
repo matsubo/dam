@@ -17,15 +17,14 @@
 //   storage_rate   — 貯水率[%]     → storageRate ÷ 100  (clamped 0–1)
 //   inflow         — 流入量[m³/s]
 //   discharge      — 全放流量[m³/s]
+// A value the portal does not show is an explicit null (粟井ダム, every value
+// null with displaykind -1, 2026-10-27): the portal's own blank.
 //
 // Priority 308. Cron hourly at :39.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const DATA_URL =
   process.env.KAGAWA_BOUSAI_URL ?? 'https://www.bousai-kagawa.jp/bousai_data/tm/dam_station.json';
@@ -35,24 +34,14 @@ const SOURCE_ID = 'kagawa-bousai';
 
 // --- types ------------------------------------------------------------------
 
-export interface ParsedRow {
-  kagawaName: string;
-  observedAt: Date | null;
-  storageRate: number | null;
-  storageVolumeM3: number | null;
-  waterLevelM: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
-}
-
 interface KagawaItem {
   station_name: string;
   obs_datetime: string;
-  store: number | null;
-  stored: number | null;
-  storage_rate: number | null;
-  inflow: number | null;
-  discharge: number | null;
+  store?: number | null;
+  stored?: number | null;
+  storage_rate?: number | null;
+  inflow?: number | null;
+  discharge?: number | null;
 }
 
 interface KagawaJson {
@@ -72,182 +61,55 @@ export function parseKagawaTimestamp(s: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function toNum(v: number | null | undefined): number | null {
-  return v != null && Number.isFinite(v) ? v : null;
+/** An explicit null is the portal's blank; a missing field is not. */
+function valueCell(v: number | null | undefined): Cell {
+  return cell(v, v === null);
 }
 
-export function parseKagawaItems(json: KagawaJson): ParsedRow[] {
-  const rows: ParsedRow[] = [];
-
-  for (const it of json.items ?? []) {
-    const damName = it.station_name?.trim();
-    if (!damName) continue;
-
-    const observedAt = parseKagawaTimestamp(it.obs_datetime ?? '');
-    const ratePct = toNum(it.storage_rate);
-    const volRaw = toNum(it.stored);
-
-    rows.push({
-      kagawaName: damName,
-      observedAt,
-      storageRate: ratePct != null ? Math.max(0, Math.min(1, ratePct / 100)) : null,
-      storageVolumeM3: volRaw != null ? volRaw * 1000 : null,
-      waterLevelM: toNum(it.store),
-      inflowM3s: toNum(it.inflow),
-      outflowM3s: toNum(it.discharge),
-    });
-  }
-
-  return rows;
-}
-
-// --- DB helpers -------------------------------------------------------------
-
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 308,
-            'かがわ防災Webポータル ダム諸量 — 18 ダム hourly JSON',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/貯水池$/, '')
-    .trim();
-}
-
-interface DamMatch {
-  kagawaName: string;
-  damId: bigint;
+function itemReading(it: KagawaItem): Reading {
+  const level = valueCell(it.store);
+  const volume = valueCell(it.stored);
+  const rate = valueCell(it.storage_rate);
+  const inflow = valueCell(it.inflow);
+  const outflow = valueCell(it.discharge);
+  const state = cellState([level, volume, rate, inflow, outflow]);
+  if (state === 'empty') return { state, mark: 'every value null' };
+  if (state === 'unreadable') return { state, why: 'no numeric value' };
+  const observedAt = parseKagawaTimestamp(it.obs_datetime ?? '');
+  if (!observedAt) return { state: 'unreadable', why: `obs_datetime "${it.obs_datetime}"` };
+  const ratePct = numberIn(rate);
+  const volRaw = numberIn(volume);
+  return {
+    state,
+    observations: [
+      {
+        observedAt,
+        storageRate: ratePct != null ? Math.max(0, Math.min(1, ratePct / 100)) : null,
+        storageVolumeM3: volRaw != null ? volRaw * 1000 : null,
+        waterLevelM: numberIn(level),
+        inflowM3s: numberIn(inflow),
+        outflowM3s: numberIn(outflow),
+      },
+    ],
+  };
 }
 
 /**
- * Best master dam for a published station name. The row already stamped with
- * the name keeps it: names alone cannot settle （元）/（再） twins (#79).
- * 長柄 and 五名 are stamped on the （元）, the dams in service; both （再） are
- * 建設中 per the prefecture (0071).
- * Otherwise an exact raw-name hit beats stem equality, then the `〜ダム`
- * spelling, a prefix, a substring; ties go to the current twin, else the
- * lower id.
+ * Every listed dam. The feed's station_no is not the key: the published name
+ * has been, so existing stamps carry it.
  */
-export function chooseMaster(kagawaName: string, masters: BindableMaster[]): bigint | null {
-  const stamped = stampedMaster(masters, kagawaName);
-  if (stamped) return stamped.id;
-  const stem = normalizeName(kagawaName);
-  if (!stem) return null;
-  let best: { m: BindableMaster; rank: number } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (m.name === kagawaName) rank = 0;
-    else if (mStem === stem) rank = 1;
-    else if (m.name === `${stem}ダム`) rank = 2;
-    else if (mStem.startsWith(stem)) rank = 3;
-    else if (mStem.includes(stem)) rank = 4;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-      best = { m, rank };
-    }
+export function kagawaEntries(json: KagawaJson): Entry[] {
+  const entries: Entry[] = [];
+  for (const it of json.items ?? []) {
+    const name = it.station_name?.trim();
+    if (!name) continue;
+    entries.push({ key: name, name, pref: PREF_CODE, reading: itemReading(it) });
   }
-  return best?.m.id ?? null;
+  return entries;
 }
 
-async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const out: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing.
-  const universe: UniverseRow[] = [];
-
-  for (const r of rows) {
-    if (!normalizeName(r.kagawaName)) continue;
-    const damId = chooseMaster(r.kagawaName, masters);
-    // The feed publishes no station id, so the published name plus the
-    // prefecture is the stable key.
-    universe.push({
-      externalId: r.kagawaName,
-      name: r.kagawaName,
-      prefCode: PREF_CODE,
-      resolvedDamId: damId,
-    });
-
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${r.kagawaName}"`);
-      continue;
-    }
-    out.push({ kagawaName: r.kagawaName, damId });
-    await bindExternalId(damId, SOURCE_ID, r.kagawaName);
-  }
-
-  await recordUniverse(SOURCE_ID, universe);
-  return out;
-}
-
-// --- task -------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
-  const r = await fetch(DATA_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
-  }
-
-  const json = (await r.json()) as KagawaJson;
-  const rows = parseKagawaItems(json);
-  log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
-
-  const matches = await matchMaster(rows, log);
-  const damByName = new Map(matches.map((m) => [m.kagawaName, m.damId]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = damByName.get(p.kagawaName);
-    if (!damId) continue;
-    if (!p.observedAt) {
-      log(`${SOURCE_ID}: missing timestamp for "${p.kagawaName}"; skipping`);
-      continue;
-    }
-    if (p.waterLevelM === null && p.storageVolumeM3 === null) continue;
-
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: p.storageVolumeM3,
-      storageRate: p.storageRate,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const entries = kagawaEntries((await upstream.fetch(DATA_URL)).json<KagawaJson>());
+  log(`${SOURCE_ID}: ${entries.length} dams listed`);
+  return { entries };
+});

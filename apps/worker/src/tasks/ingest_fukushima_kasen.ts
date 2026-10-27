@@ -18,15 +18,14 @@
 //   time      = "YYYY-MM-DD-HH-mm" (JST)
 //
 // Station-to-name mapping derived by matching water-level values against the
-//   HTML table at /web_pub/dam/010401_60_1_0.html.
+//   HTML table at /web_pub/dam/010401_60_1_0.html (re-checked 2026-10-27).
+// "*", "**", "--", "---" are the feed's own blanks.
 //
 // Priority 308. Cron hourly at :34.
 
-import { type BindableMaster, preferMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { type Cell, cell, cellState, MARKED, numberIn } from '../ingest/cells.ts';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
 
 const BASE_URL =
   process.env.FUKUSHIMA_KASEN_URL ?? 'https://kaseninf.pref.fukushima.jp/dyn/json/dat/pc';
@@ -35,7 +34,6 @@ const PREF_CODE = '07';
 const SOURCE_ID = 'fukushima-kasen';
 
 // --- station map (type-7 dam IDs → prefectural dam names) ------------------
-// Skip: 1799_7_3 (桧原湖), 1799_7_23 / 1799_7_21 / 1799_7_22 (natural lakes / 水門).
 
 const STATION_MAP: Readonly<Record<string, string>> = {
   '1797_7_1': 'こまちダム',
@@ -51,16 +49,16 @@ const STATION_MAP: Readonly<Record<string, string>> = {
   '1801_7_1': '田島ダム',
 };
 
-// --- types ------------------------------------------------------------------
+// The same table also lists three natural lakes and a 水門 (猪苗代湖's outlet
+// gate), matched by water level the same way: recorded, never bound to a dam.
+const NOT_DAMS: Readonly<Record<string, string>> = {
+  '1799_7_21': '桧原湖',
+  '1799_7_22': '小野川湖',
+  '1799_7_23': '秋元湖',
+  '1799_7_3': '十六橋水門',
+};
 
-export interface ParsedRow {
-  fukushimaName: string;
-  observedAt: Date;
-  waterLevelM: number | null;
-  inflowM3s: number | null;
-  outflowM3s: number | null;
-  rainfallMm: number | null;
-}
+// --- types ------------------------------------------------------------------
 
 interface ItemVal {
   val?: string;
@@ -97,10 +95,10 @@ export function parseFukushimaTimestamp(ts: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function parseVal(s: string | undefined): number | null {
-  if (!s || s === '*' || s === '--' || s === '---' || s === '**') return null;
-  const n = Number(s.replace(/,/g, ''));
-  return Number.isFinite(n) ? n : null;
+/** A value: "*", "**", "--", "---" are the feed's own marks. */
+function valueCell(s: string | undefined): Cell {
+  if (s === '*' || s === '**' || s === '--' || s === '---') return MARKED;
+  return cell(s ? Number(s.replace(/,/g, '')) : null, false);
 }
 
 /** Build the data JSON URL for the given UTC wall-clock moment. */
@@ -113,170 +111,71 @@ export function buildFukushimaUrl(nowUtc: Date, baseUrl: string): string {
   return `${baseUrl}/${ds}/${ds}_1_dam_60.json`;
 }
 
-export function parseFukushimaJson(json: FukushimaJson): ParsedRow[] {
-  const rows: ParsedRow[] = [];
-
-  for (const [stationId, fukushimaName] of Object.entries(STATION_MAP)) {
-    const stationData = json[stationId];
-    if (!stationData || typeof stationData === 'string') continue;
-    const latest = (stationData as StationData).data60?.[0];
-    if (!latest?.time) continue;
-
-    const observedAt = parseFukushimaTimestamp(latest.time);
-    if (!observedAt) continue;
-
-    const waterLevelM = parseVal(latest.item_10?.val);
-    const inflowM3s = parseVal(latest.item_50?.val);
-    const outflowM3s = parseVal(latest.item_70?.val);
-    const rainfallMm = parseVal(latest.item_1_70?.val);
-
-    if (waterLevelM === null && inflowM3s === null && outflowM3s === null) continue;
-
-    rows.push({ fukushimaName, observedAt, waterLevelM, inflowM3s, outflowM3s, rainfallMm });
+/** A station's reading: its latest (first) hourly point. */
+function stationReading(json: FukushimaJson, stationId: string): Reading {
+  const stationData = json[stationId];
+  if (!stationData || typeof stationData === 'string') {
+    return { state: 'unreadable', why: 'station absent from the feed' };
   }
+  const latest = stationData.data60?.[0];
+  if (!latest) return { state: 'unreadable', why: 'no data60 point' };
 
-  return rows;
-}
-
-// --- DB helpers -------------------------------------------------------------
-
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 308,
-            '福島県河川流域総合情報システム — 11 県管理ダム hourly JSON',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/貯水池$/, '')
-    .trim();
-}
-
-interface DamMatch {
-  fukushimaName: string;
-  damId: bigint;
+  const level = valueCell(latest.item_10?.val);
+  const inflow = valueCell(latest.item_50?.val);
+  const outflow = valueCell(latest.item_70?.val);
+  const rain = valueCell(latest.item_1_70?.val);
+  const state = cellState([level, inflow, outflow, rain]);
+  if (state === 'empty') return { state, mark: '"*" / "--" on every item' };
+  if (state === 'unreadable') return { state, why: 'no numeric item' };
+  const observedAt = parseFukushimaTimestamp(latest.time ?? '');
+  if (!observedAt) return { state: 'unreadable', why: `time "${latest.time}"` };
+  return {
+    state,
+    observations: [
+      {
+        observedAt,
+        waterLevelM: numberIn(level),
+        inflowM3s: numberIn(inflow),
+        outflowM3s: numberIn(outflow),
+        rainfallMm: numberIn(rain),
+      },
+    ],
+  };
 }
 
 /**
- * Best master dam for a name as this source publishes it: an exact raw-name
- * hit beats stem equality, which beats the `〜ダム` spelling, a prefix, then a
- * substring; ties go to the current （元）/（再） twin, else the lowest master
- * id.
+ * The provider's whole catalogue, keyed by the JSON station id the feed
+ * itself uses, so a station that has never reported is still recorded.
+ * `json` is null when this run's file could not be fetched.
  */
-function chooseMaster(publishedName: string, masters: BindableMaster[]): bigint | null {
-  const stem = normalizeName(publishedName);
-  if (!stem) return null;
-
-  let best: { m: BindableMaster; rank: number } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (m.name === publishedName) rank = 0;
-    else if (mStem === stem) rank = 1;
-    else if (m.name === `${stem}ダム`) rank = 2;
-    else if (mStem.startsWith(stem)) rank = 3;
-    else if (mStem.includes(stem)) rank = 4;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-      best = { m, rank };
-    }
-  }
-  return best?.m.id ?? null;
+export function fukushimaEntries(json: FukushimaJson | null, why = 'feed not fetched'): Entry[] {
+  const failed: Reading = { state: 'unreadable', why };
+  return [
+    ...Object.entries(STATION_MAP).map(([id, name]) => ({
+      key: id,
+      name,
+      pref: PREF_CODE,
+      reading: json ? stationReading(json, id) : failed,
+    })),
+    ...Object.entries(NOT_DAMS).map(([id, name]) => ({
+      key: id,
+      name,
+      pref: PREF_CODE,
+      bind: 'never' as const,
+      reading: json ? stationReading(json, id) : failed,
+    })),
+  ];
 }
 
-async function matchMaster(rows: ParsedRow[], log: (s: string) => void): Promise<DamMatch[]> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear"
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const out: DamMatch[] = [];
-  // What this source publishes, matched or not — recorded so /coverage can
-  // say "they publish it, we failed to link it" instead of guessing. Built
-  // from STATION_MAP, the provider's whole catalogue, rather than from the
-  // rows that parsed this run: a station that has never reported would
-  // otherwise stay invisible and, once the scan gate closes, be reported as
-  // published by nobody. Keyed by the JSON station id the feed itself uses.
-  const universe: UniverseRow[] = Object.entries(STATION_MAP).map(([stationId, name]) => ({
-    externalId: stationId,
-    name,
-    prefCode: PREF_CODE,
-    resolvedDamId: chooseMaster(name, masters),
-  }));
-
-  for (const r of rows) {
-    const stem = normalizeName(r.fukushimaName);
-    if (!stem) continue;
-
-    const damId = chooseMaster(r.fukushimaName, masters);
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${r.fukushimaName}"`);
-      continue;
-    }
-    out.push({ fukushimaName: r.fukushimaName, damId });
-  }
-
-  await recordUniverse(SOURCE_ID, universe);
-  return out;
-}
-
-// --- task -------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
   const url = buildFukushimaUrl(new Date(), BASE_URL);
-  const r = await fetch(url, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
+  try {
+    const r = await upstream.fetch(url);
+    return { entries: fukushimaEntries(r.json<FukushimaJson>()) };
+  } catch (err) {
+    // The catalogue is known in advance: a failed fetch still records it.
+    const why = err instanceof Error ? err.message : String(err);
+    log(`${SOURCE_ID}: ${why}`);
+    return { entries: fukushimaEntries(null, why) };
   }
-
-  const json = (await r.json()) as FukushimaJson;
-  const rows = parseFukushimaJson(json);
-  log(`${SOURCE_ID}: parsed ${rows.length} dam rows`);
-
-  const matches = await matchMaster(rows, log);
-  const damByName = new Map(matches.map((m) => [m.fukushimaName, m.damId]));
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  for (const p of rows) {
-    const damId = damByName.get(p.fukushimaName);
-    if (!damId) continue;
-    inputs.push({
-      observedAt: p.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: null,
-      storageRate: null,
-      inflowM3s: p.inflowM3s,
-      outflowM3s: p.outflowM3s,
-      waterLevelM: p.waterLevelM,
-      rainfallMm: p.rainfallMm,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    });
-  }
-
-  const written = await upsertObservations(inputs);
-  log(`${SOURCE_ID} done: parsed=${rows.length} matched=${matches.length} written=${written}`);
-};
-
-export default task;
+});

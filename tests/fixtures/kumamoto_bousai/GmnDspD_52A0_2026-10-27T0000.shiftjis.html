@@ -1,0 +1,178 @@
+
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=shift-jis">
+<meta http-equiv="Content-Script-Type" content="text/javascript">
+<meta http-equiv="Content-Style-Type" content="text/css">
+<META http-equiv="Pragma" content="no-cache">
+<title>熊本県防災情報システム☆地方別ダム情報</title>
+<style type="text/css">
+<!--
+a           {text-decoration: none}
+a:link      {color:black}
+a:visited   {color:black}
+a:active    {color:black}
+a:hover     {color:black}
+.tabjikoku  {background-image: url("images/tab_jikoku.png");background-repeat: no-repeat}
+.fc         {font-size: 9pt;color:white}
+.tabback    {background-image: url("images/bg_tabback.gif")}
+.sheetback  {border:1px solid #777777;border-top:0 none;background:url(images/bg_sheetback.gif) repeat-x;}
+.tabkyokuB  {background-image: url("images/tab_kyoku_B.png");background-repeat:repeat-x;}
+.AreaFnt    {color: black; font-size:11pt; font-weight:bold}
+.CmtFnt     {font-size:9pt}
+-->
+</style>
+<script src="common.js"></script>
+<script src="GmnLstSub.js"></script>
+<script src="DamOutSub.js"></script>
+<script language="JavaScript">
+<!--
+var Interval = 60;
+
+// ダム放流情報
+var DamOutInfo = new Array() ;
+		// [0]:レベル
+		// [1]:表示名
+		// [2]:ダム局番
+		// [3]:メッセージ
+DamOutInfo[0] = 0;
+DamOutInfo[1] = '';
+DamOutInfo[2] = 0;
+
+
+///// 表データ
+CelCnt=12;
+FontSize    = 9;
+LineWidth   = 1;
+
+HeadCol	    = "#CCCCFF";
+LstCol1     = "#F8F8F8";
+LstCol2     = "#E1FFE1";
+BgColor     = "#F8F8F8";
+
+LstHeight = 18;
+//CelColor[0] = "#CCCCFF";
+//CelColor[1] = "#CCCCFF";
+DspMod = "CENTER,CENTER,CENTER,RIGHT,RIGHT,RIGHT,RIGHT,RIGHT,RIGHT,RIGHT,RIGHT,RIGHT";
+
+HeadDat[ 0] = "<B>ダム名</B>,70,,1,1,40";
+HeadDat[ 1] = "<B>河川名</B>,60,,1,1,";
+HeadDat[ 2] = "<B>最新観測時刻</B>,80,,1,1,";
+HeadDat[ 3] = "<B>貯水位<br>[m]</B>,60,,1,1,";
+HeadDat[ 4] = "<B>全流入量<br>[m<small><sup>3</sup></small>/s]</B>,60,,1,1,";
+HeadDat[ 5] = "<B>全放流量<br>[m<small><sup>3</sup></small>/s]</B>,60,,1,1,";
+HeadDat[ 6] = "<B>有効<br>貯水量<br>[10<small><sup>3</sup></small>m<small><sup>3</sup></small>]</B>,60,,1,1,";
+HeadDat[ 7] = "<B>利水量<br>[10<small><sup>3</sup></small>m<small><sup>3</sup></small>]</B>,60,,1,1,";
+HeadDat[ 8] = "<B>治水量<br>[10<small><sup>3</sup></small>m<small><sup>3</sup></small>]</B>,60,,1,1,";
+HeadDat[ 9] = "<B>貯水率<br>(有効容量)<br>[%]</B>,60,,1,1,";
+HeadDat[10] = "<B>貯水率<br>(利水容量)<br>[%]</B>,60,,1,1,";
+HeadDat[11] = "<B>貯水率<br>(治水容量)<br>[%]</B>,60,,1,1,";
+DspDat[0] = '<a href="JavaScript:JumpStation(575)"><FONT COLOR="blue"><u>市房ダム</u></FONT></a>,球磨川,2026/10/26 24:00,256.02→,3.76→,0.00<font color="blue">↓</font>,4034→,4034→,0→,11.51→,14.01→,0.00→';
+DspCol[0] = ',,,,,,,,,,,';
+DspDat[1] = '<a href="JavaScript:JumpStation(576)"><FONT COLOR="blue"><u>氷川ダム</u></FONT></a>,氷川,2026/10/26 24:00,164.26<font color="red">↑</font>,1.35<font color="red">↑</font>,0.85<font color="blue">↓</font>,1370<font color="red">↑</font>,1370<font color="red">↑</font>,0→,23.22<font color="red">↑</font>,97.86<font color="red">↑</font>,0.00→';
+DspCol[1] = ',,,,,,,,,,,';
+DspDat[2] = '<a href="JavaScript:JumpStation(772)"><FONT COLOR="blue"><u>石打ダム</u></FONT></a>,波多川,2026/10/26 24:00,70.99<font color="red">↑</font>,0.05<font color="red">↑</font>,0.03→,125→,125→,0→,11.10<font color="red">↑</font>,23.60→,0.00→';
+DspCol[2] = ',,,,,,,,,,,';
+DspDat[3] = '<a href="JavaScript:JumpStation(577)"><FONT COLOR="blue"><u>上津浦ダム</u></FONT></a>,上津浦川,2026/10/26 24:00,140.04→,0.02→,0.01→,177→,177→,0→,40.23→,84.29→,0.00→';
+DspCol[3] = ',,,,,,,,,,,';
+DspDat[4] = '<a href="JavaScript:JumpStation(773)"><FONT COLOR="blue"><u>亀川ダム</u></FONT></a>,亀川,2026/10/26 24:00,99.52<font color="red">↑</font>,0.30<font color="red">↑</font>,0.08→,480<font color="red">↑</font>,480<font color="red">↑</font>,0→,20.00→,48.00<font color="red">↑</font>,0.00→';
+DspCol[4] = ',,,,,,,,,,,';
+DspDat[5] = '<a href="JavaScript:JumpStation(774)"><FONT COLOR="blue"><u>路木ダム</u></FONT></a>,路木川,2026/10/26 24:00,77.58<font color="red">↑</font>,0.24<font color="red">↑</font>,0.04<font color="red">↑</font>,609<font color="red">↑</font>,609<font color="red">↑</font>,0→,29.30<font color="red">↑</font>,66.20<font color="red">↑</font>,0.00→';
+DspCol[5] = ',,,,,,,,,,,';
+
+RowCnt=DspDat.length;
+
+// 局詳細画面へジャンプ
+function JumpStation(sno)
+{
+	var gno = 62;
+	if ( Interval == 10 )
+		gno = 67;
+	if ( parent.parent.menu )
+		parent.parent.location = "../GmnDsp.exe?M"+gno+"S"+sno;
+	else
+		location = "GmnDspD.exe?"+gno+"S"+sno;
+}
+
+//-->
+</script>
+</head>
+<body leftmargin="0" topmargin="0" marginheight="0" marginwidth="0" onunload="CloseDamOutMsg()">
+<FORM name="GMN">
+<div id="Layer1" style="position:absolute;left:4px;top:2px;z-index:1;">
+ <table border="0" cellpadding="0" cellspacing="0" width="760">
+  <tr>
+   <td class="tabback" height="22">
+    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+     <tr>
+      <td>
+       <table border="0" cellpadding="0" cellspacing="0">
+        <tr>
+         <td><img src="images/tab_kyoku_A.png" border="0"></td>
+          <td class="tabkyokuB">
+           <table border="0" cellpadding="0" cellspacing="0">
+            <tr>
+             <td class="AreaFnt">&nbsp;全県&nbsp;</td>
+            </tr>
+           </table>
+          </td>
+         <td><img src="images/tab_kyoku_C.png" border="0"></td>
+        </tr>
+       </table>
+      </td>
+      <td align="right">
+       <table border="0" cellpadding="0" cellspacing="0" width="276" height="22" class="tabjikoku">
+        <tr>
+         <td align="right">
+          <table border="0" cellpadding="0" cellspacing="0">
+           <tr>
+            <td align="center"><img src="images/spacer.gif" width="3" height="2"></td>
+           </tr>
+           <tr>
+            <td>
+             <script language="JavaScript">
+					DisplayTime("2026-10-26-24-00");
+             </script>
+            </td>
+            <td align="center" class="fc"><img src="images/spacer.gif" width="5" height="3"></td>
+           </tr>
+          </table>
+         </td>
+        </tr>
+       </table>
+      </td>
+     </tr>
+    </table>
+   </td>
+  </tr>
+  <tr>
+   <td class="sheetback" align="center">
+    <table border="0" cellpadding="2" cellspacing="0" width="750">
+     <tr height="28"><td></td></tr> <!-- 10→28 -->
+     <tr>
+      <td align="center" valign="top"><div style="position:relative;left:0px;top:0px">
+       <!-- 表 -->
+       <script language="JavaScript">
+		var DspStr = '';
+		DspStr += GmnLst();
+		document.write(DspStr);
+
+		// ダム放流情報
+		if ( DamOutInfo[0] > 0 ) {
+			document.write('<span style="position:absolute;left:0px;top:-26px;z-index:6;cursor:pointer;" onClick="PopDamOutMsg(0)">');
+			document.write(DispPatelite(DamOutInfo[0],DamOutInfo[1]));
+			document.write('</span>');
+		}
+
+       </script>
+      </div></td>
+     </tr>
+     <tr height="10"><td></td></tr>
+    </table>
+   </td>
+  </tr>
+ </table>
+</div>
+</FORM>
+</body>
+</html>

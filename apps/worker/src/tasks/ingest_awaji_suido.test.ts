@@ -14,7 +14,9 @@
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { Reading } from '../ingest/types.ts';
 import {
+  awajiEntries,
   type MasterCapacity,
   PINNED,
   parseAwajiChosui,
@@ -183,5 +185,57 @@ describe('storedVolume', () => {
 
   test('rejects a volume it cannot check because the 貯水率 is missing', () => {
     expect(problem(store(html, '竹原ダム', { ratePct: null }))).toMatch(/貯水率/);
+  });
+});
+
+describe('awajiEntries', () => {
+  const entries = (page: string) => awajiEntries(parseAwajiChosui(page));
+  const read = async (page: string, name: string, dam = MASTER[name]): Promise<Reading> => {
+    const e = entries(page).find((x) => x.key === name);
+    if (!e) throw new Error(`no ${name}`);
+    const cap = dam ? { totalCapacityM3: dam.totalM3, activeCapacityM3: dam.activeM3 } : null;
+    const r = e.reading;
+    return typeof r === 'function' ? r(cap && { id: 1n, name, ...cap }) : r;
+  };
+
+  test('every table row is an entry keyed by its folded name; pins, the combined row and 牛内', () => {
+    const list = entries(html);
+    expect(list.map((e) => [e.key, e.bind, e.dontWrite])).toEqual([
+      ['猪鼻第1ダム', { ndi: '1588' }, undefined],
+      ['猪鼻第2ダム', { ndi: '1589' }, undefined],
+      ['竹原ダム', { ndi: '1586' }, undefined],
+      ['天川第1ダム', undefined, undefined],
+      ['天川第2ダム', { ndi: '1556' }, undefined],
+      ['成相・北富士ダム', 'never', undefined],
+      ['牛内ダム', { ndi: '1598' }, 'kasenbosai and hyogo-bodik carry it hourly'],
+      ['本庄川ダム', { ndi: '1591' }, undefined],
+    ]);
+    expect(list.every((e) => e.pref === '28')).toBe(true);
+  });
+
+  test('reads the stored volume at 00:00 JST on the 現在 date', async () => {
+    expect(await read(typo, '天川第2ダム')).toEqual({
+      state: 'values',
+      observations: [{ observedAt: new Date('2026-09-22T15:00:00.000Z'), storageVolumeM3: 52_000 }],
+    });
+    expect(await read(typo, '猪鼻第2ダム')).toMatchObject({
+      state: 'values',
+      observations: [{ storageVolumeM3: 479_200 }],
+    });
+  });
+
+  test('a volume storedVolume refuses is unreadable', async () => {
+    const r = await read(typo, '天川第2ダム', { totalM3: 126_000, activeM3: 53_000 });
+    expect(r.state).toBe('unreadable');
+  });
+
+  test('a dashed 貯水量 is provider-marked empty; a malformed one unreadable', async () => {
+    const dashed = html.replace(
+      /(竹原ダム[\s\S]*?<font face="ＭＳ ゴシック" size="2">)271,500(<\/font>)/,
+      '$1－$2',
+    );
+    expect(await read(dashed, '竹原ダム')).toEqual({ state: 'empty', mark: '貯水量 「-」' });
+    const broken = typo.replace('>783,200<', '>783,2000<');
+    expect((await read(broken, '猪鼻第2ダム')).state).toBe('unreadable');
   });
 });

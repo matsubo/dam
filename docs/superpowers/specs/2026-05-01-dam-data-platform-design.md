@@ -212,30 +212,30 @@ FROM observations GROUP BY dam_id, day;
 ## 5. Architecture
 
 ```
+   Cloudflare (CDN, tunnel)
+        │
+        ▼
 ┌─────────────────────────────────────────────────┐
-│ Coolify (VPS)                                   │
+│ k3s (home cluster, namespace dam)               │
 │                                                 │
 │ ┌─────────────┐  ┌─────────────────────────┐    │
-│ │ Next.js     │  │ Worker (Bun)            │    │
+│ │ Next.js ×2  │  │ Worker (Bun)            │    │
 │ │  - SSR/ISR  │  │  - graphile-worker      │    │
 │ │  - API      │  │  - source adapters      │    │
 │ └──────┬──────┘  └────────┬────────────────┘    │
 │        │                  │                     │
 │        ▼                  ▼                     │
 │ ┌────────────────────────────────────────┐      │
-│ │ PostgreSQL 16 + TimescaleDB + PostGIS  │      │
+│ │ PostgreSQL 18 + TimescaleDB + PostGIS  │      │
+│ │  (CloudNativePG, primary + standby)    │      │
 │ │  - dams / watersheds / observations    │      │
 │ │  - graphile_worker.* (job queue)       │      │
 │ │  - continuous aggregates               │      │
 │ └────────────────────────────────────────┘      │
-│                                                 │
-│ ┌────────────────────────────────────────┐      │
-│ │ MinIO (S3-compatible) — raw snapshots  │      │
-│ └────────────────────────────────────────┘      │
 └─────────────────────────────────────────────────┘
-        │                              ▲
-        ▼                              │
-   pgBackRest → external S3            (mirrored backups)
+        │
+        ▼
+   daily volume snapshots → Longhorn backup store
 ```
 
 ### Job flow
@@ -440,26 +440,32 @@ GET /api/v1/watershed?lat=35.681&lng=139.767
 
 ## 11. Deployment
 
-### Topology (Coolify)
-- **app**: Next.js (Bun) — SSR/ISR/API.
-- **worker**: Bun + graphile-worker.
-- **db**: PostgreSQL 16 + TimescaleDB + PostGIS (official extension image).
-- **storage**: MinIO (S3-compatible).
-- **proxy**: Coolify default (Caddy/Traefik) with automatic SSL.
+### Topology (k3s)
+- **app**: Next.js (Bun) — SSR/ISR/API. Deployment `dam-web`, two replicas
+  (`deploy/k8s.yaml`).
+- **worker**: Bun + graphile-worker. Deployment `dam-worker`.
+- **db**: CloudNativePG Cluster `dam-pg18` — PostgreSQL 18 + TimescaleDB +
+  PostGIS (image from `deploy/postgres/`), primary + synchronous standby.
+  Cluster-side, in matsubo/network-setting `k8s/dam.yaml`.
+- **ingress**: Traefik; public traffic arrives over the Cloudflare tunnel, TLS
+  ends at Cloudflare.
 
 ### Backups
-- DB: pgBackRest (incremental → external S3, full weekly, PITR 7 days).
-- Raw snapshots: MinIO mirrored to external S3.
-- Coolify resource definitions managed via GitOps.
+- DB: daily CloudNativePG volume snapshot (Longhorn backup store), newest 14
+  kept. No WAL archive, so no point-in-time recovery.
+- Raw snapshots: the object store was dropped in 2026-10; its contents are
+  archived outside the cluster.
 
 ### Env and secrets
-- Use Coolify secret management.
+- Kubernetes Secret `dam-env`, created by hand; never in git.
 - Repo includes `.env.example`; real values are not committed.
 - API keys encrypted at rest with `pgcrypto`.
 
 ### CI/CD
-- GitHub Actions: lint → typecheck → test → build → push image → trigger Coolify webhook.
-- Migrations: Drizzle/Kysely, run as a pre-start `migrate` job.
+- GitHub Actions: lint → typecheck → test → E2E (`ci.yml`); `deploy.yml`
+  builds the web/worker images to GHCR, applies `deploy/k8s.yaml` over
+  Tailscale and purges the CDN.
+- Migrations: applied by `deploy/bootstrap.sh` when a web pod starts.
 
 ## 12. Test Strategy
 
@@ -495,8 +501,10 @@ GET /api/v1/watershed?lat=35.681&lng=139.767
 - Map view first paint < 2s after marker clustering.
 
 ### Availability
-- MVP: single VPS with monthly maintenance allowed.
-- Targets: RTO 4h, RPO 24h (pgBackRest PITR).
+- Two web pods on different nodes and a database standby, so a node drain or
+  failure does not take the site down.
+- Targets: RTO 4h, RPO 24h (daily volume snapshot) if both database
+  instances are lost.
 
 ### Data retention
 - Observations: kept indefinitely (compressed).

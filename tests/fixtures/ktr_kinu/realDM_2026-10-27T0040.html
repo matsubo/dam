@@ -1,0 +1,178 @@
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Script-Type" content="text/javascript">
+<meta http-equiv="Content-Style-Type"  content="text/css">
+<meta http-equiv="Pragma"  content="no-cache">
+<meta http-equiv="Expires" content="-1">
+<title>鬼怒川４ダムのリアルタイム情報</title>
+
+<link rel="stylesheet" href="../css/kinugawa.css">
+
+<script type="text/javascript" src="../script/comnSub.js"></script>
+<script type="text/javascript" src="../script/comnTbl.js"></script>
+<script type="text/javascript" src="../script/damSub.js"></script>
+<script type="text/javascript" src="lang.js"></script>
+<script type="text/javascript" language="JavaScript">
+<!--
+reSize();	// Windowサイズの確認
+
+// 画面情報
+GmnName = 'realDM';	// 画面名
+
+// 観測時刻
+KansokuT = [
+'2026-10-27-00-40',
+'2026-10-27-00-40',
+'2026-10-27-00-40',
+'2026-10-27-00-40'
+];
+
+// フリーメッセージ
+FreeMsg = [
+[0,'#0070C0','#66FFFF','平常の放流をしています',0,'7,7,6,7,7,6,6,6,6,6,6'],
+[0,'#0070C0','#66FFFF','平常の放流をしています',0,'7,7,6,7,7,6,6,6,6,6,6'],
+[0,'#0070C0','#66FFFF','平常の放流をしています',0,'7,7,6,7,7,6,6,6,6,6,6'],
+[0,'#0070C0','#66FFFF','平常の放流をしています',0,'7,7,6,7,7,6,6,6,6,6,6']
+];
+
+// 放流レベルデータ
+LevelDat = [
+1,1,1,1
+];
+
+// 閉局設定 <<'21.06 追加>>
+DamClosed = [
+0,0,0,0
+];
+
+// 貯水位(定数値) <<'22.02 追加>>
+DamTyosui = [
+[1,0, 59100, '591.00'],
+[1,0, 97600, '976.00'],
+[1,0, 61600, '616.00'],
+[1,0, 68400, '684.00']
+];
+
+// ダム状況データ
+DamVal = [
+[	// 五十里ダム
+[1,57702,'577.02',1,57701,1041],
+[1,249,'2.49',1,699,1043],
+[1,-50,'-0.50',1,-500,1050],
+[1,199,'1.99',1,199,1045],
+[1,199,'1.99',1,199,1044],
+[1,0,'0.00',1,0,1046],
+[1,185,'18.5',1,185,447]
+],
+[	// 川俣ダム
+[1,96853,'968.53',1,96852,1001],
+[1,655,'6.55',1,627,1003],
+[1,-611,'-6.11',1,-582,1009],
+[1,44,'0.44',1,45,1005],
+[1,44,'0.44',1,45,1004],
+[1,0,'0.00',1,0,1006],
+[1,4,'0.4',1,0,407]
+],
+[	// 川治ダム
+[1,59312,'593.12',1,59311,1021],
+[1,291,'2.91',1,153,1023],
+[1,-242,'-2.42',1,-104,1030],
+[1,0,'0.00',1,0,1025],
+[1,49,'0.49',1,49,1024],
+[1,49,'0.49',1,49,1026],
+[1,237,'23.7',1,233,427]
+],
+[	// 湯西川ダム
+[1,66878,'668.78',1,66877,1061],
+[1,271,'2.71',1,241,1065],
+[1,-217,'-2.17',1,-187,1066],
+[1,54,'0.54',1,54,1068],
+[1,54,'0.54',1,54,1067],
+[0,0,'',1,1395487854,0],
+[1,170,'17.0',1,168,507]
+]
+];
+//-->
+</script>
+</head>
+
+<body topmargin="0" leftmargin="0" marginwidth="0" marginheight="0" id="pageTop"
+ onLoad="StartTool()" onUnload="EndTool()">
+
+<div id="header"><p>
+ <table border="0" cellpadding="0" cellspacing="0" width="100%">
+  <tr><td background="images/obi_realtime.png" height="80">
+   <table border="0" cellpadding="0" cellspacing="0" width="100%">
+    <tr>
+     <td>&nbsp;</td>
+     <td align="right"><img src="images/gengo.png" border="0" width="70" height="61"></td>
+     <td align="right" width="200">
+      <table border="0" cellpadding="0" cellspacing="0" width="100%">
+       <script language="JavaScript">dspSelLang()</script>
+      </table>
+     </td>
+    </tr>
+   </table>
+  </td></tr>
+ </table>
+</p></div>
+
+<div><p>
+ <table border="0" cellpadding="0" cellspacing="0" width="100%">
+  <tr><td align="right">
+   <table border="0" cellpadding="0" cellspacing="0">
+    <tr>
+     <td align="right"><img src="../images/arrow_mikata.png"></td>
+     <td align="right"><script language="JavaScript">dspLinkView()</script></td>
+    </tr>
+   </table>
+  </td></tr>
+ </table>
+</p></div>
+
+<div id="contents">
+ <!-- 五十里ダム -->
+ <p>
+ <script language="JavaScript">dspDamName(1)</script>
+ <script language="JavaScript">dspPanel  (1)</script>
+ <script language="JavaScript">dspDamDat (1)</script>
+ <script language="JavaScript">dspDamCctv(1)</script>
+ <script language="JavaScript">dspLinks  (1)</script>
+ <script language="JavaScript">dspPageTopButton()</script>
+ </p>
+
+ <!-- 川俣ダム -->
+ <p>
+ <script language="JavaScript">dspDamName(2)</script>
+ <script language="JavaScript">dspPanel  (2)</script>
+ <script language="JavaScript">dspDamDat (2)</script>
+ <script language="JavaScript">dspDamCctv(2)</script>
+ <script language="JavaScript">dspLinks  (2)</script>
+ <script language="JavaScript">dspPageTopButton()</script>
+ </p>
+
+ <!-- 川治ダム -->
+ <p>
+ <script language="JavaScript">dspDamName(3)</script>
+ <script language="JavaScript">dspPanel  (3)</script>
+ <script language="JavaScript">dspDamDat (3)</script>
+ <script language="JavaScript">dspDamCctv(3)</script>
+ <script language="JavaScript">dspLinks  (3)</script>
+ <script language="JavaScript">dspPageTopButton()</script>
+ </p>
+
+ <!-- 湯西川ダム -->
+ <p>
+ <script language="JavaScript">dspDamName(4)</script>
+ <script language="JavaScript">dspPanel  (4)</script>
+ <script language="JavaScript">dspDamDat (4)</script>
+ <script language="JavaScript">dspDamCctv(4)</script>
+ <script language="JavaScript">dspLinks  (4)</script>
+ <script language="JavaScript">dspPageTopButton()</script>
+ </p>
+
+ <script language="JavaScript">dspFooter()</script>
+</div>
+</body>
+</HTML>

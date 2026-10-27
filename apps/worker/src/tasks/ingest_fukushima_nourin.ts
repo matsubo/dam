@@ -19,11 +19,8 @@
 // source wins on a dam both cover. The rate is 利水(かんがい用水)基準 per the
 // page's own footnote, so trusted_rate_basis is set (see migration 0040).
 
-import { type BindableMaster, preferMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Bind, Entry, Reading } from '../ingest/types.ts';
 
 const PAGE_URL =
   process.env.FUKUSHIMA_NOURIN_URL ??
@@ -35,12 +32,15 @@ const SOURCE_ID = 'fukushima-nourin';
 /** Upper sanity bound for a published 貯水率, in percent. */
 const MAX_PLAUSIBLE_PCT = 200;
 
-export interface ParsedRow {
-  /** Name exactly as the page prints it, e.g. 「岳ダム」「深田調整池」. */
-  fukushimaName: string;
-  /** 貯水率 as a 0..1 fraction. */
-  storageRate: number;
-}
+/**
+ * Names the master spells differently: ノ/の (feed 山ノ入ダム, master 山の入),
+ * and a 調整池 suffix the master omits (大深沢調整池 — 雄国山麓土地改良区 — is
+ * master 大深沢, 東北農政局, 喜多方市; exact, so 大深沢 cannot take a longer name).
+ */
+const BINDS: Readonly<Record<string, Bind>> = {
+  山ノ入ダム: { name: '山の入' },
+  大深沢調整池: { name: '大深沢', exact: true },
+};
 
 // --- parsing ----------------------------------------------------------------
 
@@ -91,198 +91,53 @@ function parsePercent(cell: string): number | null {
 /** Dam-like names only — excludes the 県平均 summary row and the footnote row. */
 const NAME_RE = /(ダム|調整池|溜池|池|沼)$/;
 
-/** One dam the page lists, and whether its row carried a usable rate. */
-export interface PublishedRow {
-  name: string;
-  /**
-   * true = a rate we store; false = the page itself says there is none
-   * (調査対象外, or the annotated 0.0 % of a drained dam); null = a cell we
-   * could not read, which may be our parser rather than the page.
-   */
-  hasData: boolean | null;
+/**
+ * One row's 貯水率 cell. The page itself says there is none for 調査対象外
+ * and for the annotated 0.0 % of a drained dam; a cell we cannot read may be
+ * our parser rather than the page, so it is unreadable, not empty.
+ */
+function rowReading(cell: string, reportDate: Date | null): Reading {
+  const pct = parsePercent(cell);
+  // A published 0.0% here is never an operating value: the page annotates it
+  // (鴻の巣ダム is drained for construction). Keeping it out keeps us out of
+  // the phantom-zero hole migrations 0038/0039 had to dig us out of.
+  if (pct === 0 || (pct === null && cell.includes('調査対象外'))) {
+    return { state: 'empty', mark: cell };
+  }
+  if (pct === null || pct > MAX_PLAUSIBLE_PCT) {
+    return { state: 'unreadable', why: `貯水率 cell 「${cell}」` };
+  }
+  if (!reportDate) return { state: 'unreadable', why: 'no 「…現在」 survey date on the page' };
+  return { state: 'values', observations: [{ observedAt: reportDate, storageRate: pct / 100 }] };
 }
 
-export function parseFukushimaNourinHtml(html: string): {
-  reportDate: Date | null;
-  /** Rows with a usable 貯水率 — what we store. */
-  rows: ParsedRow[];
-  /**
-   * Every dam the page lists, whether or not its rate was usable. This is the
-   * source's universe: 鉄山 / 坂下 (調査対象外) and 鴻の巣 (落水) are published
-   * by 福島県, so /coverage must not read them as published by nobody.
-   */
-  published: PublishedRow[];
-} {
+/**
+ * Every dam the page lists, whether or not its rate was usable: 鉄山 / 坂下
+ * (調査対象外) and 鴻の巣 (落水) are published by 福島県, so /coverage must not
+ * read them as published by nobody. The page gives no station ids, so the
+ * printed name is the key.
+ */
+export function fukushimaNourinEntries(html: string): Entry[] {
   const reportDate = parseNourinReportDate(html);
-  const rows: ParsedRow[] = [];
-  const published: PublishedRow[] = [];
-
+  const entries: Entry[] = [];
   for (const cells of tableRows(html)) {
     if (cells.length < 4) continue;
     const name = cells[0] ?? '';
     if (!NAME_RE.test(name)) continue;
-
-    const cell = cells[3] ?? '';
-    const pct = parsePercent(cell);
-    // A published 0.0% here is never an operating value: the page annotates it
-    // (鴻の巣ダム is drained for construction). Dropping it keeps us out of the
-    // phantom-zero hole migrations 0038/0039 had to dig us out of.
-    if (pct === 0 || (pct === null && cell.includes('調査対象外'))) {
-      published.push({ name, hasData: false });
-      continue;
-    }
-    if (pct === null || pct > MAX_PLAUSIBLE_PCT) {
-      published.push({ name, hasData: null });
-      continue;
-    }
-
-    published.push({ name, hasData: true });
-    rows.push({ fukushimaName: name, storageRate: pct / 100 });
-  }
-
-  return { reportDate, rows, published };
-}
-
-// --- name matching ----------------------------------------------------------
-
-/**
- * Strip ダム + （元）/（再）-style annotations and fold ノ/の, which the page
- * and the master spell differently (feed 山ノ入ダム vs master 山の入).
- * 調整池 / 溜池 / 池 / 沼 are kept — they are part of the name, not a suffix.
- */
-export function normalizeName(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .replace(/ノ/g, 'の')
-    .trim();
-}
-
-/**
- * Reservoir-kind suffixes the master sometimes omits: 大深沢調整池 (feed) is
- * 大深沢 in the master. Only multi-character suffixes are stripped — dropping a
- * bare 池/沼 would turn 新池 into 新 and match half the prefecture.
- */
-const KIND_SUFFIX_RE = /(調整池|貯水池|ため池|溜池)$/;
-
-/**
- * Best master dam for a feed stem; exact name beats stem beats substring, ties
- * going to the current （元）/（再） twin, else the lower id.
- */
-export function chooseMaster(feedName: string, masters: BindableMaster[]): bigint | null {
-  const stem = normalizeName(feedName);
-  if (!stem) return null;
-  const bareStem = stem.replace(KIND_SUFFIX_RE, '');
-  const hasBareStem = bareStem.length >= 2 && bareStem !== stem;
-
-  let best: { m: BindableMaster; rank: number } | null = null;
-  for (const m of masters) {
-    const mStem = normalizeName(m.name);
-    let rank: number;
-    if (m.name === feedName) rank = 0;
-    else if (mStem === stem) rank = 1;
-    else if (m.name === `${stem}ダム`) rank = 2;
-    else if (mStem.startsWith(stem)) rank = 3;
-    else if (mStem.includes(stem)) rank = 4;
-    else if (hasBareStem && mStem === bareStem) rank = 5;
-    else continue;
-    if (!best || rank < best.rank || (rank === best.rank && preferMaster(m, best.m))) {
-      best = { m, rank };
-    }
-  }
-  return best?.m.id ?? null;
-}
-
-// --- DB helpers -------------------------------------------------------------
-
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active, trusted_rate_basis)
-    VALUES (${SOURCE_ID}, 285,
-            '福島県 農林水産部 県内の主要農業関係ダムの貯水状況 — 農業用ダム 29 基, 隔週 (貯水率のみ)',
-            true, true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority           = EXCLUDED.priority,
-          description        = EXCLUDED.description,
-          active             = EXCLUDED.active,
-          trusted_rate_basis = EXCLUDED.trusted_rate_basis
-  `;
-}
-
-// --- task -------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
-  const r = await fetch(PAGE_URL, {
-    headers: {
-      'user-agent':
-        process.env.HTTP_USER_AGENT ??
-        'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)',
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-
-  if (r.status !== 200) {
-    log(`${SOURCE_ID}: HTTP ${r.status}; aborting`);
-    return;
-  }
-
-  const { reportDate, rows, published } = parseFukushimaNourinHtml(await r.text());
-  if (!reportDate) {
-    log(`${SOURCE_ID}: no survey date in the page; aborting`);
-    return;
-  }
-  log(`${SOURCE_ID}: parsed ${rows.length} dam rows for ${reportDate.toISOString()}`);
-
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear"
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-
-  // What 福島県 publishes, matched or not, built from the page's whole dam list
-  // rather than the rows that carried a rate — a dam that is 調査対象外 this
-  // season is still published, and must not be read as published by nobody.
-  // The page gives no station ids, so the printed name is the external id and
-  // prefCode keeps it distinct from a same-named dam elsewhere.
-  const universe: UniverseRow[] = published.map(({ name, hasData }) => ({
-    externalId: name,
-    name,
-    prefCode: PREF_CODE,
-    resolvedDamId: chooseMaster(name, masters),
-    hasData,
-  }));
-  await recordUniverse(SOURCE_ID, universe);
-
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  let unmatched = 0;
-  for (const p of rows) {
-    const damId = chooseMaster(p.fukushimaName, masters);
-    if (!damId) {
-      unmatched += 1;
-      log(`${SOURCE_ID}: no master match for "${p.fukushimaName}"`);
-      continue;
-    }
-    inputs.push({
-      observedAt: reportDate,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: null,
-      storageRate: p.storageRate,
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: null,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
+    const bind = BINDS[name];
+    entries.push({
+      key: name,
+      name,
+      pref: PREF_CODE,
+      ...(bind ? { bind } : {}),
+      reading: rowReading(cells[3] ?? '', reportDate),
     });
   }
+  return entries;
+}
 
-  const written = await upsertObservations(inputs);
-  log(
-    `${SOURCE_ID} done: parsed=${rows.length} matched=${inputs.length} unmatched=${unmatched} written=${written}`,
-  );
-};
-
-export default task;
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const entries = fukushimaNourinEntries((await upstream.fetch(PAGE_URL)).text());
+  log(`${SOURCE_ID}: ${entries.length} dam rows`);
+  return { entries, dated: true };
+});

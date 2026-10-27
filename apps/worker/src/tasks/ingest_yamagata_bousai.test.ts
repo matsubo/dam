@@ -1,7 +1,23 @@
 // apps/worker/src/tasks/ingest_yamagata_bousai.test.ts
+//
+// Feed JSON → universe entries, no database: binding and writing belong to
+// the ingest run (apps/worker/src/ingest/run.test.ts).
 
 import { describe, expect, test } from 'bun:test';
-import { parseYamagataJson, parseYamagataTimestamp } from './ingest_yamagata_bousai.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
+import {
+  parseYamagataTimestamp,
+  type YamagataJson,
+  yamagataEntries,
+} from './ingest_yamagata_bousai.ts';
+
+function observation(e: Entry | undefined) {
+  const r = e?.reading as Reading | undefined;
+  if (r?.state !== 'values') throw new Error('no values');
+  const o = r.observations[0];
+  if (!o) throw new Error('no observation');
+  return o;
+}
 
 describe('parseYamagataTimestamp', () => {
   test('parses JST timestamp to UTC (subtract 9h)', () => {
@@ -25,7 +41,7 @@ describe('parseYamagataTimestamp', () => {
   });
 });
 
-describe('parseYamagataJson', () => {
+describe('yamagataEntries', () => {
   function makeEntry(
     an: string,
     data1: string,
@@ -38,7 +54,7 @@ describe('parseYamagataJson', () => {
     return { an, data1, data2, data3, data4, data5, time };
   }
 
-  function makeJson(entries: Record<string, ReturnType<typeof makeEntry>>) {
+  function makeJson(entries: Record<string, ReturnType<typeof makeEntry>>): YamagataJson {
     return { date: '20260605133000', ...entries };
   }
 
@@ -46,10 +62,12 @@ describe('parseYamagataJson', () => {
     const json = makeJson({
       '1': makeEntry('蔵王ダム', '599.27', '4858', '1.80', '1.27', '86.4'),
     });
-    const rows = parseYamagataJson(json);
-    expect(rows).toHaveLength(1);
-    const r = rows[0];
-    expect(r?.yamagataName).toBe('蔵王ダム');
+    const list = yamagataEntries(json);
+    expect(list).toHaveLength(1);
+    expect(list[0]?.key).toBe('蔵王ダム');
+    expect(list[0]?.name).toBe('蔵王ダム');
+    expect(list[0]?.pref).toBe('06');
+    const r = observation(list[0]);
     expect(r?.observedAt?.toISOString()).toBe('2026-06-05T04:30:00.000Z');
     expect(r?.waterLevelM).toBeCloseTo(599.27);
     // 4858 千m³ × 1000 = 4,858,000 m³
@@ -65,18 +83,17 @@ describe('parseYamagataJson', () => {
       '1': makeEntry('蔵王ダム', '599.27', '4858', '1.80', '1.27', '86.4'),
       '2': makeEntry('前川ダム', '256.74', '1394', '0.05', '0.05', '82.0'),
     });
-    const rows = parseYamagataJson(json);
-    expect(rows).toHaveLength(2);
-    expect(rows.map((r) => r.yamagataName)).toEqual(['蔵王ダム', '前川ダム']);
+    expect(yamagataEntries(json).map((e) => e.key)).toEqual(['蔵王ダム', '前川ダム']);
   });
 
   test('uses per-dam time when present', () => {
     const json = makeJson({
       '1': makeEntry('蔵王ダム', '599.27', '4858', '1.80', '1.27', '86.4', '20260605120000'),
     });
-    const rows = parseYamagataJson(json);
     // 12:00 JST = 03:00 UTC
-    expect(rows[0]?.observedAt?.toISOString()).toBe('2026-06-05T03:00:00.000Z');
+    expect(observation(yamagataEntries(json)[0]).observedAt.toISOString()).toBe(
+      '2026-06-05T03:00:00.000Z',
+    );
   });
 
   test('falls back to feed date when per-dam time is missing', () => {
@@ -91,26 +108,37 @@ describe('parseYamagataJson', () => {
         data5: '86.4',
       },
     };
-    const rows = parseYamagataJson(json as unknown as Parameters<typeof parseYamagataJson>[0]);
-    expect(rows[0]?.observedAt?.toISOString()).toBe('2026-06-05T04:30:00.000Z');
+    const list = yamagataEntries(json as unknown as YamagataJson);
+    expect(observation(list[0]).observedAt.toISOString()).toBe('2026-06-05T04:30:00.000Z');
   });
 
   test('treats empty string fields as null', () => {
     const json = makeJson({
       '1': makeEntry('荒沢ダム', '', '23897', '24.96', '', '82.8'),
     });
-    const rows = parseYamagataJson(json);
-    expect(rows[0]?.waterLevelM).toBeNull();
-    expect(rows[0]?.outflowM3s).toBeNull();
-    expect(rows[0]?.storageVolumeM3).toBe(23_897_000);
+    const r = observation(yamagataEntries(json)[0]);
+    expect(r.waterLevelM).toBeNull();
+    expect(r.outflowM3s).toBeNull();
+    expect(r.storageVolumeM3).toBe(23_897_000);
+  });
+
+  test('a dam blank or dashed in every field is provider-marked empty', () => {
+    const json = makeJson({ '1': makeEntry('荒沢ダム', '', '---', '-', '―', '') });
+    expect((yamagataEntries(json)[0]?.reading as Reading | undefined)?.state).toBe('empty');
+  });
+
+  test('an unparseable timestamp is unreadable, not dropped', () => {
+    const json = makeJson({
+      '1': makeEntry('蔵王ダム', '599.27', '4858', '1.80', '1.27', '86.4', 'bad'),
+    });
+    expect((yamagataEntries(json)[0]?.reading as Reading | undefined)?.state).toBe('unreadable');
   });
 
   test('skips entry with no dam name', () => {
     const json = makeJson({
       '1': makeEntry('', '599.27', '4858', '1.80', '1.27', '86.4'),
     });
-    const rows = parseYamagataJson(json);
-    expect(rows).toHaveLength(0);
+    expect(yamagataEntries(json)).toHaveLength(0);
   });
 
   test('handles numeric gaps (missing keys 15-17) gracefully — only iterates present keys', () => {
@@ -118,10 +146,7 @@ describe('parseYamagataJson', () => {
       '14': makeEntry('田沢川ダム', '130.94', '4988', '1.40', '0.65', '100.0'),
       '18': makeEntry('寒河江ダム', '389.80', '62707', '27.31', '27.23', '70.7'),
     });
-    const rows = parseYamagataJson(json);
-    expect(rows).toHaveLength(2);
-    expect(rows[0]?.yamagataName).toBe('田沢川ダム');
-    expect(rows[1]?.yamagataName).toBe('寒河江ダム');
+    expect(yamagataEntries(json).map((e) => e.key)).toEqual(['田沢川ダム', '寒河江ダム']);
   });
 
   test('storageRate is clamped to [0,1] via division (not clamping — trust source)', () => {
@@ -129,17 +154,15 @@ describe('parseYamagataJson', () => {
     const json = makeJson({
       '1': makeEntry('留山川ダム', '300.00', '339', '0.05', '0.05', '100.0'),
     });
-    const rows = parseYamagataJson(json);
-    expect(rows[0]?.storageRate).toBeCloseTo(1.0);
+    expect(observation(yamagataEntries(json)[0]).storageRate).toBeCloseTo(1.0);
   });
 
   test('storage 0 (流水型ダム) yields storageVolumeM3=0', () => {
     const json = makeJson({
       '7': makeEntry('最上小国川流水型ダム', '276.78', '1', '1.63', '1.63', '0.0'),
     });
-    const rows = parseYamagataJson(json);
-    const r = rows[0];
-    expect(r?.storageVolumeM3).toBe(1_000); // 1千m³ × 1000
-    expect(r?.storageRate).toBeCloseTo(0.0);
+    const r = observation(yamagataEntries(json)[0]);
+    expect(r.storageVolumeM3).toBe(1_000); // 1千m³ × 1000
+    expect(r.storageRate).toBeCloseTo(0.0);
   });
 });

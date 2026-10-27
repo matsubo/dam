@@ -1,49 +1,73 @@
 # Operator runbook
 
-This is the on-call handbook for the production dam deployment. The
-deployment artifacts live in [`deploy/coolify/`](../coolify/) and the backup
-config in [`deploy/backup/`](../backup/). Read this before paging anyone.
+This is the on-call handbook for the production dam deployment. The app's
+deployment artifacts live in [`deploy/`](..) (`Dockerfile.web`,
+`Dockerfile.worker`, `bootstrap.sh`, `k8s.yaml`, `purge-cdn.yaml`); the
+namespace, the database, its backups and the Secrets live in
+matsubo/network-setting `k8s/dam.yaml`. Read this before paging anyone.
 
 **Owner / on-call contact:** <redacted>
 
 ---
 
-## 0. Topology (since 2026-09-11, #30)
+## 0. Topology (k3s since 2026-10-07)
 
-Production is three Coolify resources, not one compose stack: `dam-web`
-(Next.js, rolling updates), `dam-worker` (graphile-worker) and `dam-db`
-(TimescaleDB, image pinned by digest).
-Layout, env vars, rolling-update rules and rollback are in
-`deploy/coolify/README.md`. Where this runbook says "the `app` container" read
-`dam-web`; "the `worker` service" read `dam-worker`; "the `db` container" read
-`dam-db`. Each is its own Coolify
-resource with its own terminal, logs and Stop/Start buttons. The former compose
-file is kept at `deploy/coolify/docker-compose.legacy.yaml` for reference.
+Production runs on the home k3s cluster, namespace `dam`:
+
+| Object | What | Defined in |
+| --- | --- | --- |
+| Deployment `dam-web` | Next.js, two replicas on different nodes, rolling updates, PodDisruptionBudget | `deploy/k8s.yaml` |
+| Deployment `dam-worker` | graphile-worker, one replica | `deploy/k8s.yaml` |
+| Service / Ingress `dam-web` | `dam.teraren.com` through Traefik; public traffic arrives over the in-cluster Cloudflare tunnel | `deploy/k8s.yaml` |
+| Job `dam-purge-cdn` | Cloudflare cache purge after each rollout | `deploy/purge-cdn.yaml` |
+| CNPG Cluster `dam-pg18` | PostgreSQL 18 + TimescaleDB + PostGIS, primary + synchronous standby; the app connects through Service `dam-postgres-rw` | network-setting `k8s/dam.yaml` |
+| Secret `dam-env` | runtime env shared by web and worker (`DATABASE_URL`, `AUTH_*`, `CF_*`, …) | created by hand; recipe in network-setting `k8s/dam.yaml` |
+
+`kubectl` below means cluster-admin: on t1, `sudo k3s kubectl` (the
+`kubectl cnpg` plugin is in `~/bin` there). CI's deployer ServiceAccount
+manages only the objects in `deploy/` and cannot read Secrets.
+
+Database shell (superuser on the current primary):
+`kubectl cnpg psql dam-pg18 -n dam -- -d dam`.
+
+### 0.1 Deploy
+
+`.github/workflows/deploy.yml` runs on every push to `main` (or
+`gh workflow run deploy.yml`): it builds `ghcr.io/matsubo/dam-web` and
+`ghcr.io/matsubo/dam-worker` tagged with the commit SHA, joins the tailnet,
+applies `deploy/k8s.yaml` with those images, waits for both rollouts and runs
+the CDN purge Job. A new web pod runs `bootstrap.sh` (migrations + master
+upsert) before it turns Ready, and old and new pods serve side by side for a
+moment, so migrations must stay additive.
+
+The roll-out job only runs while the repository variable `DEPLOY_K3S` is
+`true`. Set it to false before moving, restoring or reloading the database so
+a push cannot roll web/worker mid-operation:
+
+```sh
+gh variable set DEPLOY_K3S --body false --repo matsubo/dam
+```
+
+### 0.2 Rollback
+
+Revert the commit on `main` and push. For an immediate stop before that,
+`kubectl -n dam rollout undo deploy/dam-web` (and `deploy/dam-worker`)
+returns to the previous ReplicaSet; the next push re-applies whatever `main`
+holds. Neither undoes a migration.
 
 ## 1. First-time bring-up
 
-Assumes a fresh Coolify resource has been created from
-the three resources described in `deploy/coolify/README.md` exist and all required env vars are set
-(see [`deploy/coolify/README.md`](../coolify/README.md)).
+1. Cluster side: the prerequisites, the `dam-pg18` Cluster and the Secrets
+   `dam-pg-app`, `dam-env`, `ghcr-pull` as described in the header of
+   network-setting `k8s/dam.yaml`. Restore the database from a backup (§4)
+   rather than starting empty.
+2. Set `DEPLOY_K3S` to `true` and run the workflow
+   (`gh workflow run deploy.yml`). On an empty database `bootstrap.sh`
+   restores the bundled `/seed/master.sql.gz` (dams, watersheds, rivers,
+   source priorities).
+3. Issue the first API key (§3).
 
-```sh
-# All commands below run inside the `app` container's Coolify terminal.
-just up                                  # only relevant when you ssh into the host
-bun run --filter @dam/db migrate         # equivalent: just migrate
-
-# Master data — order matters (watersheds before dams):
-bun run packages/adapters/ndi/src/cli.ts watersheds
-bun run packages/adapters/ndi/src/cli.ts dams
-bun run --filter @dam/adapters-damnet import
-
-# Reconcile master tables (dedupe, slug repair, etc.):
-bun run --filter @dam/reconciler run
-
-# Issue the bootstrap API key — token is shown ONCE:
-bun run bin/api_key.ts issue --email you@example.com --label bootstrap
-```
-
-The worker starts automatically when Coolify deploys the stack; nothing to do.
+The worker starts with the rollout; nothing else to do.
 
 ---
 
@@ -51,16 +75,18 @@ The worker starts automatically when Coolify deploys the stack; nothing to do.
 
 The worker has no HTTP surface; the only ways to control it are:
 
-- **Stop:** Coolify UI → `dam-worker` → "Stop". This is safe; in
-  flight jobs are picked up on the next start because graphile-worker stores
-  its queue in Postgres.
-- **Start:** same UI → "Start".
-- **Restart after a config change** (env var, image rebuild): bump the deploy
-  in Coolify, or `docker compose up -d --force-recreate worker` if you ssh into
-  the host directly.
+- **Stop:** `kubectl -n dam scale deploy/dam-worker --replicas=0`. This is
+  safe; in flight jobs are picked up on the next start because
+  graphile-worker stores its queue in Postgres.
+- **Start:** `kubectl -n dam scale deploy/dam-worker --replicas=1`.
+- **Restart after a config change** (Secret `dam-env`):
+  `kubectl -n dam rollout restart deploy/dam-worker`.
+
+A deploy re-applies `replicas: 1`, so a stopped worker comes back on the next
+push unless `DEPLOY_K3S` is false.
 
 To pause scheduled scrapes without stopping the worker, use graphile-worker's
-admin SQL on the `db` service:
+admin SQL in the database shell:
 
 ```sql
 update graphile_worker.jobs set run_at = run_at + interval '1 day' where task_identifier like 'scrape_%';
@@ -70,7 +96,18 @@ update graphile_worker.jobs set run_at = run_at + interval '1 day' where task_id
 
 ## 3. API key management
 
+`bin/api_key.ts` is not in the images. Run it from a repo checkout against a
+port-forward of the database Service:
+
 ```sh
+# Terminal 1 (cluster-admin; listens on that host's 127.0.0.1, so from another
+# machine add `ssh -L 15432:127.0.0.1:15432 t1`):
+kubectl -n dam port-forward svc/dam-postgres-rw 15432:5432
+
+# Terminal 2, repo root. The dam role's password is in network-setting
+# credentials.yaml (same value as in Secret dam-env's DATABASE_URL).
+export DATABASE_URL=postgres://dam:<password>@127.0.0.1:15432/dam
+
 # Issue (token printed once — copy it now):
 bun run bin/api_key.ts issue --email user@example.com --label "client name"
 
@@ -81,70 +118,51 @@ bun run bin/api_key.ts list
 bun run bin/api_key.ts revoke --id <key_id>
 ```
 
-Keys are hashed with `API_KEY_PEPPER`; rotating the pepper invalidates every
-key. If you suspect a leaked pepper:
-
-1. Issue replacement keys to all clients first.
-2. Rotate `API_KEY_PEPPER` in Coolify.
-3. Redeploy.
-4. Revoke the old keys.
+Keys are stored as SHA-256 hashes (`packages/db/src/repo/api_keys.ts`); the
+plaintext exists only in the issue output.
 
 ---
 
-## 4. Backups (pgBackRest)
+## 4. Backups (CloudNativePG volume snapshots)
 
-Configuration lives at [`deploy/backup/pgbackrest.conf`](../backup/pgbackrest.conf).
-The placeholders in that file are substituted from Coolify env vars at sidecar
-start. The schedule (full weekly + hourly diff) is enforced by a cron job
-inside the pgbackrest sidecar.
+Backups are cluster-side; the full description, including the tested restore
+procedure and its pitfalls, is under "Backups" and "Restore" in
+network-setting `k8s/dam.yaml`. In short:
 
-### 4.1 Manual full backup
+- ScheduledBackup `dam-pg18-daily` takes an online base backup from the
+  standby every day at 03:45 JST as a Longhorn VolumeSnapshot; CronJob
+  `dam-pg-backup-retention` keeps the newest 14.
+- There is no WAL archive, so no point-in-time recovery. Losing one instance
+  loses no committed write (synchronous standby, automatic failover); losing
+  both falls back to the last daily backup (RPO up to one day).
 
-```sh
-# Run inside the pgbackrest sidecar:
-pgbackrest backup --stanza=main --type=full
-```
-
-### 4.2 Verify a backup
-
-```sh
-pgbackrest info --stanza=main
-pgbackrest verify --stanza=main
-```
-
-### 4.3 Point-in-time restore (PITR)
-
-This is destructive; it stops Postgres and replaces the data directory.
+### 4.1 On-demand backup (before risky work)
 
 ```sh
-# 1. Stop the app and worker so they don't reconnect mid-restore.
-#    (Coolify UI → Stop on `app` and `worker`.)
-
-# 2. Stop Postgres on the db container.
-docker compose stop db
-
-# 3. From the pgbackrest sidecar, restore to the desired timestamp:
-pgbackrest restore --stanza=main \
-  --type=time \
-  --target="2026-05-02 03:14:00+09" \
-  --delta
-
-# 4. Start Postgres. It will replay WAL up to the target timestamp.
-docker compose start db
-
-# 5. Once `pg_isready` succeeds, start app and worker again.
+kubectl apply -f - <<'EOF'
+apiVersion: postgresql.cnpg.io/v1
+kind: Backup
+metadata: { name: dam-pg18-manual-YYYYMMDD, namespace: dam }
+spec: { cluster: { name: dam-pg18 }, method: volumeSnapshot }
+EOF
 ```
 
-### 4.4 Disaster recovery (full host loss)
+### 4.2 List backups
 
-1. Bring up a new Coolify host and recreate the stack (same compose file).
-2. Set the same `PGBACKREST_*` env vars so the new sidecar finds the existing
-   S3 repository.
-3. Stop the freshly-initialized `db` container.
-4. Run `pgbackrest restore --stanza=main --delta` to fetch the latest backup.
-5. Start `db`, then `app`, then `worker`.
+```sh
+kubectl -n dam get backups.postgresql.cnpg.io
+```
 
-Restore objective: RTO 1h, RPO 1h (matches the diff-backup cadence).
+(`kubectl get backup` is Longhorn's CRD, not CNPG's.)
+
+### 4.3 Restore
+
+Set `DEPLOY_K3S` to false and stop the worker (§2), bootstrap a new Cluster
+from the chosen VolumeSnapshot, then point Service `dam-postgres-rw` at it
+(network-setting `k8s/dam.yaml`, "Restore"). Start the worker and set
+`DEPLOY_K3S` back to true afterwards. Rows ingested after the backup are
+lost; re-running the ingest tasks refills what upstreams still publish
+(observation upserts are idempotent).
 
 ---
 
@@ -152,9 +170,12 @@ Restore objective: RTO 1h, RPO 1h (matches the diff-backup cadence).
 
 ### 5.1 Postgres / TimescaleDB
 
-Major-version bumps require `pg_dump`/`pg_restore`. Do NOT bump the major in
-the compose file without first taking a manual full pgBackRest backup and
-testing the restore path on a staging host.
+The database runs `ghcr.io/matsubo/dam-postgres`, built from
+`deploy/postgres/Dockerfile` by `.github/workflows/postgres-image.yml`. An
+extension or PostgreSQL minor bump is a new image plus `ALTER EXTENSION …
+UPDATE`; a PostgreSQL major is a new Cluster. Both procedures (with the
+backup to take first) are in network-setting `k8s/dam.yaml`, "Extension
+upgrade" and "Upgrade 16 -> 18".
 
 ### 5.2 Bun
 
@@ -171,12 +192,14 @@ bumping bun locally, bump both Dockerfiles in the same commit and run
 
 | What | Where |
 | --- | --- |
-| App / worker stdout | Coolify UI → resource → service → "Logs" tab |
-| Postgres logs | Coolify UI → `db` service → "Logs" |
-| pgBackRest | Coolify UI → pgbackrest sidecar → "Logs"; archived under `/var/log/pgbackrest` inside the sidecar |
+| Web / worker stdout | `kubectl -n dam logs deploy/dam-web` (one pod; `-l app=dam-web --prefix` for both), `kubectl -n dam logs deploy/dam-worker`; add `--previous` for a crashed container |
+| `bootstrap.sh` | head of the web pod's log |
+| Postgres | `kubectl -n dam logs <instance pod> -c postgres`; state: `kubectl cnpg status dam-pg18 -n dam` |
+| Deploys | the GitHub Actions runs of `deploy.yml` |
+| Database metrics | Grafana dashboard "CloudNativePG" |
 
-Coolify retains roughly the last few hundred MB of stdout per service; for
-longer retention forward to a syslog target via Coolify's log drains.
+There is no log aggregation: a pod's logs go away with the pod, and the
+kubelet rotates them while it runs.
 
 ---
 
@@ -188,8 +211,7 @@ This is the single most common page. The symptom is usually one source's
 ### 7.1 Identify which source
 
 ```sh
-# Inside the db container:
-psql -U dam -d dam -c "
+kubectl cnpg psql dam-pg18 -n dam -- -d dam -c "
   select task_identifier, last_error
     from graphile_worker.jobs
    where attempts >= max_attempts
@@ -242,7 +264,7 @@ If that prints sensible records, ship it.
 ### 7.5 Ship the fix
 
 1. Commit (`fix(<adapter>): handle <change> upstream`) and push.
-2. Coolify rebuilds and redeploys.
+2. The deploy workflow builds the images and rolls them out (§0.1).
 3. Re-queue the failed jobs:
 
 ```sql
@@ -257,11 +279,13 @@ update graphile_worker.jobs
 ## 8. Common Postgres health checks
 
 ```sh
+damsql() { kubectl cnpg psql dam-pg18 -n dam -- -d dam "$@"; }
+
 # Connection count:
-psql -U dam -d dam -c "select count(*) from pg_stat_activity;"
+damsql -c "select count(*) from pg_stat_activity;"
 
 # Slow queries:
-psql -U dam -d dam -c "
+damsql -c "
   select pid, now() - query_start as duration, state, query
     from pg_stat_activity
    where state = 'active' and now() - query_start > interval '30 seconds'
@@ -269,7 +293,7 @@ psql -U dam -d dam -c "
 "
 
 # Disk usage of the largest tables:
-psql -U dam -d dam -c "
+damsql -c "
   select relname, pg_size_pretty(pg_total_relation_size(relid)) as size
     from pg_catalog.pg_statio_user_tables
    order by pg_total_relation_size(relid) desc
@@ -280,8 +304,8 @@ psql -U dam -d dam -c "
 Hypertable-specific checks (TimescaleDB) for the observation tables:
 
 ```sh
-psql -U dam -d dam -c "select * from timescaledb_information.hypertables;"
-psql -U dam -d dam -c "select * from timescaledb_information.chunks order by range_start desc limit 10;"
+damsql -c "select * from timescaledb_information.hypertables;"
+damsql -c "select * from timescaledb_information.chunks order by range_start desc limit 10;"
 ```
 
 ---
@@ -316,8 +340,17 @@ TimescaleDB caps that per transaction
   (~0.5 s each; it locks out readers of that chunk for that time), then
   `CALL refresh_continuous_aggregate('obs_daily', <chunk start>, <chunk end>, force => true);`.
 
-Run from the `db` container's terminal with the file copied into the working
-directory, always as `psql -U dam -d dam -v ON_ERROR_STOP=1 -f <file>`.
+Run from a repo checkout, piping the file into psql on the current primary as
+role `dam`:
+
+```sh
+PRIMARY=$(kubectl -n dam get cluster.postgresql.cnpg.io dam-pg18 -o jsonpath='{.status.currentPrimary}')
+kubectl -n dam exec -i "$PRIMARY" -c postgres -- env 'PGOPTIONS=-c role=dam' \
+  psql -X -d dam -v ON_ERROR_STOP=1 < deploy/ops/oneoff/<file>
+```
+
+The table's `psql -U dam -d dam -v ON_ERROR_STOP=1 -f <file>` stands for that
+command; its follow-up SQL runs in the database shell (§0).
 
 | Script | Run when | Command, then follow-up |
 | --- | --- | --- |
@@ -349,6 +382,6 @@ directory, always as `psql -U dam -d dam -v ON_ERROR_STOP=1 -f <file>`.
 If the runbook doesn't get you out of the hole within ~30 min, page
 **<redacted>** with:
 
-- Coolify resource name + the failing service.
+- The failing Deployment or pod (`kubectl -n dam get pods`).
 - The first stack trace or error from logs.
 - Anything you've already tried.

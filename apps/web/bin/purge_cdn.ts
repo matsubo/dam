@@ -1,6 +1,6 @@
 // Purge this site's hostname from the Cloudflare cache so a deploy is visible
-// at once instead of after the edge TTL. Coolify runs it as dam-web's
-// post-deployment command:
+// at once instead of after the edge TTL. The deploy workflow runs it as the
+// Job in deploy/purge-cdn.yaml after each rollout:
 //
 //   bun run bin/purge_cdn.ts
 //

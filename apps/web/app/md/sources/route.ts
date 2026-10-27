@@ -1,3 +1,4 @@
+import { allSourceFacts } from '@dam/core/sources';
 import { markdownResponse } from '../../../lib/markdown-response.ts';
 
 export const dynamic = 'force-static';
@@ -5,18 +6,25 @@ export const revalidate = 3600;
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dam.teraren.com';
 
+/** A table cell: no pipes or line breaks from the declaration text. */
+const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ');
+
+// Every declared source (packages/core/src/source_registry.ts), the same facts
+// /sources and /api/v1/sources show; the 30-day counts are on those two.
+const SOURCE_ROWS = allSourceFacts()
+  .map(
+    (s) =>
+      `| ${cell(s.label)} (\`${s.sourceId}\`) | ${cell(s.upstream)} | ${cell(s.what)} | ${cell(s.cadence)} | ${cell(s.license ?? '未確認')} | ${s.status} | ${s.priority} |`,
+  )
+  .join('\n');
+
 const BODY = `# Data Sources & Methodology
 
 ## External sources used
 
-| Source | Provides | Cadence | License |
-|---|---|---|---|
-| 国土交通省 国土数値情報 (NDI W01/W05/W07) | Master locations, capacity, watersheds (一級/二級 from W05 区間種別 + 水系域コード, boundaries from W07) | Annual | 非商用 (旧国土情報利用約款; W01/W05/W07 all carry the 非商用 licence, W01 because its source is a paid publication) — 出典・加工明示, derived attributes / 区分 / 流域界 only |
-| ダム便覧 (dambinran.damnet.or.jp) | 利水/有効貯水容量, purpose, type | Monthly | 無断転載禁止 (site notice); cite source |
-| 国土地理院 (GSI) | Elevation (DEM10B/5A), basemap tiles | Monthly | Cite source |
-| ja.wikipedia.org | Photo fallback (CC-BY-SA) | Monthly | CC-BY-SA |
-| 東京都水道局 水源情報 | 15 ダム vol/rate/delta (利根川/荒川/多摩川) | Daily | 東京都オープンデータ |
-| 水資源機構 旬報 | 26 ダム vol/rate (7 水系) | 10-day | 公的統計 |
+| Source | Upstream | Provides | Cadence | License | Status | Priority |
+|---|---|---|---|---|---|---|
+${SOURCE_ROWS}
 
 Every observation served by this site comes from one of the upstream
 sources above; there is no placeholder or generated data. Dams with no

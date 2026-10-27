@@ -28,16 +28,9 @@
 // these dams. Cron hourly at :48, asking for the hour now running so its :00
 // and :30 columns are both read; the 6-hour window re-covers missed runs.
 
-import { type BindableMaster, chooseRanked } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import {
-  recordUniverse,
-  recordUniverseHasData,
-  type UniverseRow,
-} from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
+import type { Upstream } from '../ingest/upstream.ts';
 
 const BASE_URL =
   process.env.JPOWER_NAHARIGAWA_URL ?? 'https://jpower-naharigawa-daminfo.jp/Pages/DamGraph01.aspx';
@@ -155,125 +148,43 @@ export function graphValue(now: Date): string {
   return `${day.getUTCFullYear()}/${p(day.getUTCMonth() + 1)}/${p(day.getUTCDate())} ${p(hour)}:00`;
 }
 
-// --- matching ---------------------------------------------------------------
-
-function stem(name: string): string {
-  return name
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .trim();
-}
+// --- entries ----------------------------------------------------------------
 
 /**
- * The master row for a published dam name: the row stamped with it, else an
- * exact stem match, a （元）/（再） pair settled by preferMaster. No prefix
- * fallback: a 久木 must not land on some 久木野.
+ * One dam's ダムグラフ page → its reading. A page without readings stays
+ * unreadable (a blank page may be ours, not the operator's), and so does one
+ * naming another dam: `no` then points elsewhere.
  */
-export function chooseMaster(name: string, masters: BindableMaster[]): bigint | null {
-  const target = stem(name);
-  const candidates = masters
-    .filter((m) => m.stamp === name || stem(m.name) === target)
-    .map((m) => ({ ...m, rank: 0 }));
-  return chooseRanked(candidates, name)?.id ?? null;
+export function naharigawaReading(html: string, name: string): Reading {
+  const graph = parseNaharigawaGraph(html);
+  if (graph.name !== name) return { state: 'unreadable', why: `page shows "${graph.name}"` };
+  if (graph.readings.length === 0) return { state: 'unreadable', why: 'no column with a value' };
+  return { state: 'values', observations: graph.readings };
 }
 
-// --- DB helpers -------------------------------------------------------------
+/** One ダムグラフ page by `no`, for the hour `value` (see graphValue). */
+export const graphUrl = (value: string, no: string): string =>
+  `${BASE_URL}?value=${encodeURIComponent(value)}&no=${no}`;
 
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 301,
-            '電源開発 奈半利川ダム情報公開サイト — 魚梁瀬/久木/平鍋ダム (UTF-8 HTML, 30分値)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-async function matchMaster(log: (s: string) => void): Promise<Map<string, bigint>> {
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const damByName = new Map<string, bigint>();
-  const universe: UniverseRow[] = [];
-  for (const { name } of STATIONS) {
-    const damId = chooseMaster(name, masters);
-    universe.push({ externalId: name, name, prefCode: PREF_CODE, resolvedDamId: damId });
-    if (!damId) {
-      log(`${SOURCE_ID}: no master match for "${name}"`);
-      continue;
-    }
-    damByName.set(name, damId);
-    await bindExternalId(damId, SOURCE_ID, name);
-  }
-  await recordUniverse(SOURCE_ID, universe);
-  return damByName;
+/**
+ * The three dams, each read from its own page for the hour `value`. Matched
+ * exactly, never by prefix: a 久木 must not land on some 久木野.
+ */
+export function naharigawaEntries(upstream: Upstream, value: string): Entry[] {
+  return STATIONS.map(({ no, name }) => ({
+    key: name,
+    name,
+    pref: PREF_CODE,
+    bind: { exact: true },
+    reading: async () =>
+      naharigawaReading((await upstream.fetch(graphUrl(value, no))).text(), name),
+  }));
 }
 
 // --- task -------------------------------------------------------------------
 
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-  const damByName = await matchMaster(log);
-
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
   const value = graphValue(new Date());
-  const userAgent =
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
-  const inputs = [] as Parameters<typeof upsertObservations>[0];
-  let parsed = 0;
-  // Stations whose page yielded readings this run; the rest stay unknown
-  // (an HTTP error or a blank page may be ours, not the operator's).
-  const withData = new Set<string>();
-  for (const { no, name } of STATIONS) {
-    const url = `${BASE_URL}?value=${encodeURIComponent(value)}&no=${no}`;
-    const r = await fetch(url, {
-      headers: { 'user-agent': userAgent },
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (r.status !== 200) {
-      log(`${SOURCE_ID}: ${name} HTTP ${r.status}; skipped`);
-      continue;
-    }
-    const graph = parseNaharigawaGraph(await r.text());
-    // The page names its dam; a mismatch means `no` now points elsewhere.
-    if (graph.name !== name) {
-      log(`${SOURCE_ID}: no=${no} shows "${graph.name}", expected "${name}"; skipped`);
-      continue;
-    }
-    parsed += graph.readings.length;
-    if (graph.readings.length > 0) withData.add(name);
-    const damId = damByName.get(name);
-    if (!damId) continue;
-    for (const p of graph.readings) {
-      inputs.push({
-        observedAt: p.observedAt,
-        damId,
-        sourceId: SOURCE_ID,
-        storageVolumeM3: null,
-        storageRate: null,
-        inflowM3s: p.inflowM3s,
-        outflowM3s: p.outflowM3s,
-        waterLevelM: p.waterLevelM,
-        rainfallMm: null,
-        rawSnapshotId: null,
-        qualityFlag: 0,
-      });
-    }
-  }
-
-  await recordUniverseHasData(
-    SOURCE_ID,
-    STATIONS.map(({ name }) => ({ externalId: name, hasData: withData.has(name) ? true : null })),
-  );
-  const written = await upsertObservations(inputs);
-  log(
-    `${SOURCE_ID} done: value=${value} parsed=${parsed} matched=${damByName.size} written=${written}`,
-  );
-};
-
-export default task;
+  log(`${SOURCE_ID}: value=${value}`);
+  return { entries: naharigawaEntries(upstream, value) };
+});

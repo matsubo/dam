@@ -99,13 +99,13 @@ beforeAll(async () => {
   base = {
     count: beforeNational.observedDamCount,
     storage: num(beforeNational.storageM3),
-    capacity: num(beforeNational.activeCapacityM3),
+    capacity: num(beforeNational.effectiveCapacityM3),
   };
   const beforePref = (await storageTotalsByPref()).get(PREF);
   basePref = {
     count: beforePref?.observedDamCount ?? 0,
     storage: num(beforePref?.storageM3 ?? null),
-    capacity: num(beforePref?.activeCapacityM3 ?? null),
+    capacity: num(beforePref?.effectiveCapacityM3 ?? null),
   };
 
   damFresh = await addDam('TOTALS-FRESH', 1000, 'totals-fresh');
@@ -165,7 +165,7 @@ describe('nationalStorageTotals', () => {
     const t = await nationalStorageTotals();
     // 1000 (fresh) + 2000 (level-newer). The no-obs / stale / level-only dams
     // carry 21,000 m³ of capacity between them and must not appear.
-    expect(num(t.activeCapacityM3) - base.capacity).toBe(3000);
+    expect(num(t.effectiveCapacityM3) - base.capacity).toBe(3000);
   });
 
   test('sums the latest fresh volume per dam', async () => {
@@ -176,7 +176,7 @@ describe('nationalStorageTotals', () => {
   test('the resulting rate is storage over cohort capacity', async () => {
     const t = await nationalStorageTotals();
     const storage = num(t.storageM3) - base.storage;
-    const capacity = num(t.activeCapacityM3) - base.capacity;
+    const capacity = num(t.effectiveCapacityM3) - base.capacity;
     expect(storage / capacity).toBeCloseTo(0.4, 5);
   });
 });
@@ -186,7 +186,7 @@ describe('storageTotalsByPref', () => {
     const row = (await storageTotalsByPref()).get(PREF);
     expect(row).toBeDefined();
     expect((row?.observedDamCount ?? 0) - basePref.count).toBe(2);
-    expect(num(row?.activeCapacityM3 ?? null) - basePref.capacity).toBe(3000);
+    expect(num(row?.effectiveCapacityM3 ?? null) - basePref.capacity).toBe(3000);
     expect(num(row?.storageM3 ?? null) - basePref.storage).toBe(1200);
   });
 });
@@ -196,7 +196,7 @@ describe('storageTotalsByWatershed', () => {
     const row = (await storageTotalsByWatershed()).get('test-totals-watershed');
     expect(row).toBeDefined();
     expect(row?.observedDamCount).toBe(2);
-    expect(num(row?.activeCapacityM3 ?? null)).toBe(3000);
+    expect(num(row?.effectiveCapacityM3 ?? null)).toBe(3000);
     expect(num(row?.storageM3 ?? null)).toBe(1200);
   });
 
@@ -213,18 +213,20 @@ describe('storageTotalsByWatershed', () => {
 describe('storageRate', () => {
   test('divides storage by cohort capacity', () => {
     expect(
-      storageRate({ observedDamCount: 2, storageM3: '1200', activeCapacityM3: '3000' }),
+      storageRate({ observedDamCount: 2, storageM3: '1200', effectiveCapacityM3: '3000' }),
     ).toBeCloseTo(0.4, 5);
   });
 
   test('is null for an empty cohort', () => {
     expect(
-      storageRate({ observedDamCount: 0, storageM3: null, activeCapacityM3: null }),
+      storageRate({ observedDamCount: 0, storageM3: null, effectiveCapacityM3: null }),
     ).toBeNull();
     expect(storageRate(undefined)).toBeNull();
   });
 
   test('is null when capacity is zero rather than dividing by it', () => {
-    expect(storageRate({ observedDamCount: 1, storageM3: '10', activeCapacityM3: '0' })).toBeNull();
+    expect(
+      storageRate({ observedDamCount: 1, storageM3: '10', effectiveCapacityM3: '0' }),
+    ).toBeNull();
   });
 });

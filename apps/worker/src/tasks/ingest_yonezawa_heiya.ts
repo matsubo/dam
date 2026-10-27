@@ -22,21 +22,14 @@
 // 水窪 is in no other feed (not on kasenbosai, not in 山形県's bousai table),
 // so priority 278 ties with nothing on it.
 
-import { type BindableMaster, preferMaster, stampedMaster } from '@dam/core/dam_binding';
-import { sql } from '@dam/db/client';
-import { bindExternalId } from '@dam/db/repo/dams';
-import { upsertObservations } from '@dam/db/repo/observations';
-import { recordUniverse, type UniverseRow } from '@dam/db/repo/source_universe';
-import type { Task } from 'graphile-worker';
+import { ingestTask } from '../ingest/run.ts';
+import type { Entry } from '../ingest/types.ts';
+import { UpstreamError } from '../ingest/upstream.ts';
 
 const PAGE_URL = process.env.YONEZAWA_HEIYA_URL ?? 'https://www.yonezawa-heiya.or.jp/pages/150/';
 
 const PREF_CODE = '06';
 const SOURCE_ID = 'yonezawa-heiya';
-
-const USER_AGENT =
-  process.env.HTTP_USER_AGENT ??
-  'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)';
 
 // --- parsing ----------------------------------------------------------------
 
@@ -90,115 +83,45 @@ export function findArchiveUrl(html: string, base: string): string | null {
   return null;
 }
 
-// --- matching ---------------------------------------------------------------
+// --- entries ----------------------------------------------------------------
 
-function stemOf(s: string): string {
-  return s
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/ダム$/, '')
-    .trim();
-}
-
-/** The stamped row, else the dam of the same name (live twin of （元）/（再）). */
-export function chooseMaster(name: string, masters: BindableMaster[]): bigint | null {
-  const stamped = stampedMaster(masters, name);
-  if (stamped) return stamped.id;
-  const stem = stemOf(name);
-  let best: BindableMaster | null = null;
-  for (const m of masters) {
-    if (stemOf(m.name) !== stem) continue;
-    if (!best || preferMaster(m, best)) best = m;
-  }
-  return best?.id ?? null;
-}
-
-// --- DB helpers -------------------------------------------------------------
-
-async function ensureSourcePriority(): Promise<void> {
-  await sql`
-    INSERT INTO source_priorities (source_id, priority, description, active)
-    VALUES (${SOURCE_ID}, 278,
-            '米沢平野土地改良区 用水状況 — 水窪ダム貯水量 (週次 HTML)',
-            true)
-    ON CONFLICT (source_id) DO UPDATE
-      SET priority    = EXCLUDED.priority,
-          description = EXCLUDED.description,
-          active      = EXCLUDED.active
-  `;
-}
-
-async function fetchHtml(url: string): Promise<string | null> {
-  const r = await fetch(url, {
-    headers: { 'user-agent': USER_AGENT },
-    signal: AbortSignal.timeout(20_000),
-  });
-  return r.status === 200 ? await r.text() : null;
-}
-
-// --- task -------------------------------------------------------------------
-
-const task: Task = async (_payload, helpers) => {
-  const log = (s: string): void => helpers.logger.info(s);
-  await ensureSourcePriority();
-
-  const html = await fetchHtml(PAGE_URL);
-  if (html === null) {
-    log(`${SOURCE_ID}: ${PAGE_URL} did not return 200; aborting`);
-    return;
-  }
-  const name = parseDamName(html);
+/**
+ * The one dam the page reports on, with every weekly reading of the current
+ * page and the fiscal-year archive (null when it could not be read). Binds
+ * only the dam of the same name (the live twin of a （元）/（再） pair).
+ */
+export function yonezawaEntry(current: string, archive: string | null): Entry {
+  const name = parseDamName(current);
   if (!name) throw new Error(`${SOURCE_ID}: no 「…ダム用水状況」 heading on ${PAGE_URL}`);
-
   const readings = new Map<number, ParsedReading>();
-  for (const r of parseYonezawaReadings(html)) readings.set(r.observedAt.getTime(), r);
+  for (const r of parseYonezawaReadings(current)) readings.set(r.observedAt.getTime(), r);
+  if (archive !== null) {
+    for (const r of parseYonezawaReadings(archive)) readings.set(r.observedAt.getTime(), r);
+  }
+  return {
+    key: name,
+    name,
+    pref: PREF_CODE,
+    bind: { exact: true },
+    reading:
+      readings.size > 0
+        ? { state: 'values', observations: [...readings.values()] }
+        : { state: 'unreadable', why: 'no 「現在、貯水量は」 caption' },
+  };
+}
+
+export default ingestTask(SOURCE_ID, async ({ log, upstream }) => {
+  const html = (await upstream.fetch(PAGE_URL)).text();
   const archiveUrl = findArchiveUrl(html, PAGE_URL);
-  const archive = archiveUrl ? await fetchHtml(archiveUrl) : null;
+  // An archive answering with an error status is skipped; a network failure fails the run.
+  let archive: string | null = null;
+  if (archiveUrl) {
+    try {
+      archive = (await upstream.fetch(archiveUrl)).text();
+    } catch (err) {
+      if (!(err instanceof UpstreamError && err.status !== null)) throw err;
+    }
+  }
   if (archive === null) log(`${SOURCE_ID}: archive ${archiveUrl ?? '(no link)'} not read`);
-  else for (const r of parseYonezawaReadings(archive)) readings.set(r.observedAt.getTime(), r);
-  log(`${SOURCE_ID}: parsed ${readings.size} weekly readings for ${name}`);
-
-  const masters = await sql<BindableMaster[]>`
-    SELECT id, name, completed_year AS "completedYear", external_ids->>${SOURCE_ID} AS stamp
-    FROM dams WHERE pref_code = ${PREF_CODE} ORDER BY id
-  `;
-  const damId = chooseMaster(name, masters);
-  // The page publishes this one dam; record it before the unmatched return.
-  const universe: UniverseRow[] = [
-    {
-      externalId: name,
-      name,
-      prefCode: PREF_CODE,
-      resolvedDamId: damId,
-      ...(readings.size > 0 ? { hasData: true } : {}),
-    },
-  ];
-  await recordUniverse(SOURCE_ID, universe);
-  if (!damId) {
-    log(`${SOURCE_ID}: no master match for "${name}"`);
-    return;
-  }
-  await bindExternalId(damId, SOURCE_ID, name);
-
-  const written = await upsertObservations(
-    [...readings.values()].map((r) => ({
-      observedAt: r.observedAt,
-      damId,
-      sourceId: SOURCE_ID,
-      storageVolumeM3: r.storageVolumeM3,
-      storageRate: null,
-      inflowM3s: null,
-      outflowM3s: null,
-      waterLevelM: null,
-      rainfallMm: null,
-      rawSnapshotId: null,
-      qualityFlag: 0,
-    })),
-  );
-  log(`${SOURCE_ID} done: parsed=${readings.size} matched=1 written=${written}`);
-
-  if (readings.size === 0) {
-    throw new Error(`${SOURCE_ID}: no 「現在、貯水量は」 caption on ${PAGE_URL} — layout change?`);
-  }
-};
-
-export default task;
+  return { entries: [yonezawaEntry(html, archive)], dated: true };
+});

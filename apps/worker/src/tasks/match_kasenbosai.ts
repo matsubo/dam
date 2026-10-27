@@ -31,6 +31,7 @@ import { sql } from '@dam/db/client';
 import { bindExternalId } from '@dam/db/repo/dams';
 import { recordUniverse } from '@dam/db/repo/source_universe';
 import type { Task } from 'graphile-worker';
+import { liveUpstream, type Upstream } from '../ingest/upstream.ts';
 import {
   MATCH_THRESHOLD,
   pickBest,
@@ -87,24 +88,6 @@ function jstNowParts(): { date: string; time: string } {
   return { date: `${yyyy}${mm}${dd}`, time: `${hh}${mi}` };
 }
 
-function userAgent(): string {
-  return (
-    process.env.HTTP_USER_AGENT ??
-    'DamDataPlatform/0.1 (+https://dam.teraren.com/legal/terms; contact: https://discord.gg/UbWqspWbAk)'
-  );
-}
-
-async function fetchJson<T>(url: string, timeoutMs = 10_000): Promise<T> {
-  const r = await fetch(url, {
-    headers: { 'user-agent': userAgent() },
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
-  // SCC files have a UTF-8 BOM; TextDecoder('utf-8') strips it automatically
-  // for Bun's response.json() too.
-  return (await r.json()) as T;
-}
-
 interface DamFeature {
   geometry?: { coordinates?: [number, number] };
   properties?: { obs_fcd?: string; obs_nm?: string; ofc_cd?: number };
@@ -130,16 +113,19 @@ export function parseDamCollection(fc: DamCollection, kbPrefCd: number): Catalog
 }
 
 export async function fetchAllKasenbosaiDams(
+  upstream: Upstream,
   date: string,
   time: string,
   log: (s: string) => void,
 ): Promise<CatalogueDam[]> {
-  const prefArea = await fetchJson<PrefAreaResp>(PREFAREA_URL);
+  // SCC files have a UTF-8 BOM; the port's json() drops it.
+  const prefArea = (await upstream.fetch(PREFAREA_URL, { timeoutMs: 10_000 })).json<PrefAreaResp>();
   const out: CatalogueDam[] = [];
   for (const pref of prefArea.prefs) {
     const url = `${OBS_BASE}/${date}/${time}/dam/${pref.prefCd}.json`;
     try {
-      out.push(...parseDamCollection(await fetchJson<DamCollection>(url, 8_000), pref.prefCd));
+      const fc = (await upstream.fetch(url, { timeoutMs: 8_000 })).json<DamCollection>();
+      out.push(...parseDamCollection(fc, pref.prefCd));
     } catch (err) {
       log(
         `match:kasenbosai: pref ${pref.prefCd} (${pref.prefNm}) skipped: ${(err as Error).message}`,
@@ -345,7 +331,7 @@ const task: Task = async (rawPayload, helpers) => {
   const time = payload.time ?? tDef;
   log(`match:kasenbosai start — snapshot ${date} ${time}`);
 
-  const cat = await fetchAllKasenbosaiDams(date, time, log);
+  const cat = await fetchAllKasenbosaiDams(liveUpstream('kasenbosai'), date, time, log);
   log(`match:kasenbosai: fetched ${cat.length} dams across ${PREFECTURES.length} JIS prefs`);
 
   // Score everything first. Two stations can legitimately resolve to the same

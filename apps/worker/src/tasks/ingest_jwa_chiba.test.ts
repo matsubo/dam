@@ -1,5 +1,10 @@
+// apps/worker/src/tasks/ingest_jwa_chiba.test.ts
+//
+// Sample page → universe entries, no database: binding and writing belong to
+// the ingest run (apps/worker/src/ingest/run.test.ts).
+
 import { describe, expect, test } from 'bun:test';
-import { parseDam, parseJwaChibaHtml, parseJwaChibaTimestamp } from './ingest_jwa_chiba.ts';
+import { jwaChibaEntries, parseDam, parseJwaChibaTimestamp } from './ingest_jwa_chiba.ts';
 
 describe('parseJwaChibaTimestamp', () => {
   test('parses Reiwa date → midnight JST → UTC', () => {
@@ -110,33 +115,46 @@ describe('parseDam', () => {
   });
 });
 
-describe('parseJwaChibaHtml', () => {
-  test('returns rows for both dams', () => {
-    const rows = parseJwaChibaHtml(SAMPLE_HTML);
-    expect(rows).toHaveLength(2);
-    const nagara = rows.find((r) => r.htmlName === '長柄ダム');
-    const togane = rows.find((r) => r.htmlName === '東金ダム');
+describe('jwaChibaEntries', () => {
+  test('lists both dams with their level and rate at 0時 JST', () => {
+    const list = jwaChibaEntries({ html: SAMPLE_HTML });
+    expect(list.map((e) => [e.key, e.name, e.pref, e.bind])).toEqual([
+      ['長柄ダム', '長柄ダム', '12', undefined],
+      ['東金ダム', '東金ダム', '12', undefined],
+    ]);
+    const [nagara, togane] = list.map((e) => {
+      const r = e.reading;
+      if (typeof r === 'function' || r.state !== 'values') throw new Error(`${e.key}: no values`);
+      return r.observations[0];
+    });
+    // 令和8年6月5日 0時 JST = 2026-06-04T15:00:00Z
+    expect(nagara?.observedAt.toISOString()).toBe('2026-06-04T15:00:00.000Z');
     expect(nagara?.waterLevelM).toBeCloseTo(74.18);
     expect(nagara?.storageRate).toBeCloseTo(0.925);
     expect(togane?.waterLevelM).toBeCloseTo(42.86);
+    // the end comment says 取水率, not 貯水率: still parsed
     expect(togane?.storageRate).toBeCloseTo(0.898);
   });
 
-  test('returns correct UTC timestamp', () => {
-    const rows = parseJwaChibaHtml(SAMPLE_HTML);
-    // 令和8年6月5日 0時 JST = 2026-06-04T15:00:00Z
-    expect(rows[0]?.observedAt.toISOString()).toBe('2026-06-04T15:00:00.000Z');
+  test('a dam with neither 水位 nor 貯水率 is still listed, unreadable', () => {
+    const html = SAMPLE_HTML.replace('E.L. 42.86m', 'E.L. m').replace('89.8 %', ' %');
+    const togane = jwaChibaEntries({ html }).find((e) => e.key === '東金ダム');
+    expect(togane?.reading).toEqual({
+      state: 'unreadable',
+      why: 'no 水位 or 貯水率 parsed for 東金ダム',
+    });
   });
 
-  test('returns empty array when no timestamp', () => {
-    const rows = parseJwaChibaHtml('<table></table>');
-    expect(rows).toHaveLength(0);
+  test('a page without the 0時現在 date leaves both dams unreadable', () => {
+    const list = jwaChibaEntries({ html: '<table></table>' });
+    expect(list).toHaveLength(2);
+    for (const e of list) expect(e.reading).toMatchObject({ state: 'unreadable' });
   });
 
-  test('the "取水率" typo in end-comment still works for 東金ダム storage rate', () => {
-    const rows = parseJwaChibaHtml(SAMPLE_HTML);
-    const togane = rows.find((r) => r.htmlName === '東金ダム');
-    // Should parse correctly despite the end comment saying 取水率
-    expect(togane?.storageRate).toBeCloseTo(0.898);
+  test('a failed fetch still lists both dams, unreadable', () => {
+    expect(jwaChibaEntries({ failed: 'HTTP 500' }).map((e) => e.reading)).toEqual([
+      { state: 'unreadable', why: 'HTTP 500' },
+      { state: 'unreadable', why: 'HTTP 500' },
+    ]);
   });
 });

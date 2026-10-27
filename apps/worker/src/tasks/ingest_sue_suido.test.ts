@@ -7,7 +7,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { chooseMaster, parseSueRates, planSue, type SueMaster } from './ingest_sue_suido.ts';
+import { parseSueRates, sueEntries } from './ingest_sue_suido.ts';
 
 const FIXTURE = join(
   import.meta.dir,
@@ -19,11 +19,6 @@ const FIXTURE = join(
 );
 
 const html = await readFile(FIXTURE, 'utf8');
-
-const MASTERS: SueMaster[] = [
-  { id: 11081n, name: '須恵', completedYear: 1964, stamp: null },
-  { id: 1n, name: '須恵川', completedYear: 1990, stamp: null },
-];
 
 describe('parseSueRates', () => {
   test('reads the four 現在 rates, not the 月別 history', () => {
@@ -49,28 +44,32 @@ describe('parseSueRates', () => {
   });
 });
 
-describe('chooseMaster', () => {
-  test('須恵ダム binds to 須恵 only, not a longer name', () => {
-    expect(chooseMaster('須恵ダム', MASTERS)).toBe(11081n);
-  });
+describe('sueEntries', () => {
+  const page = parseSueRates(html);
+  const observedAt = page.observedAt;
+  if (!observedAt) throw new Error('fixture has a 更新日');
 
-  test('the 貯水池 / 溜池 outside the master bind to nothing', () => {
-    expect(chooseMaster('中柱田貯水池', MASTERS)).toBeNull();
-    expect(chooseMaster('新男鳥溜池', MASTERS)).toBeNull();
-  });
-});
-
-describe('planSue', () => {
-  test('records all four and writes 須恵 only, dated by the 更新日', () => {
-    const page = parseSueRates(html);
-    if (!page.observedAt) throw new Error('fixture has a 更新日');
-    const { universe, writes } = planSue(page.rows, MASTERS, page.observedAt);
-    expect(universe.map((u) => [u.externalId, u.resolvedDamId, u.publishedAt])).toEqual([
-      ['須恵ダム', 11081n, new Date('2026-08-31T15:00:00Z')],
-      ['中柱田貯水池', null, null],
-      ['旧男鳥溜池', null, null],
-      ['新男鳥溜池', null, null],
+  test('lists all four, bound by exact name only (須恵ダム is 須恵, never a longer name)', () => {
+    expect(sueEntries(observedAt, page.rows).map((e) => [e.key, e.pref, e.bind])).toEqual([
+      ['須恵ダム', '40', { exact: true }],
+      ['中柱田貯水池', '40', { exact: true }],
+      ['旧男鳥溜池', '40', { exact: true }],
+      ['新男鳥溜池', '40', { exact: true }],
     ]);
-    expect(writes).toEqual([{ damId: 11081n, row: { name: '須恵ダム', storageRate: 1 } }]);
+  });
+
+  test('reads the rate only, dated by the 更新日', () => {
+    expect(sueEntries(observedAt, page.rows)[0]?.reading).toEqual({
+      state: 'values',
+      observations: [{ observedAt: new Date('2026-08-31T15:00:00Z'), storageRate: 1 }],
+    });
+  });
+
+  test('a blank rate is unreadable', () => {
+    const rows = page.rows.map((r) => (r.name === '須恵ダム' ? { ...r, storageRate: null } : r));
+    expect(sueEntries(observedAt, rows)[0]?.reading).toEqual({
+      state: 'unreadable',
+      why: 'no 貯水率',
+    });
   });
 });

@@ -1,17 +1,14 @@
 // apps/worker/src/tasks/ingest_fukushima_nourin.test.ts
 //
-// Pure-function tests for the 福島県「県内の主要農業関係ダムの貯水状況」
-// parser. Fixture is a verbatim UTF-8 capture of the 令和8年9月1日 table.
+// Fixture → universe entries for 福島県「県内の主要農業関係ダムの貯水状況」, no
+// database: binding and writing belong to the ingest run. Fixture is a
+// verbatim UTF-8 capture of the 令和8年9月1日 table.
 
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import {
-  chooseMaster,
-  normalizeName,
-  parseFukushimaNourinHtml,
-  parseNourinReportDate,
-} from './ingest_fukushima_nourin.ts';
+import type { Entry, Reading } from '../ingest/types.ts';
+import { fukushimaNourinEntries, parseNourinReportDate } from './ingest_fukushima_nourin.ts';
 
 const FIXTURE = join(
   import.meta.dir,
@@ -22,7 +19,19 @@ const FIXTURE = join(
   'tests/fixtures/fukushima_nourin/noutikannri010_2026-09-01.html',
 );
 
-const fixtureHtml = (): Promise<string> => readFile(FIXTURE, 'utf-8');
+const html = await readFile(FIXTURE, 'utf-8');
+const entries = fukushimaNourinEntries(html);
+
+function readingOf(list: Entry[], name: string): Reading {
+  const r = list.find((e) => e.name === name)?.reading;
+  if (!r || typeof r === 'function') throw new Error(`no reading for ${name}`);
+  return r;
+}
+
+function rate(name: string): number | null | undefined {
+  const r = readingOf(entries, name);
+  return r.state === 'values' ? r.observations[0]?.storageRate : undefined;
+}
 
 describe('parseNourinReportDate', () => {
   test('parses 「令和8年9月1日現在」 → JST midnight', () => {
@@ -36,129 +45,70 @@ describe('parseNourinReportDate', () => {
   });
 
   test('takes the 「…現在」 survey date, not an earlier 掲載日 on the page', () => {
-    const html = '<div>掲載日：令和8年9月2日更新</div><h3>令和8年9月1日現在</h3>';
-    expect(parseNourinReportDate(html)?.toISOString()).toBe('2026-08-31T15:00:00.000Z');
+    const page = '<div>掲載日：令和8年9月2日更新</div><h3>令和8年9月1日現在</h3>';
+    expect(parseNourinReportDate(page)?.toISOString()).toBe('2026-08-31T15:00:00.000Z');
   });
 });
 
-describe('normalizeName', () => {
-  test('folds ノ/の so 山ノ入ダム matches master 山の入', () => {
-    expect(normalizeName('山ノ入ダム')).toBe(normalizeName('山の入'));
+describe('fukushimaNourinEntries', () => {
+  test('dates every reading by the survey heading', () => {
+    const r = readingOf(entries, '岳ダム');
+    if (r.state !== 'values') throw new Error(r.state);
+    expect(r.observations[0]?.observedAt.toISOString()).toBe('2026-08-31T15:00:00.000Z');
   });
 
-  test('strips ダム suffix and （元）/（再） annotations', () => {
-    expect(normalizeName('千五沢ダム')).toBe('千五沢');
-    expect(normalizeName('千五沢（再）')).toBe('千五沢');
+  test('reads 貯水率 as a 0..1 fraction', () => {
+    expect(rate('岳ダム')).toBeCloseTo(0.979, 6);
+    expect(rate('深田調整池')).toBeCloseTo(0.75, 6);
+    expect(rate('金沢調整池')).toBeCloseTo(0.724, 6);
+    expect(rate('新池')).toBeCloseTo(0.784, 6);
   });
 
-  test('keeps 調整池 / 溜池 / 池 / 沼 suffixes (they are part of the name)', () => {
-    expect(normalizeName('深田調整池')).toBe('深田調整池');
-    expect(normalizeName('千軒平溜池')).toBe('千軒平溜池');
-  });
-});
-
-describe('parseFukushimaNourinHtml', () => {
-  test('reads the survey date from the heading', async () => {
-    const { reportDate } = parseFukushimaNourinHtml(await fixtureHtml());
-    expect(reportDate?.toISOString()).toBe('2026-08-31T15:00:00.000Z');
-  });
-
-  test('extracts one row per dam with 貯水率 as a 0..1 fraction', async () => {
-    const { rows } = parseFukushimaNourinHtml(await fixtureHtml());
-    const byName = new Map(rows.map((r) => [r.fukushimaName, r.storageRate]));
-    expect(byName.get('岳ダム')).toBeCloseTo(0.979, 6);
-    expect(byName.get('深田調整池')).toBeCloseTo(0.75, 6);
-    expect(byName.get('金沢調整池')).toBeCloseTo(0.724, 6);
-    expect(byName.get('新池')).toBeCloseTo(0.784, 6);
-  });
-
-  test('skips 調査対象外 rows whose 貯水率 cell is prose, not a number', async () => {
-    const { rows } = parseFukushimaNourinHtml(await fixtureHtml());
-    const names = rows.map((r) => r.fukushimaName);
-    expect(names).not.toContain('鉄山ダム');
-    expect(names).not.toContain('坂下ダム');
-  });
-
-  test('skips the annotated 0.0% row (鴻の巣ダム — 工事中で落水)', async () => {
-    const { rows } = parseFukushimaNourinHtml(await fixtureHtml());
-    expect(rows.map((r) => r.fukushimaName)).not.toContain('鴻の巣ダム');
-    for (const r of rows) expect(r.storageRate).toBeGreaterThan(0);
-  });
-
-  test('reports every published dam row, unusable rate included', async () => {
+  test('lists every published dam row, unusable rate included, and no summary row', () => {
     // The universe is what 福島県 publishes, not what we could store: 鉄山 /
     // 坂下 / 鴻の巣 are on the page, so /coverage must not read them as
     // "nobody publishes this dam".
-    const { published, rows } = parseFukushimaNourinHtml(await fixtureHtml());
-    const names = published.map((p) => p.name);
-    expect(names.length).toBe(29);
+    const names = entries.map((e) => e.name);
+    expect(names).toHaveLength(29);
     expect(names).toContain('鉄山ダム');
     expect(names).toContain('坂下ダム');
     expect(names).toContain('鴻の巣ダム');
     expect(names).not.toContain('県平均');
-    expect(rows.length).toBe(26);
-  });
-
-  test('marks the rows the page itself says carry no value', async () => {
-    // 調査対象外 (鉄山 / 坂下) and the drained 0.0% (鴻の巣) are the page telling
-    // us there is nothing to publish — /coverage must not call them our bug.
-    const { published } = parseFukushimaNourinHtml(await fixtureHtml());
-    const hasData = new Map(published.map((p) => [p.name, p.hasData]));
-    expect(hasData.get('鉄山ダム')).toBe(false);
-    expect(hasData.get('坂下ダム')).toBe(false);
-    expect(hasData.get('鴻の巣ダム')).toBe(false);
-    expect([...hasData.values()].filter((v) => v === true).length).toBe(26);
-  });
-
-  test('leaves a rate cell it cannot read as unknown, not as "no value"', async () => {
-    // An unrecognised cell may be a layout change on our side; reporting it as
-    // an empty upstream row would hide that bug under 提供元に値なし.
-    const html = (await fixtureHtml()).replace(/97\.9%/, '97,9 %');
-    const { published, rows } = parseFukushimaNourinHtml(html);
-    const unreadable = published.filter((p) => p.hasData === null);
-    expect(unreadable.length).toBe(1);
-    expect(rows.map((r) => r.fukushimaName)).not.toContain(unreadable[0]?.name);
-  });
-
-  test('skips the 県平均 summary row and the footnote row', async () => {
-    const { rows } = parseFukushimaNourinHtml(await fixtureHtml());
-    const names = rows.map((r) => r.fukushimaName);
-    expect(names).not.toContain('県平均');
-    expect(rows.length).toBe(26);
-    for (const r of rows) {
-      expect(r.fukushimaName).toMatch(/(ダム|調整池|溜池|池|沼)$/);
-      expect(r.storageRate).toBeLessThanOrEqual(1);
+    for (const e of entries) {
+      expect(e.name).toMatch(/(ダム|調整池|溜池|池|沼)$/);
+      expect(e.pref).toBe('07');
     }
   });
-});
 
-describe('chooseMaster', () => {
-  const masters = [
-    { id: 1n, name: '大深沢' },
-    { id: 2n, name: '深田調整池' },
-    { id: 3n, name: '金沢調整池' },
-    { id: 4n, name: '金沢調整池副堤' },
-    { id: 5n, name: '新宮川' },
-    { id: 6n, name: '千五沢（元）' },
-    { id: 7n, name: '千五沢（再）', completedYear: 2023 },
-  ];
-
-  test('matches a feed name that carries a 調整池 suffix the master omits', () => {
-    // 大深沢調整池 (雄国山麓土地改良区) is master 大深沢 — 東北農政局, 喜多方市.
-    expect(chooseMaster('大深沢調整池', masters)).toBe(1n);
+  test('marks the rows the page itself says carry no value', () => {
+    // 調査対象外 (鉄山 / 坂下) and the drained 0.0% (鴻の巣 — 工事中で落水) are
+    // the page telling us there is nothing to publish — /coverage must not
+    // call them our bug, and the 0.0% is never stored as a phantom zero.
+    expect(readingOf(entries, '鉄山ダム').state).toBe('empty');
+    expect(readingOf(entries, '坂下ダム').state).toBe('empty');
+    expect(readingOf(entries, '鴻の巣ダム').state).toBe('empty');
+    const values = entries.filter((e) => readingOf(entries, e.name).state === 'values');
+    expect(values).toHaveLength(26);
+    for (const e of values) {
+      const r = rate(e.name) ?? 0;
+      expect(r).toBeGreaterThan(0);
+      expect(r).toBeLessThanOrEqual(1);
+    }
   });
 
-  test('prefers the exact master name over the suffix-stripped fallback', () => {
-    expect(chooseMaster('金沢調整池', masters)).toBe(3n);
-    expect(chooseMaster('深田調整池', masters)).toBe(2n);
+  test('leaves a rate cell it cannot read unreadable, not "no value"', () => {
+    // An unrecognised cell may be a layout change on our side; reporting it as
+    // an empty upstream row would hide that bug under 提供元に値なし.
+    const broken = fukushimaNourinEntries(html.replace(/97\.9%/, '97,9 %'));
+    expect(readingOf(broken, '岳ダム').state).toBe('unreadable');
   });
 
-  test('does not strip a single-character 池/沼 (新池 must not match 新宮川)', () => {
-    expect(chooseMaster('新池', masters)).toBeNull();
-    expect(chooseMaster('半田沼', masters)).toBeNull();
-  });
-
-  test('binds 千五沢 to the completed （再）, not the lower-id （元） (#79)', () => {
-    expect(chooseMaster('千五沢ダム', masters)).toBe(7n);
+  test('binds the names the master spells differently', () => {
+    // Feed 山ノ入ダム is master 山の入; 大深沢調整池 (雄国山麓土地改良区) is
+    // master 大深沢 (東北農政局, 喜多方市), exact so it takes no longer name.
+    const bind = (name: string) => entries.find((e) => e.name === name)?.bind;
+    expect(bind('山ノ入ダム')).toEqual({ name: '山の入' });
+    expect(bind('大深沢調整池')).toEqual({ name: '大深沢', exact: true });
+    expect(bind('岳ダム')).toBeUndefined();
   });
 });
