@@ -161,4 +161,6 @@ COMMENT ON FUNCTION window_source(BIGINT, TIMESTAMPTZ, TIMESTAMPTZ, BOOLEAN) IS
   'Best source for a dam over [p_from, p_to): highest source_rank among sources '
   'with a value there, then source_id; p_prefer_volume ranks volume-carrying sources first.';
 
-DROP FUNCTION display_observation(BIGINT, BOOLEAN, INTERVAL);
+-- display_observation() stays until the release running this code is live
+-- everywhere: a rolling deploy keeps an old web pod serving for ~30 s after
+-- the new pod has migrated, and the old code still calls it. 0227 drops it.

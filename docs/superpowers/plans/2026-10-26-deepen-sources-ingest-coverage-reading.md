@@ -106,7 +106,8 @@ an E2E smoke run. Nothing is pushed without the owner's go-ahead.
   and no worse plan for 全国 and 水系.
 
 - Done (2026-10-27), migration 0226: `dam_reading()`, `window_source()`, `source_rank()`;
-  `display_observation()` and `newest_row.ts` are gone.
+  `newest_row.ts` is gone. `display_observation()` is dropped by 0227 in the next release, so
+  old pods still running during the rollout keep working.
   - `obs_daily` was **not** rebuilt: its `last_storage_volume_m3` (0223) already is the daily
     value (newest row with a volume, same tie-break, no trusted preference), so a rebuild would
     change no row.
