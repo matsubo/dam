@@ -285,6 +285,7 @@ the file for detail.
 0224_ingest_run_not_dam_rows_and_iwate_stamps.sql  not_dam_reason for the rows the ingest run newly lists that are not one master dam (weirs, gates, combined rows); iwate-kasen stamps moved from dam names to station numbers
 0225_value_and_coverage_gate.sql  observation_has_value(o) (GLOSSARY: Value; inlined by the planner) and the view coverage_gate_sources (the sources that must record their list before a dam can be 提供元なし)
 0226_reading.sql  dam_reading(dam, need_volume, window, as_of) — the reading (GLOSSARY, docs/adr/0002): trusted own rate within 24 h of the moment, else newest row with a value, ties by source_rank then source_id; returns effective_capacity_m3 and rate. window_source(dam, from, to, prefer_volume) — the chart's source. source_rank(sp). obs_daily unchanged (its last value already is the daily value); display_observation() kept for the rolling deploy, dropped by 0227
+0227_drop_display_observation.sql  drops display_observation() (replaced by dam_reading(), 0226), one release after 0226
 ```
 
 ### Schemas
