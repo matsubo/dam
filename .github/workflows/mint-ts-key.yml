@@ -1,0 +1,49 @@
+name: Mint signed-key candidate (temporary)
+
+# Temporary, dispatch-only: mints a reusable tag:ci auth key with dam's OIDC
+# trust credential and prints it encrypted to an operator's RSA key, to be
+# signed under Tailnet Lock off-runner (see deploy.yml). Removed right after.
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  mint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Mint and encrypt
+        env:
+          CLIENT_ID: TNSPGzaJJp11CNTRL-kDFtSUjpDP11CNTRL
+          AUDIENCE: api.tailscale.com/TNSPGzaJJp11CNTRL-kDFtSUjpDP11CNTRL
+          PUB: |
+            -----BEGIN PUBLIC KEY-----
+            MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAsuhfi/7VHPJonDX54b/z
+            8AaqoT0aFMoqfZzoqlAl/uKH6gzPsPrpVsfKoWdJkN+SZFTYOOleu5O5KuZdHm37
+            9qrRF3xJ0q5uHqx2nTYH+Uab+m/yJp3DABjv32CQD99D6fTeXrZois1YhMBVoo8u
+            /sk0I07F6YW8J/GCTI3OHj2+DJker65jyBQUPBsfg0OkcuhV5foZRNeIUDU/nwSz
+            mxY343/2v22BrXcr79Rm68a+XeF5PGYBNh9D/bsKexg616CamG+CxDh1F7CWgSk+
+            zT3ejX93ZFBwiWJoAWWRk7KCK01g4uZ2ULuP7YQFq2a8BuipPmL3CU4oa/dlzWnl
+            MUoUXTyOeIojj0YR6HFPo4OQAPzBO6YMzewJiAE0xhw7iBaZS7owjB63q60ohBgg
+            yu8w+5RCYEh2Sg46pz+0taiIdhyqSuRaYbQMfpT7adU4v6TcYXDgiFO2ljKlZaO9
+            YeFazdKHhSPj1lkw2qlUZeG2a0ebxDkPoeP6rqJb55wDAgMBAAE=
+            -----END PUBLIC KEY-----
+        run: |
+          set -euo pipefail
+          jwt=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$AUDIENCE" | jq -r .value)
+          token=$(curl -sS -d "client_id=$CLIENT_ID" -d "jwt=$jwt" \
+            https://api.tailscale.com/api/v2/oauth/token-exchange | jq -r '.access_token // empty')
+          if [ -z "$token" ]; then echo "token exchange failed"; exit 1; fi
+          resp=$(curl -sS -X POST -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+            https://api.tailscale.com/api/v2/tailnet/-/keys \
+            -d '{"capabilities":{"devices":{"create":{"reusable":true,"ephemeral":true,"preauthorized":true,"tags":["tag:ci"]}}},"expirySeconds":7776000,"description":"matsubo/dam deploy (Tailnet Lock signed)"}')
+          key=$(printf '%s' "$resp" | jq -r '.key // empty')
+          if [ -z "$key" ]; then printf '%s' "$resp" | jq -c 'del(.key)'; exit 1; fi
+          printf '%s' "$resp" | jq -c '{id, expires, capabilities}'
+          printf '%s' "$PUB" > pub.pem
+          echo "ENCRYPTED=$(printf '%s' "$key" | openssl pkeyutl -encrypt -pubin -inkey pub.pem \
+            -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 | base64 -w0)"
