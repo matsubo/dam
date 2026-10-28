@@ -1,0 +1,53 @@
+name: Mint signed-key candidates (temporary)
+
+# Temporary, dispatch-only: mints one reusable tag:ci auth key per repository
+# below with dam's OIDC trust credential and prints each encrypted to an
+# operator's RSA key, to be signed under Tailnet Lock off-runner. Removed
+# right after.
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  mint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Mint and encrypt
+        env:
+          CLIENT_ID: TNSPGzaJJp11CNTRL-kDFtSUjpDP11CNTRL
+          AUDIENCE: api.tailscale.com/TNSPGzaJJp11CNTRL-kDFtSUjpDP11CNTRL
+          REPOS: inkan rainbow-keyboard sado-tracker-2026 static
+          PUB: |
+            -----BEGIN PUBLIC KEY-----
+            MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEA3QklIGVBoPemYshvI1mD
+            9oijSS7uofz/vsu4rLMiiStCG0qUtc2aJwDyYNGcA32szOcMp+D+cPvaOZvi5Ott
+            tIMU0bdFUMK/Vq+oQyw7M+iyH6eG6NG5I271U4mruev5nEQZtbCJq3TAncwO9r1m
+            aNhoHSMkkoVeRHc+1RdMIGv+BZ3+KdLjSpfw2vJd9qd6cLYLQLrJ9X5GYX8hpNOF
+            pWe1HASdIy75i6VF2jswv7GTi6F+Eho7PuxDWxBtAW32Hwwlfqqo37cvoakAdaTb
+            0+EsvQGwtnpUWOUzcZ/YtxiVrGZgJQgMZMBJ6YAAYhypF0NNe8BcwlMJfIArqARt
+            jOPX9CxgbYQCRvGHBTipuNbFOZdHqNXy8bw/3ArcXacGQvwzGDGeV56jUhsp88w+
+            qr8ULX1NcELlxbjYcEcupBCXEv4pZxu7N+sWQ+YCmpK0qwmmGsYajntzjSQxEfAx
+            Cs6eEUppgn9csbHbd4Fo3hWpxESh+hY+po810pw085zZAgMBAAE=
+            -----END PUBLIC KEY-----
+        run: |
+          set -euo pipefail
+          printf '%s' "$PUB" > pub.pem
+          jwt=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$AUDIENCE" | jq -r .value)
+          token=$(curl -sS -d "client_id=$CLIENT_ID" -d "jwt=$jwt" \
+            https://api.tailscale.com/api/v2/oauth/token-exchange | jq -r '.access_token // empty')
+          if [ -z "$token" ]; then echo "token exchange failed"; exit 1; fi
+          for repo in $REPOS; do
+            body=$(jq -nc --arg d "ci-$repo" '{capabilities:{devices:{create:{reusable:true,ephemeral:true,preauthorized:true,tags:["tag:ci"]}}},expirySeconds:7776000,description:$d}')
+            resp=$(curl -sS -X POST -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+              https://api.tailscale.com/api/v2/tailnet/-/keys -d "$body")
+            key=$(printf '%s' "$resp" | jq -r '.key // empty')
+            if [ -z "$key" ]; then printf '%s' "$resp" | jq -c 'del(.key)'; exit 1; fi
+            printf '%s %s\n' "$repo" "$(printf '%s' "$resp" | jq -c '{id, expires}')"
+            echo "ENCRYPTED $repo $(printf '%s' "$key" | openssl pkeyutl -encrypt -pubin -inkey pub.pem \
+              -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 | base64 -w0)"
+          done
