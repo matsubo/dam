@@ -191,10 +191,31 @@ namespace, RBAC and the `dam-env` Secret are cluster-side, in
 matsubo/network-setting `k8s/dam.yaml`. `NEXT_PUBLIC_SITE_URL` and
 `NEXT_PUBLIC_GTM_ID` are build args in the workflow; runtime env is `dam-env`.
 
-Every web pod start runs `deploy/bootstrap.sh`: pending migrations, the
-bundled master seed when `dams` is empty, the idempotent master upsert, then
-Next.js. Migrations must stay additive (old and new pods serve side by side
-during a rollout).
+Every web pod start runs `deploy/bootstrap.sh`: pending migrations, the bundled
+master seed when `dams` is empty, the idempotent master upsert, `sources sync`
+(the source declarations into `source_priorities`, ADR 0001), then Next.js.
+Migrations must stay additive (old and new pods serve side by side during a
+rollout): drop what the old code still uses one release later (0226 → 0227).
+
+### The deploy job's tailnet key (Tailnet Lock)
+
+The deploy job reaches the cluster API at `https://100.86.55.136:6443`
+(Tailscale Service `svc:k3s-api`, the only thing `tag:ci` may reach) as an
+ephemeral `tag:ci` node. The tailnet runs Tailnet Lock (since 2026-10-26), so the
+node must come from a **signed** auth key: repository secret `TS_AUTHKEY`. A
+node made through the OIDC trust credential is unsigned, joins "successfully",
+and every kubectl call times out on `100.86.55.136:6443`.
+
+The current key is `kw7XcTc7TB21CNTRL` (tag:ci, reusable, ephemeral,
+pre-approved), expiring **2027-01-26**; deploys fail the same way after that.
+Renew before then:
+
+1. Create the key: admin console → Settings → Keys, Reusable + Ephemeral +
+   Pre-approved, tags `tag:ci`, 90 days.
+2. On a node holding a trusted Tailnet Lock key (`tailscale lock status` shows
+   one marked `(self)`; mini is one), sign it straight into the secret:
+   `tailscale lock sign 'tskey-auth-…' | tr -d '\n' | gh secret set TS_AUTHKEY -R matsubo/dam`
+3. Revoke the old key in the admin console.
 
 ## Long-running / cron tasks
 
