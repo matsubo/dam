@@ -86,7 +86,7 @@ jobs:
       # (tag:ci, reusable, ephemeral, pre-approved) signed with a trusted
       # Tailnet Lock key; it expires 2027-01-26. Renewal: docs/llm/RUNBOOK.md
       # "Deploy".
-      - uses: tailscale/github-action@99a8333667fff04fdd6cffb46dfd409f8329a7bf # v4.3.0
+      - uses: tailscale/github-action@064b10558093f38325e838ddea35486bdc6b1d5c # v4.4.0
         with:
           authkey: ${{ secrets.TS_AUTHKEY }}
           statedir: /tmp/tailscale-state/
