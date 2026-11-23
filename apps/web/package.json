@@ -14,10 +14,10 @@
     "@dam/core": "workspace:*",
     "@dam/db": "workspace:*",
     "echarts": "^6.1.0",
-    "echarts-for-react": "^3.0.6",
+    "echarts-for-react": "^3.1.0",
     "leaflet": "^1.9.4",
-    "lucide-react": "^1.64.0",
-    "next": "^16.4.3",
+    "lucide-react": "^1.76.0",
+    "next": "^16.4.6",
     "next-auth": "^5.0.0-beta.32",
     "react": "^19",
     "react-dom": "^19",
@@ -26,12 +26,12 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.3.3",
+    "@tailwindcss/postcss": "^4.3.5",
     "@types/leaflet": "^1.9.22",
     "@types/node": "^25.9.9",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "postcss": "^8.5.32",
+    "postcss": "^8.5.33",
     "tailwindcss": "^4.3.3"
   }
 }
